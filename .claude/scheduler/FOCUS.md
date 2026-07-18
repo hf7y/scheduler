@@ -189,6 +189,21 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   verifiable pieces (e.g. a `USAGE_GATE_CMD` sibling to `PRECHECK_CMD`, plus
   per-run token logging into the state dir that `morning-report.sh` sums).
   Don't attempt wholesale in one unattended run.
+- **Deploy-pending awareness in `morning-report.sh`.** Projects with a
+  deploy step the nightly can't run (vkv-inventory: the batch commits +
+  pushes but has no interactive `clasp` auth, so the live `/exec` silently
+  falls behind `origin`) need the morning report to SAY "live is behind
+  origin — run the deploy." Today the only cue is an ad-hoc QUESTIONS.md
+  entry, which a code-shipping night that files no question won't produce —
+  that's how vkv drifted 5 commits + a stale live site before a human
+  noticed (2026-07-18). Add a per-project, opt-in deploy-freshness check: a
+  conf field (e.g. `LIVE_URL` + a `DEPLOY_FRESH_CMD` probe, sibling to
+  `PRECHECK_CMD`) that `morning-report.sh` runs and, if the live build is
+  stale, prints a "DEPLOY PENDING" line with the exact deploy command.
+  vkv-inventory's probe already exists and is cheap: `GET
+  ?scope=sweep-status` returns HTML when stale, JSON when fresh (see that
+  repo's `tools/deploy.sh`). Opt-in, so projects with no deploy step are
+  unaffected and the report stays byte-identical for them.
 - **Right-size per-tier model choice** (see Cost insight above) — audit each
   registered project's `schedule/*.conf` `<TIER>_MODEL` fields; identify
   which nightly/batch tiers are running Opus (or Opus-priced reasoning) for
