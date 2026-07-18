@@ -2,11 +2,19 @@
 
 The scheduler's Tier 2 job (`/nightly-batch`) is scoped by this file, same
 as every other project. Difference: this project is the **meta-tool** that
-controls all the other jobs, so its nightly run is a **review gate** — work
-lands on a `nightly/<date>` branch for a human to merge, never auto-applied.
+controls all the other jobs.
 
-The repo now has a GitHub remote (`git@github.com:hf7y/scheduler.git`),
-pushed by a human. The nightly still does NOT push or merge on its own.
+**Push policy (changed 2026-07-18, human-approved):** the nightly job MAY
+push its own commits directly to `origin/main` — no `nightly/<date>` branch,
+no human merge step required. This is *not* a license to skip review after
+the fact: every push MUST be flagged prominently in that night's report
+(what was pushed, why, and how to revert it — e.g. `git revert <sha>`) so
+the human can review it the next morning same as before, just after the
+fact instead of before. See item 6 in Current focus for the sequencing
+requirement (push after other jobs, before morning) and conflict-awareness
+work still to build before leaning on this. Until that safety work lands,
+prefer the old review-gate branch behavior for any change riskier than a
+docs/FOCUS-only edit.
 
 ## This project dogfoods its own system
 
@@ -217,4 +225,4 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 - Anything that can only be tested by waiting for a live cron fire.
 - Editing installed wrappers under `~/.local/bin`, the live crontab, or any
   other project's files.
-  nightly still never pushes).
+
