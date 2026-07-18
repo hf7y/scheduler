@@ -1,0 +1,14 @@
+# Questions for the user
+
+<!-- Copy this to .claude/QUESTIONS.md in a project's repo (or just let
+     /bug-sweep or /nightly-batch create it on first use -- both commands
+     already know to). Running log, appended to (never overwritten or
+     trimmed) by either command whenever something bigger than a routine
+     tracker note comes up -- an ambiguous policy question, a real
+     tradeoff, a "which of these two directions" fork. Clear an entry by
+     deleting its line once you've actually read and dealt with it;
+     that's the only thing that should ever remove something from this
+     file. This is the "can both tiers flag something for me, somewhere I
+     can easily find it" answer -- deliberately a real file at the repo
+     root, not buried in ~/reports/, so opening the project itself
+     surfaces it. -->

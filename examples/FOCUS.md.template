@@ -1,0 +1,38 @@
+<!-- Per-project "what's live right now" marker -- the Tier 2 nightly-batch
+     job (.claude/commands/nightly-batch.md) reads this FIRST, before
+     touching anything else, to decide what's actually in scope tonight.
+     Keep it short; update by hand whenever the actual priority shifts.
+     Matches chezz's real .claude/FOCUS.md (the more mature precedent as
+     of 2026-07-17) almost word for word -- copy that structure, not just
+     this template, when in doubt. -->
+
+Current focus: <one or two sentences on what you are actively working
+toward right now>
+
+Note: any open tracker report whose `note` starts with exactly `NIGHTLY:`
+is ALWAYS in scope regardless of what's written above -- that's
+`/bug-sweep`'s own explicit hand-off convention for a real bug too big
+for a fast sweep (see `bug-sweep.md.template`). You do not need to (and
+should not have to) edit this file just to let a flagged bug through.
+
+**Policy: build maximally autonomously.** Anything else sitting in the
+tracker (see ../INTAKE.md -- `type=feature` reports ARE the running
+feature backlog, there's no separate file for this) is fair game to
+actually BUILD, not just analyze and summarize:
+
+- Pick the most reasonable interpretation and build it -- don't wait for
+  permission on an ordinary, git-revertible decision.
+- A genuinely new/distinct idea (not a continuation of the focus above)
+  gets its OWN branch off `main`, named for what it is, pushed on its
+  own. Rolling back a bad call is then just not merging it -- that's what
+  "make it easy to roll back" means in practice.
+- Flag what got built and why in `.claude/QUESTIONS.md` (see
+  `QUESTIONS.md.template`) and in the report -- the flag IS the review
+  point, not a request to build.
+- **The only real stop-and-wait bar: something that can't be reverted.**
+  A commit, a branch, a tracker POST, a deploy to a confirmed-safe
+  non-production deployment -- none of these block you. What does: a
+  real external side effect outside git's own reach (a message to a real
+  person, an action against someone else's system, spending real money,
+  deleting something with no backup). If genuinely unsure, that's the
+  `.claude/QUESTIONS.md` case -- but err toward "revertible, proceed."

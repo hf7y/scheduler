@@ -1,0 +1,110 @@
+---
+description: Nightly thorough pass -- feature work, redesigns, refactors too big for the bug sweeper, scoped by FOCUS.md
+---
+
+<!-- Copy this to .claude/commands/nightly-batch.md in a project's repo,
+     alongside a real .claude/FOCUS.md (see FOCUS.md.template). Mirrors
+     bug-sweep.md.template's structure and chezz's real, more mature
+     nightly-batch.md (2026-07-17) -- read that directly if in doubt,
+     this template distills it. Adjust the report path/project name in
+     step 5 and the tracker URL in step 1 to match the project this gets
+     copied into. -->
+
+Read `.claude/FOCUS.md` first -- including its "build maximally
+autonomously" policy. Build first, don't just analyze: pick the most
+reasonable interpretation of an accumulated idea and build it, on its own
+branch if it's not a continuation of the stated focus, flagged in
+`.claude/QUESTIONS.md` and the report. Only actually stop and wait for
+the user when the action itself can't be reverted -- an ordinary commit,
+branch, or tracker POST never qualifies.
+
+This command is designed to run unattended overnight, with no human
+review step until the morning.
+
+## 1. Orient
+
+`git log --oneline -10`, current branch state, `README.md`, and
+`.claude/FOCUS.md`. If the previous nightly run left work in progress
+(check the last report under `~/reports/<PROJECT>/`), pick up from there
+rather than starting over. Also fetch the full tracker backlog with
+`&status=all&type=all` (see `../INTAKE.md`) so nothing already resolved
+gets re-investigated, and so any new `type=feature` reports are visible
+for the report's summary even though they won't be implemented.
+
+**Any open report whose `note` starts with exactly `NIGHTLY:`** was
+explicitly handed off by `/bug-sweep` as a real, fixable bug that was
+just too big for a fast sweep (see that command's step 2) -- these are
+ALWAYS in scope tonight, in addition to whatever FOCUS.md says, not
+something FOCUS.md needs to mention by name. Note every one you find
+before moving on, so step 3 doesn't miss one.
+
+## 2. Re-verify anything a previous run touched, from scratch
+
+Do not trust a prior run's own claims about what works -- run the
+project's real test suite if it has one, or build a fresh local test
+harness, and confirm independently before building further on top of it.
+
+## 3. Push forward, building rather than just analyzing
+
+Scope = FOCUS.md's stated focus, UNION every `NIGHTLY:`-flagged report
+from step 1, UNION the accumulated `type=feature` backlog -- per
+FOCUS.md's autonomy policy, build features too, not just summarize them.
+Commit as you complete meaningful chunks; do not save it all for one
+giant commit at the end.
+
+A feature (or any distinct new idea, not a continuation of FOCUS.md's
+stated focus) gets its own branch off `main`, named for what it is,
+pushed on its own -- don't stack unrelated new work onto whatever branch
+happens to be checked out. That's what "easy to roll back" means in
+practice: undoing a bad call is not merging the branch, not untangling
+one feature's commits from another's.
+
+For each `NIGHTLY:`-flagged bug you fix, resolve it on the tracker the
+same way `/bug-sweep` would, referencing the commit hash (see
+`../INTAKE.md`) -- do not leave it for a future sweep to re-discover. For
+each feature you build, note in `.claude/QUESTIONS.md` (step 5) which
+branch it landed on -- that note IS the review point, not a request to
+build it.
+
+## 4. Stress-test what you built
+
+Look for the scenarios a first pass typically misses -- edge cases, empty
+states, deeper nesting/scale than the happy-path case, deep links into a
+mid-state. Fix what breaks; note what's genuinely out of scope for
+tonight.
+
+## 5. Flag what you built, and anything needing the user's own judgment
+
+Two things go here, both append-only (never overwrite or trim existing
+entries), format `- **YYYY-MM-DD (nightly-batch):** <text>`:
+
+- **Every feature/distinct new idea you built tonight** (step 3) -- which
+  branch it landed on, what it does, in one or two lines. This IS the
+  review point for something built without asking first -- it has to
+  actually be findable.
+- **A genuine judgment call needing the user's own decision** -- not
+  "should I build this" (default: yes, per FOCUS.md), but something
+  actually ambiguous: a real tradeoff, a "which of these two directions,"
+  or a case you genuinely couldn't tell whether it crossed the
+  irreversible-action line. Most nights have at most one of these; don't
+  manufacture one.
+
+## 6. Write the report
+
+`~/reports/<PROJECT NAME -- fill in>/$(date +%Y-%m-%d).md`, and update
+`~/reports/<PROJECT NAME>/LATEST.md` to match it. Cover exactly: what
+shipped (with commit references), what broke and got fixed, what was
+deliberately deferred and why (per FOCUS.md), any `NIGHTLY:`-flagged bugs
+resolved, a summary of any new feature-backlog ideas seen since the last
+report, and whether anything got appended to `.claude/QUESTIONS.md`
+(point at it, don't duplicate its full text here). This is read once,
+quickly, the next time this machine boots up -- write for that, not for
+completeness's own sake.
+
+## 7. Before finishing
+
+Confirm every meaningful change has a real commit, pushed to origin.
+An overnight run that is not saved anywhere didn't happen. If this
+project's tracker backend supports it (see `../INTAKE.md`'s
+`sweep-status` contract), POST a status update the same way `/bug-sweep`
+does, so a live status readout reflects tonight's run too.

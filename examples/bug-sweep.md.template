@@ -1,0 +1,135 @@
+---
+description: Fetch open <PROJECT> bug reports, fix the mechanical ones, leave notes on the rest, commit, and mark resolved reports on the tracker
+---
+
+<!-- Copy this to .claude/commands/bug-sweep.md in a project's repo.
+     Distilled from chezz's real, more mature bug-sweep.md (2026-07-17,
+     the version with the sweep-status step and the "## Summary" heading
+     convention) -- read that directly if in doubt. vkv-inventory's own
+     bug-sweep.md predates this and is missing both; worth upgrading it
+     to match once this template is confirmed as the standard. -->
+
+Run one sweep of the live <PROJECT> bug/feature tracker. This command is
+designed to run unattended (manually, via `/loop`, or on a cron schedule)
+-- don't block on interactive confirmation; when something needs a human
+call, leave it open with a note instead of guessing.
+
+## 1. Fetch open reports
+
+See `../INTAKE.md` for the full read/write contract. `scope=bugs` alone
+defaults to `type=bug` -- feature requests don't come back unless you ask
+explicitly with `type=feature` or `type=all`. That's deliberate: the bug
+queue is only things that must eventually be fixed or explicitly
+reclassified out, not a mixed backlog of defects and ideas.
+
+```
+curl -sL "<TRACKER_URL>?scope=bugs&status=open&limit=50"
+```
+
+Each report has `{timestamp, name, url, description, status, note, type}`.
+`url` is often a deep link into the app -- open it in context if the
+description alone isn't enough to understand the bug.
+
+## 2. Triage every report into exactly one bucket
+
+- **Mechanical fix** -- a concrete, reproducible defect with an
+  unambiguous correct behavior, verifiable in this sandbox (this
+  project's own test suite, or a throwaway local harness).
+- **Actually a feature idea, not a bug** -- reclassify (step 5) rather
+  than leaving it in the bug queue with a note. The feature backlog isn't
+  held to "must eventually resolve," so it's the right place for
+  open-ended ideas to sit.
+- **Needs a human call, but is a real bug** -- genuine defect, but the fix
+  isn't obvious, can't be verified in this sandbox, or the right fix
+  requires a design decision only the user can make. Stays open, with a
+  note. Different from the next bucket: this one needs a person's
+  judgment, not just more time.
+- **Real bug, but too big for this sweep -- hand off to nightly** -- a
+  genuine, fixable-by-an-agent defect where the fix is straightforward in
+  principle but needs more investigation/build time than a fast, frequent
+  sweep should spend. Leave it open with a note prefixed exactly
+  `NIGHTLY:` (nightly-batch.md's own fetch step looks for this prefix and
+  treats it as in-scope automatically, regardless of FOCUS.md's stated
+  focus -- see that file):
+  ```
+  curl -sL "<TRACKER_URL>" -X POST -H "Content-Type: text/plain" \
+    --data-raw '{"type":"resolve","timestamp":"<exact timestamp string>","status":"open","note":"NIGHTLY: <what makes this too big for a sweep, and what a real fix looks like>"}'
+  ```
+- **Duplicate of an already-tracked issue** -- matches an existing code
+  comment/README TODO entry covering the same ground.
+
+Don't resolve a design/feature-idea report as "fixed" on your own
+judgment. Reclassify a feature idea rather than building it here -- not
+because it needs the user's OK (FOCUS.md's autonomy policy says
+otherwise), but because this tier stays fast and narrow on purpose;
+`/nightly-batch` is where feature ideas actually get built.
+
+## 3. Implement each mechanical fix
+
+Locate the relevant code. Write or extend a regression test if the
+project has a test suite. **Verify the test actually catches the bug**:
+temporarily revert the fix, confirm the new test fails, then reapply and
+confirm it passes -- a test that passes both ways isn't proving anything.
+
+## 4. Commit
+
+One commit per sweep (or several if the fixes are unrelated enough to
+tell apart in history). Short imperative summary line, a body explaining
+*why* each fix matters, not just what changed.
+
+## 5. Update the tracker
+
+For each report fixed, mark it resolved, referencing the commit hash (see
+`../INTAKE.md` for the exact POST shape). Reclassify a feature idea filed
+as a bug instead of resolving/noting it in place. Leave a genuine
+needs-a-human bug open with a note on what a real fix would require.
+
+**Gotcha**: never trust the raw HTTP response from a POST here -- see
+`../INTAKE.md`. Always confirm by re-fetching afterward.
+
+## 6. Record this sweep's status
+
+If this project's tracker backend supports the `sweep-status` contract
+(see `../INTAKE.md`) -- every run posts this, even one that fixed
+nothing, so a live status readout has proof the sweep is still running
+instead of only a log nobody's watching:
+
+```
+curl -sL "<TRACKER_URL>" -X POST -H "Content-Type: text/plain" \
+  --data-raw '{"type":"sweep-status","fetched":<N>,"fixed":<F>,"reclassified":<R>,"leftOpen":<L>}'
+```
+
+If the project's backend doesn't have this yet, skip this step and note
+in the summary that it's a gap (don't add the backend support
+unilaterally in the middle of a routine sweep).
+
+## 7. Flag anything that needs the user's own judgment
+
+If anything this sweep touched genuinely needs a decision only the user
+can make -- bigger than one report's "needs a human call" note (step 2):
+an ambiguous policy question, a real tradeoff, a "which of these two
+directions" fork -- append it to `.claude/QUESTIONS.md` at the repo root
+(create with a one-line header if it doesn't exist). Append only, never
+overwrite or trim existing entries -- the user clears an entry by hand
+once they've actually read and dealt with it. Format: `- **YYYY-MM-DD
+(bug-sweep):** <question>`. Most sweeps have nothing to add here; don't
+manufacture a question just to have an entry.
+
+## 8. Report a summary
+
+Start with the exact heading `## Summary` (not a variant -- this run is
+logged alongside every other run, unattended, and a consistent heading is
+what makes the log grep-able later) and one compact result line directly
+under it:
+
+```
+Fetched: N (M new) · Fixed & pushed: F · Reclassified: R · Handed to nightly: H · Left open: L
+```
+
+Below that, in prose: what got fixed and committed, what got reclassified
+as a feature (and why), what got handed off to nightly (and why), what
+got a note-only bug left open, how many new reports came in since last
+sweep, and whether anything got appended to `.claude/QUESTIONS.md`. Don't
+resolve, reclassify, or hand off more than a handful of reports in one
+sweep without flagging anything that felt like a judgment call, even if
+you didn't block on it.

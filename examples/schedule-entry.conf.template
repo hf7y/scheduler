@@ -1,0 +1,53 @@
+# Schedule entry template -- copy to ../schedule/<project>.conf, fill in,
+# then run ../bin/sync-crontab.sh (prints a preview; add --apply to
+# actually write it) to install/update this project's crontab lines.
+#
+# This is the config-time "which hours does this project run" registry --
+# NOT the same thing as the runtime PROJECT_KEY registry in
+# lib/sweep-loop-common.sh (the ~/.local/share/scheduler-registry/ mutex
+# that stops a project's own Tier 1 and Tier 2 jobs from racing each
+# other's git push while both are already running). This file decides
+# WHEN a job fires in the first place; that one decides who wins if two
+# fire at once. Both matter, neither replaces the other.
+#
+# "Registering" a project with the scheduler IS this: drop a file here
+# with real values, run bin/sync-crontab.sh --apply. Deregistering is
+# deleting this file and running sync again -- it fully regenerates its
+# managed crontab block from whatever *.conf files currently exist here,
+# so there's nothing else to clean up by hand.
+
+PROJECT="<project-name>"
+# Optional -- this project's real working copy, if it has one in this
+# exact shape. Used only to symlink its .claude/QUESTIONS.md into
+# ../questions/<project>.md (bin/sync-crontab.sh --apply creates the real
+# file with a template header first if it doesn't exist yet). Leave
+# blank/omit for a project with no local working copy in this shape.
+PROJECT_REPO_PATH="/home/zach/Documents/Project Archive/<project>"
+
+# Tier 1 -- bug sweeper. Leave BOTH of these three blank to skip Tier 1
+# for this project.
+SWEEP_JOB_NAME="<project>-bug-sweep"      # MUST exactly match JOB_NAME set
+                                            # inside SWEEP_SCRIPT below --
+                                            # that's how sync-crontab.sh
+                                            # finds this job's expiry state
+                                            # at ~/.local/share/$SWEEP_JOB_NAME/expires_at
+SWEEP_SCRIPT="/home/zach/.local/bin/<project>-bug-sweep-loop.sh"
+SWEEP_CRON="*/15 9-21 * * *"               # fixed daytime window -- fill
+                                            # in real hours, don't ship the
+                                            # placeholder as-is
+
+# Tier 2 -- overnight batch. Leave BOTH of these three blank to skip
+# Tier 2 for this project.
+BATCH_JOB_NAME="<project>-nightly-batch"   # same matching requirement as
+                                            # SWEEP_JOB_NAME above
+BATCH_SCRIPT="/home/zach/.local/bin/<project>-nightly-batch-loop.sh"
+BATCH_CRON="auto"                          # "auto" (or leave blank) lets
+                                            # bin/sync-crontab.sh assign a
+                                            # slot automatically -- see
+                                            # schedule/_batch.conf and the
+                                            # README's "Schedule registry"
+                                            # section. Set an explicit
+                                            # "MIN HOUR * * *" instead only
+                                            # if this project's cadence
+                                            # genuinely isn't nightly (see
+                                            # schedule/wtul.conf).
