@@ -6,3 +6,8 @@
 # the links are not.
 questions/*.md
 !questions/.gitkeep
+
+# Generated + machine-specific (symlinks) audit view, rebuilt by
+# bin/build-services-view.sh. The generator is tracked; its output is not.
+services/*
+!services/.gitkeep
