@@ -27,7 +27,59 @@ bespoke ones:
 - **Questions** (`.claude/scheduler/QUESTIONS.md`) for anything needing a
   human decision — appended, never acted on unilaterally.
 
+## Cost insight (2026-07-18 usage audit — read before touching model/effort settings)
+
+Audited real token usage across `~/.claude/projects/*.jsonl` since 2026-07-17.
+Findings, so this doesn't get re-litigated or blamed on the wrong thing:
+
+- **The bug sweeper is cheap** (~$72 of ~$1245 total, ~6%). It was suspected
+  as the usage drain and it is not — don't spend effort "fixing" it on that
+  theory.
+- **Interactive human chats are ~73% of spend** (~$907), automation
+  (nightly-batch + bug-sweep + scheduler self-runs combined) is ~27% (~$339).
+- **The real per-token cost lever is model choice, not reasoning effort.**
+  Opus is ~5x Sonnet's price per token (both input and output/thinking).
+  Effort level only trims how many tokens Opus emits per turn — "Opus on
+  low effort" for routine work still pays the full Opus per-token premium
+  for a lower-quality answer. Human default model has been switched to
+  Sonnet 5 (2026-07-18) for exactly this reason.
+- **Scheduler's own self-runs and the nightly batches are a real, separate
+  cost center worth slimming** — 07-18 alone saw automation jump to ~$284
+  in one day (scheduler self-run ~$134, vkv-inventory-nightly ~$73,
+  chezz-nightly ~$28). Action item: scheduler should look at what model/
+  effort each `*_TIER*_MODEL` in `schedule/*.conf` is actually set to, and
+  whether nightly/batch tiers that don't need Opus-grade reasoning (routine
+  sweeps, mechanical migrations) can run on Sonnet instead. This is a
+  concrete, cheap win — fold it into the "Optimal-usage scheduling" backlog
+  item below rather than treating it as a new one-off.
+
 ## Current focus
+
+0. **Collapse report + questions into one file I actually read.** Today I
+   have to open a report AND separately edit `QUESTIONS.md` to answer
+   things — too many files, and the answer workflow is disconnected from
+   where I actually see the question. Preferred workflow (may partially be
+   superseded by the TUI in item 3 below, but worth building now — could be
+   good enough on its own even once the TUI lands):
+   - The **morning report and the open questions/decisions live in a single
+     markdown file**, one per project, owned by scheduler.
+   - I open that one file, read what happened + what's pending, and **write
+     my answers inline right there** (e.g. under each question, same `> `
+     convention as today's QUESTIONS.md).
+   - That file is what's symlinked into each project today (or, once a
+     project has no local checkout per item 4's design, copied into the
+     ephemeral clone before `claude` runs) — so the next night's job reads
+     my inline answers straight out of it, same round-trip QUESTIONS.md
+     already does, just merged with the report instead of a separate file.
+   - Concretely: look at whether `focus/<project>.md` (scope),
+     `questions/<project>.md`, and `~/reports/<project>/...` can become one
+     `report/<project>.md`-shaped file per project — newest report on top or
+     appended, open questions inline, my `> ` replies picked up and cleared
+     next run. Don't lose the history reports currently have; append rather
+     than overwrite.
+   - Do this incrementally and verifiably like everything else in this file
+     — pick one project (scheduler itself is the safest first mover, as in
+     item 4) to prototype the merged-file shape before touching others.
 
 1. **Migrate every project's `schedule/*.conf` onto the new
    `bin/scheduler-run` entrypoint, per `MIGRATION.md`.** The generic
@@ -137,6 +189,13 @@ bespoke ones:
   verifiable pieces (e.g. a `USAGE_GATE_CMD` sibling to `PRECHECK_CMD`, plus
   per-run token logging into the state dir that `morning-report.sh` sums).
   Don't attempt wholesale in one unattended run.
+- **Right-size per-tier model choice** (see Cost insight above) — audit each
+  registered project's `schedule/*.conf` `<TIER>_MODEL` fields; identify
+  which nightly/batch tiers are running Opus (or Opus-priced reasoning) for
+  work that's mechanical enough for Sonnet, and propose the downgrade
+  per-project (don't silently change other repos' confs from here — flag it,
+  same as other cross-project proposals). Opus is ~5x Sonnet per token, so
+  this is likely the single cheapest lever for slimming automation cost.
 
 ## Out of scope for an unattended run
 
