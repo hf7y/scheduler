@@ -50,6 +50,13 @@
 #   MAX_TURNS      default 40 (bug-sweep scale -- bump way up, e.g. 200,
 #                  for a Tier 2 nightly-batch wrapper; see
 #                  nightly-batch-loop.sh)
+#   MODEL          default unset -- pass a specific model id to `claude
+#                  -p --model` (e.g. "claude-sonnet-5" for a mechanical
+#                  bug sweep, instead of whatever the CLI default is).
+#                  Unset means no --model flag (CLI default), so this is
+#                  backward-compatible. Pair it with PRECHECK_CMD (below):
+#                  the precheck cuts HOW OFTEN claude runs, MODEL cuts what
+#                  each run costs.
 #   ALLOWED_TOOLS  default "Bash,Read,Write,Edit,Glob,Grep"
 #   NODE_BIN_DIR   default /home/zach/.nvm/versions/node/v25.2.1/bin --
 #                  wherever `claude` actually resolves from on this
@@ -94,6 +101,7 @@ set -uo pipefail
 : "${TIER:=unspecified}"
 : "${EXPIRY_DAYS:=7}"
 : "${MAX_TURNS:=40}"
+: "${MODEL:=}"
 : "${ALLOWED_TOOLS:=Bash,Read,Write,Edit,Glob,Grep}"
 : "${NODE_BIN_DIR:=/home/zach/.nvm/versions/node/v25.2.1/bin}"
 : "${BRANCH:=main}"
@@ -196,7 +204,7 @@ fi
   if [ -n "$PRECHECK_CMD" ] && ! eval "$PRECHECK_CMD"; then
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
-  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS"; then
+  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"}; then
     STATUS="done"
   else
     STATUS="FAILED"
