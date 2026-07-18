@@ -107,6 +107,23 @@ bespoke ones:
 
 6. Note: pushing this repo is now something scheduler can do itself. As long as that's revertable, it's just something that needs to be flagged for me to review (that it happened, what the consequences are/why I might want to revert it). To avoid conflicts with other scheduled jobs, we need awareness of effects. It makes sense to push/schedule this utility's development changes to occur after upcoming jobs are run, but before the morning.
 
+## Watch and report tonight
+
+- **Per-project pre-commit hook cost.** Unattended sweep/batch jobs commit
+  *per item*, so each commit pays that project's pre-commit hook. chezz's
+  hook runs the full Playwright suite (>2 min) — observed 2026-07-18 stalling
+  a commit past a 2-min tool timeout. Across several commits that silently
+  eats the turn/time budget and can leave a commit half-made on a timeout.
+  Scheduler is the right place to be aware of this (it owns the budget and
+  the optimal-usage work). Tonight: don't fix it, just **surface it** — note
+  in the report which registered projects have a heavy pre-commit hook and
+  roughly how long, and propose the cheapest awareness mechanism (e.g. the
+  engine timing each `git commit` into the state dir so `morning-report.sh`
+  can sum per-project commit overhead, and/or a conf note per project). A
+  natural sibling to the `USAGE_GATE_CMD`/token-logging idea already in the
+  backlog. Do not touch other projects' hooks or `--no-verify` their commits
+  from here — that's each project's own call.
+
 ## Backlog (the intake — add a line to propose an idea)
 
 - **Sweep cadence** — sweeps (esp. chezz) may run too often; tune
