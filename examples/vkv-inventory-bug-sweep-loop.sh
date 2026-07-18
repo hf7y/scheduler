@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# DEPRECATED as a pattern for NEW projects. Per-project wrapper scripts like
+# this are the LEGACY path -- a new project sets no wrapper at all and puts
+# this same config into schedule/<project>.conf, which bin/scheduler-run
+# reads (see ../README.md and ../MIGRATION.md). Kept only as a reference for
+# the still-live wrappers that haven't migrated yet.
+#
 # Example: what the REAL script at
 # ~/.local/bin/vkv-inventory-bug-sweep-loop.sh (currently ~97 lines,
 # hand-duplicating the same engine as chezz's own loop script) would look

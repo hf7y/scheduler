@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# DEPRECATED as a pattern for NEW projects -- see the note atop
+# vkv-inventory-bug-sweep-loop.sh. A new project puts this config into
+# schedule/<project>.conf (BATCH_* fields) instead of writing a wrapper;
+# bin/scheduler-run reads it. Kept as reference for still-live wrappers.
+#
 # Example: Tier 2 (overnight batch) wrapper on the same shared library as
 # Tier 1's bug-sweep wrappers -- generalizes
 # ~/Documents/vkv/inv/schedule-drilldown-wakeup.sh's one-off `at` pattern

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Generic entrypoint -- run one project/tier's job entirely from its
+# schedule/<project>.conf, with NO per-project wrapper script.
+#
+#   scheduler-run <project> <sweep|batch>
+#
+# Replaces the old ~/.local/bin/<project>-<tier>-loop.sh files: those did
+# nothing but set a handful of variables and `source` the shared engine.
+# That handful of variables now lives in schedule/<project>.conf (the same
+# file bin/sync-crontab.sh already reads for scheduling), so a project is
+# ONE file again -- the conf -- instead of a conf here plus a wrapper in
+# ~/.local/bin whose JOB_NAME had to be kept in sync by hand.
+#
+# BACKWARDS COMPATIBLE: a tier whose conf still sets <TIER>_SCRIPT keeps
+# using that legacy wrapper (bin/sync-crontab.sh points cron straight at it
+# and never calls this script for that tier). This entrypoint only runs for
+# a tier that has moved its runtime config into the conf. See MIGRATION.md.
+
+set -uo pipefail
+
+SCHED_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+PROJECT="${1:?usage: scheduler-run <project> <sweep|batch>}"
+TIER_ARG="${2:?usage: scheduler-run <project> <sweep|batch>}"
+
+case "$TIER_ARG" in
+  sweep) PREFIX="SWEEP"; TIER="bug-sweep" ;;
+  batch) PREFIX="BATCH"; TIER="nightly-batch" ;;
+  *) echo "scheduler-run: tier must be 'sweep' or 'batch', got '$TIER_ARG'" >&2; exit 2 ;;
+esac
+
+CONF="$SCHED_ROOT/schedule/$PROJECT.conf"
+[ -f "$CONF" ] || { echo "scheduler-run: no such conf: $CONF" >&2; exit 2; }
+# shellcheck disable=SC1090
+source "$CONF"
+
+# Indirect fetch of a <PREFIX>_<NAME> conf field; empty string if unset.
+field() { local v="${PREFIX}_$1"; printf '%s' "${!v:-}"; }
+
+JOB_NAME="$(field JOB_NAME)"
+[ -n "$JOB_NAME" ] || { echo "scheduler-run: ${PREFIX}_JOB_NAME not set in $CONF -- tier '$TIER_ARG' isn't enabled for $PROJECT" >&2; exit 2; }
+
+# If this tier still has a legacy wrapper, running it through scheduler-run
+# would double up the config. sync-crontab.sh already avoids this (it points
+# cron at the wrapper directly), but guard anyway in case of a manual call.
+if [ -n "$(field SCRIPT)" ]; then
+  echo "scheduler-run: ${PREFIX}_SCRIPT is set in $CONF -- that legacy wrapper is authoritative for tier '$TIER_ARG'; run it directly, or remove ${PREFIX}_SCRIPT to migrate onto scheduler-run (see MIGRATION.md)" >&2
+  exit 2
+fi
+
+PROMPT="$(field PROMPT)"
+[ -n "$PROMPT" ] || { echo "scheduler-run: ${PREFIX}_PROMPT not set in $CONF (required once ${PREFIX}_SCRIPT is removed)" >&2; exit 2; }
+
+# Project-level runtime config (shared by both tiers).
+PROJECT_KEY="${PROJECT_KEY:-$PROJECT}"
+: "${REPO_URL:?scheduler-run: REPO_URL must be set in $CONF}"
+REPO_SUBDIR="${REPO_SUBDIR:-.}"
+# SECRETS_SRC_DIR / SECRETS_DEST_SUBDIR (optional) are already in scope from
+# sourcing the conf, if it set them; the engine defaults them otherwise.
+
+# Optional per-tier knobs -- only keep them set when the conf actually gave
+# a value, so the engine's own defaults apply otherwise.
+for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH; do
+  val="$(field "$knob")"
+  if [ -n "$val" ]; then
+    printf -v "$knob" '%s' "$val"
+  else
+    unset "$knob" 2>/dev/null || true
+  fi
+done
+
+export JOB_NAME PROJECT_KEY TIER REPO_URL REPO_SUBDIR PROMPT
+
+# shellcheck disable=SC1091
+source "$SCHED_ROOT/lib/sweep-loop-common.sh"
