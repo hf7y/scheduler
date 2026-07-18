@@ -10,18 +10,18 @@ cron jobs.
 
 ## Orient (do this first)
 
-1. Read `.claude/FOCUS.md` — it states the current posture and points at
-   the backlog.
-2. Read `TODO.md` — this is the backlog. It's a plain hand-written list;
-   items may be terse.
-3. Read `README.md` — the architecture and the decisions already made, so
+1. Read `.claude/scheduler/FOCUS.md` — it states the current posture, the
+   current focus, AND the backlog (its "Backlog" section). There is no
+   separate `TODO.md` anymore; FOCUS.md is both scope and backlog.
+2. Read `README.md` — the architecture and the decisions already made, so
    you don't re-litigate or undo them.
-4. Skim recent reports in `~/reports/scheduler/` if any, to see what prior
+3. Skim recent reports in `~/reports/scheduler/` if any, to see what prior
    runs already did or deferred.
 
 ## Pick work
 
-From `TODO.md`, choose the **highest-value, lowest-risk** item(s) you can
+From `.claude/scheduler/FOCUS.md` (its focus + backlog), choose the
+**highest-value, lowest-risk** item(s) you can
 **fully finish and verify tonight**. One well-tested change beats three
 speculative ones. Good candidates are self-contained: a script fix, a new
 read-only helper, a docs/consistency cleanup, a `schedule/*.conf` change
@@ -44,12 +44,13 @@ tomorrow," or anything that reshapes the engine every job depends on.
   If a change genuinely can't be verified without going live, **don't
   commit it** — write it up as a proposal in tonight's report instead.
 - **Don't invent scope.** If an item is ambiguous or needs a real
-  judgment call, append the question to `.claude/QUESTIONS.md` and describe
-  it in the report rather than guessing.
+  judgment call, append the question to `.claude/scheduler/QUESTIONS.md` and
+  describe it in the report rather than guessing.
 - Keep `README.md` honest — if you change how something works, update the
   README in the same commit.
-- If you complete a `TODO.md` item, remove or check off its line as part of
-  the same change so the backlog stays accurate.
+- If you complete a backlog item, remove or check off its line in
+  `.claude/scheduler/FOCUS.md` as part of the same change so it stays
+  accurate.
 
 ## Finish
 

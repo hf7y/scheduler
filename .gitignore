@@ -16,3 +16,6 @@ focus/*.md
 # bin/build-services-view.sh. The generator is tracked; its output is not.
 services/*
 !services/.gitkeep
+
+# Stray captured report output that landed in bin/ -- not source.
+bin/morning-report.md

@@ -151,7 +151,7 @@ for conf in "${CONF_FILES[@]}"; do
   unset BATCH_JOB_NAME BATCH_SCRIPT BATCH_CRON PROJECT_REPO_PATH
   # Runtime fields (read by scheduler-run) that also gate command resolution
   # here -- reset so one conf's value can't leak into the next.
-  unset REPO_URL SWEEP_PROMPT BATCH_PROMPT
+  unset REPO_URL SWEEP_PROMPT BATCH_PROMPT SCHEDULER_SUBDIR
   # shellcheck disable=SC1090
   source "$conf"
 
@@ -165,10 +165,14 @@ for conf in "${CONF_FILES[@]}"; do
   # PROJECT_REPO_PATH is optional -- a project with no local working copy
   # in this exact shape just doesn't get one.
   if [ -n "${PROJECT_REPO_PATH:-}" ]; then
-    QUESTIONS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/.claude/QUESTIONS.md")
+    # Self-contained-folder model: a migrated project sets
+    # SCHEDULER_SUBDIR=".claude/scheduler" so its FOCUS/QUESTIONS group under
+    # one folder it owns. Not-yet-migrated projects default to ".claude".
+    sdir="${SCHEDULER_SUBDIR:-.claude}"
+    QUESTIONS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/$sdir/QUESTIONS.md")
     # Same idea for FOCUS.md -- the per-project scope-input a nightly run
     # reads, browsable/editable from one place (../focus/) without copying.
-    FOCUS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/.claude/FOCUS.md")
+    FOCUS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/$sdir/FOCUS.md")
   fi
 
   # --- Tier 1 (sweep): no auto-scheduling concept for this tier -- it's
