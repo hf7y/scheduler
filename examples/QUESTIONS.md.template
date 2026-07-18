@@ -5,10 +5,36 @@
      already know to). Running log, appended to (never overwritten or
      trimmed) by either command whenever something bigger than a routine
      tracker note comes up -- an ambiguous policy question, a real
-     tradeoff, a "which of these two directions" fork. Clear an entry by
-     deleting its line once you've actually read and dealt with it;
-     that's the only thing that should ever remove something from this
-     file. This is the "can both tiers flag something for me, somewhere I
-     can easily find it" answer -- deliberately a real file at the repo
-     root, not buried in ~/reports/, so opening the project itself
-     surfaces it. -->
+     tradeoff, a "which of these two directions" fork. This is the "can
+     both tiers flag something for me, somewhere I can easily find it"
+     answer -- deliberately a real file at the repo root, not buried in
+     ~/reports/, so opening the project itself surfaces it (and it's
+     symlinked into scheduler/questions/<project>.md + printed by
+     bin/morning-report.sh). -->
+
+## How to answer (this is the two-way interface)
+
+Reply **inline, directly under the question**, on a new line starting
+with `> ` (a Markdown blockquote). You don't delete anything yourself.
+Example:
+
+```
+- **2026-07-18 (nightly): Stalemate — reset the floor or die?**
+  > reset to the start of the current floor, keep the run alive
+```
+
+Contract the commands follow:
+- **`/nightly-batch` owns answer-processing.** On its next run it reads
+  this file first, treats any `> ` answer as authoritative (same standing
+  as `FOCUS.md`), acts on it, folds a standing decision into `FOCUS.md`,
+  then removes that question+answer block once acted on (git history and
+  the run's report keep the record).
+- **`/bug-sweep` only appends** genuine judgment calls; it must NOT act on
+  or delete a `> ` answer (that's the nightly's job) — this keeps the fast
+  15-minute loop from racing the nightly over the same file.
+- Unanswered questions are left untouched and never re-asked/duplicated.
+- To dismiss a question without any action, just delete its line by hand.
+
+Question format either tier appends:
+`- **YYYY-MM-DD (nightly|bug-sweep): <question>**` + short context, then a
+`  > (answer inline here)` placeholder line so the reply slot is obvious.

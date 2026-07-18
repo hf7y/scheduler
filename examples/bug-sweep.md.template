@@ -110,10 +110,17 @@ can make -- bigger than one report's "needs a human call" note (step 2):
 an ambiguous policy question, a real tradeoff, a "which of these two
 directions" fork -- append it to `.claude/QUESTIONS.md` at the repo root
 (create with a one-line header if it doesn't exist). Append only, never
-overwrite or trim existing entries -- the user clears an entry by hand
-once they've actually read and dealt with it. Format: `- **YYYY-MM-DD
-(bug-sweep):** <question>`. Most sweeps have nothing to add here; don't
-manufacture a question just to have an entry.
+overwrite or trim existing entries. Format: `- **YYYY-MM-DD (bug-sweep):
+<question>**` + short context, then a `  > (answer inline here)`
+placeholder line so the user's reply slot is obvious. Most sweeps have
+nothing to add here; don't manufacture a question just to have an entry.
+
+Answer-processing is the **nightly's** job, not this sweep's. The user
+replies inline under a question with a `> ` line (QUESTIONS.md's header
+documents it); `/nightly-batch` reads those, acts, and clears them. This
+fast 15-minute loop must NOT act on or delete a `> ` answer itself --
+leave answered questions in place for the nightly, so the two tiers never
+race over the file.
 
 ## 8. Report a summary
 

@@ -38,6 +38,17 @@ ALWAYS in scope tonight, in addition to whatever FOCUS.md says, not
 something FOCUS.md needs to mention by name. Note every one you find
 before moving on, so step 3 doesn't miss one.
 
+**Read `.claude/QUESTIONS.md` and process any answers** (this tier owns
+that; `/bug-sweep` only appends). The user replies to a question inline,
+on a line starting with `> ` (a Markdown blockquote) directly under it --
+QUESTIONS.md's own header documents the convention. For every question
+that now has a `> ` answer, treat it as authoritative human direction
+(same standing as `FOCUS.md`): act on it as part of tonight's work, and
+fold a standing scope/policy decision into `FOCUS.md` so it persists.
+Once you have acted on an answered question, remove that question+answer
+block -- git history and tonight's report keep the record. Leave
+unanswered questions untouched; never re-ask or duplicate one.
+
 ## 2. Re-verify anything a previous run touched, from scratch
 
 Do not trust a prior run's own claims about what works -- run the

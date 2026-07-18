@@ -68,8 +68,22 @@ Two real gaps, closed the same day as everything above:
   happened," but a bigger ambiguous question (a policy fork, a real
   tradeoff) could get lost in report prose. `.claude/QUESTIONS.md` — a
   real file at each project's own repo root, not tucked in `~/reports/` —
-  is now the standard place either tier appends one when it comes up.
-  Append-only; the user clears an entry by hand once they've read it.
+  is now the standard place either tier appends one when it comes up
+  (append-only), and it's symlinked into `questions/<project>.md` +
+  printed by `bin/morning-report.sh`, so it surfaces in one place.
+
+  **QUESTIONS.md is two-way, not just a flag.** The user answers a
+  question by replying **inline** under it on a `> ` blockquote line —
+  that's the whole interface, no separate tool. The contract: `/nightly-batch`
+  owns answer-processing (reads the file first each run, treats a `> `
+  answer as authoritative like `FOCUS.md`, acts on it, folds standing
+  decisions into `FOCUS.md`, then removes the answered block — git history
+  and the report keep the record); `/bug-sweep` only *appends* questions
+  and must never act on or clear a `> ` answer, so the 15-minute loop
+  can't race the nightly over the file. Unanswered questions are left
+  alone and never re-asked; deleting a line by hand still dismisses one
+  without action. See `examples/QUESTIONS.md.template` for the exact
+  format both tiers write and the user answers in.
 
 Both are documented in `examples/bug-sweep.md.template` and
 `examples/nightly-batch.md.template` (and `examples/QUESTIONS.md.template`
