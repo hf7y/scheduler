@@ -23,6 +23,18 @@ DATE="$(date +%F)"
 BRANCH="paced/$DATE"
 REPORT="$REPORTS_DIR/${DATE}-paced.md"
 
+# Merge policy toggle (2026-07-19, human-directed): default is "merge" --
+# each cycle's finished commits get merged into local main right away
+# (never pushed; a human reviews after the fact and can `git revert -m 1
+# <merge-sha>` same as any other merge commit). Set to "branch" to go back
+# to the old review-before-merge behavior (commits sit on $BRANCH only,
+# human merges by hand). Toggle with:
+#   echo branch > ~/.local/share/scheduler-paced-dev/merge_mode   # old way
+#   echo merge  > ~/.local/share/scheduler-paced-dev/merge_mode   # default
+# or just: rm ~/.local/share/scheduler-paced-dev/merge_mode  (resets to merge)
+MERGE_MODE_FILE="$STATE_DIR/merge_mode"
+merge_mode() { [ -f "$MERGE_MODE_FILE" ] && cat "$MERGE_MODE_FILE" || echo "merge"; }
+
 MAX_TURNS="${MAX_TURNS:-60}"
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
 NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
@@ -94,10 +106,36 @@ Commit each finished change with a clear message. Then append a section for THIS
     notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG"
   fi
 
+  MERGED=0
+  if [ "$AFTER_SHA" != "$BEFORE_SHA" ] && [ "$STATUS" = "done" ]; then
+    MODE="$(merge_mode)"
+    if [ "$MODE" = "merge" ]; then
+      if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] && [ -z "$(git status --porcelain)" ]; then
+        if git merge --no-ff --no-edit "$BRANCH"; then
+          MERGED=1
+          MERGE_SHA="$(git rev-parse HEAD)"
+          echo "merged $BRANCH into main -- $MERGE_SHA (revert with: git revert -m 1 $MERGE_SHA)"
+          notify-send "$JOB_NAME" "Auto-merged $BRANCH into main ($MERGE_SHA) -- revert-on-review still open." 2>/dev/null || true
+        else
+          echo "merge into main FAILED (conflict?) -- aborting merge, leaving $BRANCH for manual review"
+          git merge --abort 2>/dev/null || true
+        fi
+      else
+        echo "merge_mode=merge but $SCHED_REPO isn't clean/on-main right now (likely another session's in-progress edit) -- leaving $BRANCH unmerged, safe fallback"
+      fi
+    else
+      echo "merge_mode=$MODE -- leaving $BRANCH unmerged for manual review (old behavior)"
+    fi
+  fi
+
   if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
-    echo "cycle $STATUS: new commits on $BRANCH --"
-    git log --oneline "main..$BRANCH" 2>/dev/null | head -20
-    notify-send "$JOB_NAME" "New commits on $BRANCH awaiting review/merge." 2>/dev/null || true
+    if [ "$MERGED" = "1" ]; then
+      echo "cycle $STATUS: new commits, MERGED to main -- review with: git show $MERGE_SHA / git log -p $BEFORE_SHA..$AFTER_SHA"
+    else
+      echo "cycle $STATUS: new commits on $BRANCH (unmerged) --"
+      git log --oneline "main..$BRANCH" 2>/dev/null | head -20
+      notify-send "$JOB_NAME" "New commits on $BRANCH awaiting review/merge." 2>/dev/null || true
+    fi
   else
     echo "cycle $STATUS: no commits"
   fi

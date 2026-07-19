@@ -16,6 +16,23 @@ work still to build before leaning on this. Until that safety work lands,
 prefer the old review-gate branch behavior for any change riskier than a
 docs/FOCUS-only edit.
 
+**Merge policy (changed 2026-07-19, human-directed):** `bin/scheduler-dev-cycle.sh`
+now merges each finished paced cycle's commits from `paced/<date>` into
+*local* `main` right after the cycle (`git merge --no-ff`), instead of
+leaving them on the branch for a manual merge first. Review still happens —
+just after the fact (`git show <merge-sha>`, revert with
+`git revert -m 1 <merge-sha>`) instead of before. This is a **toggleable
+flag**, not a rewrite of the safety model: `~/.local/share/scheduler-paced-dev/merge_mode`
+holds `merge` (default, new behavior) or `branch` (old behavior, commits
+stay on the branch for manual review/merge). The cycle also self-guards:
+if `main` isn't clean and checked out in the scheduler repo when a cycle
+finishes (e.g. another session has an in-progress edit, as has happened
+with `crt.conf`), it automatically falls back to leaving commits unmerged
+rather than merging into a dirty tree. **Still separate from and unaffected
+by this: pushing to `origin` stays exactly as cautious as the push policy
+above** — this only changes local-main merge timing, not whether/when
+anything reaches GitHub.
+
 ## This project dogfoods its own system
 
 The scheduler uses the exact pieces every registered project uses, no
@@ -111,7 +128,34 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
    command's FOCUS path — write it up as a per-project proposal in the
    report (and a QUESTIONS entry) rather than editing other repos from here.
 
-3. Develop a TUI or webapp experience (whatever is slimmest) for the morning reports and other interactions. Maybe this ends up as a progam installed in my local bin. I'd like to open up a terminal, run "scheduler" or similar cool name, see at a glance what's scheduled. Then I should be able to see past reports, inline edit open questions, see what tasks each project has scheduled to run.
+3. **"scheduler" glance command (scoped 2026-07-19).** Goal: run `scheduler`
+   in a terminal, see at a glance what's scheduled per project + whether it
+   has open questions, then jump into a report and answer inline — vim
+   native, not a custom UI. Sequencing (build item 0's merged file FIRST;
+   the command is mostly a thin wrapper around it):
+   a. **Prototype the merged `report/<project>.md` file on scheduler itself**
+      (item 0 above) — newest run appended, `## Questions` section using the
+      existing `> ` reply convention, next cycle reads its own prior answers
+      back out of the same file. Don't lose history; append don't overwrite.
+   b. **Add a `scheduler` subcommand** (`bin/scheduler-run scheduler` or a
+      thin new `bin/scheduler` wrapper) that prints one screen: per project,
+      next scheduled dispatch (paced-rotation position for paced
+      participants, cron time for fixed ones) and an open-questions flag;
+      and `scheduler open <project>` that just execs `$EDITOR` on that
+      project's merged report file — no custom TUI framework, no parsing
+      layer beyond what already reads `QUESTIONS.md` today.
+   c. **Blocker "approve/clear" = `git log main..<branch>` + manual
+      `git merge`/`git revert`**, same as the merge-policy note above — the
+      glance screen can show "N commits on <branch> awaiting review" and
+      shell out to `git log`/`git diff` on demand, but do not auto-merge
+      from inside this command; that stays a human action (or the separate,
+      already-toggleable `scheduler-dev-cycle.sh` merge policy for this
+      project's own self-dev branch specifically).
+   d. Migrate one project at a time after scheduler's own prototype is
+      verified; old `LATEST.md`/`QUESTIONS.md` stay as fallback until each
+      project's wrapper is confirmed reading the merged file correctly.
+   Pick off (a) first, verify it round-trips a real inline reply before
+   touching (b)-(d).
 
 4. Lay the groundwork for a long term design which allows me to remove these github hosted projects from my system entirely. The code lives on github and only gets pulled if necessary to do work. If it's better to cache the downloaded repo somewhere, that's fine. The goal here is to clean up my working environment so me moving these projects around to different locations doesn't effect scheduler's ability to run their improvements.
 
