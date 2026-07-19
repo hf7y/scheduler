@@ -67,6 +67,30 @@ batch_slot_time() {
   printf '%d %d' "$((total % 60))" "$((total / 60))"
 }
 
+# --- Paced-runner meta (optional) ---------------------------------------------
+# schedule/_runner.conf turns on usage-paced dispatch: one frequent tick runs
+# bin/usage-paced-runner.sh, which round-robins the ENABLED participants in
+# schedule/_paced.conf whenever usage-gate.sh reports spare weekly quota. With
+# PACED_SUPPRESS_BATCH=1, any project that IS a paced participant gets its fixed
+# nightly BATCH cron line suppressed below (the runner dispatches it instead) --
+# each project's BATCH_* config stays intact, so deleting _runner.conf restores
+# the old fixed-time behaviour on the next sync. SWEEP (bug-sweep) tiers are
+# never suppressed.
+RUNNER_JOB=""; RUNNER_CMD=""; RUNNER_CRON=""; PACED_SUPPRESS_BATCH=0
+if [ -f "$SCHEDULE_DIR/_runner.conf" ]; then
+  # shellcheck disable=SC1091
+  source "$SCHEDULE_DIR/_runner.conf"
+fi
+PACED_SET=" "   # space-delimited set of paced participant names
+if [ "${PACED_SUPPRESS_BATCH:-0}" = "1" ] && [ -f "$SCHEDULE_DIR/_paced.conf" ]; then
+  while IFS='|' read -r pname penabled _; do
+    case "$pname" in ''|\#*) continue ;; esac
+    [ "${penabled// /}" = "1" ] || continue
+    PACED_SET+="${pname// /} "
+  done < "$SCHEDULE_DIR/_paced.conf"
+fi
+is_paced() { case "$PACED_SET" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
 shopt -s nullglob
 CONF_FILES=()
 for f in "$SCHEDULE_DIR"/*.conf; do
@@ -201,6 +225,10 @@ for conf in "${CONF_FILES[@]}"; do
   # of requiring a hand-picked, non-colliding literal time every time a
   # project registers. ---
   jn="${BATCH_JOB_NAME:-}"; sc="${BATCH_SCRIPT:-}"; cr="${BATCH_CRON:-}"
+  if is_paced "$PROJECT" && { [ -n "$jn" ] || [ -n "$sc" ] || [ -n "$cr" ]; }; then
+    echo "note [$name/BATCH]: paced participant -- fixed cron suppressed, dispatched by ${RUNNER_JOB:-usage-paced-runner}" >&2
+    jn=""; sc=""; cr=""   # fall through to the "not used" branch below
+  fi
   if [ -z "$jn" ] && [ -z "$sc" ] && [ -z "$cr" ]; then
     : # not used for this project
   elif [ -z "$jn" ]; then
@@ -248,6 +276,20 @@ if [ "${#AUTO_BATCH[@]}" -gt 0 ]; then
     BATCH_CRON_SEEN+=("$cr|$proj (auto)")
     MANAGED_LINES+=("$cr $sc # scheduler:$proj:BATCH ($jn, auto-batched)")
   done
+fi
+
+# Emit the single usage-paced dispatcher tick (if schedule/_runner.conf set it).
+# This one line replaces the fixed nightly BATCH lines suppressed above.
+if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
+  if [ -z "$RUNNER_JOB" ] || [ -z "$RUNNER_CMD" ] || [ -z "$RUNNER_CRON" ]; then
+    echo "ERROR [runner]: _runner.conf needs RUNNER_JOB, RUNNER_CMD and RUNNER_CRON all set -- runner tick omitted" >&2
+    ERRORS=$((ERRORS + 1))
+  elif ! validate_cron "$RUNNER_CRON"; then
+    echo "ERROR [runner]: RUNNER_CRON='$RUNNER_CRON' isn't a valid 5-field cron expression -- runner tick omitted" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    MANAGED_LINES+=("$RUNNER_CRON $RUNNER_CMD # scheduler:$RUNNER_JOB:RUNNER (usage-paced dispatch)")
+  fi
 fi
 
 # Warn (not fail) on two projects' Tier 2 sharing an identical cron
