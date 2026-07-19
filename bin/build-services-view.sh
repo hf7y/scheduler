@@ -99,17 +99,24 @@ emit_tier() { # $1 conf-tier (SWEEP/BATCH) $2 label $3 project $4 repo
   } >> "$outdir/schedule.txt"
 
   # task.md section
-  local cmd cmdname cmdfile mt at br
+  local cmd cmdname cmdfile mt at br mo
   cmd="$(prompt_cmd "$sc")"; cmdname="${cmd#/}"
   cmdfile="$repo/.claude/commands/${cmdname}.md"
   mt="$(scalar "$sc" MAX_TURNS)"; [ -n "$mt" ] || mt="40 (engine default)"
   at="$(scalar "$sc" ALLOWED_TOOLS)"; [ -n "$at" ] || at="Bash,Read,Write,Edit,Glob,Grep (engine default)"
   br="$(scalar "$sc" BRANCH)"; [ -n "$br" ] || br="main (engine default)"
+  # Model is the biggest per-token cost lever (Opus ~5x Sonnet), so surface
+  # it in the audit. A legacy wrapper sets MODEL inline; a scheduler-run tier
+  # sets <TIER>_MODEL in the conf (already sourced into scope here). Unset in
+  # both means no --model flag -> the run inherits ~/.claude/settings.json.
+  mo="$(scalar "$sc" MODEL)"; [ -n "$mo" ] || eval "mo=\${${T}_MODEL:-}"
+  [ -n "$mo" ] || mo="unset — inherits CLI default (~/.claude/settings.json)"
   {
     echo "## ${label}  (${jn})"
     echo
     echo "Runs \`claude -p\` with:"
     echo "  - command:       ${cmd:-?}   (full instructions: ./command-${cmdname}.md)"
+    echo "  - model:         ${mo}"
     echo "  - max turns:     ${mt}"
     echo "  - allowed tools: ${at}"
     echo "  - branch:        ${br}"

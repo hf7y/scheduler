@@ -107,3 +107,20 @@ BATCH_MAX_TURNS=200
 
 # --- LEGACY (backwards-compat): drop to migrate onto scheduler-run. ---
 # BATCH_SCRIPT="/home/zach/.local/bin/<project>-nightly-batch-loop.sh"
+
+# ===========================================================================
+# DEPLOY FRESHNESS (optional) -- for a project whose nightly commits + pushes
+# but whose *live* deploy is a step a human runs by hand (e.g. an interactive
+# clasp/publish auth the unattended job can't do). Without this, a
+# code-shipping night that files no question leaves the live site silently
+# behind origin. Set all three and bin/morning-report.sh will probe each
+# morning and, when stale, print a prominent "DEPLOY PENDING" line.
+# ===========================================================================
+# DEPLOY_FRESH_CMD is the probe: it must exit 0 when live is up to date and
+# NON-ZERO when a deploy is pending. Keep it cheap (a single HTTP GET). E.g.
+# vkv-inventory's ?scope=sweep-status returns JSON when fresh, HTML when stale:
+# DEPLOY_FRESH_CMD="curl -fsS 'https://.../exec?scope=sweep-status' | grep -q '^[[:space:]]*{'"
+# DEPLOY_CMD is the exact command to run to deploy, printed in that line:
+# DEPLOY_CMD="cd /path/to/<project> && tools/deploy.sh"
+# LIVE_URL is optional context printed alongside:
+# LIVE_URL="https://script.google.com/.../exec"
