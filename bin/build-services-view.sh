@@ -82,7 +82,10 @@ last_run() {
 emit_tier() { # $1 conf-tier (SWEEP/BATCH) $2 label $3 project $4 repo
   local T="$1" label="$2" project="$3" repo="$4" outdir="$5"
   local jn cr sc; eval "jn=\${${T}_JOB_NAME:-}"; eval "cr=\${${T}_CRON:-}"; eval "sc=\${${T}_SCRIPT:-}"
-  [ -z "$jn" ] && return 0
+  if [ -z "$jn" ]; then
+    echo "### ${label} — disabled (no ${T}_JOB_NAME set)" >> "$outdir/schedule.txt"
+    return 0
+  fi
 
   # Resolve the live cron expression (auto-batched BATCH_CRON is only known
   # from the crontab, not the conf), preferring what's actually installed.
@@ -146,7 +149,12 @@ INDEX="$SERVICES/README.md"
 
 shopt -s nullglob
 for conf in "$DIR"/schedule/*.conf; do
-  [ "$(basename "$conf")" = "_batch.conf" ] && continue
+  # Underscore-prefixed files are meta-config (_batch.conf, _paced.conf,
+  # _runner.conf, ...), not projects -- same convention sync-crontab.sh's
+  # project glob already follows. Sourcing one as a project conf is worse
+  # than a cosmetic miss: _paced.conf's "name|enabled|cmd" lines get read as
+  # shell and can execute a real participant wrapper (network call, hangs).
+  case "$(basename "$conf")" in _*) continue ;; esac
   ( # subshell so each conf's vars don't leak into the next
     unset PROJECT PROJECT_REPO_PATH SWEEP_JOB_NAME SWEEP_CRON SWEEP_SCRIPT \
           BATCH_JOB_NAME BATCH_CRON BATCH_SCRIPT
