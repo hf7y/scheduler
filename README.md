@@ -50,7 +50,7 @@ is fully regenerated from whatever confs currently exist).
 | `bin/scheduler-run` | Generic entrypoint. `scheduler-run <project> <sweep\|batch>` reads `schedule/<project>.conf` and sources the engine. Replaces per-project `~/.local/bin/*-loop.sh` wrappers. |
 | `bin/sync-crontab.sh` | Reads every `schedule/*.conf`, rewrites only the scheduler-managed crontab block, auto-staggers `BATCH_CRON=auto` slots, syncs `questions/`+`focus/` symlinks. Preview by default; `--apply` writes. |
 | `bin/tracker-bug-sweep-precheck.sh` | Reusable `PRECHECK_CMD` gate: skips the `claude` call entirely when the tracker's open-report set is unchanged. |
-| `bin/morning-report.sh` | Aggregates every project's `~/reports/<project>/LATEST.md` + flagged questions. |
+| `bin/morning-report.sh` | Aggregates every project's `~/reports/<project>/LATEST.md` + flagged questions, and prints a `DEPLOY PENDING` line for any project whose optional `DEPLOY_FRESH_CMD` probe reports the live build has fallen behind origin. |
 | `bin/build-services-view.sh` | Regenerates the plain-text per-service audit under `services/`. |
 | `schedule/*.conf` | One per registered project (`_batch.conf` is global auto-stagger config). |
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in. |
