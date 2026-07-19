@@ -38,3 +38,8 @@ its line once you've actually read and dealt with it.
   Needs a real decision: which approach (if any) is worth building, and
   whether it's worth doing before or after more projects migrate onto
   this engine.
+  > Just flag it in reports which branches exist when there's a live/dev
+  > split (option 2 -- self-report touched branches, don't try to infer
+  > purely from git state). Keep me informed about branches generally;
+  > look into an ASCII tree diagram in the report/dashboard showing branch
+  > structure per project. Standing direction -- fold into FOCUS.md.

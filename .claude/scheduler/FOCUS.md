@@ -230,6 +230,17 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **Branch awareness in reports (decided 2026-07-19, human-directed).**
+  Fixes the push-verification blind spot above (option 2): have each run
+  self-report which branch(es) it touched (write branch name(s) to a small
+  marker file rather than trying to infer purely from git state after the
+  fact), and have `morning-report.sh`/the services view surface it — a
+  per-project line naming any branch(es) beyond `main` that exist right
+  now, flagging when there's a live/dev split. Also look into rendering an
+  ASCII tree diagram of each project's branch structure (e.g. `git log
+  --graph --oneline --all` shaped) in the report/dashboard so branch state
+  is visible at a glance, not just named. General principle: keep the human
+  informed about what branches exist, don't let them pile up silently.
 - **Sweep cadence** — sweeps (esp. chezz) may run too often; tune
   `schedule/*.conf` cadence, validate with a `sync-crontab.sh` preview.
 - **Auditability** — largely addressed by `bin/build-services-view.sh` /
