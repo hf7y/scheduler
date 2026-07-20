@@ -317,7 +317,7 @@ cmd_sweep() {
       while IFS= read -r rel; do
         [ -n "$rel" ] || continue
         echo "== $name: auto-committing $rel =="
-        cmd_idea_push_reminder "$path/$rel"
+        cmd_commit_file "$path/$rel"
       done <<< "$dirty_md"
     fi
 
@@ -338,8 +338,51 @@ cmd_sweep() {
       echo "== $name: $ahead commit(s) ahead of origin/$branch, not pushed (push always stays a human step)"
     fi
   done
+
+  # Second pass: every automated job's DEDICATED CLONE
+  # (~/.local/share/<JOB_NAME>/repo) -- added 2026-07-20 after realizing
+  # the first pass above only ever checks YOUR manual checkouts. That's a
+  # real blind spot: the original stranded-commit incident this whole
+  # feature exists for (chezz, same day) was found sitting in a dedicated
+  # clone, not a human checkout -- the first version of `sweep` could
+  # never have caught its own motivating example. Glob-based, not
+  # conf-parsed: scans whatever actually exists under ~/.local/share/*/repo
+  # rather than trying to reconstruct job names from schedule/*.conf,
+  # so it also covers legacy per-tier clones (chezz-bug-sweep,
+  # chezz-nightly-batch, etc.) without needing to keep two enumeration
+  # paths in sync. Scheduler's own jobs use throwaway worktrees, not this
+  # shape (confirmed: no matching repo/ dir), so they're naturally excluded,
+  # not special-cased.
+  #
+  # REPORT ONLY here, never auto-commit -- a dedicated clone gets a fresh
+  # `git reset --hard origin/<branch>` before every run, so a human is
+  # never expected to be editing inside one directly. Anything dirty or
+  # unpushed there is either a genuinely interrupted run (the exact thing
+  # worth surfacing) or something unusual enough to deserve a look, not a
+  # routine auto-commit that could paper over what actually happened.
+  local clone_found=0
+  for repo in "$HOME"/.local/share/*/repo; do
+    [ -d "$repo/.git" ] || continue
+    clone_found=1
+    job="$(basename "$(dirname "$repo")")"
+    dirty="$(git -C "$repo" status --porcelain 2>/dev/null)"
+    branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    ahead="$(git -C "$repo" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
+    if [ -n "$dirty" ]; then
+      echo "== [clone] $job: dirty in the dedicated clone itself -- unusual, worth a look =="
+      echo "$dirty" | sed 's/^/  /'
+    fi
+    if [ "${ahead:-0}" -gt 0 ] 2>/dev/null; then
+      echo "== [clone] $job: $ahead commit(s) ahead of origin/$branch, sitting UNPUSHED in the dedicated clone -- likely a run that got cut off after committing but before pushing (see the stranded-commit backlog item) =="
+    fi
+  done
+
   echo
-  echo "swept every registered project + scheduler itself."
+  if [ "$clone_found" = "1" ]; then
+    echo "swept every registered project + scheduler itself + every job's dedicated clone."
+  else
+    echo "swept every registered project + scheduler itself. (no dedicated clones found under ~/.local/share/*/repo)"
+  fi
 }
 
 case "${1:-}" in
