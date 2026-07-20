@@ -185,6 +185,22 @@ cmd_idea_push_reminder() {
   if [ -z "$(git -C "$repo" status --porcelain -- "$path" 2>/dev/null)" ]; then
     return 0
   fi
+  # Freshness check BEFORE committing -- the actual fix for "do I need to
+  # git fetch && git status by hand before every edit" (2026-07-20): no,
+  # the tool checks instead. Doesn't block the commit (the file content is
+  # always safe to keep locally regardless), just warns loudly if this
+  # commit is about to land on a stale base, which is exactly the failure
+  # mode that caused a real divergence (home-assistant, same day). `git
+  # fetch` against a local bare remote (~/git-remotes/*.git, most projects
+  # here) is effectively instant; against a real GitHub remote it's a
+  # normal network round-trip -- worth it for what it catches.
+  local branch behind
+  branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  git -C "$repo" fetch --quiet 2>/dev/null
+  behind="$(git -C "$repo" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+  if [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
+    echo "NOTE: $repo is $behind commit(s) behind origin/$branch -- committing anyway (your edit is safe), but pull/merge before pushing to avoid a real divergence"
+  fi
   if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "Idea added via \`scheduler -i\`: $(basename "$path")" -- "$path"; then
     echo "committed locally in $repo -- run 'git -C \"$repo\" push' whenever you're ready (never automatic)"
   else
