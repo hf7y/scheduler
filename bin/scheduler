@@ -33,10 +33,21 @@ usage: scheduler [command] [project]
                          into its FOCUS.md backlog/feature-request section
                          (or a new "Ideas" section, created if the project
                          has no FOCUS.md yet)
+  sweep, -s              reactive backstop for the vim auto-commit hook --
+                         scans every registered repo (+ scheduler itself)
+                         for uncommitted/unpushed/diverged state the hook
+                         may have missed (e.g. a long-running vim session
+                         that predates a ~/.vimrc change never fires new
+                         autocmds). Safely auto-commits dirty *.md files
+                         one at a time (same tested logic as `-i`); never
+                         touches non-.md files or attempts to resolve a
+                         genuine ahead+behind divergence -- those are only
+                         ever reported, never auto-resolved.
 
 Examples: scheduler -b   |   scheduler focus crt   |   scheduler report wtul
           scheduler -i realisateur "a browser extension that ..."
           scheduler -i wtul "add a --dry-run flag to wtul-rip"
+          scheduler -s
 EOF
 }
 
@@ -215,6 +226,64 @@ cmd_glance() {
   echo "-> scheduler focus/questions/report <project> to jump straight in"
 }
 
+cmd_sweep() {
+  echo "scheduler sweep -- $(date '+%Y-%m-%d %H:%M')"
+  echo "(reactive backstop: catches uncommitted/unpushed/diverged state the vim"
+  echo " auto-commit hook may have missed -- e.g. a long-running vim session"
+  echo " that predates a ~/.vimrc change never picks up new autocmds)"
+  echo
+
+  local repos_seen=0 issues_found=0
+  {
+    printf 'scheduler|%s\n' "$SCHED_ROOT"
+    while IFS= read -r proj; do
+      # scheduler is also self-registered (schedule/scheduler.conf, for its
+      # own dogfooded paced cycle) -- already covered by the hardcoded line
+      # above, skip here to avoid checking the same repo twice.
+      [ "$proj" = "scheduler" ] && continue
+      local rp
+      rp="$(conf_field "$proj" PROJECT_REPO_PATH)"
+      [ -n "$rp" ] && printf '%s|%s\n' "$proj" "$rp"
+    done < <(projects)
+  } | while IFS='|' read -r name path; do
+    [ -d "$path/.git" ] || continue
+    repos_seen=$((repos_seen + 1))
+
+    # Safe .md files get auto-committed, one file at a time, same tested
+    # logic `-i` already uses. Anything else (code, YAML config, etc.) is
+    # only ever reported -- see home-assistant's config/automations.yaml
+    # divergence (2026-07-20) for exactly why this stays conservative.
+    local dirty_md
+    dirty_md="$(git -C "$path" status --porcelain -- '*.md' 2>/dev/null | awk '{print $2}')"
+    if [ -n "$dirty_md" ]; then
+      while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        echo "== $name: auto-committing $rel =="
+        cmd_idea_push_reminder "$path/$rel"
+      done <<< "$dirty_md"
+    fi
+
+    local dirty_other
+    dirty_other="$(git -C "$path" status --porcelain -- . ':!*.md' 2>/dev/null)"
+    if [ -n "$dirty_other" ]; then
+      echo "== $name: dirty, NOT auto-committed (only *.md is safe to auto-commit) =="
+      echo "$dirty_other" | sed 's/^/  /'
+    fi
+
+    local branch ahead behind
+    branch="$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    ahead="$(git -C "$path" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
+    behind="$(git -C "$path" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+    if [ "${ahead:-0}" -gt 0 ] && [ "${behind:-0}" -gt 0 ]; then
+      echo "== $name: ** DIVERGED from origin/$branch ** -- $ahead local-only, $behind remote-only commit(s). Needs a real merge decision -- NOT auto-resolved, ever."
+    elif [ "${ahead:-0}" -gt 0 ]; then
+      echo "== $name: $ahead commit(s) ahead of origin/$branch, not pushed (push always stays a human step)"
+    fi
+  done
+  echo
+  echo "swept every registered project + scheduler itself."
+}
+
 case "${1:-}" in
   ""|glance) cmd_glance ;;
   blockers|-b) open_file "$SCHED_ROOT/BLOCKERS.md" ;;
@@ -231,6 +300,7 @@ case "${1:-}" in
     open_file "$REPORTS_ROOT/$2/LATEST.md"
     ;;
   idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  sweep|-s) cmd_sweep ;;
   -h|--help|help) usage ;;
   *) echo "scheduler: unknown command '$1'" >&2; usage; exit 2 ;;
 esac
