@@ -20,12 +20,43 @@
 # live build has fallen behind origin -- so a code-shipping night that
 # committed + pushed but couldn't run the deploy (e.g. vkv-inventory's clasp
 # step needs interactive auth) surfaces here even when it filed no question.
+#
+# Also prints a "Branches beyond main" section (FOCUS.md backlog item,
+# decided 2026-07-19): every registered job's engine already maintains a
+# dedicated clone under ~/.local/share/<JOB_NAME>/repo (see
+# lib/sweep-loop-common.sh) that is never deleted between runs, so its local
+# git state -- what branches exist locally and on origin as of the last run
+# -- is read directly rather than adding a new marker file. Same idea for
+# this repo itself (checked directly, no dedicated clone). Read-only: no
+# fetch is performed, so this reflects branch state as of each project's
+# last scheduled run / this repo's current state, not a live network check.
 
 set -uo pipefail
 SCHED_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPORTS_DIR="${REPORTS_DIR:-$HOME/reports}"
 QUESTIONS_DIR="$SCHED_DIR/questions"
 SCHEDULE_DIR="$SCHED_DIR/schedule"
+STATE_ROOT="${STATE_ROOT:-$HOME/.local/share}"
+
+# Print $2's branches beyond its default (main/master), one per line, or
+# nothing if there are none / it isn't a git repo. $1 is a label for the
+# caller to print if this produces any output.
+extra_branches() {
+  local repo="$1"
+  # .git is a FILE (not a directory) inside a git worktree -- use -e, not -d,
+  # so this also covers this repo's own paced/<date> worktree.
+  [ -e "$repo/.git" ] || return 0
+  local default
+  default="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
+  default="${default#origin/}"
+  [ -n "$default" ] || default="main"
+  # refs/remotes/origin/HEAD's short name is bare "origin" (not "origin/HEAD"),
+  # so it needs its own exclusion alongside "HEAD" for a plain branch ref.
+  git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin 2>/dev/null \
+    | sed 's#^origin/##' \
+    | sort -u \
+    | grep -vx -e "$default" -e "HEAD" -e "origin" -e "main" -e "master" || true
+}
 
 if [ -d "$REPORTS_DIR" ]; then
   found=0
@@ -58,7 +89,17 @@ if [ -d "$SCHEDULE_DIR" ]; then
   any_deploy=0
   for conf in "$SCHEDULE_DIR"/*.conf; do
     [ -e "$conf" ] || continue
-    [ "$(basename "$conf")" = "_batch.conf" ] && continue
+    # Underscore-prefixed files are meta-config (_batch.conf, _paced.conf,
+    # _runner.conf, ...), not projects -- skip all of them uniformly, same
+    # convention bin/sync-crontab.sh and bin/build-services-view.sh already
+    # follow. This used to only exclude _batch.conf by name: sourcing
+    # _paced.conf's "name|enabled|cmd" lines as shell parses each as a
+    # pipeline, and the last stage is a real wrapper path -- e.g.
+    # `scheduler|1|/home/zach/.local/bin/scheduler-dev-cycle.sh` actually
+    # EXECUTES that wrapper as a side effect of this read-only report
+    # script (same bug independently hit and fixed in
+    # build-services-view.sh on 2026-07-19; this loop was missed then).
+    case "$(basename "$conf")" in _*) continue ;; esac
     # Source in a subshell (same idiom as build-services-view.sh) so a conf's
     # vars never leak; emit a tab-separated line on stdout only when stale.
     result="$(
@@ -84,6 +125,39 @@ if [ -d "$SCHEDULE_DIR" ]; then
     echo "  live build is BEHIND origin — a deploy is pending."
     [ -n "$dp_url" ] && echo "  live: $dp_url"
     echo "  run:  $dp_cmd"
+    echo
+  done
+fi
+
+# Branches beyond main -- this repo (scheduler) first, since its own
+# paced/nightly self-dev branches are the ones most likely to pile up
+# unmerged (see FOCUS.md item 6), then every other registered project's
+# dedicated clone.
+any_branches=0
+sched_extra="$(extra_branches "$SCHED_DIR")"
+if [ -n "$sched_extra" ]; then
+  echo "════════════════════════════════════════"
+  echo "  Branches beyond main"
+  echo "════════════════════════════════════════"
+  any_branches=1
+  echo "-- scheduler (this repo) --"
+  echo "$sched_extra" | sed 's/^/  /'
+  echo
+fi
+if [ -d "$STATE_ROOT" ]; then
+  for repo in "$STATE_ROOT"/*/repo; do
+    [ -d "$repo/.git" ] || continue
+    job="$(basename "$(dirname "$repo")")"
+    extra="$(extra_branches "$repo")"
+    [ -n "$extra" ] || continue
+    if [ "$any_branches" -eq 0 ]; then
+      echo "════════════════════════════════════════"
+      echo "  Branches beyond main"
+      echo "════════════════════════════════════════"
+      any_branches=1
+    fi
+    echo "-- $job (as of its last run) --"
+    echo "$extra" | sed 's/^/  /'
     echo
   done
 fi
