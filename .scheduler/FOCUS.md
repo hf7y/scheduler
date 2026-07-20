@@ -555,6 +555,52 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 - **2026-07-20 14:27 (via `scheduler -i`):** find a way to make scheduler [project] alias to report. also find a way to introduce tab completion on project names so I don't need to remember.
 
+- **Avoid stranded state when a run gets cut off mid-way by hitting the
+  usage limit (raised 2026-07-20, human-directed).** Two asks, and both
+  build on infrastructure that ALREADY exists rather than needing new
+  architecture:
+  1. **Predictive: don't start a run predicted not to finish.**
+     `usage-gate.sh`'s burn-rate check already gates dispatch on spare
+     weekly quota BEFORE a cycle starts — the gap is that a long-running
+     job can still exhaust quota mid-run (a burst, or concurrent
+     interactive use eating the same account-wide budget), which
+     `usage-gate.sh`'s pre-check can't see coming. Worth a stronger
+     pre-check (e.g. require enough headroom for the job's typical/max
+     `MAX_TURNS` cost, not just "any spare capacity right now"), but this
+     can only ever be a probabilistic improvement, not a guarantee — #2
+     below is the part that actually matters when prediction is wrong.
+  2. **Reactive: lightweight start/stop "punch clock" so a cutoff is
+     visible, not silent.** `lib/sweep-loop-common.sh` ALREADY writes a
+     start-of-run marker per project
+     (`~/.local/share/scheduler-registry/<PROJECT_KEY>.active`, with
+     job/tier/started_at/pid) and removes it via a bash `EXIT` trap when
+     the run finishes — this is already an implicit punch-clock. What's
+     actually missing:
+     - The marker doesn't record WHAT the run was attempting (just that
+       one was running) — add a one-line "what I'm about to do" field,
+       written once at the top of the run, so a stranded marker is
+       informative, not just "something happened."
+     - **Nothing surfaces a marker that never got cleaned up.** An `EXIT`
+       trap doesn't fire on `SIGKILL`/OOM/a hard crash, so a truly
+       stranded run leaves its `.active` marker sitting forever with
+       nobody looking at it. `bin/scheduler`/`morning-report.sh` should
+       check for `.active` markers older than some threshold (job's own
+       typical max runtime, a generous multiple of it) with no matching
+       completion, and flag them — "this looked like it was still running
+       3 hours ago, probably got cut off, check `sweep.log`."
+     - **The commit-level risk is already partially covered, not
+       unaddressed:** `sweep-loop-common.sh`'s existing before/after/
+       remote-SHA push-verification already distinguishes "pushed: yes" /
+       "no new commits" / "WARNING: local commit made but NOT pushed" —
+       a run cut off after committing but before pushing already shows up
+       as that WARNING line in the log today. The real gap is entirely in
+       visibility (nobody's watching `sweep.log` proactively), not in the
+       underlying git safety (a git commit itself is always atomic — there
+       is no such thing as a half-made commit to worry about).
+  Sequencing: cheap to build once axis 1's migration touches
+  `lib/sweep-loop-common.sh`-adjacent code anyway — natural pairing, not
+  urgent enough to jump the queue on its own.
+
 - **Real bug, confirmed 2026-07-20: report filenames are date-only under
   a no-longer-nightly rhythm — data loss risk, not hypothetical.** Every
   real wrapper's `PROMPT` (`chezz`, `wtul`, `home-assistant`,
