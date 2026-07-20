@@ -131,8 +131,26 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 3. **"scheduler" glance command (scoped 2026-07-19).** Goal: run `scheduler`
    in a terminal, see at a glance what's scheduled per project + whether it
    has open questions, then jump into a report and answer inline — vim
-   native, not a custom UI. Sequencing (build item 0's merged file FIRST;
-   the command is mostly a thin wrapper around it):
+   native, not a custom UI.
+   - **First cut BUILT 2026-07-20** (`~/.local/bin/scheduler`, NOT in this
+     repo's git history, same as every other `~/.local/bin` wrapper): `scheduler`
+     (glance -- project, open-question count from `questions/*.md`, open
+     `BLOCKERS.md` item count per project), `scheduler -b`/`blockers`,
+     `scheduler -f`/`focus [project]`, `scheduler -q`/`questions [project]`,
+     `scheduler -r`/`report [project]` (opens `~/reports/<project>/LATEST.md`
+     in `$EDITOR`). This is (b) below in spirit but skipped ahead of (a) --
+     it reads today's separate `focus/`/`questions/`/`LATEST.md` files
+     as-is rather than waiting on the merged-file design, so it's a real
+     shortcut today, not a placeholder for the eventual merged file. Open
+     question/blocker counts are a rough heuristic (bullet-line count minus
+     lines matching "resolved"/"acknowledged", or bullets under a matching
+     `## <project>` heading in `BLOCKERS.md`) -- not a real parser, will
+     miscount on anything that doesn't follow the usual `- **` convention.
+     Not yet showing next-dispatch timing (paced-rotation position / cron
+     time) or `git log main..<branch>` awaiting-review counts -- still
+     open, see (b)/(c) below.
+   Sequencing (build item 0's merged file FIRST; the command is mostly a
+   thin wrapper around it):
    a. **Prototype the merged `report/<project>.md` file on scheduler itself**
       (item 0 above) — newest run appended, `## Questions` section using the
       existing `> ` reply convention, next cycle reads its own prior answers
