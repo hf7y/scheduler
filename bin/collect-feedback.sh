@@ -124,9 +124,9 @@ OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v co
     }
     next
   }
-  /^>[ \t]?/ {
+  /^[ \t]*>[ \t]?/ {
     content = $0
-    sub(/^>[ \t]?/, "", content)
+    sub(/^[ \t]*>[ \t]?/, "", content)
     if (content == "(answer inline here)" || content ~ /^\(answer inline here\)/) {
       flush_reply()
       if (consume) print $0 > keep_file
