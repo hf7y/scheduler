@@ -252,17 +252,24 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   verifiable pieces (e.g. a `USAGE_GATE_CMD` sibling to `PRECHECK_CMD`, plus
   per-run token logging into the state dir that `morning-report.sh` sums).
   Don't attempt wholesale in one unattended run.
-- **crt project not yet registerable (2026-07-18)** — `~/Documents/Projects/crt`
-  (landline-handset voice console for Claude Code) is not a git repo at all
-  yet, and there's no `gh` CLI here to script a new GitHub repo + deploy key.
-  Every other project's `REPO_URL` assumes a dedicated disposable clone
-  (`git clone git@github-<project>-deploy:...`) — the engine has no
-  local-checkout-only mode, and Zach confirmed (asked 2026-07-18) he does not
-  want one built as a workaround; GitHub + a real deploy key is the way in
-  when he's ready. Wants Tier 2 (nightly-batch) only when it does register —
-  matches wtul/home-assistant (hardware-tied, no fast web tracker to sweep).
-  Next step is on Zach: create the GitHub repo + deploy key by hand, then
-  come back to fill in `schedule/crt.conf` from the template.
+- **crt registered 2026-07-19** — since resolved (superseding the 2026-07-18
+  note above): now a git repo pushed to a local bare remote
+  (`~/git-remotes/crt.git`, no GitHub/credentials needed), `schedule/crt.conf`
+  wired in as a Tier-2-only paced participant (`schedule/_paced.conf`),
+  `.claude/{FOCUS,QUESTIONS}.md` + `commands/nightly-batch.md` in place,
+  `focus/crt.md`+`questions/crt.md` symlinks applied. First run
+  (2026-07-19T18:33) got a stale clone (`de7ae87`, one commit behind
+  `origin/main`'s `249deff` which is what actually added
+  `.claude/commands/nightly-batch.md`) so it hit "Unknown command:
+  `/nightly-batch`" and did nothing — a one-time ordering issue from
+  registering before that commit was pushed, not a bug in the engine. The
+  dedicated clone does a fresh `reset --hard` each run, so this should
+  self-heal on tonight's next paced cycle since `origin/main` now has the
+  command file — **worth confirming in tomorrow's report that it actually
+  did**, since this is the first project exercising a raw `BATCH_PROMPT`
+  (`/nightly-batch`) through the new generic `scheduler-run` engine rather
+  than a legacy `*_SCRIPT` wrapper, so a real failure here would be worth
+  distinguishing from the known stale-clone explanation.
 - **Deploy-pending awareness in `morning-report.sh`.** Projects with a
   deploy step the nightly can't run (vkv-inventory: the batch commits +
   pushes but has no interactive `clasp` auth, so the live `/exec` silently
