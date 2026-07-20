@@ -372,3 +372,130 @@ crontab-installed) for chezz on the same shared-library shape; see
 - Whether any project's `nightly-batch` wrapper should set `PRECHECK_CMD`
   yet (see "Cost of an idle run" above) — deferred until a real idle-night
   pattern shows up in that project's own reports.
+
+## 2026-07-20 — the vision session, then the real-world hardening pass
+
+Two very different halves of one long day. Full blow-by-blow for
+everything below lives in `.scheduler/FOCUS.md` (dated entries) — this
+is the synthesized shape, not a duplicate.
+
+**Part 1 — vision and architecture, mostly design, not code.**
+
+- **Vision, stated directly:** scheduler runs a fleet of autonomous
+  builders, not just a fleet of maintained projects. Self-spawning
+  (realisateur scaffolding new projects unprompted) is core to the value
+  this system is for, not a risk to contain — safety comes from a
+  *per-project* `AUTONOMY_TIER` dial (low/medium/high, matched to that
+  project's actual stakes), never one global trust ceiling. One rule
+  sits above any tier regardless: genuinely irreversible actions (a new
+  paid dependency, physical actuation, a non-revertible cutover) always
+  need a human, no matter how trusted a project is.
+- **Root-caused the `.claude/**` permission gate** that had been
+  blocking unattended writes to `QUESTIONS.md`/`FOCUS.md` across several
+  projects — confirmed with a controlled A/B test (identical `claude -p`
+  invocation, only the target path differed) that `.claude/**` is
+  hard-refused in headless mode, full stop. Fix: move scheduler-tracking
+  files to a top-level dir outside `.claude/` (`.scheduler/` here).
+  Applied to scheduler itself as the reference implementation; other
+  projects' migration is still queued (consolidation roadmap axis 3).
+- **Designed but did not build:** a `REGISTRATION.md` contract +
+  `SCHEDULER_CONF_VERSION` (soft-validated, warn-don't-block) +
+  `bin/scheduler-register`, so a project can register itself (manually
+  or autonomously) against one authoritative schema instead of
+  reverse-engineering the shape from an existing project's conf. Also
+  designed the target `scheduler` CLI screen in detail (a literal mockup
+  is in FOCUS.md) and the `BLOCKERS.md`-as-a-computed-view redesign.
+- **Item 0** (collapsing report + questions + blockers into one
+  printable, stable file per project) got the most design attention of
+  anything this session — then got explicitly **parked**, later the same
+  day, after real friction kept surfacing faster than any of it could be
+  built and verified. The reasoning, stated directly and worth keeping
+  as a standing principle, not just applied once: *"my ideas outpace
+  implementation of stable versions so the target is always moving."*
+  Named "vision debt" — folded into chezz's own `.claude/commands/
+  ideate.md` the same day as a pattern that command should watch for
+  generally, not just here.
+
+**Part 2 — the actual hardening pass, mostly real bugs found by using
+the system for real, not designed in the abstract.**
+
+This is where most of the day's durable value landed. A representative,
+not exhaustive, list — see FOCUS.md for the rest:
+
+- **A near-miss, caught just in time:** a human reply written into
+  `~/reports/realisateur/LATEST.md` was invisible to `collect-feedback.sh`
+  (it only recognized `%%TAG` lines, not the `> ` convention
+  `QUESTIONS.md` itself documents) — one dispatch away from being
+  silently destroyed when that file got overwritten. Recovered by hand,
+  then fixed at the root: `collect-feedback.sh` now recognizes `> `
+  replies too, merging wrapped lines into one block.
+- **Same bug, twice, in two different files** — the fix above was
+  regex-tested against unindented content, but the REAL convention
+  indents replies two spaces under their bullet. Shipped once, found
+  live (three real replies in realisateur's `QUESTIONS.md` landed
+  correctly but silently never got their auto-stamp), fixed in both
+  `collect-feedback.sh` and the vim auto-stamp function, retroactively
+  corrected the three replies that shipped before the fix.
+- **Built the vim tooling that makes the reply workflow safe by
+  construction, not by discipline:** auto-timestamp + auto-sign on save
+  (without faking history — only new/changed lines get stamped, once
+  per reply not once per wrapped line), then auto-commit on save
+  (resolves symlinks to commit into whichever repo actually owns the
+  file, fully backgrounded so a slow pre-commit hook never blocks the
+  editor). Scope was deliberately broadened mid-session from a fixed
+  literal path list to every `*.md` file, gated by a separate
+  registered-repo check — "discourage the informal path by making the
+  proper one more useful, never by restricting the informal one" is the
+  standing principle that decision established.
+- **`scheduler sweep`** — a reactive backstop for exactly the case the
+  proactive vim hook can't cover (a long-running vim session that
+  predates a `~/.vimrc` change never picks up new autocmds). Built,
+  proven necessary within the same session (found real unprotected
+  content in crt and home-assistant immediately), then extended to also
+  check every automated job's *dedicated clone*, not just human
+  checkouts — the exact blind spot that would have stopped it from
+  catching its own motivating example (chezz's stranded commit was found
+  in a dedicated clone, not a checkout). Wired to its own independent
+  15-minute cron tick, deliberately not gated by `usage-gate.sh` (sweep
+  is pure git/bash, zero API cost — gating it behind a check that
+  protects API spend would throttle it for a reason that doesn't apply).
+- **A real, live-diagnosed git divergence in home-assistant**, root-caused
+  precisely: a live-tested fix deployed straight to the device via its
+  REST API got git-synced correctly, but a *separate*, git-only decision
+  (disabling 5 automations) made in the same session was never deployed
+  — so the nightly's own "reconcile with live instance" step (which
+  trusts live over git by design) silently overwrote the undeployed
+  intent with what was actually running on the hardware. Compounded by
+  the checkout never being fetched against origin afterward. Reconciled
+  with human direction on the one real content conflict; the pattern
+  itself is recorded as a recurring shape to watch for, not a one-off.
+- **Two real regressions caught by using the system, not by review:**
+  `cmd_idea_push_reminder`'s own staleness/freshness check used `git diff
+  --quiet`, which is blind to brand-new untracked files — exactly the
+  case (`.idea` drops) it most needed to catch. And a mid-session rename
+  (`cmd_idea_push_reminder` → `cmd_commit_file`, done to give the vim
+  hook and the CLI one shared implementation instead of two) missed a
+  call site inside `sweep` itself, which would have failed silently the
+  next time sweep found something to auto-commit. Both found and fixed
+  the same day, before either shipped to a real run.
+- **Cross-project propagation, each with a clear boundary respected:**
+  chezz's `.githooks/pre-commit` made path-aware (skips the full 3+
+  minute Playwright suite for docs-only commits — verified live, 3.4min
+  to 1.1s); vim-arcade's mission broadened to teach vim *and* tmux *and*
+  git etiquette, not vim motions alone; crt got a heads-up to check
+  scheduler's current state before more work against an interface
+  (`morning-report.sh`) that's now deprecated; realisateur got a durable
+  note about its eventual abstract-visioning role, explicitly parked,
+  not built.
+- **`bin/morning-report.sh` deprecated in place** in favor of `bin/
+  scheduler` (a real, working CLI, built earlier but never brought under
+  version control until this session — fixed that too, `~/.local/bin/
+  scheduler` is now a symlink to a tracked `bin/scheduler`).
+
+**What's still open, by design, not by oversight:** the live-wrapper
+fixes (date-format collision, `LATEST.md`-as-symlink) only ever landed
+in `examples/` templates, pending explicit go-ahead to touch the five
+real installed scripts; stale-`.active`-marker detection is designed and
+queued as the next concrete piece; `AUTONOMY_TIER`/the registration
+contract stay parked behind the hardening-first priority, correctly not
+built speculatively.
