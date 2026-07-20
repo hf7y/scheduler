@@ -43,3 +43,32 @@ its line once you've actually read and dealt with it.
   > purely from git state). Keep me informed about branches generally;
   > look into an ASCII tree diagram in the report/dashboard showing branch
   > structure per project. Standing direction -- fold into FOCUS.md.
+
+- **2026-07-20 (crt project, building a voice-console presenter for the
+  morning report):** Two findings while building `crt/bin/
+  crt-present-morning-report.py` (a pure-code, zero-LLM parser of
+  `bin/morning-report.sh`'s own stdout, so a voice console can speak/print
+  it without a Claude call -- full design in `crt`'s own
+  `MORNING-REPORT-PRESENTATION.md`):
+
+  1. **`bin/morning-report.sh` hangs.** Ran it standalone twice this
+     session, independent of anything in the crt repo -- it never
+     completed (120s timeout both times). Not investigated further (out
+     of scope from the crt side), but a real bug: plausibly a slow/
+     unreachable per-project `DEPLOY_FRESH_CMD` probe (home-assistant's
+     own report already documents an unreachable-Pi/network-mismatch
+     scenario that could match the shape of a hang). Worth someone
+     tracing which project's probe is the culprit.
+  2. **No machine-parseable one-line summary per project.** crt's
+     presenter has to guess a headline (first non-empty line of a
+     project's report section, markdown `#` stripped), which works for
+     reports that open with a title line but is a poor headline for ones
+     that open with prose. A standardized required field near the top of
+     every `LATEST.md` -- e.g. a literal `**Headline:** ...` line every
+     project's report template emits -- would make any downstream
+     consumer of the aggregate (crt's voice console, or anything else
+     that wants a summary without re-reading full prose) reliably good
+     instead of heuristic-dependent. Concrete ask, not just a note: worth
+     adding to the shared report template(s) if another consumer besides
+     crt would use it too.
+  > (answer inline here)
