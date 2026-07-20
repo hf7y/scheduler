@@ -55,9 +55,9 @@ retry until it's actually acted on).
 ## Editing reports in vim
 
 `~/.vimrc` defines buffer-local mappings (active on files under
-`~/reports/**/*.md` and this repo's `focus/` and `questions/` symlink
-dirs) that insert a tag on a new line below the cursor and drop straight
-into insert mode:
+`~/reports/**/*.md`, this repo's `focus/` and `questions/` symlink dirs,
+and `BLOCKERS.md`) that insert a tag on a new line below the cursor and
+drop straight into insert mode:
 
 | Mapping | Inserts |
 |---|---|
@@ -67,6 +67,27 @@ into insert mode:
 | `<leader>n` | `%%NOTE ` |
 | `<leader>y` | `%%APPROVE` |
 | `<leader>r` | `%%REJECT ` |
+
+## One cross-project file: BLOCKERS.md
+
+`BLOCKERS.md` (repo root) lists human-owned action items across every
+project, one `## <project_key>` section each. `collect-feedback.sh`
+supports two extra flags for this case:
+
+- `--section "<project_key>"` -- only collect tags anchored under a
+  heading matching that text (case-insensitive, `#`s/whitespace ignored),
+  so one shared file can be scanned separately per project without
+  leaking another project's tags into the wrong run.
+- `--consume` -- after collecting, rewrite the file removing the matched
+  `%%TAG` lines in place. Use this for `BLOCKERS.md` (and any other
+  persistent, hand-maintained file) since -- unlike `LATEST.md` -- nothing
+  else naturally clears an acted-on tag from it.
+
+`lib/sweep-loop-common.sh` and the scheduler's own two bespoke wrappers
+all check `BLOCKERS.md --section "$PROJECT_KEY" --consume` right after
+the `LATEST.md` check, prepending it to the prompt the same way. The
+blocker's plain-text description line is untouched by `--consume` --
+delete that by hand once the underlying problem is actually resolved.
 
 ## Reusing this elsewhere
 
