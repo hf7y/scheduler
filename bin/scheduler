@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# scheduler -- quick navigation into the scheduler's own tracking files, so
+# "what's going on / what needs me" doesn't require hunting through nested
+# project folders. No args = one-screen glance; subcommands jump straight
+# into a file in $EDITOR (vim if unset). Read-only glance, editor commands
+# open real files (or symlinks into each project's real .claude/ files) --
+# this is a thin wrapper, not a parser/database; see
+# .claude/scheduler/FOCUS.md item 3 for the fuller "glance command" design
+# this is a first cut of.
+set -uo pipefail
+
+SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
+REPORTS_ROOT="$HOME/reports"
+EDITOR="${EDITOR:-vim}"
+
+usage() {
+  cat <<EOF
+usage: scheduler [command] [project]
+
+  (no args)             one-screen glance: every registered project, open
+                         question count, and whether BLOCKERS.md has an
+                         entry for it
+  blockers, -b          open BLOCKERS.md
+  focus [project], -f   open a project's FOCUS.md (list projects if omitted)
+  questions [project], -q
+                         open a project's QUESTIONS.md (list if omitted)
+  report [project], -r  open a project's latest report (LATEST.md)
+  idea <project> "text", -i
+                         drop a new idea/feature-request for a project
+                         without opening an editor. realisateur gets a new
+                         .idea file (its own real inbox convention); every
+                         other project gets a timestamped line inserted
+                         into its FOCUS.md backlog/feature-request section
+                         (or a new "Ideas" section, created if the project
+                         has no FOCUS.md yet)
+
+Examples: scheduler -b   |   scheduler focus crt   |   scheduler report wtul
+          scheduler -i realisateur "a browser extension that ..."
+          scheduler -i wtul "add a --dry-run flag to wtul-rip"
+EOF
+}
+
+projects() {
+  for conf in "$SCHED_ROOT"/schedule/*.conf; do
+    b="$(basename "$conf" .conf)"
+    [[ "$b" == _* ]] && continue
+    echo "$b"
+  done
+}
+
+open_file() {
+  local path="$1"
+  if [ ! -e "$path" ]; then
+    echo "scheduler: no file yet at $path" >&2
+    exit 1
+  fi
+  exec "$EDITOR" "$path"
+}
+
+require_project() {
+  local kind="$1" proj="${2:-}"
+  if [ -z "$proj" ]; then
+    echo "available projects:"
+    projects | sed 's/^/  /'
+    echo
+    echo "usage: scheduler $kind <project>"
+    exit 1
+  fi
+}
+
+conf_field() {
+  local proj="$1" field="$2" conf="$SCHED_ROOT/schedule/$proj.conf"
+  [ -f "$conf" ] || return 1
+  grep -E "^${field}=" "$conf" | head -1 | cut -d= -f2- | tr -d '"'
+}
+
+resolve_focus_path() {
+  local proj="$1"
+  local repo_path subdir
+  repo_path="$(conf_field "$proj" PROJECT_REPO_PATH)"
+  if [ -z "$repo_path" ]; then
+    echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
+    return 1
+  fi
+  subdir="$(conf_field "$proj" SCHEDULER_SUBDIR)"
+  echo "$repo_path/${subdir:-.claude}/FOCUS.md"
+}
+
+cmd_idea() {
+  local proj="${1:-}" text="${2:-}"
+  if [ -z "$proj" ] || [ -z "$text" ]; then
+    echo "usage: scheduler idea <project> \"idea text\""
+    echo
+    echo "available projects:"
+    projects | sed 's/^/  /'
+    exit 1
+  fi
+
+  if [ "$proj" = "realisateur" ]; then
+    local repo_path
+    repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
+    if [ -z "$repo_path" ]; then
+      echo "scheduler: realisateur has no PROJECT_REPO_PATH set" >&2
+      exit 1
+    fi
+    local slug ts file
+    ts="$(date +%Y%m%d-%H%M%S)"
+    slug="$(printf '%s' "$text" | tr -c 'a-zA-Z0-9' '-' | tr -s '-' | cut -c1-30 | sed 's/^-*//; s/-*$//')"
+    [ -n "$slug" ] || slug="idea"
+    file="$repo_path/${slug}-${ts}.idea"
+    printf '%s\n' "$text" > "$file"
+    echo "dropped: $file"
+    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle; remember to 'git add && git commit && git push' in $repo_path so the dedicated clone actually sees it, same gap that bit the first three ideas)"
+    return
+  fi
+
+  local focus_path
+  focus_path="$(resolve_focus_path "$proj")" || exit 1
+  local ts="$(date '+%Y-%m-%d %H:%M')"
+  local line="- **$ts (via \`scheduler -i\`):** $text"
+
+  if [ ! -f "$focus_path" ]; then
+    mkdir -p "$(dirname "$focus_path")"
+    {
+      echo "<!-- Per-project scope marker -- this file was CREATED by"
+      echo "     \`scheduler -i\` from a dropped idea. It's just that idea,"
+      echo "     not a real scope doc yet -- flesh this out properly, or at"
+      echo "     least confirm it before the next unattended run treats it"
+      echo "     as gospel. -->"
+      echo
+      echo "## Ideas (added via \`scheduler -i\`)"
+      echo
+      echo "$line"
+    } > "$focus_path"
+    echo "created: $focus_path"
+    cmd_idea_push_reminder "$focus_path"
+    return
+  fi
+
+  if awk -v IGNORECASE=1 '/^#+.*(backlog|feature request)/{f=1} END{exit !f}' "$focus_path"; then
+    awk -v IGNORECASE=1 -v line="$line" '
+      { print }
+      !done && /^#+.*(backlog|feature request)/ { print ""; print line; done=1 }
+    ' "$focus_path" > "$focus_path.tmp" && mv "$focus_path.tmp" "$focus_path"
+    echo "inserted into backlog/feature-request section: $focus_path"
+  else
+    {
+      echo
+      echo "## Ideas (added via \`scheduler -i\`)"
+      echo
+      echo "$line"
+    } >> "$focus_path"
+    echo "appended new section to: $focus_path"
+  fi
+  cmd_idea_push_reminder "$focus_path"
+}
+
+cmd_idea_push_reminder() {
+  # Auto-COMMITS (never auto-pushes -- push always stays a human step,
+  # same rule the vim auto-commit hook follows). This project's scheduled
+  # jobs run against a dedicated clone that resets hard to origin before
+  # every dispatch, so an idea sitting merely committed-but-unpushed is
+  # exactly as invisible to it as one that's uncommitted -- only the
+  # commit step was the one people (and agents) kept forgetting.
+  local path="$1" repo
+  repo="$(git -C "$(dirname "$path")" rev-parse --show-toplevel 2>/dev/null)"
+  [ -n "$repo" ] || return 0
+  if git -C "$repo" diff --quiet -- "$path" && git -C "$repo" diff --cached --quiet -- "$path"; then
+    return 0
+  fi
+  if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "Idea added via \`scheduler -i\`: $(basename "$path")" -- "$path"; then
+    echo "committed locally in $repo -- run 'git -C \"$repo\" push' whenever you're ready (never automatic)"
+  else
+    echo "(auto-commit failed -- left as an uncommitted edit at $path; commit by hand)" >&2
+  fi
+}
+
+cmd_glance() {
+  echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
+  echo
+  printf '  %-16s %-9s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS.md"
+  local any_blockers=0
+  while IFS= read -r proj; do
+    local qfile="$SCHED_ROOT/questions/$proj.md"
+    local qn=0
+    [ -f "$qfile" ] && qn="$(grep '^- \*\*' "$qfile" 2>/dev/null | grep -vic "resolved\|acknowledged" || true)"
+    local qlabel="-"
+    [ "$qn" -gt 0 ] 2>/dev/null && qlabel="$qn open"
+
+    local bn=0
+    [ -f "$SCHED_ROOT/BLOCKERS.md" ] && bn="$(awk -v want="$proj" '
+      BEGIN{c=0; insec=0}
+      /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
+      insec && /^- \*\*/ { c++ }
+      END { print c }
+    ' "$SCHED_ROOT/BLOCKERS.md")"
+    local blabel="-"
+    if [ "$bn" -gt 0 ] 2>/dev/null; then
+      blabel="$bn"
+      any_blockers=1
+    fi
+
+    printf '  %-16s %-9s %s\n' "$proj" "$qlabel" "$blabel"
+  done < <(projects)
+  echo
+  if [ "$any_blockers" = "1" ]; then
+    echo "-> scheduler blockers   (or: scheduler -b)"
+  fi
+  echo "-> scheduler focus/questions/report <project> to jump straight in"
+}
+
+case "${1:-}" in
+  ""|glance) cmd_glance ;;
+  blockers|-b) open_file "$SCHED_ROOT/BLOCKERS.md" ;;
+  focus|-f)
+    require_project focus "${2:-}"
+    open_file "$SCHED_ROOT/focus/$2.md"
+    ;;
+  questions|-q)
+    require_project questions "${2:-}"
+    open_file "$SCHED_ROOT/questions/$2.md"
+    ;;
+  report|-r)
+    require_project report "${2:-}"
+    open_file "$REPORTS_ROOT/$2/LATEST.md"
+    ;;
+  idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  -h|--help|help) usage ;;
+  *) echo "scheduler: unknown command '$1'" >&2; usage; exit 2 ;;
+esac
