@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+# DEPRECATED (2026-07-20) -- superseded by `bin/scheduler` (installed at
+# ~/.local/bin/scheduler), a real interactive CLI covering the same ground
+# (glance view, per-project questions/focus/report drill-down, blockers)
+# more usably, without this script's known unresolved hang bug. Confirmed
+# nothing besides this script itself reads DIGEST.md. Left working and
+# in-repo (not deleted) since it's harmless and low-risk to keep, but
+# `bin/scheduler` is the thing to actually use and build against now --
+# see .scheduler/FOCUS.md's Vision/Consolidation-roadmap sections.
+#
+# Original description below, still accurate for what THIS script does:
+#
 # Prints every project's most recent report in one place. Run by hand each
 # morning, or wire the one line at the bottom into ~/.bashrc / ~/.profile
 # to print automatically whenever a new shell starts (commented out below
