@@ -122,7 +122,7 @@ cmd_idea() {
     printf '%s\n' "$text" > "$file"
     echo "dropped: $file"
     echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle)"
-    cmd_idea_push_reminder "$file"
+    cmd_commit_file "$file" "Idea added via \`scheduler -i\`: $(basename "$file")"
     return
   fi
 
@@ -145,7 +145,7 @@ cmd_idea() {
       echo "$line"
     } > "$focus_path"
     echo "created: $focus_path"
-    cmd_idea_push_reminder "$focus_path"
+    cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\`: $(basename "$focus_path")"
     return
   fi
 
@@ -164,17 +164,25 @@ cmd_idea() {
     } >> "$focus_path"
     echo "appended new section to: $focus_path"
   fi
-  cmd_idea_push_reminder "$focus_path"
+  cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\`: $(basename "$focus_path")"
 }
 
-cmd_idea_push_reminder() {
-  # Auto-COMMITS (never auto-pushes -- push always stays a human step,
-  # same rule the vim auto-commit hook follows). This project's scheduled
-  # jobs run against a dedicated clone that resets hard to origin before
-  # every dispatch, so an idea sitting merely committed-but-unpushed is
-  # exactly as invisible to it as one that's uncommitted -- only the
-  # commit step was the one people (and agents) kept forgetting.
-  local path="$1" repo
+cmd_commit_file() {
+  # THE single implementation of "safely auto-commit one file, with a
+  # staleness warning first" -- shared by `scheduler -i` (calls this
+  # directly, in-process) AND the vim auto-commit hook (shells out to
+  # `scheduler _commit-file`, backgrounded, instead of re-implementing
+  # this same git logic a second time in vimscript). Change behavior
+  # here once, both callers get it. (Renamed from cmd_idea_push_reminder
+  # 2026-07-20 when this stopped being idea-specific.)
+  #
+  # Auto-COMMITS (never auto-pushes -- push always stays a human step).
+  # This project's scheduled jobs run against a dedicated clone that
+  # resets hard to origin before every dispatch, so a file sitting merely
+  # committed-but-unpushed is exactly as invisible to it as an
+  # uncommitted one -- only the commit step was the one people (and
+  # agents) kept forgetting.
+  local path="$1" msg="${2:-}" repo
   repo="$(git -C "$(dirname "$path")" rev-parse --show-toplevel 2>/dev/null)"
   [ -n "$repo" ] || return 0
   # `git diff --quiet` only sees changes to ALREADY-TRACKED files -- it is
@@ -201,7 +209,8 @@ cmd_idea_push_reminder() {
   if [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
     echo "NOTE: $repo is $behind commit(s) behind origin/$branch -- committing anyway (your edit is safe), but pull/merge before pushing to avoid a real divergence"
   fi
-  if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "Idea added via \`scheduler -i\`: $(basename "$path")" -- "$path"; then
+  [ -n "$msg" ] || msg="Human edit via scheduler: $(basename "$path") ($(date '+%Y-%m-%dT%H:%M'))"
+  if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "$msg" -- "$path"; then
     echo "committed locally in $repo -- run 'git -C \"$repo\" push' whenever you're ready (never automatic)"
   else
     echo "(auto-commit failed -- left as an uncommitted edit at $path; commit by hand)" >&2
@@ -316,6 +325,14 @@ case "${1:-}" in
     open_file "$REPORTS_ROOT/$2/LATEST.md"
     ;;
   idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  _commit-file)
+    # Internal, not a documented user-facing verb (leading underscore
+    # matches the schedule/_*.conf "meta, not a project" convention) --
+    # the vim auto-commit hook's own entrypoint into cmd_commit_file, so
+    # there's exactly one implementation of "safely commit one file with
+    # a staleness check" for both callers to share.
+    cmd_commit_file "${2:-}" "${3:-}"
+    ;;
   sweep|-s) cmd_sweep ;;
   -h|--help|help) usage ;;
   *) echo "scheduler: unknown command '$1'" >&2; usage; exit 2 ;;
