@@ -222,6 +222,92 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
      — pick one project (scheduler itself is the safest first mover, as in
      item 4) to prototype the merged-file shape before touching others.
 
+   **Target UX (2026-07-20, human-directed session) — what `scheduler` with
+   no args should print once this + the tier/registration work land.** Not
+   built yet — a concrete screen to build TOWARD, not a description of
+   current behavior (today's `scheduler` reads three separate
+   `focus/`/`questions/`/`LATEST.md` sources per project, and no conf has
+   an `AUTONOMY_TIER` yet):
+
+   ```
+   $ scheduler
+   scheduler — 11 projects · 3 need you · last checked 2m ago
+
+     PROJECT          TIER    NEXT            STATUS
+     chezz            medium  paced (#2/9)    clean
+     vkv-inventory    medium  paced (#4/9)    tracker down (403) — needs you
+     home-assistant   low     paced (#5/9)    2 questions open
+     wtul             low     Wed 03:14       clean
+     crt              medium  paced (#7/9)    deploy pending
+     scheduler        high    03:00 daily     clean
+     realisateur      high    paced (#9/9)    1 question
+     groc-mangr       high    paced (#1/9)    new — unaudited
+     nine-speakers    high    paced (#3/9)    new — unaudited
+     sequestria       high    paced (#6/9)    new — unaudited
+     vim-arcade       high    paced (#8/9)    new — unaudited
+
+     branches awaiting review:
+       vkv-inventory   nightly/2026-07-19  4 commits, not merged
+       scheduler       paced/2026-07-20    merged locally, not pushed
+
+     run `scheduler <project>` to open its report + reply to questions inline
+     run `scheduler blockers` for cross-project human-owned items
+   ```
+
+   `scheduler <project>` opens that ONE project's merged `report/<project>.md`
+   in `$EDITOR` — last run's narrative on top, open questions inline with
+   `> ` reply slots right where the context is, older reports below. Reply
+   inline, save, quit; next run reads it first, acts, clears the block —
+   same round-trip `QUESTIONS.md` does today, one file instead of two.
+
+   What each already-decided roadmap piece buys in that screen, concretely:
+   - `AUTONOMY_TIER` (item 1.5) → the `TIER` column.
+   - Registration contract (axis 0) → the `new — unaudited` marker, driven
+     by a real field instead of memory of which projects realisateur spawned.
+   - Sweep pacing (axis 2) → `NEXT` reads as one consistent shape (paced
+     position or cron time), not two different mental models per project.
+   - Layout consolidation (axis 3) → the merged report files all live in
+     one predictable place per project, no `.claude/` permission surprises.
+   - Branch-awareness (standing direction, 2026-07-19) → the "branches
+     awaiting review" block.
+
+   **How `blockers` actually works, target design (2026-07-20,
+   human-directed session):**
+   - **`BLOCKERS.md` as a separate hand/agent-maintained file is
+     RETIRED, target state.** Today it's a real duplication risk — content
+     gets manually copied from a project's own `FOCUS.md` into it (see
+     crt's hardware items, moved by hand 2026-07-20), the exact
+     drift-prone pattern `INTAKE.md` already rejected for the feature
+     backlog ("a second place the same information could drift out of
+     sync"). `scheduler blockers` becomes a **live aggregated view**: it
+     scans every project's own merged `report/<project>.md` (item 0, once
+     scheduler-owns-scope-as-master per item 4/5 below has landed) for a
+     `## Blockers`/needs-human-flagged section and assembles the
+     cross-project screen by reading, not by a separately maintained copy.
+   - **Explicit dependency: this needs item 4/5 (scheduler owns each
+     project's scope file as the master copy) to land FIRST.** Until then,
+     there's no single file scheduler can both read live AND consider
+     authoritative to write your reply into — so `BLOCKERS.md` keeps
+     working exactly as it does today as the bridge, not replaced
+     prematurely. Sequence: item 4/5 → item 0 (merged report+questions
+     file per project) → THEN blockers becomes a view over those merged
+     files, `BLOCKERS.md` retired.
+   - **Timing: your inline reply takes effect on that project's NEXT
+     scheduled dispatch, same as every other inline-answer flow
+     (`QUESTIONS.md`, report feedback) — deliberately no "nudge a project
+     to run sooner right now" mechanism.** Considered and explicitly
+     rejected for now: adding real design/build work (rotation-priority
+     bump, or an ad hoc immediate run) to close an "I answered, why
+     hasn't it happened yet" gap that's rare enough to handle manually
+     (you can always run that project's wrapper by hand if something is
+     truly urgent). Revisit only if this actually becomes a recurring
+     complaint once the aggregated view is live.
+   - Once aggregated, "propagates right away" means: your edit lands
+     directly in the one true (scheduler-owned) copy the instant you save
+     it — no separate consume/sync step, no drift risk. It does NOT mean
+     the owning project's agent acts on it instantly; that still only
+     happens at its next paced/cron dispatch, same as today.
+
 1. **Migrate every project's `schedule/*.conf` onto the new
    `bin/scheduler-run` entrypoint, per `MIGRATION.md`.** The generic
    entrypoint + backwards-compat mechanism landed 2026-07-18; the confs are
