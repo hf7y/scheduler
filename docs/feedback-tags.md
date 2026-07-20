@@ -132,9 +132,31 @@ needs no changes: its tag regex only matches on the `%%KEYWORD` prefix, so
 a bracketed stamp immediately after is just more of the tag's own text,
 visible to whatever reads it.
 
-## Auto-commit on save (added 2026-07-20)
+## Auto-commit on save (added 2026-07-20, scope broadened same day)
 
-Every save of one of these scoped files also triggers a `git add` +
+**Trigger scope is every `*.md`, anywhere — not a fixed literal list of
+scheduler-tracking files.** Broadened after a real gap: `RFP-GALLERY.md`
+(a normal crt project doc, not one of the four scheduler-tracking files)
+sat edited-but-uncommitted with zero safety net, purely because it fell
+outside the old narrow path list. The mappings and auto-stamp are
+harmless no-ops on a file that never uses the `%%TAG`/`> ` syntax, so
+broadening their trigger costs nothing.
+
+**The one consequential action — the actual commit — has its own
+separate gate**, so the broad trigger can never turn into "auto-commit
+every markdown file on this machine": a save only actually commits if
+the file's repo is the scheduler repo itself, or is listed as a
+`PROJECT_REPO_PATH` in some `schedule/*.conf`. A personal note or an
+unrelated, non-registered project's markdown resolves to a repo
+scheduler has never heard of and is silently skipped — verified with a
+scripted test (a "registered" and an "unregistered" throwaway repo,
+identical edit in both, only the registered one got committed) before
+touching the real dotfile, then re-confirmed the registry-lookup itself
+(`grep -Fxq 'PROJECT_REPO_PATH="..."' schedule/*.conf`) against the real
+`schedule/` directory for both a real registered project and an
+arbitrary unregistered path.
+
+Every save of one of these now-broadly-scoped files also triggers a `git add` +
 `git commit` of just that one file, so a human's edit is never left
 sitting only in the working tree where it could get silently swept into
 an unrelated commit (this happened once, for real, before this existed —

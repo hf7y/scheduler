@@ -334,6 +334,44 @@ useful as before; nothing about them is invalidated by doing this first.
    - Branch-awareness (standing direction, 2026-07-19) → the "branches
      awaiting review" block.
 
+   **Refined target shape (2026-07-20, human-directed, later the same
+   day) — the merged per-project file should read as a STABLE, PRINTABLE
+   document, not just "less files to open."** Concretely: "I'd send a job
+   to my 2D printer, read this at my desk" — the file should be clean
+   enough as plain markdown/text that printing it produces something
+   genuinely readable away from a screen, with inline questions and short
+   reply "hooks" (a one-liner you can type back later, not necessarily a
+   live edit-in-place) rather than requiring an editor open. This
+   reframes the earlier "one file per project" goal: it's not just about
+   file COUNT, it's about the file being a stable enough artifact to
+   leave your desk with. Two intake modes should both funnel into the
+   SAME underlying questions/blockers store (never a second place that
+   drifts): (a) the fast inline-vim-edit habit already built (keep
+   improving it — it's the default, low-friction path), and (b) a
+   slower, thorough, print-and-return path for when a report deserves
+   real attention away from the keyboard. Not designed further than this
+   framing yet — real work: what the "reply hook" syntax looks like
+   (an ID you can text/type back? a `scheduler answer <project> <id>
+   "..."` command?), and an actual `lp`/`lpr`-backed `scheduler print
+   <project>` command. Genuinely new scope, not yet broken into
+   buildable pieces.
+
+   **Design principle for the space between the two intake modes
+   (2026-07-20): discourage the informal path by making the proper one
+   MORE useful, never by restricting the informal one.** Concretely
+   decided this session, in response to `RFP-GALLERY.md` sitting
+   uncommitted with no safety net: the auto-commit hook's SAFETY NET was
+   broadened to cover ad hoc project-doc edits too (see
+   `docs/feedback-tags.md`'s "Auto-commit on save" section) — the fast
+   habit stays fully supported, nothing about it got harder. The actual
+   discouragement should come entirely from the proper single-inbox path
+   (once item 0 above exists) being clearly the better place to put a
+   real question or blocker — faster to open, guaranteed to be read by
+   the next run, printable — not from making ad hoc doc edits riskier or
+   less convenient. If ad hoc editing stays genuinely more convenient
+   than the proper inbox once it exists, that's a sign the proper inbox
+   isn't good enough yet, not a reason to restrict the ad hoc path.
+
    **Confirmed later the same day: questions and blockers have no real
    remaining DATA distinction, only a presentational one.** Both are "a
    human needs to reply inline, an agent reads it and acts" — the only
