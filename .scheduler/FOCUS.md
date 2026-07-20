@@ -647,6 +647,18 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **Batched, not built now 2026-07-20: `scheduler -i <project>` with no
+  text argument should open `$EDITOR`** instead of failing with a usage
+  message — pre-populate a blank templated bullet at the backlog
+  insertion point (so existing/older ideas are naturally visible right
+  there, no separate "show parked ideas" feature needed) for a normal
+  project; for realisateur, open a fresh empty `.idea` file. After the
+  editor closes: if real content was typed, run it through
+  `cmd_commit_file` same as today; if the placeholder was left untouched,
+  clean up rather than leaving a stray empty entry. Deliberately NOT
+  building a richer "surface my parked ideas for me" UX here — that's
+  explicitly realisateur's future abstract-visioning scope (see its own
+  FOCUS.md), not something to guess at from scheduler's side.
 - **RESOLVED 2026-07-20: home-assistant's real divergence, found by the
   first-ever `scheduler sweep` run, reconciled with human direction.**
   Worth keeping the root-cause shape on file since it's a real pattern,
