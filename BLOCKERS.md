@@ -15,86 +15,64 @@ run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
 ## wtul
-- **ROADMAP #2 (AcoustID/Discogs metadata fallback) needs two self-serve
-  keys** an unattended run can't obtain: an AcoustID API key
-  (acoustid.org) and a Discogs personal access token. Both free, both a
-  five-minute signup. Once you have them, decide where they live (same
-  question #1's Spinitron key already raised — env var vs. gitignored
-  config file) and drop them in; the next `/wtul-batch` can wire the
-  fallback logic itself once the keys exist.
-- **ROADMAP #8 (catalog spreadsheet write-back) needs a deployed Apps
-  Script URL**, not Cloud Console credentials anymore (revised
-  2026-07-20 — OAuth/service-account was overkill). The script itself is
-  written and checked in at `wtul/gas/catalog-writeback.gs.js` — paste it
-  into the sheet's own Extensions > Apps Script, Deploy > New deployment >
-  Web app (execute as Me, access Anyone), then send the `/exec` URL back.
-  Same "which account" gotcha vkv-inventory hit below may apply if this
-  sheet is workspace-owned rather than personal — deploy from whichever
-  account actually owns/edits it.
-
+- **ROADMAP #2 (AcoustID/Discogs metadata fallback) — AcoustID done,
+  Discogs still pending.** AcoustID key obtained and wired 2026-07-20
+  (`lib/metadata_lookup.py`, offered as a suggestion at the `fix <discid>`
+  prompt). Still needs: **a Discogs personal access token** (free,
+  self-serve at discogs.com) for the fallback path, built and tested but
+  a silent no-op without it; and **`fpcalc`** (Chromaprint) actually
+  installed so a real fingerprint match can be live-verified —
+  `sudo apt install -y libchromaprint-tools` needs an interactive sudo
+  prompt no unattended run can supply.
+	Discogs token hopefully: user "localshow" : cHvFpfwlzgMgELLGiBqGkcaorBLehdunZEmwGaSE
 ## crt
-Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these are
-all genuinely hands-on-hardware items an unattended run can never clear,
-so they belong here rather than cluttering that file's code-shaped scope.
+Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
+are all genuinely hands-on-hardware items an unattended run can never
+clear, so they belong here rather than cluttering that file's code-shaped
+scope. **Answered 2026-07-20** (folded into the project's own docs the
+same day — `PARKING-LOT.md`, `PERSONA-CHANNEL.md`, `RFP-GALLERY.md`,
+`RFP-PAYPHONE.md`, `VIDEO-CAST.md`, `cad/CAD-BACKLOG.md`,
+`.claude/FOCUS.md`'s MIDI section — see those for the full writeups);
+still listed here because the actual hands-on-hardware step hasn't
+happened yet for any of them.
 - **MIDI controller pass-through stuck.** Root cause found (Windows had
   the MiniLab's MIDI interface disabled, fixed via `Enable-PnpDevice`),
   but `VBoxManage usbattach` still fails ("busy with a previous request")
   even after that fix and a full VM power-cycle — needs a VBoxSVC/
   VirtualBox host service restart on dexter (a process-kill action an
-  unattended run won't take on its own).
+  unattended run won't take on its own). **Direction**: develop it
+  dexter/Windows-side for now, with the explicit intent it merges back
+  into the bare-metal Linux distro eventually — keep it portable, don't
+  lean on anything Windows-only.
 - **Physical hookswitch build needs real measurements.** `cad/params.scad`
   ships generic placeholder dimensions — measure the actual handset
   barrel diameter and the actual microswitch's body/hole spacing, edit
   `params.scad` (or hand the numbers to a session and it'll do the edit),
-  then `cad/export_stl.sh` + print + assemble.
+  then `cad/export_stl.sh` + print + assemble. **Caliper on hand**
+  (https://www.amazon.com/dp/B09R84QZ2P) — measurements not taken yet.
 - **OctoPrint** needs hands on the spare Raspberry Pi (OctoPi SD already
   flashed on mandark, just needs to be put in the Pi and powered up).
+  **Already on the network** — check next time mandark joins.
 - **Benchy calibration print** needs the Ender 3's SD card path verified
   and someone to actually run the print (3DBenchy STL already downloaded
-  on mandark).
+  on mandark). **In progress**: printer's mid-print on a Pi3B case right
+  now; Benchy itself still pending.
 - **USB phone-interface module** (bare-metal Compute Stick target) is
-  blocked on a DAC arriving — nothing to do until it ships.
+  blocked on a DAC arriving — nothing to do until it ships. **ETA**: the
+  DAC (https://www.amazon.com/dp/B08Y8CZB2S) is arriving Tuesday morning.
 - **VM-resident hardware-check job isn't installed.** Written this
   session (`VM-JOBS.md`, `systemd/crt-vm-hardware-check.{service,timer}`)
   but needs the manual `systemctl enable --now` steps run ON crt-vm —
-  exact commands are in `VM-JOBS.md`.
+  exact commands are in `VM-JOBS.md`. No update yet.
 
-### crt deep-vision (PARKING-LOT.md / RFP docs) — added 2026-07-20
-Two different kinds of blocker here, worth telling apart: pure decisions
-(answerable from anywhere, right now, no hardware/on-site access needed
-at all) vs. sourcing calls (need a purchase, but the *decision* and the
-*ordering* can both happen remotely — it's only installing/using the part
-that needs on-site hands, and isn't listed again here since it'd just
-duplicate the hardware items above once something ships).
-
-**Pure decisions — answerable right now:**
-- **Gallery installation** (`RFP-GALLERY.md`): centralized backend vs.
-  fully independent units. Named in that doc as the single
-  highest-leverage call — it changes the entire bill of materials, and
-  nothing else about that concept is worth planning until it's made.
-- **Payphone installation** (`RFP-PAYPHONE.md`): confirm the no-real-payout
-  framing (tokens/print-outs/bonus time instead of coin return), or say
-  a real-payout version is actually wanted — if the latter, that doc is
-  explicit it needs real legal advice for the specific venue before any
-  more work happens on it.
-- **Video-cast-to-CRT**: not designed at all yet (`DEVELOPMENT-
-  WORKFLOW.md` just named the shape of the problem). Needs a scope/
-  priority call before it's even a real backlog item — what source
-  device, how urgent relative to everything else.
-
-**Sourcing calls — a purchase decision, doable remotely, but nothing to
-build until the part is chosen/ordered:**
-- **Persona-channel rotary switch** (`PERSONA-CHANNEL.md`): mechanism is
-  decided (a real detented switch, not a servo/LED display) — needs an
-  actual commodity part picked before the faceplate CAD can be drawn.
-- **RF power-on-TV trigger module** (`PARKING-LOT.md`'s "lift the handset
-  powers the TV on" idea) — needs an RF transmitter module chosen/sourced;
-  no design work possible before that.
-- **HDMI-to-RF multi-channel modulator** (`PARKING-LOT.md`'s multi-persona
-  TV-channel idea) — same, needs real hardware sourced first.
-- **IR blaster** (`cad/ir_blaster_mount.scad`, already stubbed) — needs an
-  actual IR LED in hand and the real TV sensor position measured; the
-  mount geometry is pure placeholder until then.
+### crt deep-vision (PARKING-LOT.md / RFP docs)
+- **Gallery installation** (`RFP-GALLERY.md`): the original "centralized
+  vs. independent" framing is superseded — **direction given 2026-07-20**:
+  explore autonomous networked Pis (per-unit personality + failure
+  isolation + emergent message-passing) vs. real POTS wiring through a
+  switcher (cheaper per-unit, authentic feel, single point of failure).
+  Full possibilities writeup now in `RFP-GALLERY.md`. **Still open**:
+  which of the two to actually build.
 
 ## Recently resolved
 
@@ -108,3 +86,34 @@ build until the part is chosen/ordered:**
   unblocked instead by scraping the public `spinitron.com/WTUL/` page the
   station's own "currently playing" widget already uses, no key needed.
   Shipped and merged to `main`.
+- **wtul catalog write-back (ROADMAP #8)** (2026-07-20) — Apps Script
+  deployed, `/exec` URL wired into `bin/wtul-rip`, live-verified against
+  the real "LOCAL" sheet tab (including catching and fixing the
+  documented Apps-Script-POST-response-can't-be-trusted gotcha via a
+  re-GET confirm step). Shipped and merged to `main`. Two throwaway test
+  rows ("TEST - wtul wiring check" / "TEST2 - write_row confirm check")
+  are sitting in the LOCAL sheet from live-testing — safe to delete
+  whenever convenient, not urgent.
+- **crt payphone: no-real-payout framing** (2026-07-20) — confirmed: real
+  coin mechanism, quarters as the test-phase token, token conversion as a
+  parallel (not blocking) track, never deployed for real money. The
+  earlier legal-check blocker doesn't apply under this framing. Folded
+  into `RFP-PAYPHONE.md`.
+- **crt video-cast-to-CRT: scope/priority call** (2026-07-20) — answered:
+  source device is something else on the network, VLC-based, both
+  shared-file and live-streaming delivery worth having, medium priority.
+  Folded into a new `VIDEO-CAST.md`; technical protocol choice still open
+  there, but the blocking scope decision is made.
+- **crt RF power-on-TV trigger: wrong mechanism named** (2026-07-20) —
+  corrected: should be IR, not RF (same blaster as the channel-switch
+  idea, not a separate module). Folded into `PARKING-LOT.md`.
+- **crt HDMI-to-RF multi-channel modulator: sourcing question** (2026-07-20)
+  — answered: the modulator is already owned (daisy-chain multi-channel
+  supported); the remaining blocker is housing/mounting/wiring
+  integration, not sourcing. Folded into `PARKING-LOT.md`/
+  `cad/CAD-BACKLOG.md`.
+- **crt persona-channel rotary switch + IR blaster: parts sourced**
+  (2026-07-20) — switch: https://www.amazon.com/dp/B088W8WMTB. IR LED:
+  https://www.amazon.com/dp/B099ZJ6555. Folded into `PERSONA-CHANNEL.md`/
+  `cad/CAD-BACKLOG.md`; CAD work still waits on real dimensions once each
+  part is in hand.
