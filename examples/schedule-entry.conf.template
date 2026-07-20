@@ -95,7 +95,7 @@ BATCH_PROMPT="/nightly-batch
 
 This is a fully unattended overnight run. Read .claude/FOCUS.md FIRST --
 everything tonight is scoped by it. Write your report to
-~/reports/<project>/\$(date +%Y-%m-%d).md and update
+~/reports/<project>/\$(date +%Y-%m-%dT%H%M).md and update
 ~/reports/<project>/LATEST.md to match. Confirm everything is committed and
 pushed before finishing."
 BATCH_MAX_TURNS=200

@@ -37,7 +37,7 @@ that file. An accumulated feature idea or report that is not in service
 of the current focus should be written up as deferred in tonight's
 report, not implemented, no matter how easy it looks.
 
-Write your report to ~/reports/vkv-inventory/$(date +%Y-%m-%d).md and
+Write your report to ~/reports/vkv-inventory/$(date +%Y-%m-%dT%H%M).md and
 update ~/reports/vkv-inventory/LATEST.md to match it, so it is a 30-second
 read the next time this machine boots up, covering: what shipped, what
 broke and got fixed, what was deliberately deferred and why, and any open

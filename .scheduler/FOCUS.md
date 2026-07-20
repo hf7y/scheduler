@@ -553,7 +553,27 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Backlog (the intake — add a line to propose an idea)
 
-- **Bottleneck-aware scheduling between workstreams (raised 2026-07-20,
+- **Real bug, confirmed 2026-07-20: report filenames are date-only under
+  a no-longer-nightly rhythm — data loss risk, not hypothetical.** Every
+  real wrapper's `PROMPT` (`chezz`, `wtul`, `home-assistant`,
+  `vkv-inventory`, `scheduler`'s own — grepped and confirmed directly,
+  same pattern in all five) tells the agent to write to
+  `~/reports/<project>/$(date +%Y-%m-%d).md`. Under the usage-paced
+  governor, a project is no longer guaranteed exactly one dispatch per
+  calendar day — a second same-day run silently overwrites the first
+  dated file, permanently losing that run's dated record (`LATEST.md`
+  still reflects the latest state, but the per-run history does not).
+  **Fix: change the format string to `$(date +%Y-%m-%dT%H%M)` (no colons —
+  stays filesystem-safe) in every wrapper's `PROMPT`.** Purely a filename
+  format change, no behavior/git-operation change, low risk — but these
+  are LIVE installed scripts under `~/.local/bin/*-loop.sh` actively
+  driving other projects' automation, not files in this repo, so this
+  needs an explicit human go-ahead before being touched (asked
+  2026-07-20, awaiting your answer — see chat). `examples/
+  nightly-batch-loop.sh` (this repo's own template) should get the same
+  fix regardless, so newly-registered projects don't inherit the bug.
+  Natural pairing: could ride along with axis 1's per-project migration
+  pass above, since that's already opening each project's wrapper/conf.
   explicitly a LATER feature — parked, not designed yet).** Today's
   coordination is per-project only (the `PROJECT_KEY` registry mutex stops
   a project's own Tier 1/Tier 2 from racing each other; the paced governor

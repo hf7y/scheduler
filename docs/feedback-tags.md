@@ -65,8 +65,41 @@ drop straight into insert mode:
 | `<leader>b` | `%%BLOCKER ` |
 | `<leader>q` | `%%QUESTION ` |
 | `<leader>n` | `%%NOTE ` |
-| `<leader>y` | `%%APPROVE` |
+| `<leader>y` | `%%APPROVE ` |
 | `<leader>r` | `%%REJECT ` |
+
+## Auto-timestamp + signature on save (added 2026-07-20)
+
+Any `%%TAG` line or `> ` reply, wherever it's typed from (the mappings
+above or freehand), gets `[YYYY-MM-DDTHH:MM zach]` inserted right after
+its marker automatically when the file is saved — the human doesn't need
+to type it, and doesn't need to remember to. Motivation: since the paced
+governor moved projects off a fixed nightly rhythm, day-level dates in
+existing conventions are ambiguous (a project can now genuinely run more
+than once in a calendar day) — an agent reading a reply needs to know
+*when, to the minute* and *who* wrote it, especially as more sessions
+(human or agent, on this machine or elsewhere) touch these shared files.
+
+Mechanics (`~/.vimrc`, `SchedulerFeedbackAutoStamp` augroup): on
+`BufRead`/`BufNewFile` the buffer's on-disk lines are snapshotted; on
+`BufWritePre`, any tag/reply line that is BOTH unstamped AND new-or-changed
+relative to that snapshot gets stamped. A line untouched since opening —
+including every pre-existing unstamped reply already in a file from before
+this feature existed — is left exactly as-is, so opening an old
+report/QUESTIONS.md and saving it (e.g. to fix an unrelated typo) never
+fabricates today's date onto yesterday's answers. Already-stamped lines
+are never re-stamped (checked directly, not just via the snapshot diff, so
+this holds even across separate vim sessions). Verified with a scripted
+headless-vim test: a new tagged line and a new freehand `> ` reply both
+got stamped correctly; an old, already-answered `> ` line was untouched;
+re-saving an already-stamped line left its timestamp unchanged.
+
+The signer is hardcoded `zach`, not derived from `$USER` — this is a
+personal dotfile answering "did zach write this or someone/something
+else," not a general multi-user attribution system. `collect-feedback.sh`
+needs no changes: its tag regex only matches on the `%%KEYWORD` prefix, so
+a bracketed stamp immediately after is just more of the tag's own text,
+visible to whatever reads it.
 
 ## One cross-project file: BLOCKERS.md
 

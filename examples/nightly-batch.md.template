@@ -102,7 +102,7 @@ entries), format `- **YYYY-MM-DD (nightly-batch):** <text>`:
 
 ## 6. Write the report
 
-`~/reports/<PROJECT NAME -- fill in>/$(date +%Y-%m-%d).md`, and update
+`~/reports/<PROJECT NAME -- fill in>/$(date +%Y-%m-%dT%H%M).md`, and update
 `~/reports/<PROJECT NAME>/LATEST.md` to match it. Cover exactly: what
 shipped (with commit references), what broke and got fixed, what was
 deliberately deferred and why (per FOCUS.md), any `NIGHTLY:`-flagged bugs
