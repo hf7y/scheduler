@@ -81,6 +81,17 @@ if [ -f "$SCHEDULE_DIR/_runner.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_runner.conf"
 fi
+
+# --- Sweep tick meta (optional) ------------------------------------------------
+# schedule/_sweep.conf's mere presence adds ONE fixed, always-on tick for
+# `scheduler sweep` -- deliberately separate from the usage-paced dispatch
+# above (sweep is pure git/bash, zero API cost, so gating it behind
+# usage-gate.sh would protect a budget it never touches).
+SWEEP_TICK_JOB=""; SWEEP_TICK_CMD=""; SWEEP_TICK_CRON=""
+if [ -f "$SCHEDULE_DIR/_sweep.conf" ]; then
+  # shellcheck disable=SC1091
+  source "$SCHEDULE_DIR/_sweep.conf"
+fi
 PACED_SET=" "   # space-delimited set of paced participant names
 if [ "${PACED_SUPPRESS_BATCH:-0}" = "1" ] && [ -f "$SCHEDULE_DIR/_paced.conf" ]; then
   while IFS='|' read -r pname penabled _; do
@@ -293,6 +304,20 @@ if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
     ERRORS=$((ERRORS + 1))
   else
     MANAGED_LINES+=("$RUNNER_CRON $RUNNER_CMD # scheduler:$RUNNER_JOB:RUNNER (usage-paced dispatch)")
+  fi
+fi
+
+# Emit the sweep tick (if schedule/_sweep.conf set it) -- independent of
+# and not suppressed/affected by anything above.
+if [ -n "$SWEEP_TICK_JOB" ] || [ -n "$SWEEP_TICK_CMD" ] || [ -n "$SWEEP_TICK_CRON" ]; then
+  if [ -z "$SWEEP_TICK_JOB" ] || [ -z "$SWEEP_TICK_CMD" ] || [ -z "$SWEEP_TICK_CRON" ]; then
+    echo "ERROR [sweep]: _sweep.conf needs SWEEP_TICK_JOB, SWEEP_TICK_CMD and SWEEP_TICK_CRON all set -- sweep tick omitted" >&2
+    ERRORS=$((ERRORS + 1))
+  elif ! validate_cron "$SWEEP_TICK_CRON"; then
+    echo "ERROR [sweep]: SWEEP_TICK_CRON='$SWEEP_TICK_CRON' isn't a valid 5-field cron expression -- sweep tick omitted" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    MANAGED_LINES+=("$SWEEP_TICK_CRON $SWEEP_TICK_CMD # scheduler:$SWEEP_TICK_JOB:SWEEP (reactive backstop)")
   fi
 fi
 
