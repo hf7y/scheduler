@@ -241,6 +241,24 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Current focus
 
+**SEQUENCING (re-decided 2026-07-20, human-directed, supersedes earlier
+ordering) — item 0 below is now the TOP priority, ahead of the
+"Consolidation roadmap" section's axes 0-3 further down this file.**
+Reasoning: real, repeated friction surfaced in one session alone —
+realisateur's own `LATEST.md` near-miss (a human reply nearly lost
+because report files and `QUESTIONS.md` LOOK the same in the editor but
+have completely different processing/durability guarantees), confirmed
+`LATEST.md` is a literal unlinked duplicate of the dated report (not a
+symlink, so the two can silently diverge), and `BLOCKERS.md` turning out
+to have no real DATA distinction left from `QUESTIONS.md` — only a
+presentational one (per-project view vs. cross-project view). All three
+are symptoms of the same root problem item 0 exists to fix. The
+mechanical consolidation axes (registration migration, sweep pacing,
+layout rollout) are lower-risk, already scoped, and can wait — they were
+previously sequenced first only because they were scoped first, not
+because they matter more. Once item 0 lands, the axes remain exactly as
+useful as before; nothing about them is invalidated by doing this first.
+
 0. **Collapse report + questions into one file I actually read.** Today I
    have to open a report AND separately edit `QUESTIONS.md` to answer
    things — too many files, and the answer workflow is disconnected from
@@ -315,6 +333,19 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
      one predictable place per project, no `.claude/` permission surprises.
    - Branch-awareness (standing direction, 2026-07-19) → the "branches
      awaiting review" block.
+
+   **Confirmed later the same day: questions and blockers have no real
+   remaining DATA distinction, only a presentational one.** Both are "a
+   human needs to reply inline, an agent reads it and acts" — the only
+   actual difference is per-project view (`QUESTIONS.md`) vs.
+   cross-project aggregated view (`BLOCKERS.md`). This is exactly why the
+   design below already treats blockers as a computed VIEW over the same
+   underlying files rather than separate storage — that instinct was
+   right the first time; today's conversation just confirmed it directly
+   instead of leaving it implicit. Practical upshot: don't design
+   `QUESTIONS.md`-shaped and `BLOCKERS.md`-shaped features as if they're
+   answering different kinds of questions — they're the same list,
+   filtered two different ways.
 
    **How `blockers` actually works, target design (2026-07-20,
    human-directed session):**
@@ -812,7 +843,14 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Consolidation roadmap (2026-07-20, human-directed session)
 
-**Axis 0 (prerequisite, do first): build `REGISTRATION.md` + conf schema
+**RE-SEQUENCED (2026-07-20, later same day): this whole section now comes
+AFTER "Current focus" item 0** (the unified per-project file + retiring
+`BLOCKERS.md` as separate storage) — see the sequencing note at the top
+of "Current focus" for why. Everything below is still exactly as valid
+and still queued, just second in line, not first.
+
+**Axis 0 (prerequisite, do first once item 0 above is underway): build
+`REGISTRATION.md` + conf schema
 v1 + the soft validator + `bin/scheduler-register`** — see "Registration —
 the Claude-native contract" under Vision above for the full design. This
 has to land before axis 1 below can stamp a meaningful
