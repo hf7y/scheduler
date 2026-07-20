@@ -601,6 +601,34 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   `lib/sweep-loop-common.sh`-adjacent code anyway — natural pairing, not
   urgent enough to jump the queue on its own.
 
+  **CONFIRMED LIVE, same day, and priority raised (2026-07-20, from an
+  interactive chezz session, not a hypothetical anymore).** Chezz's
+  2026-07-20T01:38 nightly-batch run hit the account's monthly spend
+  limit after committing locally (`152e803`) but before pushing — exactly
+  the predicted failure mode, exact `WARNING: local commit made but NOT
+  pushed` signature, found sitting unpushed in
+  `~/.local/share/chezz-nightly-batch/repo` and pushed by hand. **The same
+  spend-limit message + WARNING pattern also appears in crt/realisateur/
+  home-assistant/vkv-inventory/wtul's `sweep.log`s**, clustered around
+  2026-07-19 ~22:34 and 2026-07-20 ~01:30-05:00 (matching a run of HTTP
+  429s in `scheduler-paced-runner/run.log` over the same window) — an
+  account-wide event, not chezz-specific.
+
+  **Followed up same session: fetched fresh from every registered
+  project's dedicated clone origin and checked ahead/behind.** Only
+  chezz showed `ahead` (the incident above, already resolved by the time
+  of checking); every other clone with a dedicated repo
+  (chezz-bug-sweep, crt, home-assistant, realisateur, vkv-inventory ×2,
+  wtul) is `ahead=0` — no other stranded commits exist right now.
+  aedile/groc-mangr/nine-speakers/sequestria/vim-arcade have no dedicated
+  clone yet (not yet dispatched under the paced governor), so nothing to
+  check there. This was a one-time real incident during a genuine
+  account-wide spend-limit event, not an ongoing silent leak — but the
+  underlying visibility gap (#2 above) is exactly what let it sit
+  unnoticed until a human happened to check by hand, and that's the part
+  worth prioritizing ahead of other backlog items given this confirmed
+  real-world recurrence.
+
 - **Real bug, confirmed 2026-07-20: report filenames are date-only under
   a no-longer-nightly rhythm — data loss risk, not hypothetical.** Every
   real wrapper's `PROMPT` (`chezz`, `wtul`, `home-assistant`,
@@ -844,6 +872,20 @@ now need converging, in this order:
    per-project rather than editing another repo directly from here** —
    same boundary as always. Natural pairing: do a project's axis-1 and
    axis-3 migration in the same cycle if it's getting touched anyway.
+
+   **chezz is first mover, in progress (2026-07-20, from chezz's own
+   interactive session) — TRACKED DEPENDENCY, not yet actionable here.**
+   Chezz's own `.claude/FOCUS.md` now has an explicit next-batch task to
+   move its `FOCUS.md`/`QUESTIONS.md` off `.claude/` into a top-level
+   `.scheduler/` dir, matching this repo's reference implementation.
+   That session deliberately did NOT set `SCHEDULER_SUBDIR` in
+   `schedule/chezz.conf` here (correct — cross-project boundary, chezz's
+   migration hasn't actually happened yet, only been queued). **Whatever
+   run does chezz's axis-1 migration should check first whether this
+   axis-3 move already landed in chezz's repo, and set
+   `SCHEDULER_SUBDIR=".scheduler"` in `schedule/chezz.conf` at the same
+   time if so** — avoids a second, separate touch of the same conf file
+   for something that's already been done on the chezz side.
 
 **Deferred — parked, not forgotten, revisit after the three axes above
 converge:**
