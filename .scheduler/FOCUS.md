@@ -241,25 +241,50 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Current focus
 
-**SEQUENCING (re-decided 2026-07-20, human-directed, supersedes earlier
-ordering) — item 0 below is now the TOP priority, ahead of the
-"Consolidation roadmap" section's axes 0-3 further down this file.**
-Reasoning: real, repeated friction surfaced in one session alone —
-realisateur's own `LATEST.md` near-miss (a human reply nearly lost
-because report files and `QUESTIONS.md` LOOK the same in the editor but
-have completely different processing/durability guarantees), confirmed
-`LATEST.md` is a literal unlinked duplicate of the dated report (not a
-symlink, so the two can silently diverge), and `BLOCKERS.md` turning out
-to have no real DATA distinction left from `QUESTIONS.md` — only a
-presentational one (per-project view vs. cross-project view). All three
-are symptoms of the same root problem item 0 exists to fix. The
-mechanical consolidation axes (registration migration, sweep pacing,
-layout rollout) are lower-risk, already scoped, and can wait — they were
-previously sequenced first only because they were scoped first, not
-because they matter more. Once item 0 lands, the axes remain exactly as
-useful as before; nothing about them is invalidated by doing this first.
+**SEQUENCING (re-decided AGAIN 2026-07-20, human-directed, later the same
+day — item 0 is PARKED, not top priority, reversing the ordering above
+from earlier today.** Reasoning, stated directly by the user and worth
+keeping verbatim in spirit: *"my ideas outpace implementation of stable
+versions so the target is always moving"* — a named, recurring pattern
+(see "vision debt," folded into chezz's own `.claude/commands/
+ideate.md` same session), not unique to item 0. Chasing the single-file
+merge now would be doing the exact thing that pattern warns against:
+letting a good-but-bigger idea displace finishing the version already in
+flight. **Item 0 stays fully designed (nothing below is deleted or
+devalued) but is explicitly NOT the thing to build next.**
 
-0. **Collapse report + questions into one file I actually read.** Today I
+**Actual current priority: hardened, well-understood stability of the
+system AS IT EXISTS TODAY (the three-plus-one-file shape: `FOCUS.md`,
+`QUESTIONS.md`, reports, `BLOCKERS.md`) — so scheduled jobs and
+interactions don't break, and so the user can actually explain the
+system to themselves, not just operate it by trusting `bin/scheduler` to
+smooth over the parts they don't yet follow.** Concretely, in order:
+1. Keep closing the real bugs this system already surfaced when
+   exercised for real this session (the `> ` indentation-matching bug,
+   the untracked-file commit bug, the slow-hook-on-docs-commit waste —
+   all fixed same session, this IS what "hardening" looks like in
+   practice, not an abstract goal).
+2. **Write a clear, honest explainer of how the current system actually
+   works, for the user's own understanding** — not another design doc
+   for an agent to read, a genuine "here's what happens when you do X"
+   walkthrough a human can hold in their head. Concrete candidate home:
+   `bin/scheduler help` or a new `scheduler explain` subcommand that
+   prints exactly this, so understanding lives next to the tool, not in
+   a file that goes stale. Not started yet.
+3. Only after 1-2 are genuinely solid: revisit item 0, the consolidation
+   roadmap axes below, and any other bigger redesign — same "vision
+   debt" discipline applied to this file's own backlog, not just to
+   individual project ideate sessions.
+
+**Any new/big idea from here forward gets a durable, findable parking
+spot (this file, or the relevant project's own FOCUS.md/QUESTIONS.md) —
+never just left in chat.** That's the concrete fix for "make sure we
+will for sure get to them," per the user's own framing — not a promise
+to build sooner.
+
+0. **PARKED 2026-07-20 (see "SEQUENCING" note above — not top priority,
+   fully designed, deliberately not being built next).** Collapse report
+   + questions into one file I actually read. Today I
    have to open a report AND separately edit `QUESTIONS.md` to answer
    things — too many files, and the answer workflow is disconnected from
    where I actually see the question. Preferred workflow (may partially be
@@ -624,6 +649,25 @@ useful as before; nothing about them is invalidated by doing this first.
 
 - **2026-07-20 16:08 (via `scheduler -i`):** New third standing mode, built and proven out in chezz this session: /ideate (interactive-only, sibling to /bug-sweep and /nightly-batch). Where those two implement, /ideate explicitly does NOT -- it pulls live tracker+scheduler state, asks direct AskUserQuestion-style design-fork questions instead of guessing, and records decisions+rationale into a new DESIGN-NOTES.md (durable vision doc, repo root, outside .claude/) then queues them into FOCUS.md's priority list for /nightly-batch to actually build. Paired with a new CLAUDE.md that tells interactive sessions to proactively suggest /ideate when a request looks like open-ended vision/prioritization work rather than a concrete ask (suggestion, not a gate -- an explicit 'just fix X' still gets done inline). Worth generalizing into examples/ideate.md.template + a CLAUDE.md.template snippet alongside the existing bug-sweep/nightly-batch templates so other projects can adopt the same three-mode split. Reference implementation: chezz's .claude/commands/ideate.md, CLAUDE.md, and DESIGN-NOTES.md, commit history 2026-07-20.
 
+- **2026-07-20 16:41 (via `scheduler -i realisateur`, refines the 16:08
+  entry above) — OPEN DESIGN FORK, explicitly NOT decided, parked per
+  today's "hardening first" priority.** User's own framing: realisateur
+  (not scheduler) should own wiring an `/ideate`-shaped capacity into
+  projects across the ecosystem — not just generalizing chezz's template
+  mechanically, but realisateur actually *learning the principle* and
+  applying it with judgment per-project. This reopens whether
+  `scheduler -i`'s current design is right: maybe `-i` should narrow to
+  "just append a next-action item" (its current, simple, working
+  behavior), with an explicit HOOK letting realisateur decide, per idea,
+  whether it's immediately actionable (stays a plain backlog line) or
+  needs real incubation (realisateur's job — both fresh ideas AND bigger
+  visions spawned in other projects' contexts, like this one). The idea
+  itself is already durably parked correctly: dropped via `scheduler -i
+  realisateur "..."`, committed into realisateur's own repo, will be
+  processed by its next dispatch. Nothing about `scheduler -i`'s actual
+  behavior changes until this fork is deliberately resolved — do not
+  half-implement a hook speculatively.
+
 - **2026-07-20 14:27 (via `scheduler -i`):** find a way to make scheduler [project] alias to report. also find a way to introduce tab completion on project names so I don't need to remember.
 
 - **Avoid stranded state when a run gets cut off mid-way by hitting the
@@ -883,11 +927,13 @@ useful as before; nothing about them is invalidated by doing this first.
 
 ## Consolidation roadmap (2026-07-20, human-directed session)
 
-**RE-SEQUENCED (2026-07-20, later same day): this whole section now comes
-AFTER "Current focus" item 0** (the unified per-project file + retiring
-`BLOCKERS.md` as separate storage) — see the sequencing note at the top
-of "Current focus" for why. Everything below is still exactly as valid
-and still queued, just second in line, not first.
+**RE-SEQUENCED AGAIN (2026-07-20, later still): item 0 is now PARKED (see
+"SEQUENCING" note at the top of "Current focus"), so this axis-0-3
+consolidation work and the "hardening + explainer" priority above are
+what's actually active — not item 0.** Everything below is still exactly
+as valid and still queued for eventually, just genuinely not urgent
+right now either; the real current work is hardening/documentation per
+"Current focus" items 1-2.
 
 **Axis 0 (prerequisite, do first once item 0 above is underway): build
 `REGISTRATION.md` + conf schema
