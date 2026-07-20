@@ -96,7 +96,8 @@ build until the part is chosen/ordered:**
   actual IR LED in hand and the real TV sensor position measured; the
   mount geometry is pure placeholder until then.
 
-Currently no other open blockers. Recently resolved:
+## Recently resolved
+
 - **vkv-inventory tracker 403** (2026-07-20) — the org-owned Apps Script
   deployment couldn't be redeployed from the personal `dangerpine@gmail.com`
   account (Workspace policy); redeploying from
