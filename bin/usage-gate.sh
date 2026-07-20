@@ -21,11 +21,21 @@
 #   1 = HOLD  (on/over pace, at ceiling, or a window is 'rejected')
 #   2 = ERROR (probe failed / unparseable)  -> callers MUST treat as HOLD
 #
+# Rush-before-reset (human policy, 2026-07-20): within USAGE_RUSH_BEFORE_RESET_MIN
+# minutes of the 7-DAY window's own reset, the even-burn "on-pace" hold is
+# dropped entirely (on BOTH windows) -- unused weekly quota doesn't roll
+# over, so preserving slack in the final stretch is waste, not caution.
+# CEILING and a 'rejected' status still block, same as always -- this only
+# removes the pacing-preference hold, not the real safety limits. Expect
+# (and accept) the 5h window hitting its ceiling early under this policy;
+# it recovers on its own regardless, unlike the weekly budget.
+#
 # Env knobs:
 #   USAGE_CEILING     (0.85)  never run above this utilisation on any window
 #   USAGE_MIN_SLACK   (0.02)  require this much room below the burn-line to run
 #   USAGE_PROBE_MODEL (claude-haiku-4-5-20251001)
 #   USAGE_GATE_QUIET  (0)     1 = print only "RUN"/"HOLD"/"ERROR"
+#   USAGE_RUSH_BEFORE_RESET_MIN (120)  see "Rush-before-reset" above
 set -uo pipefail
 
 CEILING="${USAGE_CEILING:-0.85}"
@@ -80,6 +90,20 @@ if not any(("%s-utilization" % w) in vals for w, _ in WINDOWS):
     print("ERROR" if quiet else f"verdict=ERROR reason=no_headers http_code={code}")
     sys.exit(2)
 
+# Rush-before-reset (human policy, 2026-07-20): unused WEEKLY quota is lost
+# at the 7d reset, it doesn't roll over -- so preserving even-burn slack in
+# the final stretch before that reset is pure waste, not caution. Once the
+# 7d window is within RUSH_MIN of its own reset, drop "on-pace" as a hold
+# reason on BOTH windows (still respect "ceiling"/"rejected" -- those are
+# real API limits, not pacing preference) and just run flat-out until one
+# of those actually blocks. This deliberately accepts hitting the 5h
+# ceiling early ("the session maxes out") -- that window refreches on its
+# own on a matter of hours regardless, unlike the 7-day budget this is
+# trying not to leave on the table.
+RUSH_MIN = float(os.environ.get("USAGE_RUSH_BEFORE_RESET_MIN", "120"))
+reset_7d = num(vals.get("7d-reset"))
+rush = reset_7d is not None and (reset_7d - now) / 60.0 <= RUSH_MIN
+
 rows, block = [], []
 for w, length in WINDOWS:
     util   = num(vals.get(f"{w}-utilization"))
@@ -94,7 +118,7 @@ for w, length in WINDOWS:
     reasons = []
     if status.lower() == "rejected":       reasons.append("rejected")
     if util >= ceiling:                    reasons.append("ceiling")
-    if slack < min_slack:                  reasons.append("on-pace")
+    if slack < min_slack and not rush:     reasons.append("on-pace")
     if reasons: block.append((w, reasons))
     rows.append((w, util, target, slack, reset, status))
 
@@ -107,7 +131,7 @@ verdict = "RUN" if run else "HOLD"
 if quiet:
     print(verdict); sys.exit(0 if run else 1)
 
-print(f"verdict={verdict} binding={binding} ceiling={ceiling} min_slack={min_slack} http_code={code}")
+print(f"verdict={verdict} binding={binding} ceiling={ceiling} min_slack={min_slack} http_code={code} rush={rush}")
 for w, util, target, slack, reset, status in rows:
     mins = int((reset - now) / 60)
     print(f"window={w} util={util:.3f} burnline={target:.3f} slack={slack:+.3f} "
