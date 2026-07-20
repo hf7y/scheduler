@@ -95,8 +95,9 @@ BATCH_PROMPT="/nightly-batch
 
 This is a fully unattended overnight run. Read .claude/FOCUS.md FIRST --
 everything tonight is scoped by it. Write your report to
-~/reports/<project>/\$(date +%Y-%m-%dT%H%M).md and update
-~/reports/<project>/LATEST.md to match. Confirm everything is committed and
+~/reports/<project>/\$(date +%Y-%m-%dT%H%M).md, then symlink
+~/reports/<project>/LATEST.md to point at that exact file instead of
+writing a second copy. Confirm everything is committed and
 pushed before finishing."
 BATCH_MAX_TURNS=200
 # BATCH_MODEL="claude-opus-4-8"
