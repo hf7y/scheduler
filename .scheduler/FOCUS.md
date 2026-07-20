@@ -647,6 +647,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-20 17:05 (via `scheduler -i`):** when I touch a file like questions, it should move the number of questions outstanding from what's listed. This can either be determined immediately by analysing what's been edited inline or left as a ? in ambiguous cases when later agent confirmation is needed. That way I can use this bin utility to address questions systematically while seeing by progress. perhaps a simple * and ? convention next to the number can communicate this
+
 - **2026-07-20 16:08 (via `scheduler -i`):** New third standing mode, built and proven out in chezz this session: /ideate (interactive-only, sibling to /bug-sweep and /nightly-batch). Where those two implement, /ideate explicitly does NOT -- it pulls live tracker+scheduler state, asks direct AskUserQuestion-style design-fork questions instead of guessing, and records decisions+rationale into a new DESIGN-NOTES.md (durable vision doc, repo root, outside .claude/) then queues them into FOCUS.md's priority list for /nightly-batch to actually build. Paired with a new CLAUDE.md that tells interactive sessions to proactively suggest /ideate when a request looks like open-ended vision/prioritization work rather than a concrete ask (suggestion, not a gate -- an explicit 'just fix X' still gets done inline). Worth generalizing into examples/ideate.md.template + a CLAUDE.md.template snippet alongside the existing bug-sweep/nightly-batch templates so other projects can adopt the same three-mode split. Reference implementation: chezz's .claude/commands/ideate.md, CLAUDE.md, and DESIGN-NOTES.md, commit history 2026-07-20.
 
 - **2026-07-20 16:41 (via `scheduler -i realisateur`, refines the 16:08
