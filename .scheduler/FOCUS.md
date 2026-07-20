@@ -553,6 +553,8 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-20 14:27 (via `scheduler -i`):** find a way to make scheduler [project] alias to report. also find a way to introduce tab completion on project names so I don't need to remember.
+
 - **Real bug, confirmed 2026-07-20: report filenames are date-only under
   a no-longer-nightly rhythm — data loss risk, not hypothetical.** Every
   real wrapper's `PROMPT` (`chezz`, `wtul`, `home-assistant`,
