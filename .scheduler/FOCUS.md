@@ -264,6 +264,29 @@ smooth over the parts they don't yet follow.** Concretely, in order:
    the untracked-file commit bug, the slow-hook-on-docs-commit waste —
    all fixed same session, this IS what "hardening" looks like in
    practice, not an abstract goal).
+   - **NEXT UP (queued 2026-07-20, human-directed): stale `.active`-marker
+     / stranded-run detection.** Design already written up in this
+     file's stranded-commit section above (record what a run is
+     attempting, and have `bin/scheduler`/`morning-report.sh` flag a
+     `~/.local/share/scheduler-registry/<PROJECT_KEY>.active` marker
+     that's older than a job's typical runtime with no matching
+     completion). `scheduler sweep` now covers the git/commit half of
+     "did a run get cut off" (dedicated-clone check, added same
+     session) — this is the other half: a run that got cut off before
+     ever making a commit at all wouldn't show up in sweep, only in a
+     stale `.active` marker. Natural fit for `sweep` itself once built
+     (same 15-minute tick already exists), not a new mechanism.
+   - **PARKED (human-directed 2026-07-20), explicitly NOT a live risk:**
+     the `LATEST.md`-symlink fix from earlier today. Verified directly
+     against `lib/sweep-loop-common.sh`: `collect-feedback.sh` reads
+     `LATEST.md` BEFORE `claude -p` is invoked, and the overwrite only
+     happens as the last thing that same run does — so a reply left via
+     `scheduler -r <project>` is always read before any overwrite,
+     symlink or not. The bug's real remaining cost is narrower than
+     "replies get lost": the permanent dated-file historical record
+     won't reflect a reply left only in `LATEST.md`. A documentation/
+     audit-trail gap, not an operational one — fine to leave queued
+     behind higher-value work, not urgent.
 2. **Write a clear, honest explainer of how the current system actually
    works, for the user's own understanding** — not another design doc
    for an agent to read, a genuine "here's what happens when you do X"
