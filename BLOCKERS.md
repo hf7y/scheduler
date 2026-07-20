@@ -24,7 +24,9 @@ only ever sees its own section, never another project's.
   installed so a real fingerprint match can be live-verified —
   `sudo apt install -y libchromaprint-tools` needs an interactive sudo
   prompt no unattended run can supply.
-	Discogs token hopefully: user "localshow" : cHvFpfwlzgMgELLGiBqGkcaorBLehdunZEmwGaSE
+  > Discogs token hopefully: user "localshow" : cHvFpfwlzgMgELLGiBqGkcaorBLehdunZEmwGaSE
+  > libchromaprint-tools installed = CLEARED
+
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
 are all genuinely hands-on-hardware items an unattended run can never
@@ -44,22 +46,35 @@ happened yet for any of them.
   dexter/Windows-side for now, with the explicit intent it merges back
   into the bare-metal Linux distro eventually — keep it portable, don't
   lean on anything Windows-only.
+  > Still accurate as of jul 20, 13:00. 
+
 - **Physical hookswitch build needs real measurements.** `cad/params.scad`
   ships generic placeholder dimensions — measure the actual handset
   barrel diameter and the actual microswitch's body/hole spacing, edit
   `params.scad` (or hand the numbers to a session and it'll do the edit),
   then `cad/export_stl.sh` + print + assemble. **Caliper on hand**
   (https://www.amazon.com/dp/B09R84QZ2P) — measurements not taken yet.
+  > attempt to make an educated guess based on other information. handset
+  > feels "standard" in size. perhaps an existing stl of a similar phone
+  > handset can be used for development while exact measurements await.
+  > also make a note of where exactly measurments should be taken, with
+  > graphical indications, to make it easy for Zach to report requested
+  > measurements. but develop this based on educated guess; don't let
+  > missing exact measurements block.
+
 - **OctoPrint** needs hands on the spare Raspberry Pi (OctoPi SD already
   flashed on mandark, just needs to be put in the Pi and powered up).
   **Already on the network** — check next time mandark joins.
+
 - **Benchy calibration print** needs the Ender 3's SD card path verified
   and someone to actually run the print (3DBenchy STL already downloaded
   on mandark). **In progress**: printer's mid-print on a Pi3B case right
   now; Benchy itself still pending.
+
 - **USB phone-interface module** (bare-metal Compute Stick target) is
   blocked on a DAC arriving — nothing to do until it ships. **ETA**: the
   DAC (https://www.amazon.com/dp/B08Y8CZB2S) is arriving Tuesday morning.
+
 - **VM-resident hardware-check job isn't installed.** Written this
   session (`VM-JOBS.md`, `systemd/crt-vm-hardware-check.{service,timer}`)
   but needs the manual `systemctl enable --now` steps run ON crt-vm —
@@ -73,6 +88,7 @@ happened yet for any of them.
   switcher (cheaper per-unit, authentic feel, single point of failure).
   Full possibilities writeup now in `RFP-GALLERY.md`. **Still open**:
   which of the two to actually build.
+  > see RFP-GALLERY.md for updates and fold them in.
 
 ## Recently resolved
 
