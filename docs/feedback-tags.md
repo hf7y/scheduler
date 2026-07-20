@@ -101,6 +101,47 @@ needs no changes: its tag regex only matches on the `%%KEYWORD` prefix, so
 a bracketed stamp immediately after is just more of the tag's own text,
 visible to whatever reads it.
 
+## Auto-commit on save (added 2026-07-20)
+
+Every save of one of these scoped files also triggers a `git add` +
+`git commit` of just that one file, so a human's edit is never left
+sitting only in the working tree where it could get silently swept into
+an unrelated commit (this happened once, for real, before this existed —
+a batch of edits to `BLOCKERS.md` got bundled into an unrelated automated
+commit via `git add -A` and had to be split back out by hand afterward).
+This replaces "remember to commit your own edits" with "it's already
+done" — a discipline problem solved by automation instead of a habit to
+build.
+
+**Commits into whichever repo actually owns the file, not necessarily
+this one.** `focus/*.md` and `questions/*.md` are symlinks into other
+projects' own repos (chezz's `FOCUS.md`, etc.) — editing one and saving
+resolves the symlink, finds the REAL owning repo via `git rev-parse
+--show-toplevel`, and commits there. `BLOCKERS.md` and this project's own
+`.scheduler/FOCUS.md`/`QUESTIONS.md` commit into the scheduler repo
+itself. Files with no owning repo at all (`~/reports/**/*.md` —
+deliberately uncommitted, lives outside git by design) are silently
+skipped — confirmed directly against the real `~/reports` directory, not
+assumed.
+
+**Fully backgrounded so vim never blocks**, using `setsid` plus full
+stdin/stdout/stderr detachment — some projects' pre-commit hooks are
+genuinely slow (chezz's runs a full Playwright suite, 2+ minutes), and a
+save must never hang the editor on that. Only the single saved file is
+staged (never `-A`), so this can never sweep in unrelated uncommitted
+work already sitting in that repo. The commit message is always prefixed
+`Human edit via scheduler vim hook:` so it's never mistaken for a
+hand-crafted one.
+
+Verified end-to-end in a sandboxed pair of throwaway repos linked by a
+symlink (mirroring the real `focus/*.md` setup) before touching the real
+`~/.vimrc`: committing through the symlink lands only in the external
+repo, the local one stays untouched; committing `BLOCKERS.md` directly
+lands locally; both return control to vim near-instantly. A naive first
+attempt (background the command with a bare `&`, no `setsid`/detachment)
+was confirmed to hang vim indefinitely — the tested form here is what
+avoids that.
+
 ## One cross-project file: BLOCKERS.md
 
 `BLOCKERS.md` (repo root) lists human-owned action items across every
