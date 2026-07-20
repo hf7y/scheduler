@@ -33,6 +33,68 @@ by this: pushing to `origin` stays exactly as cautious as the push policy
 above** — this only changes local-main merge timing, not whether/when
 anything reaches GitHub.
 
+## Vision (2026-07-20, human-directed session)
+
+**Scheduler runs a fleet of autonomous builders, not just a fleet of
+maintained projects — and safety comes from a per-project autonomy dial
+matched to that project's actual stakes, not one global trust ceiling.**
+A hobby vim-game and a home-assistant install with physical devices should
+never share one policy. Self-spawning (realisateur scaffolding new
+projects unprompted) is core to the value this system is for, not a risk
+to contain — the job is to make that pattern safe *by construction*
+(sandboxed remotes, cost caps, the tier below), not to rein it in after
+the fact.
+
+**`AUTONOMY_TIER` — the dial, one field per project, not yet built:**
+- **`low`** — branch-only commits; a human merges by hand; never deploys.
+  (Matches vkv-inventory/wtul's current default posture — this becomes
+  their explicit tier once the field exists, not a behavior change.)
+- **`medium`** — may push directly to `main` (flagged + revertible in the
+  report), but merging larger multi-branch work and deploying stay human.
+  (Matches scheduler's own current push policy above, and chezz's
+  autopilot-with-irreversibility-gate.)
+- **`high`** — push, merge, AND deploy autonomously when the deploy target
+  is confirmed revertible (a stable dev-deployment id, not a hard
+  production cutover). (Matches scheduler's own merge-policy note above,
+  and vkv-inventory's own standing direction to push/deploy when
+  revertible.)
+
+This is a **formalization of policy that already exists, scattered**
+across this file's push/merge notes, chezz's FOCUS.md, and vkv-inventory's
+QUESTIONS.md answers — not new behavior being invented. The point of
+building it is to make the tier an engine-enforced field
+`schedule/<project>.conf` sets and `lib/sweep-loop-common.sh`/
+`scheduler-run` actually reads, instead of policy living only in each
+project's prose (which a run can misremember or a new project can lack
+entirely).
+
+**One rule sits ABOVE the tier system, at every level, always:**
+genuinely irreversible actions — a NEW paid external service dependency, a
+physical device actuation, a non-revertible production cutover — always
+need explicit human sign-off, no matter the tier. The dial governs
+*revertible* autonomy (push/merge/deploy that can be undone with a `git
+revert` or a redeploy); irreversibility is a separate, universal gate that
+transcends tier, same principle chezz's FOCUS.md already uses.
+
+**Newly self-spawned projects (the realisateur pattern) get no special
+starting tier** — a spawned project's own `schedule/<project>.conf` claims
+whatever `AUTONOMY_TIER` its own scaffolding session set, same as a
+hand-registered project. Trust the scaffolding process, don't
+double-gate it. (The existing convention of spawned projects using a
+local bare git remote instead of GitHub — crt/realisateur/groc-mangr's
+precedent — already provides real containment underneath this regardless
+of tier: no credentials to leak, nothing reaches the outside world.)
+
+**Roadmap implication:** `AUTONOMY_TIER` becomes Phase 1.5 — natural to
+build alongside axis 1 (registration migration) below, since that work is
+already touching every project's `schedule/<project>.conf` one at a time;
+adding the tier field in the same pass avoids a second full sweep across
+every conf later. Not designed further than the tier definitions above
+yet — the engine-enforcement mechanics (how `lib/sweep-loop-common.sh`
+and each project's `/nightly-batch` command decide whether to merge/
+deploy based on the tier) are real design work for a future session or
+unattended cycle, not done in this one.
+
 ## This project dogfoods its own system
 
 The scheduler uses the exact pieces every registered project uses, no
@@ -414,6 +476,19 @@ need converging, in this order:
    no web tracker to break) rather than chezz/vkv-inventory's dual-tier
    setups. One project per cycle, not all four at once.
 
+   **1.5. `AUTONOMY_TIER` (see Vision section above) — bundle into the same
+   pass.** While a project's conf is already open for the axis-1 migration,
+   add its `AUTONOMY_TIER` field (`low`/`medium`/`high`) reflecting that
+   project's *actual current* de facto policy (read its FOCUS.md's own
+   push/merge/irreversibility language to infer it — don't invent a new
+   policy, just formalize the existing one). Do NOT build the
+   engine-enforcement side yet (no code should change behavior based on
+   this field this pass) — this step is only "declare the field and set it
+   correctly per project," so the mechanics can be built against real,
+   already-populated data next. If a project's actual policy is unclear or
+   contested, leave `AUTONOMY_TIER` unset and flag it as a QUESTIONS.md
+   entry rather than guessing.
+
 2. **Sweep pacing** — Tier 1 bug-sweeps (chezz, vkv-inventory) have been
    sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
    migration orphaned them. **Decision made 2026-07-20: fold sweeps into
@@ -451,11 +526,17 @@ converge:**
 - FOCUS item 3's remaining pieces (b/c/d: the `scheduler` glance
   subcommand reading the merged file, blocker approve/clear via `git log`,
   per-project rollout) — same reasoning, depends on item 0.
-- Auditing what the four realisateur-spawned projects (groc-mangr,
-  nine-speakers, sequestria, vim-arcade) have actually shipped unattended
-  with no human review yet — real, not urgent enough to interrupt the
-  consolidation pass, but shouldn't sit forever either. Worth a dedicated
-  look once the roadmap above is further along.
+- **Reframed 2026-07-20 (see Vision above) — this is now an infrastructure
+  check, not an "audit the output" task.** Self-spawning is the intended
+  use case, not a risk to contain, so the deferred question isn't "were
+  groc-mangr/nine-speakers/sequestria/vim-arcade's commits good" — it's
+  "does the containment the pattern depends on actually hold": confirm
+  each spawned project really is on a local bare remote (no GitHub
+  credentials reachable), has a real cost cap, and gets a sensible
+  `AUTONOMY_TIER` once that field exists (item 1.5 above) rather than
+  drifting to whatever a scaffolding session happened to set. Do this
+  once axis 1 / item 1.5 give every project (including these four) a real
+  `AUTONOMY_TIER` value to check against.
 
 ## Out of scope for an unattended run
 
