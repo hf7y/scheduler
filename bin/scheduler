@@ -110,7 +110,8 @@ cmd_idea() {
     file="$repo_path/${slug}-${ts}.idea"
     printf '%s\n' "$text" > "$file"
     echo "dropped: $file"
-    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle; remember to 'git add && git commit && git push' in $repo_path so the dedicated clone actually sees it, same gap that bit the first three ideas)"
+    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle)"
+    cmd_idea_push_reminder "$file"
     return
   fi
 
@@ -165,7 +166,12 @@ cmd_idea_push_reminder() {
   local path="$1" repo
   repo="$(git -C "$(dirname "$path")" rev-parse --show-toplevel 2>/dev/null)"
   [ -n "$repo" ] || return 0
-  if git -C "$repo" diff --quiet -- "$path" && git -C "$repo" diff --cached --quiet -- "$path"; then
+  # `git diff --quiet` only sees changes to ALREADY-TRACKED files -- it is
+  # silent (exit 0, "no differences") for a brand-new untracked file, which
+  # made this bail out and skip committing entirely for exactly the case
+  # (a freshly dropped .idea file) it most needed to handle. `git status
+  # --porcelain` catches both untracked and modified.
+  if [ -z "$(git -C "$repo" status --porcelain -- "$path" 2>/dev/null)" ]; then
     return 0
   fi
   if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "Idea added via \`scheduler -i\`: $(basename "$path")" -- "$path"; then
