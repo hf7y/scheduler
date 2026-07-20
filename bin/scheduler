@@ -224,10 +224,43 @@ cmd_glance() {
   local any_blockers=0
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
-    local qn=0
-    [ -f "$qfile" ] && qn="$(grep '^- \*\*' "$qfile" 2>/dev/null | grep -vic "resolved\|acknowledged" || true)"
     local qlabel="-"
-    [ "$qn" -gt 0 ] 2>/dev/null && qlabel="$qn open"
+    if [ -f "$qfile" ]; then
+      # Distinguishes genuinely unanswered questions from ones you've
+      # already replied to inline but the project's next run hasn't yet
+      # processed -- added 2026-07-20 so the glance count reflects your
+      # own inline edits instead of only updating once a run clears the
+      # block. A bullet counts as answered if a real `> ` reply (not the
+      # "(answer inline here)" placeholder) appears before the next
+      # bullet/heading; RESOLVED/ACKNOWLEDGED bullets are excluded
+      # entirely either way (case-insensitive via tolower(), not just
+      # the first letter -- a plain-ASCII "resolved|acknowledged" regex
+      # match silently missed full-caps "RESOLVED" during testing).
+      read -r q_unanswered q_answered <<<"$(awk '
+        BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0}
+        /^- \*\*/ {
+          if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
+          started=1
+          is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
+          has_reply=0
+          next
+        }
+        started && /^[ \t]*>[ \t]?/ {
+          line=$0
+          sub(/^[ \t]*>[ \t]?/, "", line)
+          if (line !~ /^\(answer inline here\)/) has_reply=1
+        }
+        END { if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
+              print unanswered, answered }
+      ' "$qfile" 2>/dev/null)"
+      q_unanswered="${q_unanswered:-0}"; q_answered="${q_answered:-0}"
+      if [ "$q_unanswered" -gt 0 ] 2>/dev/null; then
+        qlabel="$q_unanswered open"
+        [ "$q_answered" -gt 0 ] 2>/dev/null && qlabel="$qlabel (+$q_answered✓)"
+      elif [ "$q_answered" -gt 0 ] 2>/dev/null; then
+        qlabel="0 open ($q_answered✓ pending run)"
+      fi
+    fi
 
     local bn=0
     [ -f "$SCHED_ROOT/BLOCKERS.md" ] && bn="$(awk -v want="$proj" '
