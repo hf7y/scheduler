@@ -201,7 +201,27 @@ fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"
 
-  if [ -n "$PRECHECK_CMD" ] && ! eval "$PRECHECK_CMD"; then
+  # Pick up any %%TAG inline comments the human left in the previous
+  # report (see docs/feedback-tags.md) and put them first in this run's
+  # prompt. LATEST.md gets overwritten by this same run below, so a tag
+  # naturally clears itself once acted on -- no separate "mark as read".
+  LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  FEEDBACK_FILE="$HOME/reports/$PROJECT_KEY/LATEST.md"
+  if [ -f "$FEEDBACK_FILE" ]; then
+    FEEDBACK_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$FEEDBACK_FILE" 2>/dev/null || true)"
+    if [ -n "$FEEDBACK_BLOCK" ]; then
+      echo "found inline feedback tags in $FEEDBACK_FILE -- prepending to prompt"
+      PROMPT="Human feedback on the previous report, left inline in $FEEDBACK_FILE -- act on this FIRST, before anything else:
+
+$FEEDBACK_BLOCK
+
+---
+
+$PROMPT"
+    fi
+  fi
+
+  if [ -n "$PRECHECK_CMD" ] && [ -z "${FEEDBACK_BLOCK:-}" ] && ! eval "$PRECHECK_CMD"; then
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
   elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"}; then

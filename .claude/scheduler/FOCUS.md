@@ -252,6 +252,26 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   verifiable pieces (e.g. a `USAGE_GATE_CMD` sibling to `PRECHECK_CMD`, plus
   per-run token logging into the state dir that `morning-report.sh` sums).
   Don't attempt wholesale in one unattended run.
+  - **2026-07-19 (human direction, extends the above):** `usage-gate.sh`'s
+    burn-rate governor should be TIME-OF-DAY-AWARE, not flat across the
+    day — spend more of the weekly budget during hours the user is
+    typically inactive (night), hold more back during hours they're
+    typically active (day), so paced cycles don't compete with the user's
+    own interactive usage right when they're most likely to be using
+    Claude Code themselves. Needs an actual activity profile, not a guess
+    at fixed hours — see next point.
+  - **2026-07-19 (human direction): track usage-exhaustion history for
+    dynamic budgeting.** Log every time the account actually runs out of
+    weekly/daily quota (timestamp + which window), so the pacing curve
+    above can be DATA-DRIVEN instead of hand-tuned: if exhaustion keeps
+    happening at a particular time of day or day of week, that's a signal
+    to pull back the daytime allowance further; if quota is consistently
+    left unused, the night allowance can grow. This is the input the
+    time-of-day curve should be tuned against, not a one-time guess.
+    Needs a design pass: where the exhaustion log lives, what counts as
+    "ran out" (a 429/rate-limit response vs. `usage-gate.sh` itself
+    declining to dispatch), and how far back history should weight into
+    the current curve.
 - **crt registered 2026-07-19** — since resolved (superseding the 2026-07-18
   note above): now a git repo pushed to a local bare remote
   (`~/git-remotes/crt.git`, no GitHub/credentials needed), `schedule/crt.conf`
@@ -292,6 +312,63 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   per-project (don't silently change other repos' confs from here — flag it,
   same as other cross-project proposals). Opus is ~5x Sonnet per token, so
   this is likely the single cheapest lever for slimming automation cost.
+
+- **DONE 2026-07-19: inline `%%TAG` feedback in reports.** The human
+  reviews a report/tracker file directly in vim (mappings in `~/.vimrc`,
+  scoped to `~/reports/**/*.md` and this repo's `focus/`/`questions/`
+  symlinks: `<leader>a/b/q/n/y/r` for ACTION/BLOCKER/QUESTION/NOTE/APPROVE/
+  REJECT), leaves tagged comments inline, and the NEXT run for that project
+  picks them up automatically and acts on them first — see
+  `docs/feedback-tags.md` for the format and `bin/collect-feedback.sh` for
+  the collector. Wired into `lib/sweep-loop-common.sh` (covers every
+  project on the shared engine, including ones using `bin/scheduler-run`)
+  and into the scheduler's own two bespoke wrappers
+  (`scheduler-nightly-batch-loop.sh`, `scheduler-dev-cycle.sh`).
+  Deliberately NOT wired into a chat interface — the point was to stop
+  needing one for routine report feedback. Verified: `collect-feedback.sh`
+  unit-tested against a hand-built sample file; the `%%TAG` → nnoremap →
+  buffer-local-mapping chain verified in headless vim (`:nmap <buffer>`
+  showed all six mappings with correct RHS); `bash -n` clean on all three
+  edited scripts; a live dry-run (`SCHED_DRYRUN=1
+  scheduler-dev-cycle.sh`) with a real `%%APPROVE` tag appended to
+  `~/reports/scheduler/LATEST.md` confirmed the collector fires and would
+  have prepended the block (removed the test tag after). **Not yet
+  verified against a real (non-dry-run) `claude -p` invocation** — that
+  needs an actual paced/nightly cycle to run for real confirmation the
+  prepended prompt text lands as intended.
+  - Not yet extended to crt/realisateur's actual report format (crt uses
+    `crt-report.sh`, a different convention per the 2026-07-19 report
+    section above) — only the standard `~/reports/<project>/LATEST.md`
+    shape is covered so far.
+
+- **Permission gate on `.claude/**` writes in unattended runs (raised
+  2026-07-19, needs investigation before deciding a fix).** Both this
+  project's own paced-dev cycle and vkv-inventory's nightly run report
+  being unable to write `.claude/scheduler/QUESTIONS.md` /
+  `.claude/QUESTIONS.md` in unattended `claude -p` invocations ("hard-
+  blocked ... as a 'sensitive file'"), while `bin/` edits in the same runs
+  go through fine. A same-session lookup (claude-code-guide agent, not
+  independently verified against the actual docs) claims Claude Code has
+  a hardcoded protected-path rule for `.claude/` that `permissions.allow`
+  entries cannot pre-approve, and that it auto-denies in headless mode
+  under `default`/`acceptEdits`/`dontAsk`, with unpredictable behavior
+  under `auto` (classifier-decided). **This is in tension with observed
+  behavior**: chezz's nightly run successfully committed edits to
+  `.claude/FOCUS.md` AND `.claude/QUESTIONS.md` the same night
+  (`97dd47d`) using the same shared engine and the same `ALLOWED_TOOLS` as
+  the runs that got blocked — so either the protection isn't a blanket
+  `.claude/` block, or something else differs per-run (permission mode,
+  classifier judgment on the specific edit, etc.). Needs a real
+  investigation (not another web lookup) before picking a fix: reproduce
+  the block deliberately (e.g. a `SCHED_DRYRUN=0` test cycle that only
+  tries to touch `.claude/scheduler/QUESTIONS.md`) and see what actually
+  happens today. **Candidate fix if the block turns out to be real and
+  path-based:** stop nesting tracker files under `.claude/` for any
+  project relying on an unattended run to edit them — e.g. move the
+  `SCHEDULER_SUBDIR` model's `FOCUS.md`/`QUESTIONS.md` to a top-level
+  hidden dir outside `.claude/` (naming TBD, avoid colliding with the
+  existing `schedule/` dir) — but don't migrate every project on this
+  guess alone.
 
 ## Out of scope for an unattended run
 
