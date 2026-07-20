@@ -95,6 +95,58 @@ and each project's `/nightly-batch` command decide whether to merge/
 deploy based on the tier) are real design work for a future session or
 unattended cycle, not done in this one.
 
+### Registration — the Claude-native contract (2026-07-20, human-directed)
+
+Registration (a project joining this fleet at all) is autonomy tier zero:
+the one-time decision to commit real recurring cron/quota to a project,
+forever, until someone notices and deregisters it. Today it's implicit —
+`examples/schedule-entry.conf.template` + prose comments an agent has to
+read and interpret correctly with no human proofreading it, and no schema
+version, so drift is silent (already happened once this session:
+`_paced.conf`/`_runner.conf` broke `build-services-view.sh`'s glob before
+anyone noticed; `SCHEDULER_SUBDIR`'s own meaning just changed under us).
+**Decided shape, matching the "lean into autonomy" vision above — light
+gates, not heavy ones:**
+
+- **Self-registration auto-applies, same as any other conf edit.** A
+  realisateur-style agent writing `schedule/<project>.conf` directly and
+  running `--apply` stays exactly as trusted as it is today — flagged in
+  the next report for awareness, not held for approval. Consistent with
+  "self-spawning is the point, don't double-gate it" above.
+- **`REGISTRATION.md`** — a new top-level contract doc, same spirit as
+  `INTAKE.md`: the complete field schema (required vs optional,
+  `AUTONOMY_TIER` values, what `SCHEDULER_SUBDIR` must point at, etc.) —
+  written once, versioned, so an agent has one authoritative source
+  instead of reverse-engineering the shape from an existing project's
+  conf or scattered README/DESIGN-NOTES prose.
+- **`SCHEDULER_CONF_VERSION=N`** — a required field in every
+  `schedule/<project>.conf`, declaring which schema version (as defined in
+  `REGISTRATION.md`) that conf was written against. **Soft validation**:
+  `sync-crontab.sh` checks it and prints a clear warning (also surfaced in
+  `morning-report.sh`) on a missing/unknown version or a field that fails
+  schema checks — it does **not** block or refuse to apply. Matches this
+  repo's existing philosophy (colliding Tier 2 batch times already warn,
+  don't block) — an unattended run should never grind to a halt over a
+  schema nit. This is the forward-compat mechanism: old confs keep working
+  under their declared version's rules as the schema evolves, making the
+  existing `*_SCRIPT` back-compat pattern explicit and general instead of
+  a one-off.
+- **`bin/scheduler-register`** — a single new entrypoint wrapping
+  copy-template → fill → validate (prints warnings, doesn't block) →
+  preview → apply as one discoverable, scriptable command, matching
+  `sync-crontab.sh`'s existing preview-by-default/`--apply` shape, instead
+  of a multi-step doc-following process spread across several tool calls.
+
+**Build order (this is prerequisite work, sequenced BEFORE axis 1's
+per-project sweep below):** `REGISTRATION.md` + schema v1 + the soft
+validator + `bin/scheduler-register` need to exist first (schema v1 has
+to be defined before any conf can meaningfully declare
+`SCHEDULER_CONF_VERSION=1` against it). Once that lands, axis 1's
+per-project pass (already touching every conf for the `*_SCRIPT`
+migration, already adding `AUTONOMY_TIER` per item 1.5) picks up
+`SCHEDULER_CONF_VERSION=1` in the same sweep — three related fields, one
+pass per project, not three.
+
 ## This project dogfoods its own system
 
 The scheduler uses the exact pieces every registered project uses, no
@@ -461,8 +513,14 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 
 ## Consolidation roadmap (2026-07-20, human-directed session)
 
-Three axes of registration/layout sprawl that grew independently and now
-need converging, in this order:
+**Axis 0 (prerequisite, do first): build `REGISTRATION.md` + conf schema
+v1 + the soft validator + `bin/scheduler-register`** — see "Registration —
+the Claude-native contract" under Vision above for the full design. This
+has to land before axis 1 below can stamp a meaningful
+`SCHEDULER_CONF_VERSION` on any project's conf.
+
+Then three axes of registration/layout sprawl that grew independently and
+now need converging, in this order:
 
 1. **Registration mechanism** — every `schedule/<project>.conf` still sets
    a legacy `*_SCRIPT` line (chezz, vkv-inventory, home-assistant, wtul),
