@@ -33,6 +33,33 @@ by this: pushing to `origin` stays exactly as cautious as the push policy
 above** — this only changes local-main merge timing, not whether/when
 anything reaches GitHub.
 
+## Architecture: cron, not a daemon (reaffirmed 2026-07-20)
+
+Revisited explicitly this session — the original "no daemon" call in
+`DESIGN-NOTES.md` named its own trigger condition: *"would pay off once
+there are enough projects that per-project cron-entry sprawl itself is
+the bottleneck — not yet, at 2 projects."* Now at 11. Re-examined with
+real pros/cons (not just re-asserted):
+
+- **What actually pulled toward a daemon this time** wasn't project count
+  — it was two ideas raised in the same session (bottleneck-aware
+  cross-workstream scheduling above, and "nudge a project to run sooner
+  after answering a blocker," explicitly rejected earlier in this file).
+  Both want live state a daemon is naturally good at.
+- **But the specific trigger from the original decision — cron-entry
+  sprawl — is already solved without a daemon**, by `schedule/*.conf` +
+  `sync-crontab.sh` + the paced governor. Project count alone isn't the
+  signal.
+- **Decision: keep cron.** Both daemon-shaped wants above are cheaper to
+  approximate with data (a future `DEPENDS_ON` conf field, a precheck)
+  than with a new always-on process that needs its own crash/supervision
+  story — real rewrite cost against unproven need.
+- **The real revisit trigger, named explicitly so it isn't re-litigated
+  from scratch next time:** if `bin/usage-paced-runner.sh` itself grows
+  complex/stateful enough that re-deriving everything from scratch every
+  15 minutes becomes an OBSERVED bottleneck (not hypothetical) — that's
+  the signal, not project count and not a feature wishlist.
+
 ## Vision (2026-07-20, human-directed session)
 
 **Scheduler runs a fleet of autonomous builders, not just a fleet of
@@ -448,6 +475,19 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   from here — that's each project's own call.
 
 ## Backlog (the intake — add a line to propose an idea)
+
+- **Bottleneck-aware scheduling between workstreams (raised 2026-07-20,
+  explicitly a LATER feature — parked, not designed yet).** Today's
+  coordination is per-project only (the `PROJECT_KEY` registry mutex stops
+  a project's own Tier 1/Tier 2 from racing each other; the paced governor
+  round-robins independently of any cross-project relationship). Nothing
+  today expresses "project B's work depends on project A finishing
+  something" or gives the dispatcher any notion of priority/dependency
+  across projects. Don't design this yet — noted here so it isn't lost,
+  revisit once the more foundational roadmap items (registration
+  contract, `AUTONOMY_TIER`, consolidation axes 1-3) have landed and an
+  actual cross-project dependency has been felt as a real pain point, not
+  a hypothetical one.
 
 - **Branch awareness in reports (decided 2026-07-19, human-directed).**
   Fixes the push-verification blind spot above (option 2): have each run
