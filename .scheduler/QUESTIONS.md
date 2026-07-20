@@ -71,4 +71,22 @@ its line once you've actually read and dealt with it.
      instead of heuristic-dependent. Concrete ask, not just a note: worth
      adding to the shared report template(s) if another consumer besides
      crt would use it too.
-  > (answer inline here)
+  > 1. Fold investigation of the morning report hang into the next batch. But
+  > not that scheduler is being redesigned and the morning report design
+  > itself may be deprecated.
+
+  > 2. Yes there should be standardization of report formats like that. CRT's
+  > note is good.
+
+- **2026-07-20 (permission-gate investigation, resolved — no answer needed,
+  logged for the record):** Ran a controlled A/B test (scratch repo,
+  identical `claude -p` prompt/`--allowedTools`, only the target path
+  differed) confirming the "sensitive file" refusal is real and path-based:
+  any write under `.claude/**` is hard-blocked in unattended runs; the
+  identical write to a top-level `.scheduler/**` path succeeds. Fix:
+  `SCHEDULER_SUBDIR=".scheduler"` (outside `.claude/`), applied to
+  scheduler itself this session. Full writeup and the 3-axis consolidation
+  roadmap (registration migration, sweep pacing, per-project layout
+  rollout) are in `FOCUS.md`. Next unattended cycle should pick up roadmap
+  items 1 (registration migration, one project) and 2 (fold sweeps into
+  paced rotation) per FOCUS.md's explicit instructions there.

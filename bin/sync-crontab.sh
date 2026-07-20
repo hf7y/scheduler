@@ -190,8 +190,12 @@ for conf in "${CONF_FILES[@]}"; do
   # in this exact shape just doesn't get one.
   if [ -n "${PROJECT_REPO_PATH:-}" ]; then
     # Self-contained-folder model: a migrated project sets
-    # SCHEDULER_SUBDIR=".claude/scheduler" so its FOCUS/QUESTIONS group under
-    # one folder it owns. Not-yet-migrated projects default to ".claude".
+    # SCHEDULER_SUBDIR=".scheduler" -- a TOP-LEVEL dir, deliberately OUTSIDE
+    # .claude/ -- so its FOCUS/QUESTIONS group under one folder it owns.
+    # Not-yet-migrated projects default to ".claude", which is exactly the
+    # legacy shape that hits the unattended "sensitive file" permission gate
+    # on writes (confirmed 2026-07-20, see FOCUS.md "Permission gate" note)
+    # -- SCHEDULER_SUBDIR=".scheduler" is the fix, not just a naming choice.
     sdir="${SCHEDULER_SUBDIR:-.claude}"
     QUESTIONS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/$sdir/QUESTIONS.md")
     # Same idea for FOCUS.md -- the per-project scope-input a nightly run

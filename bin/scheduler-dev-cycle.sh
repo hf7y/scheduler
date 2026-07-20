@@ -77,14 +77,14 @@ trap cleanup EXIT
 
 This is the scheduler improving ITSELF, unattended, behind a HUMAN REVIEW GATE, running in a USAGE-PACED cycle (it fires whenever you have spare weekly quota, not on a fixed clock). Everything lands as commits on branch $BRANCH for a person to review and merge -- nothing goes live automatically. Today's earlier paced cycles are already committed on this branch: run 'git log --oneline main..HEAD' FIRST and CONTINUE from there, don't redo finished work.
 
-Read .claude/scheduler/FOCUS.md next -- it is this project's scope AND backlog. Pick the NEXT highest-value, LOWEST-RISK improvement you can fully finish AND verify this cycle. This repo is the meta-tool that controls every other project's scheduling, so correctness beats volume.
+Read .scheduler/FOCUS.md next -- it is this project's scope AND backlog. Pick the NEXT highest-value, LOWEST-RISK improvement you can fully finish AND verify this cycle. This repo is the meta-tool that controls every other project's scheduling, so correctness beats volume.
 
 HARD RULES (infrastructure, not an app):
   * Commit ONLY in this working directory ($WORKTREE) on branch $BRANCH. Touch nothing outside it.
   * NEVER run 'crontab', and NEVER run bin/sync-crontab.sh with --apply. Previewing (no --apply) is fine.
   * NEVER edit installed wrappers under ~/.local/bin, or any file outside this repo.
   * Prefer changes verifiable here and now (shellcheck, dry-run, 'env -u SSH_AUTH_SOCK' to simulate cron). If a change can't be safely verified without going live, write it up as a proposal in the report instead of committing it.
-  * On a real judgment call, append it to .claude/scheduler/QUESTIONS.md and describe it in the report rather than deciding unilaterally.
+  * On a real judgment call, append it to .scheduler/QUESTIONS.md and describe it in the report rather than deciding unilaterally.
 
 Commit each finished change with a clear message. Then append a section for THIS cycle to $REPORT (create if absent) and refresh $REPORTS_DIR/LATEST.md. A change not committed on $BRANCH didn't happen."
 

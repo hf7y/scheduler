@@ -10,7 +10,7 @@ cron jobs.
 
 ## Orient (do this first)
 
-1. Read `.claude/scheduler/FOCUS.md` — it states the current posture, the
+1. Read `.scheduler/FOCUS.md` — it states the current posture, the
    current focus, AND the backlog (its "Backlog" section). There is no
    separate `TODO.md` anymore; FOCUS.md is both scope and backlog.
 2. Read `README.md` — the architecture and the decisions already made, so
@@ -20,7 +20,7 @@ cron jobs.
 
 ## Pick work
 
-From `.claude/scheduler/FOCUS.md` (its focus + backlog), choose the
+From `.scheduler/FOCUS.md` (its focus + backlog), choose the
 **highest-value, lowest-risk** item(s) you can
 **fully finish and verify tonight**. One well-tested change beats three
 speculative ones. Good candidates are self-contained: a script fix, a new
@@ -44,12 +44,12 @@ tomorrow," or anything that reshapes the engine every job depends on.
   If a change genuinely can't be verified without going live, **don't
   commit it** — write it up as a proposal in tonight's report instead.
 - **Don't invent scope.** If an item is ambiguous or needs a real
-  judgment call, append the question to `.claude/scheduler/QUESTIONS.md` and
+  judgment call, append the question to `.scheduler/QUESTIONS.md` and
   describe it in the report rather than guessing.
 - Keep `README.md` honest — if you change how something works, update the
   README in the same commit.
 - If you complete a backlog item, remove or check off its line in
-  `.claude/scheduler/FOCUS.md` as part of the same change so it stays
+  `.scheduler/FOCUS.md` as part of the same change so it stays
   accurate.
 
 ## Finish

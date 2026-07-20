@@ -38,18 +38,20 @@ anything reaches GitHub.
 The scheduler uses the exact pieces every registered project uses, no
 bespoke ones:
 
-- **Its files live in `.claude/scheduler/`** (this folder): `FOCUS.md`,
+- **Its files live in `.scheduler/`** (this folder — moved 2026-07-20 from
+  `.claude/scheduler/`; see "Permission gate" below for why it's
+  deliberately OUTSIDE `.claude/` now, not just a naming choice): `FOCUS.md`,
   `QUESTIONS.md`, `schedule.conf`. Registration symlinks them into
   scheduler's aggregation folders (`focus/`, `questions/`, `schedule/`) —
   `schedule/scheduler.conf` is already a symlink back to
-  `.claude/scheduler/schedule.conf`.
+  `.scheduler/schedule.conf`.
 - **Reports** go to `~/reports/scheduler/` like everyone else.
 - **The backlog lives HERE, in this file** (the section below) — not in a
   separate `TODO.md` anymore (retired 2026-07-18). The scheduler has no
   tracker and no end users filing reports, so FOCUS.md is both scope *and*
   backlog. Introduce an idea by adding a line to the Backlog section; that's
   the whole intake mechanism.
-- **Questions** (`.claude/scheduler/QUESTIONS.md`) for anything needing a
+- **Questions** (`.scheduler/QUESTIONS.md`) for anything needing a
   human decision — appended, never acted on unilaterally.
 
 ## Cost insight (2026-07-18 usage audit — read before touching model/effort settings)
@@ -119,14 +121,13 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
    Verify with `bin/sync-crontab.sh` (preview, NO `--apply`): output must
    stay byte-identical while `*_SCRIPT` is still set. One commit per project.
 
-2. **Propagate the self-contained-folder model to the other projects** (what
-   scheduler just adopted): each project's scheduler files
-   (`FOCUS.md`/`QUESTIONS.md`) grouped under `.claude/scheduler/`, with a
-   `SCHEDULER_SUBDIR=".claude/scheduler"` line in its conf so
-   `bin/sync-crontab.sh` points its `focus/`+`questions/` symlinks there.
-   This touches other projects' `.claude/` layout and their `/nightly-batch`
-   command's FOCUS path — write it up as a per-project proposal in the
-   report (and a QUESTIONS entry) rather than editing other repos from here.
+2. **SUPERSEDED 2026-07-20 — see "Consolidation roadmap" → axis 3 below.**
+   The target path changed: `SCHEDULER_SUBDIR=".scheduler"` (top-level,
+   outside `.claude/`), not `.claude/scheduler/` as originally written here
+   — the permission-gate investigation found `.claude/**` writes get
+   hard-refused in unattended runs, so nesting under `.claude/` would have
+   propagated the same bug to every project. Follow the roadmap section
+   instead of this item.
 
 3. **"scheduler" glance command (scoped 2026-07-19).** Goal: run `scheduler`
    in a terminal, see at a glance what's scheduled per project + whether it
@@ -359,34 +360,102 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
     section above) — only the standard `~/reports/<project>/LATEST.md`
     shape is covered so far.
 
-- **Permission gate on `.claude/**` writes in unattended runs (raised
-  2026-07-19, needs investigation before deciding a fix).** Both this
-  project's own paced-dev cycle and vkv-inventory's nightly run report
-  being unable to write `.claude/scheduler/QUESTIONS.md` /
-  `.claude/QUESTIONS.md` in unattended `claude -p` invocations ("hard-
-  blocked ... as a 'sensitive file'"), while `bin/` edits in the same runs
-  go through fine. A same-session lookup (claude-code-guide agent, not
-  independently verified against the actual docs) claims Claude Code has
-  a hardcoded protected-path rule for `.claude/` that `permissions.allow`
-  entries cannot pre-approve, and that it auto-denies in headless mode
-  under `default`/`acceptEdits`/`dontAsk`, with unpredictable behavior
-  under `auto` (classifier-decided). **This is in tension with observed
-  behavior**: chezz's nightly run successfully committed edits to
-  `.claude/FOCUS.md` AND `.claude/QUESTIONS.md` the same night
-  (`97dd47d`) using the same shared engine and the same `ALLOWED_TOOLS` as
-  the runs that got blocked — so either the protection isn't a blanket
-  `.claude/` block, or something else differs per-run (permission mode,
-  classifier judgment on the specific edit, etc.). Needs a real
-  investigation (not another web lookup) before picking a fix: reproduce
-  the block deliberately (e.g. a `SCHED_DRYRUN=0` test cycle that only
-  tries to touch `.claude/scheduler/QUESTIONS.md`) and see what actually
-  happens today. **Candidate fix if the block turns out to be real and
-  path-based:** stop nesting tracker files under `.claude/` for any
-  project relying on an unattended run to edit them — e.g. move the
-  `SCHEDULER_SUBDIR` model's `FOCUS.md`/`QUESTIONS.md` to a top-level
-  hidden dir outside `.claude/` (naming TBD, avoid colliding with the
-  existing `schedule/` dir) — but don't migrate every project on this
-  guess alone.
+- **RESOLVED 2026-07-20: permission gate on `.claude/**` writes in
+  unattended runs.** Root-caused with a real controlled test, not a web
+  lookup: a scratch git repo with two identical files, `.claude/scheduler/
+  QUESTIONS.md` and `.scheduler/QUESTIONS.md` (top-level, no `.claude/`
+  prefix). Ran `claude -p` twice, byte-identical prompt and
+  `--allowedTools "Edit,Write"`, only the target path differed. Result:
+  the `.claude/**` path was refused every time with the literal error
+  `Claude requested permissions to edit <path> which is a sensitive
+  file.`; the `.scheduler/**` path succeeded every time. **Confirmed
+  path-based, confirmed real, confirmed fixable by moving off `.claude/`
+  entirely** — not a classifier judgment call, not permission-mode
+  dependent within what we tested. (The earlier "chezz wrote
+  `.claude/QUESTIONS.md` fine the same night" observation is *not*
+  explained by this test and is still unresolved as a loose thread — worth
+  someone checking whether that run used a different permission mode or
+  `ALLOWED_TOOLS` shape than the ones that got blocked, but it doesn't
+  change the fix below.)
+
+  **Fix applied to scheduler itself, same run:** `.claude/scheduler/` →
+  moved to top-level `.scheduler/` (git mv, preserves history). Updated:
+  `.scheduler/schedule.conf`'s `SCHEDULER_SUBDIR` value (`.claude/scheduler`
+  → `.scheduler`), the `focus/scheduler.md`/`questions/scheduler.md`/
+  `schedule/scheduler.conf` symlinks, `.claude/commands/nightly-batch.md`,
+  `bin/overnight-dev.sh`, `bin/scheduler-dev-cycle.sh` (prompt text paths),
+  and `bin/sync-crontab.sh`'s comments. `sync-crontab.sh` preview confirmed
+  clean afterward (symlinks resolve to the new path, crontab output
+  unchanged). This is now scheduler's own reference implementation of the
+  fix.
+
+  **Not yet done — every other project still has `FOCUS.md`/`QUESTIONS.md`
+  directly under `.claude/`,** which means chezz, vkv-inventory,
+  home-assistant, wtul, crt, and the rest are all still exposed to this
+  exact gate on every unattended write. This is now **Phase 3** of the
+  consolidation roadmap below — same `SCHEDULER_SUBDIR=".scheduler"` move,
+  one project at a time, each project's own repo/PR (not edited from here
+  directly, per the usual cross-project boundary).
+
+## Consolidation roadmap (2026-07-20, human-directed session)
+
+Three axes of registration/layout sprawl that grew independently and now
+need converging, in this order:
+
+1. **Registration mechanism** — every `schedule/<project>.conf` still sets
+   a legacy `*_SCRIPT` line (chezz, vkv-inventory, home-assistant, wtul),
+   even though `bin/scheduler-run` + the conf runtime fields have existed
+   since 2026-07-18 and MIGRATION.md already documents the exact safe,
+   one-tier-at-a-time move. **Next unattended cycle: execute MIGRATION.md
+   for one project/tier** (read the wrapper, copy its config into the
+   conf's runtime fields, drop the `*_SCRIPT` line, verify `sync-crontab.sh`
+   preview is byte-identical except for the entrypoint line, apply). Pick
+   the lowest-risk project first (home-assistant or wtul — single tier,
+   no web tracker to break) rather than chezz/vkv-inventory's dual-tier
+   setups. One project per cycle, not all four at once.
+
+2. **Sweep pacing** — Tier 1 bug-sweeps (chezz, vkv-inventory) have been
+   sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
+   migration orphaned them. **Decision made 2026-07-20: fold sweeps into
+   the main `_paced.conf` rotation** as ordinary participants alongside
+   the Tier 2 batches (not a separate faster rotation) — accept the
+   cadence drop (once per full rotation lap instead of every ~15min) as
+   the tradeoff for one dispatcher instead of two. **Next unattended
+   cycle: add chezz's and vkv-inventory's bug-sweep wrappers to
+   `schedule/_paced.conf`, un-pause `SWEEP_JOB_NAME` in their confs**
+   (pointing at the paced runner path, not a fixed cron), verify with a
+   `sync-crontab.sh` preview that the fixed sweep cron lines are now
+   suppressed the same way batch lines already are for paced participants.
+
+3. **File layout — `SCHEDULER_SUBDIR=".scheduler"` propagation.** Was
+   blocked on the permission-gate investigation above; that's now
+   resolved and scheduler has the reference implementation. Roll out to
+   one project at a time: move that project's `.claude/FOCUS.md`/
+   `.claude/QUESTIONS.md` to `.scheduler/FOCUS.md`/`.scheduler/
+   QUESTIONS.md` in *that project's own repo*, set
+   `SCHEDULER_SUBDIR=".scheduler"` in its `schedule/<project>.conf` here,
+   re-point that project's own `/nightly-batch` and `/bug-sweep` command
+   files at the new path, verify `sync-crontab.sh --apply` re-links
+   `focus/<project>.md`/`questions/<project>.md` correctly. **Propose this
+   per-project rather than editing another repo directly from here** —
+   same boundary as always. Natural pairing: do a project's axis-1 and
+   axis-3 migration in the same cycle if it's getting touched anyway.
+
+**Deferred — parked, not forgotten, revisit after the three axes above
+converge:**
+- FOCUS item 0 (collapse report + `QUESTIONS.md` into one file the human
+  answers inline in) — still real, still wanted, but layering a fourth
+  file-shape change on top of an already-in-flight layout migration
+  (axis 3) would make both harder to verify independently. Do this once
+  every project is settled on `.scheduler/`.
+- FOCUS item 3's remaining pieces (b/c/d: the `scheduler` glance
+  subcommand reading the merged file, blocker approve/clear via `git log`,
+  per-project rollout) — same reasoning, depends on item 0.
+- Auditing what the four realisateur-spawned projects (groc-mangr,
+  nine-speakers, sequestria, vim-arcade) have actually shipped unattended
+  with no human review yet — real, not urgent enough to interrupt the
+  consolidation pass, but shouldn't sit forever either. Worth a dedicated
+  look once the roadmap above is further along.
 
 ## Out of scope for an unattended run
 
