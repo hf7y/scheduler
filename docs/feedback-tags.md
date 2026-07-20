@@ -36,15 +36,38 @@ anchor is positional, not a manually-typed reference.
 
 ## Collection
 
-`bin/collect-feedback.sh <file>` scans a file for tags and prints a
-structured block (keyword + section + anchor + text) for every one found;
-exits 1 with no output if there are none. The shared engine
+`bin/collect-feedback.sh <file>` scans a file for tags **and plain `> `
+blockquote replies** (added 2026-07-20 -- see "A real near-miss" below)
+and prints a structured block (keyword or `REPLY` + section + anchor +
+text) for every one found; exits 1 with no output if there are none.
+Consecutive `> ` lines merge into one `REPLY` block, not one per physical
+line, so a wrapped paragraph reads as a single reply. The shared engine
 (`lib/sweep-loop-common.sh`) runs this automatically against
 `~/reports/<project>/LATEST.md` right before invoking `claude`, and -- if
 anything was found -- prepends it to that run's prompt as "human feedback
 on the previous report, act on this first." The scheduler's own two
 bespoke wrappers (`scheduler-nightly-batch-loop.sh`,
 `scheduler-dev-cycle.sh`) do the same against their own report file.
+
+**A real near-miss that motivated the `> ` support:** a human reply
+written directly into a report's `LATEST.md` (using the same `> `
+convention `QUESTIONS.md`'s own contract documents) was, before this
+change, invisible to this script -- only `%%TAG` lines were recognized.
+Since `LATEST.md` gets wholly overwritten on the project's next run, that
+reply was one dispatch away from being silently destroyed, having never
+been read by anything. Recovered by hand that one time (copied into the
+project's own `QUESTIONS.md`/`FOCUS.md`, where the reply mechanism
+actually is wired); this fix closes the gap so it can't recur. Two
+distinct file/mechanism pairs, easy to conflate since the vim editing
+experience looks identical on both — worth remembering:
+- **`QUESTIONS.md`**: `> ` replies read directly by `/nightly-batch`'s own
+  prompt instructions (not by this script at all) — durable, append-only,
+  the one built for judgment calls.
+- **`LATEST.md`/`BLOCKERS.md`**: `> ` replies (now) AND `%%TAG` lines both
+  read by this script before the prompt is built. `LATEST.md` itself is
+  ephemeral (overwritten wholesale each run) — a reply there only survives
+  long enough to be read ONCE, on the very next dispatch; it is not a
+  durable record the way a `QUESTIONS.md` entry is.
 
 No separate "mark as read" step is needed: each run overwrites
 `LATEST.md` with its own fresh report, so a tag naturally disappears once
@@ -93,6 +116,14 @@ this holds even across separate vim sessions). Verified with a scripted
 headless-vim test: a new tagged line and a new freehand `> ` reply both
 got stamped correctly; an old, already-answered `> ` line was untouched;
 re-saving an already-stamped line left its timestamp unchanged.
+
+**Multi-line replies stamp once, on their first line only** (fixed
+2026-07-20 after a real multi-line reply in the wild got the same
+timestamp repeated on all six of its wrapped lines): a `> ` line is only
+a stamp candidate if the line immediately above it is NOT itself a `> `
+line — a continuation of an already-started reply never gets its own
+stamp. Re-verified with a scripted three-line reply: only line one got
+`[timestamp zach]`, lines two and three stayed plain.
 
 The signer is hardcoded `zach`, not derived from `$USER` — this is a
 personal dotfile answering "did zach write this or someone/something
