@@ -59,6 +59,43 @@ so they belong here rather than cluttering that file's code-shaped scope.
   but needs the manual `systemctl enable --now` steps run ON crt-vm —
   exact commands are in `VM-JOBS.md`.
 
+### crt deep-vision (PARKING-LOT.md / RFP docs) — added 2026-07-20
+Two different kinds of blocker here, worth telling apart: pure decisions
+(answerable from anywhere, right now, no hardware/on-site access needed
+at all) vs. sourcing calls (need a purchase, but the *decision* and the
+*ordering* can both happen remotely — it's only installing/using the part
+that needs on-site hands, and isn't listed again here since it'd just
+duplicate the hardware items above once something ships).
+
+**Pure decisions — answerable right now:**
+- **Gallery installation** (`RFP-GALLERY.md`): centralized backend vs.
+  fully independent units. Named in that doc as the single
+  highest-leverage call — it changes the entire bill of materials, and
+  nothing else about that concept is worth planning until it's made.
+- **Payphone installation** (`RFP-PAYPHONE.md`): confirm the no-real-payout
+  framing (tokens/print-outs/bonus time instead of coin return), or say
+  a real-payout version is actually wanted — if the latter, that doc is
+  explicit it needs real legal advice for the specific venue before any
+  more work happens on it.
+- **Video-cast-to-CRT**: not designed at all yet (`DEVELOPMENT-
+  WORKFLOW.md` just named the shape of the problem). Needs a scope/
+  priority call before it's even a real backlog item — what source
+  device, how urgent relative to everything else.
+
+**Sourcing calls — a purchase decision, doable remotely, but nothing to
+build until the part is chosen/ordered:**
+- **Persona-channel rotary switch** (`PERSONA-CHANNEL.md`): mechanism is
+  decided (a real detented switch, not a servo/LED display) — needs an
+  actual commodity part picked before the faceplate CAD can be drawn.
+- **RF power-on-TV trigger module** (`PARKING-LOT.md`'s "lift the handset
+  powers the TV on" idea) — needs an RF transmitter module chosen/sourced;
+  no design work possible before that.
+- **HDMI-to-RF multi-channel modulator** (`PARKING-LOT.md`'s multi-persona
+  TV-channel idea) — same, needs real hardware sourced first.
+- **IR blaster** (`cad/ir_blaster_mount.scad`, already stubbed) — needs an
+  actual IR LED in hand and the real TV sensor position measured; the
+  mount geometry is pure placeholder until then.
+
 Currently no other open blockers. Recently resolved:
 - **vkv-inventory tracker 403** (2026-07-20) — the org-owned Apps Script
   deployment couldn't be redeployed from the personal `dangerpine@gmail.com`
