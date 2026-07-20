@@ -59,6 +59,24 @@ real pros/cons (not just re-asserted):
   complex/stateful enough that re-deriving everything from scratch every
   15 minutes becomes an OBSERVED bottleneck (not hypothetical) — that's
   the signal, not project count and not a feature wishlist.
+- **Refined 2026-07-20: the daemon isn't rejected outright, it's PARKED
+  for a specific future world — scheduler running on an always-on server
+  instead of the laptop, not this laptop-bound cron setup.** That's
+  exactly the world item 4/5 (no local checkout, scheduler owns scope,
+  runnable anywhere) is already building toward — a daemon is the natural
+  fusion of "scheduler can run anywhere" with "scheduler is always
+  running," not a separate, unrelated leap. **Build-toward-it principle,
+  effective now for any NEW mechanism this roadmap adds:** prefer state
+  that lives in files/is fully re-derivable on each invocation over
+  anything held only in one process's memory; prefer idempotent,
+  poll-friendly checks over logic that assumes a specific cron cadence;
+  keep dispatch logic (what runs next, and why) separable from HOW it
+  gets triggered (a cron tick today, an event loop later) so swapping the
+  trigger mechanism later is small, not a rewrite. Every item in this
+  roadmap (`AUTONOMY_TIER`, the registration contract, the blockers
+  aggregation above) should already read this way by construction — this
+  bullet is the explicit check to apply when reviewing new design work,
+  not a new item to build separately.
 
 ## Vision (2026-07-20, human-directed session)
 
@@ -334,6 +352,65 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
      it — no separate consume/sync step, no drift risk. It does NOT mean
      the owning project's agent acts on it instantly; that still only
      happens at its next paced/cron dispatch, same as today.
+
+   **Concrete mechanics for `bin/scheduler blockers` (2026-07-20, refined
+   human-directed session) — a real script under `bin/`, not just a
+   concept:**
+   - **Scrape, don't rely on a push.** Every invocation walks every
+     registered project's own scheduler-owned scope file (once item 4/5
+     lands) fresh, looking for its blocker-flagged section. No cached
+     state between runs of the command itself.
+   - **Report what's silent, not just what's flagged.** A project with
+     nothing under its blockers section is ambiguous — "confirmed nothing
+     blocking" and "this project's report pipeline is stale/broken and
+     never got a chance to say so" look identical unless the command
+     distinguishes them. Cross-reference against that project's last
+     report timestamp (or paced-rotation last-ran marker): a project that
+     hasn't reported in an abnormal window gets its own "not reporting —
+     check it" line, separate from and never confused with an empty
+     blockers section.
+   - **Spawns a synthesized buffer, not a symlinked file.** Since this is
+     an aggregate over N different projects' own files, `scheduler
+     blockers` writes a temp file assembling every project's section
+     (clearly delimited, same visual shape as today's `BLOCKERS.md`
+     headings) and opens THAT in `$EDITOR`. **On save, a wrapper
+     (`BufWritePost` autocmd calling back into a `bin/scheduler` dispatch
+     subcommand, or a post-edit diff step run right after `$EDITOR`
+     exits — implementation detail to work out, not decided here) parses
+     which section(s) changed and writes each change back into that
+     project's own real scheduler-owned file, not the temp buffer.** This
+     is real, non-trivial plumbing (multi-file back-propagation from one
+     synthesized buffer) — flagged here as a concrete build requirement,
+     not solved by this design pass.
+   - **Redundancy: agents must not depend on back-propagation having
+     worked.** Same principle already used everywhere else in this system
+     (a run always re-reads its own `FOCUS.md`/report file fresh, never
+     relies on being "notified" of a change) — every project's own
+     `/nightly-batch` (and `/bug-sweep`) command must read its own
+     scheduler-owned file's blockers section directly as a normal part of
+     its run, regardless of whether `scheduler blockers`'s write-back
+     mechanism is known to be working. If back-propagation has a bug and
+     silently fails to reach the source file, the human's edit is still
+     recoverable (it's sitting in the temp buffer / a backup), but the
+     agent-side read must never be the ONLY path an edit can take effect
+     through.
+   - **Auto-clear policy — this is a discipline choice for you, but
+     agents must not depend on you exercising it.** Explicit tags
+     (`%%APPROVE` etc.) already exist and remain the clean, unambiguous
+     signal when used — but the realistic expectation is you often won't
+     bother typing one. **Agents MAY self-clear a blocker without an
+     explicit tag, but ONLY when the resolution is objectively verifiable
+     by the agent itself** — a specific commit exists, a test now passes,
+     a state-check the agent can run directly confirms it — never for
+     anything requiring real-world/physical confirmation only a human can
+     give (most of what's actually in `BLOCKERS.md` today: hardware,
+     measurements, physical installs). **Any self-clear, tagged or not,
+     must be narrated explicitly in that run's report** ("cleared blocker
+     X because Y, verified via Z") so it's visible and reversible if
+     wrong — never a silent removal. This extends a pattern already used
+     elsewhere in this system (e.g. chezz's nightly already resolves
+     tracker reports itself when the fix is objectively done, not waiting
+     for a human tag) to the blockers construct specifically.
 
 1. **Migrate every project's `schedule/*.conf` onto the new
    `bin/scheduler-run` entrypoint, per `MIGRATION.md`.** The generic
