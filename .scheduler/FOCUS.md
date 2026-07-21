@@ -670,6 +670,54 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-20 22:20 (via chat): full revisit of the svc-vaporwave split
+  needed — bigger than the observability-only fix queued just above.**
+  Two more pieces, not yet scoped:
+  1. **svc-vaporwave's job runs should surface in zach's normal
+     workflow** (`bin/scheduler` glance, not just raw log-diving) — not
+     just the stranded-run detection queued above, but real first-class
+     visibility: next-run time, last-run status, open questions, same as
+     every zach-side project gets today.
+  2. **Eventually move `usage-gate.sh` pacing onto svc-vaporwave too** —
+     right now aedile/vkv-inventory run on fixed cron times with no
+     burn-rate pacing at all (unlike zach's paced projects), which was
+     an acceptable simplification to get the migration done tonight, not
+     a permanent design choice.
+  Deliberately NOT designed further here — real design work for a future
+  session, and should incorporate/complete the scoped observability fix
+  above rather than duplicate it.
+
+- **2026-07-20 22:15 (via chat, queued for later): extend cross-account
+  observability to svc-vaporwave, WITHOUT promoting scheduler to a
+  machine-wide/daemon service.** Context: aedile and vkv-inventory's Tier
+  2 batch jobs migrated to a separate headless account (`svc-vaporwave`,
+  its own Claude subscription, own independent crontab -- entirely
+  outside `schedule/*.conf`/`sync-crontab.sh`'s control now, by design,
+  to distribute usage) same session. Real gap this created:
+  `scheduler sweep`'s stranded-run/`.active`-marker detection and
+  `morning-report.sh` only ever read `$HOME/.local/share/...` -- i.e.
+  zach's own home -- so a hung or crashed cycle on `svc-vaporwave` is
+  currently invisible to any of zach's own monitoring (reports themselves
+  ARE already visible, via the `/srv/vaporwave-reports` shared-group
+  symlink trick built same session -- this is specifically about
+  mid-run/stranded-run detection, not reports).
+  **Explicitly rejected as overkill for this gap: promoting scheduler to
+  a root-owned/machine-wide service.** Would directly contradict this
+  same file's own "keep cron, not a daemon" decision, reaffirmed twice
+  this same day -- the named revisit trigger was `usage-paced-runner.sh`
+  growing genuinely complex, not account count, and a second Claude
+  account is not that trigger. Jumping to a cross-account daemon now
+  would be exactly the "vision debt" pattern already called out
+  elsewhere in this file.
+  **Scoped fix instead:** extend the existing `vaporwave-reports` shared
+  group (group `vaporwave-reports`, members `zach`+`svc-vaporwave`,
+  setgid dirs under `/srv/vaporwave-reports/`) to also cover
+  `svc-vaporwave`'s `~/.local/share/scheduler-registry` dir -- same
+  group-readable pattern, no root needed, no new daemon. `scheduler
+  sweep` on zach's side additionally globs that path for stale
+  `.active` markers alongside its own. Purely additive observability,
+  doesn't touch orchestration/timing on either account.
+
 - **2026-07-20 21:40 (via chat, queued for later):** `lib/sweep-loop-common.sh`'s
   `notify-send` calls have no `2>/dev/null || true` guard (unlike aedile's
   bespoke wrapper, which already has this) -- on a headless account with
