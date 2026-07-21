@@ -57,16 +57,11 @@ same day — `PARKING-LOT.md`, `PERSONA-CHANNEL.md`, `RFP-GALLERY.md`,
 `.claude/FOCUS.md`'s MIDI section — see those for the full writeups);
 still listed here because the actual hands-on-hardware step hasn't
 happened yet for any of them.
-- **MIDI controller pass-through stuck.** Root cause found (Windows had
-  the MiniLab's MIDI interface disabled, fixed via `Enable-PnpDevice`),
-  but `VBoxManage usbattach` still fails ("busy with a previous request")
-  even after that fix and a full VM power-cycle — needs a VBoxSVC/
-  VirtualBox host service restart on dexter (a process-kill action an
-  unattended run won't take on its own). **Direction**: develop it
-  dexter/Windows-side for now, with the explicit intent it merges back
-  into the bare-metal Linux distro eventually — keep it portable, don't
-  lean on anything Windows-only.
-  > Still accurate as of jul 20, 13:00. 
+- **MIDI controller pass-through** — **PARKED 2026-07-20** into crt's own
+  `PARKING-LOT.md` (full status/next-step there). Still stuck on a
+  VBoxSVC restart on dexter needing direct human OK (live VM depends on
+  it); not on the critical path, deliberately deprioritized rather than
+  actively blocked-and-waiting.
 
 - **Physical hookswitch build needs real measurements.** `cad/params.scad`
   ships generic placeholder dimensions — measure the actual handset
