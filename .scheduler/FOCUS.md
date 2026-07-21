@@ -670,6 +670,22 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-20 20:27 (via chat, queued for next nightly cycle):** propagate
+  the "no long/multi-line copy-paste commands for the user" preference
+  (currently a per-project feedback memory scoped to this project's memory
+  dir at `~/.claude/projects/-home-zach-Documents-Project-Archive-scheduler/memory/feedback-no-multiline-paste.md`)
+  to a GLOBAL scope so every session across every project respects it, not
+  just sessions in this repo. Rule as refined: keep commands under ~80
+  chars — the constraint is chat-rendered line wrap, not literal newline
+  count (a `printf '...\n...'` one-liner can still wrap and read like a
+  heredoc). Concrete options to evaluate: (a) a global `~/.claude/CLAUDE.md`
+  (doesn't exist yet — would need creating) that's loaded in every project's
+  context, vs (b) whatever native global-memory/global-settings mechanism
+  the harness actually supports (check before assuming CLAUDE.md is the
+  only lever). Whichever lands, keep the existing per-project memory file
+  in sync or retire it in favor of the global one — don't leave two copies
+  that can drift.
+
 - **2026-07-20 19:56 (via `scheduler -i`):** the convention for scheduler on open questions/blockers: use * to indicate new items that haven't been touched by Zach. open blockers that zach has seen are counted but have no freshness flag. ? indicates that the file has been edited and the sweeper hasn't run yet (maybe blockers and questions have been addressed that aren't accounted for. running sweep should clear the questionmarks). The current check off notation is opaque and undocumented +1✓ is unclear to me.
 
 - **Batched, not built now 2026-07-20: `scheduler -i <project>` with no
