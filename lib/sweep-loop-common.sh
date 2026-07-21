@@ -195,6 +195,18 @@ fi
   START_TS=$(date +%s)
   echo "=== $(date -Is) ==="
   cd "$REPO/$REPO_SUBDIR"
+  # Hard safety check, not just a convention: this clone is meant to be
+  # disposable between scheduled cycles, but a human can (and did, in
+  # practice) open an interactive session directly in it -- e.g. to poke
+  # at a project as svc-vaporwave. `git reset --hard` below would
+  # silently discard any uncommitted work left behind. Stash it instead
+  # of losing it; a stash survives reset --hard and is recoverable
+  # (`git stash list` / `git stash pop`) even if nobody notices right
+  # away, unlike a straight reset.
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "uncommitted changes found before reset --hard -- stashing instead of discarding (git stash list to recover)"
+    git stash push -u -m "sweep-loop-common.sh auto-stash before reset $(date -Is)"
+  fi
   git checkout "$BRANCH"
   git fetch origin --quiet
   git reset --hard "origin/$BRANCH"
