@@ -229,7 +229,15 @@ $PROMPT"
   # "mark as read" instead of relying on the next report overwriting it).
   BLOCKERS_FILE="$LIB_DIR/../BLOCKERS.md"
   if [ -f "$BLOCKERS_FILE" ]; then
-    BLOCKERS_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$BLOCKERS_FILE" --section "$PROJECT_KEY" --consume 2>/dev/null || true)"
+    # --consume only if this account can actually write the file back --
+    # a cross-account run (e.g. svc-vaporwave reading zach-owned
+    # BLOCKERS.md) that tried --consume anyway hung indefinitely on the
+    # resulting mv instead of failing fast (real incident 2026-07-20,
+    # root cause of the mv not fully diagnosed -- this guard sidesteps it
+    # rather than relying on understanding exactly why it hung).
+    CONSUME_FLAG=""
+    [ -w "$BLOCKERS_FILE" ] && CONSUME_FLAG="--consume"
+    BLOCKERS_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$BLOCKERS_FILE" --section "$PROJECT_KEY" $CONSUME_FLAG 2>/dev/null || true)"
     if [ -n "$BLOCKERS_BLOCK" ]; then
       echo "found inline feedback tags in $BLOCKERS_FILE under ## $PROJECT_KEY -- prepending to prompt"
       FEEDBACK_BLOCK="${FEEDBACK_BLOCK:-}${FEEDBACK_BLOCK:+$'\n\n'}$BLOCKERS_BLOCK"
