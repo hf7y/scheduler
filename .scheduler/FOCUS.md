@@ -686,6 +686,13 @@ to build sooner.
   Deliberately NOT designed further here — real design work for a future
   session, and should incorporate/complete the scoped observability fix
   above rather than duplicate it.
+  **Amended 2026-07-21 (via chat): the goal is now real CONTROL, not just
+  observability** — give scheduler eventual actual authority over
+  svc-vaporwave's jobs (scheduling/dispatch), not only visibility into
+  their state. Still explicitly NOT a green light to jump straight to a
+  cross-account daemon (see the rejection reasoning in the item just
+  above) — this raises the eventual ceiling of the design, it doesn't
+  change tonight's "scoped fix first" sequencing.
 
 - **2026-07-20 22:15 (via chat, queued for later): extend cross-account
   observability to svc-vaporwave, WITHOUT promoting scheduler to a
