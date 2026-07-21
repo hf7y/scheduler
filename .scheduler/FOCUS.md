@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-20 19:56 (via `scheduler -i`):** the convention for scheduler on open questions/blockers: use * to indicate new items that haven't been touched by Zach. open blockers that zach has seen are counted but have no freshness flag. ? indicates that the file has been edited and the sweeper hasn't run yet (maybe blockers and questions have been addressed that aren't accounted for. running sweep should clear the questionmarks). The current check off notation is opaque and undocumented +1✓ is unclear to me.
+
 - **Batched, not built now 2026-07-20: `scheduler -i <project>` with no
   text argument should open `$EDITOR`** instead of failing with a usage
   message — pre-populate a blank templated bullet at the backlog
