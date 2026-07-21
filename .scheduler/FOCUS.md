@@ -670,6 +670,23 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **⚠️ FLAGGED, NOT BUILT (2026-07-21, human's own idea, self-caught as
+  "ideating mid-execution" — genuinely worth revisiting later, not
+  acted on now):** `.gitignore`-ing `.claude/` (used by wavebucks and
+  presumably other projects to keep Claude Code's local state out of a
+  shared repo) is the wrong TOOL for that goal, because it also silently
+  breaks automation that needs those files to survive a clone/worktree
+  (exactly what just happened to aedile's `FOCUS.md`/`QUESTIONS.md` —
+  see tonight's fix, moved to `.scheduler/` instead). **Better shape: a
+  GitHub-level display/visibility mechanism** (e.g. `.gitattributes`
+  `linguist-generated`/`linguist-vendored` to hide from stats/diffs, or
+  simply accepting that a PRIVATE repo's collaborators seeing automation
+  files isn't actually the risk "public" implies) instead of excluding
+  the files from git tracking altogether on the local machine. Worth a
+  real look at whether any OTHER registered project also blanket-
+  `.gitignore`s `.claude/` and has the same latent bug, not just
+  wavebucks/aedile.
+
 - **2026-07-20 22:20 (via chat): full revisit of the svc-vaporwave split
   needed — bigger than the observability-only fix queued just above.**
   Two more pieces, not yet scoped:
