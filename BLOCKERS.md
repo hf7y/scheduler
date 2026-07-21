@@ -15,6 +15,13 @@ run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
 ## aedile
+- **svc-vaporwave migration in progress, not yet deployed** (2026-07-20).
+  vkv-inventory already migrated and confirmed working; aedile's rewrite
+  is drafted (dedicated clone, always-push + `gh pr create`, no more
+  worktree-off-real-checkout) but not yet copied to svc-vaporwave's
+  crontab. Full handoff/remaining-steps note:
+  `~/Documents/vkv/wavebucks/aedile/.claude/NEXT-STEPS.md` (local-only,
+  gitignored in that repo, not visible from here).
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
   `aedile-nightly/<date>` to `github-wavebucks` — nothing else in the
