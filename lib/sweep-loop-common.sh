@@ -109,7 +109,7 @@ set -uo pipefail
 : "${SECRETS_DEST_SUBDIR:=.session-handoff}"
 : "${PRECHECK_CMD:=}"
 
-STATE_DIR="/home/zach/.local/share/${JOB_NAME}"
+STATE_DIR="$HOME/.local/share/${JOB_NAME}"
 REPO="$STATE_DIR/repo"
 LOG="$STATE_DIR/sweep.log"
 LOCK="$STATE_DIR/sweep.lock"
@@ -125,7 +125,7 @@ HEARTBEAT_FILE="$STATE_DIR/last_heartbeat"
 # whichever pushes second silently clobbers or conflicts with the other.
 # Keying this second lock by PROJECT_KEY instead of JOB_NAME is what makes
 # every tier/job for one project contend for the same slot.
-REGISTRY_DIR="/home/zach/.local/share/scheduler-registry"
+REGISTRY_DIR="$HOME/.local/share/scheduler-registry"
 REGISTRY_LOCK="$REGISTRY_DIR/${PROJECT_KEY}.lock"
 REGISTRY_MARKER="$REGISTRY_DIR/${PROJECT_KEY}.active"
 

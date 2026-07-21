@@ -14,6 +14,19 @@ Each project's heading must be exactly `## <PROJECT_KEY>` (matches
 run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
+## aedile
+- **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
+  2027-07-20.** Used only for `gh pr create` after pushing
+  `aedile-nightly/<date>` to `github-wavebucks` — nothing else in the
+  wrapper depends on it (clone/commit/push use the SSH deploy key
+  instead). If it lapses, the cycle still commits+pushes fine but logs
+  "WARNING: gh pr create failed" and you'll need to open the PR by hand
+  until it's rotated. Regenerate as `svc-vaporwave`: GitHub → Settings →
+  Developer settings → Personal access tokens (classic) → New token,
+  `repo` scope ONLY (current token also carries `admin:org`, broader than
+  needed — worth trimming on rotation even if not urgent today), then
+  `echo <new-token> | gh auth login --with-token`.
+
 ## wtul
 - **ROADMAP #2 (AcoustID/Discogs metadata fallback) — AcoustID done,
   Discogs still pending.** AcoustID key obtained and wired 2026-07-20
