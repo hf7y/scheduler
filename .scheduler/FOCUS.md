@@ -670,6 +670,18 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-20 21:40 (via chat, queued for later):** `lib/sweep-loop-common.sh`'s
+  `notify-send` calls have no `2>/dev/null || true` guard (unlike aedile's
+  bespoke wrapper, which already has this) -- on a headless account with
+  no D-Bus/desktop session (confirmed on `svc-vaporwave` running
+  `vkv-inventory-nightly-batch-loop.sh`: `Error calling StartServiceByName
+  for org.freedesktop.Notifications: Timeout was reached`), each call
+  burns real wall-clock time waiting on a timeout instead of failing
+  fast. Not correctness-breaking (the run still completes), just wasted
+  time on every cron fire for any headless account sourcing this engine.
+  Fix: add the same `2>/dev/null || true` guard to every `notify-send`
+  call in the shared engine.
+
 - **2026-07-20 20:27 (via chat, queued for next nightly cycle):** propagate
   the "no long/multi-line copy-paste commands for the user" preference
   (currently a per-project feedback memory scoped to this project's memory
