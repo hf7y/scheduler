@@ -82,9 +82,9 @@ happened yet for any of them.
   > measurements. but develop this based on educated guess; don't let
   > missing exact measurements block.
 
-- **OctoPrint** needs hands on the spare Raspberry Pi (OctoPi SD already
-  flashed on mandark, just needs to be put in the Pi and powered up).
-  **Already on the network** — check next time mandark joins.
+- **OctoPrint** — **RESOLVED 2026-07-20**: confirmed reachable at
+  `192.168.0.43` (HTTP 302, alive) during a live crt session with real
+  dexter/VM network access. No longer blocked on hands, it's already up.
 
 - **Benchy calibration print** needs the Ender 3's SD card path verified
   and someone to actually run the print (3DBenchy STL already downloaded
@@ -95,10 +95,13 @@ happened yet for any of them.
   blocked on a DAC arriving — nothing to do until it ships. **ETA**: the
   DAC (https://www.amazon.com/dp/B08Y8CZB2S) is arriving Tuesday morning.
 
-- **VM-resident hardware-check job isn't installed.** Written this
-  session (`VM-JOBS.md`, `systemd/crt-vm-hardware-check.{service,timer}`)
-  but needs the manual `systemctl enable --now` steps run ON crt-vm —
-  exact commands are in `VM-JOBS.md`. No update yet.
+- **VM-resident hardware-check job** — **RESOLVED 2026-07-20**: installed
+  and verified live (real offline test suite passed against real
+  ALSA/tmux on crt-vm, earcons/TTS/sideband all exit 0). Also reworked
+  from an unattended `claude -p` call to a plain script
+  (`bin/crt-vm-hardware-check.sh`) since every check it runs is
+  mechanical — no LLM needed. Timer active, first scheduled run 06:38
+  next morning.
 
 ### crt deep-vision (PARKING-LOT.md / RFP docs)
 - **Gallery installation** (`RFP-GALLERY.md`): the original "centralized
