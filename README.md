@@ -56,6 +56,7 @@ is fully regenerated from whatever confs currently exist).
 | `schedule/*.conf` | One per registered project (`_batch.conf` is global auto-stagger config). |
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in. |
 | `INTAKE.md` | The web-tracker HTTP contract a project's backend implements to plug in. |
+| `docs/offline-first-checks.md` | The reusable pattern behind `bin/scheduler status`: build a check entirely out of deterministic scripts first, layer AI on top only as an opt-in (one-shot summary or interactive session) — a template for any project that wants the same kind of status check. |
 
 ## The conf file: `schedule/<project>.conf`
 

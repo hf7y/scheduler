@@ -43,11 +43,24 @@ usage: scheduler [command] [project]
                          touches non-.md files or attempts to resolve a
                          genuine ahead+behind divergence -- those are only
                          ever reported, never auto-resolved.
+  status <project>, -c  offline (no AI) deep-dive on one project: git
+                         health (dirty/ahead/behind/diverged, + dedicated
+                         clone divergence), pending %%TAG/`> ` feedback
+                         (via collect-feedback.sh), open QUESTIONS.md
+                         entries, and the last scheduled run's outcome
+                         from its log. Append --claude for a one-shot
+                         read-only `claude -p` narrated summary of the
+                         same report, or --interactive (-I) to drop into
+                         a live `claude` session in the project's repo
+                         preloaded with it as starting context.
 
 Examples: scheduler -b   |   scheduler focus crt   |   scheduler report wtul
           scheduler -i realisateur "a browser extension that ..."
           scheduler -i wtul "add a --dry-run flag to wtul-rip"
           scheduler -s
+          scheduler status realisateur
+          scheduler status realisateur --claude
+          scheduler status realisateur --interactive
 EOF
 }
 
@@ -284,6 +297,24 @@ cmd_glance() {
   echo "-> scheduler focus/questions/report <project> to jump straight in"
 }
 
+report_divergence() {
+  # Shared by cmd_sweep and cmd_status -- reports (never resolves) how a
+  # local branch stands vs its origin. Split out 2026-07-22 so the status
+  # deep-dive doesn't reimplement this same ahead/behind/diverged check.
+  local name="$1" path="$2"
+  local branch ahead behind
+  branch="$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  ahead="$(git -C "$path" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
+  behind="$(git -C "$path" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+  if [ "${ahead:-0}" -gt 0 ] 2>/dev/null && [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
+    echo "== $name: ** DIVERGED from origin/$branch ** -- $ahead local-only, $behind remote-only commit(s). Needs a real merge decision -- NOT auto-resolved, ever."
+  elif [ "${ahead:-0}" -gt 0 ] 2>/dev/null; then
+    echo "== $name: $ahead commit(s) ahead of origin/$branch, not pushed (push always stays a human step)"
+  elif [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
+    echo "== $name: $behind commit(s) behind origin/$branch"
+  fi
+}
+
 cmd_sweep() {
   echo "scheduler sweep -- $(date '+%Y-%m-%d %H:%M')"
   echo "(reactive backstop: catches uncommitted/unpushed/diverged state the vim"
@@ -328,15 +359,7 @@ cmd_sweep() {
       echo "$dirty_other" | sed 's/^/  /'
     fi
 
-    local branch ahead behind
-    branch="$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-    ahead="$(git -C "$path" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
-    behind="$(git -C "$path" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
-    if [ "${ahead:-0}" -gt 0 ] && [ "${behind:-0}" -gt 0 ]; then
-      echo "== $name: ** DIVERGED from origin/$branch ** -- $ahead local-only, $behind remote-only commit(s). Needs a real merge decision -- NOT auto-resolved, ever."
-    elif [ "${ahead:-0}" -gt 0 ]; then
-      echo "== $name: $ahead commit(s) ahead of origin/$branch, not pushed (push always stays a human step)"
-    fi
+    report_divergence "$name" "$path"
   done
 
   # Second pass: every automated job's DEDICATED CLONE
@@ -385,6 +408,160 @@ cmd_sweep() {
   fi
 }
 
+build_status_report() {
+  # All plain bash/awk/git -- no `claude` invocation. This is the entire
+  # point of `scheduler status`: the common "how's <project> doing" check
+  # should cost zero tokens by default. cmd_status prints this directly;
+  # --claude/--interactive just layer an AI step on top of the same text.
+  local proj="$1" repo_path="$2" job_name="$3"
+
+  echo "scheduler status: $proj -- $(date '+%Y-%m-%d %H:%M')"
+
+  echo
+  echo "-- git health ($repo_path) --"
+  if [ -d "$repo_path/.git" ]; then
+    local dirty divergence
+    dirty="$(git -C "$repo_path" status --porcelain 2>/dev/null)"
+    if [ -n "$dirty" ]; then
+      echo "dirty:"
+      echo "$dirty" | sed 's/^/  /'
+    fi
+    divergence="$(report_divergence "$proj" "$repo_path")"
+    [ -n "$divergence" ] && printf '%s\n' "$divergence"
+    [ -z "$dirty" ] && [ -z "$divergence" ] && echo "clean, up to date with origin"
+  else
+    echo "not a git repo (or PROJECT_REPO_PATH is missing on disk)"
+  fi
+
+  if [ -n "$job_name" ] && [ -d "$HOME/.local/share/$job_name/repo/.git" ]; then
+    echo
+    echo "-- dedicated clone vs working checkout --"
+    local clone_head repo_head
+    clone_head="$(git -C "$HOME/.local/share/$job_name/repo" rev-parse HEAD 2>/dev/null)"
+    repo_head="$(git -C "$repo_path" rev-parse HEAD 2>/dev/null)"
+    if [ -n "$clone_head" ] && [ "$clone_head" != "$repo_head" ]; then
+      echo "clone HEAD ($clone_head) != working checkout HEAD ($repo_head) -- normal if you've committed locally since the clone's last dispatch; only a concern if the CLONE is ahead (that would mean a stranded commit -- see 'scheduler sweep')"
+    else
+      echo "clone matches working checkout HEAD"
+    fi
+  fi
+
+  echo
+  echo "-- pending feedback (collect-feedback.sh) --"
+  local fb="" bb=""
+  [ -f "$REPORTS_ROOT/$proj/LATEST.md" ] && fb="$("$SCHED_ROOT/bin/collect-feedback.sh" "$REPORTS_ROOT/$proj/LATEST.md" 2>/dev/null)"
+  [ -f "$SCHED_ROOT/BLOCKERS.md" ] && bb="$("$SCHED_ROOT/bin/collect-feedback.sh" "$SCHED_ROOT/BLOCKERS.md" --section "$proj" 2>/dev/null)"
+  if [ -z "$fb" ] && [ -z "$bb" ]; then
+    echo "none pending"
+  else
+    [ -n "$fb" ] && printf '%s\n' "$fb"
+    [ -n "$bb" ] && printf '%s\n' "$bb"
+  fi
+
+  echo
+  echo "-- open questions ($SCHED_ROOT/questions/$proj.md) --"
+  local qfile="$SCHED_ROOT/questions/$proj.md"
+  if [ -f "$qfile" ]; then
+    # Same unanswered/resolved logic as cmd_glance's awk block, but prints
+    # the actual bullet text instead of just a count -- a deep-dive on one
+    # project should show you the question, not send you to go open it.
+    local unanswered
+    unanswered="$(awk '
+      function flush() { if (started && !is_resolved && !has_reply) print buf }
+      /^- \*\*/ {
+        flush()
+        started=1
+        is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
+        has_reply=0; buf=$0
+        next
+      }
+      started && /^[ \t]*>[ \t]?/ {
+        line=$0
+        sub(/^[ \t]*>[ \t]?/, "", line)
+        if (line !~ /^\(answer inline here\)/) has_reply=1
+      }
+      END { flush() }
+    ' "$qfile")"
+    if [ -n "$unanswered" ]; then
+      printf '%s\n' "$unanswered"
+    else
+      echo "none open"
+    fi
+  else
+    echo "no QUESTIONS.md symlink found"
+  fi
+
+  echo
+  echo "-- last scheduled run ($job_name) --"
+  local log="$HOME/.local/share/$job_name/sweep.log"
+  if [ -n "$job_name" ] && [ -f "$log" ]; then
+    local expires
+    if [ -f "$HOME/.local/share/$job_name/expires_at" ]; then
+      expires="$(cat "$HOME/.local/share/$job_name/expires_at")"
+      if [[ "$(date -Is)" > "$expires" ]]; then
+        echo "EXPIRED $expires -- auto-disabled, needs EXPIRY_DAYS bump + bin/sync-crontab.sh to renew"
+      else
+        echo "expires: $expires"
+      fi
+    fi
+    grep -E '^=== (done|FAILED|skipped)' "$log" | tail -1
+    grep '^pushed:' "$log" | tail -1
+    grep '^WARNING: local commit made but NOT pushed' "$log" | tail -1
+  else
+    echo "no log yet at $log"
+  fi
+}
+
+cmd_status() {
+  local proj="$1" mode="${2:-}"
+  case "$mode" in
+    ""|--claude|--interactive|-I) ;;
+    *) echo "scheduler: unknown status flag '$mode' (use --claude or --interactive)" >&2; exit 2 ;;
+  esac
+
+  local repo_path
+  repo_path="$(conf_field "$proj" PROJECT_REPO_PATH)"
+  if [ -z "$repo_path" ]; then
+    echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
+    exit 1
+  fi
+
+  local job_name
+  job_name="$(conf_field "$proj" BATCH_JOB_NAME)"
+  [ -n "$job_name" ] || job_name="$(conf_field "$proj" SWEEP_JOB_NAME)"
+
+  local report
+  report="$(build_status_report "$proj" "$repo_path" "$job_name")"
+  printf '%s\n' "$report"
+
+  case "$mode" in
+    --claude)
+      echo
+      echo "--- claude summary (read-only, --allowedTools Read,Grep,Glob) ---"
+      (cd "$repo_path" && claude -p "$(cat <<EOF
+Here is an offline status report for the "$proj" project, generated by
+plain scripts (git status, pending human-feedback tags, open questions,
+last automated run's log) -- no code was read yet.
+
+$report
+
+Skim the project's own README/FOCUS.md if useful, then write a short
+(5 bullets max) human-readable status note: what's actually going on,
+anything that looks off or needs attention, anything safe to ignore.
+EOF
+)" --allowedTools "Read,Grep,Glob" --max-turns 15)
+      ;;
+    --interactive|-I)
+      echo
+      echo "launching interactive claude session in $repo_path, preloaded with the report above..."
+      cd "$repo_path" || exit 1
+      exec claude "$report
+
+Use this as your starting context for looking into $proj -- feel free to dig into the actual code/repo from here."
+      ;;
+  esac
+}
+
 case "${1:-}" in
   ""|glance) cmd_glance ;;
   blockers|-b) open_file "$SCHED_ROOT/BLOCKERS.md" ;;
@@ -410,6 +587,10 @@ case "${1:-}" in
     cmd_commit_file "${2:-}" "${3:-}"
     ;;
   sweep|-s) cmd_sweep ;;
+  status|-c)
+    require_project status "${2:-}"
+    cmd_status "$2" "${3:-}"
+    ;;
   -h|--help|help) usage ;;
   *) echo "scheduler: unknown command '$1'" >&2; usage; exit 2 ;;
 esac
