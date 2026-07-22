@@ -670,6 +670,32 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 (Zach, via chat): shipped the cheap slice of priority
+  ordering — `bin/scheduler`'s no-arg glance now sorts rows by
+  `q_unanswered + blocker count` descending instead of conf/registration
+  order** (see [[scheduler-usage-pacing]]-adjacent 13:59 backlog entry
+  above for the fuller quota/ETA-aware target this is a stand-in for).
+  Two related pieces scoped but deliberately NOT built this pass:
+  - **Tab-completion for `scheduler <project>`/subcommands** — a bash
+    `complete -F` function (or `bin/scheduler-completion.bash` to source)
+    reusing the existing `projects()` list in `bin/scheduler`. Purely
+    mechanical, no design work needed, just didn't fit this pass.
+  - **`scheduler <project>` direct shorthand** — one truncated view
+    combining that project's focus/questions/blockers with "expand"
+    hints, instead of requiring `-f`/`-q`/`-r`/`status` separately. A
+    smaller, buildable-now slice of item 0's "merged report" vision
+    above — item 0 as designed is bigger (full print-friendly merged
+    file with reply hooks); this would be a thinner read-only first cut
+    reusing today's separate files, same spirit as how item 3's first
+    cut skipped ahead of its own (a) step.
+  **Priority-adjustment (a `scheduler priority <project> <n>`-style
+  command) and bug/feature tagging on backlog items stay vision-level,
+  not scoped further here** — Zach's own framing this session was
+  explicitly "later," and both need a real schema decision (where does a
+  priority/tag live — a conf field? an inline prefix agents must honor
+  when writing `-i` entries?) before either is buildable, not just an
+  implementation pass.
+
 - **2026-07-22 14:02 (via `scheduler -i`):** revisit integration with realisateur. realisateur should not promote ideas to scheduler until out of an incubation period. this prevents the scheduler status from getting crowded with nacent ideas. potential automated flag whereby scheduler suggests projects migrate to realisateur if they're underdeveloped (few files, nothing pending). eventual symmetrical structure to move projects to archive once out of development
 
 - **2026-07-22 13:59 (via `scheduler -i`):** streamline the cli flow. scheduler no args should produce what's scheduled, in order of priority, with information about next run, time/cost etc. scheduler <project> should tab-complete. should show more detail about project including next tasks/requests in order of priority. flag design can remain for backwards compatibility. focus questions blockers should all be called out in the project view (truncated with suggested command to expand if too many lines). should have an easy way to promote a project's urgency in both the main scheduler view and it's individual project. start developing and maintaining a man page for scheduler that explains its use.

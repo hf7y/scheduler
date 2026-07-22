@@ -235,6 +235,14 @@ cmd_glance() {
   echo
   printf '  %-16s %-9s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS.md"
   local any_blockers=0
+  # Rows are collected as "<score>\t<rendered line>" and sorted by score
+  # descending after the loop, so projects with open questions/blockers
+  # float to the top instead of showing in registration/conf-file order
+  # (flagged 2026-07-22: "why hasn't anything run" shouldn't require
+  # reading top-to-bottom hunting for the one row that needs you). Score
+  # is just q_unanswered + bn -- a rough stand-in for the fuller
+  # quota/ETA-aware ordering still queued in FOCUS.md's backlog.
+  local rows=""
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
     local qlabel="-"
@@ -288,8 +296,12 @@ cmd_glance() {
       any_blockers=1
     fi
 
-    printf '  %-16s %-9s %s\n' "$proj" "$qlabel" "$blabel"
+    local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
+    local row
+    row="$(printf '  %-16s %-9s %s' "$proj" "$qlabel" "$blabel")"
+    rows="$rows$score"$'\t'"$row"$'\n'
   done < <(projects)
+  printf '%s' "$rows" | sort -t $'\t' -k1,1rn | cut -f2-
   echo
   if [ "$any_blockers" = "1" ]; then
     echo "-> scheduler blockers   (or: scheduler -b)"
