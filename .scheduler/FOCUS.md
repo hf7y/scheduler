@@ -1284,3 +1284,56 @@ converge:**
   other project's files.
 
 - I manually pushed 6 changes to github, I think. Need to find a way to give this autonomy to the agent which said auto mode gates it
+
+## Cross-project blocking relationships (2026-07-22, human-directed session)
+
+**Standing principle: scheduler is responsible for knowing which steps
+reasonably block on other steps across projects, even when it isn't the
+one making the judgment call.** Concrete case that surfaced this
+2026-07-22: `scheduler status <project>`'s new "next up" section (see
+`extract_next_items()` in `bin/scheduler`) needs a structured FOCUS.md to
+parse at all — chezz's is prose/HTML-comment-only (no bullet list) and
+wtul has no FOCUS.md (uses `ROADMAP.md` instead), so both come up empty.
+Reformatting/reconciling those is realisateur's job, not scheduler's (see
+`docs/priority-weight.md`'s same division of labor: scheduler stays
+mechanism, realisateur owns interpreting vision/format judgment) — filed
+as an `.idea` there 2026-07-22
+(`FOCUS-md-formatting-compliance-20260722-145750.idea`), with a short
+defer-flag dropped into chezz's and wtul's own FOCUS.md via `scheduler -i`
+so their own nightly-batch/bug-sweep don't try to self-solve the format
+question in the meantime.
+
+**What scheduler itself still needs to build, not done yet:** a real way
+to *know and display* that chezz/wtul's next scheduled dispatch is
+sitting behind a pending realisateur judgment call — right now that
+relationship exists only as prose in three FOCUS.md files, invisible to
+`bin/scheduler`'s own views. Needs, as real design work for a future
+session:
+- A data model for "project X's next dispatch depends on action Y in
+  project Z" — candidate shapes: a conf field (`BLOCKED_ON=realisateur`),
+  a convention both sides read/write (a `## Blocking` note realisateur is
+  expected to clear once it acts), or scheduler inferring it from
+  `.idea`/QUESTIONS.md cross-references — not decided, needs a real pass.
+- Surfaced in **both** places: a per-row marker on the no-arg glance
+  (e.g. `chezz ... BLOCKED: pending realisateur reformat`) and a
+  dedicated line in that project's own `scheduler status <project>`
+  output, not just buried in FOCUS.md prose.
+- First real test case once built: this exact chezz/wtul reformat —
+  whether their next dispatch should actually be HELD until realisateur's
+  pass lands, or run regardless against today's format, is realisateur's
+  call to make explicit (asked of it in the `.idea` filed above); once it
+  states that decision in a machine-readable way, this feature has real
+  data to render instead of a hypothetical.
+
+**Item 5 (BLOCKERS.md mixing urgent vs. informational entries) is
+explicitly waiting on this same realisateur-owns-judgment pattern, not
+scoped further today.** Found while investigating: realisateur already
+has a working precedent for exactly this shape — `schedule/_paced.conf`'s
+`weight` field (mechanical knob scheduler enforces) paired with
+`docs/priority-weight.md`'s explicit "scheduler is pure mechanism,
+realisateur interprets vision and expresses it through the knob" framing.
+Once realisateur produces an analogous urgency/priority annotation
+convention for BLOCKERS.md-shaped items (not built yet — nothing to pull
+in today beyond this precedent), `bin/scheduler blockers`/`cmd_glance`
+should read and render THAT rather than scheduler inventing its own
+urgency heuristic — same boundary, applied to a second knob.

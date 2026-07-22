@@ -17,9 +17,10 @@ usage() {
   cat <<'EOF'
 usage: scheduler [command] [project]
 
-  (no args)             one-screen glance: every registered project, open
-                         question count, and whether BLOCKERS.md has an
-                         entry for it
+  (no args)             one-screen glance: every registered project,
+                         sorted by open question/blocker count (most
+                         pressing first), a `*` marking anything changed
+                         since you last opened it via this tool
   blockers, -b          open BLOCKERS.md
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
   questions [project], -q
@@ -70,6 +71,29 @@ projects() {
     [[ "$b" == _* ]] && continue
     echo "$b"
   done
+}
+
+SEEN_FILE="$HOME/.local/share/scheduler-glance/seen.tsv"
+
+mark_seen() {
+  # Records "you looked at this" per project/key so cmd_glance can flag
+  # what changed since your last look with `*` (2026-07-22, addressing
+  # "questions/blockers view is meaningless to me" -- a bare open count
+  # doesn't say whether it's something you've never seen or something
+  # you already know about and haven't gotten to). Deliberately a plain
+  # tsv, not a database -- same style as everything else here.
+  local key="$1" now
+  now="$(date +%s)"
+  mkdir -p "$(dirname "$SEEN_FILE")"
+  touch "$SEEN_FILE"
+  grep -v "^${key}	" "$SEEN_FILE" > "$SEEN_FILE.tmp" 2>/dev/null || true
+  { cat "$SEEN_FILE.tmp" 2>/dev/null; printf '%s\t%s\n' "$key" "$now"; } > "$SEEN_FILE"
+  rm -f "$SEEN_FILE.tmp"
+}
+
+get_seen() {
+  local key="$1"
+  [ -f "$SEEN_FILE" ] && awk -F'\t' -v k="$key" '$1==k{print $2; found=1} END{if(!found) print 0}' "$SEEN_FILE" || echo 0
 }
 
 open_file() {
@@ -233,7 +257,8 @@ cmd_commit_file() {
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
-  printf '  %-16s %-9s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS.md"
+  printf '  %-16s %-20s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS.md"
+  echo "  (* = changed since you last opened it here)"
   local any_blockers=0
   # Rows are collected as "<score>\t<rendered line>" and sorted by score
   # descending after the loop, so projects with open questions/blockers
@@ -288,9 +313,20 @@ cmd_glance() {
       q_unanswered="${q_unanswered:-0}"; q_answered="${q_answered:-0}"
       if [ "$q_unanswered" -gt 0 ] 2>/dev/null; then
         qlabel="$q_unanswered open"
-        [ "$q_answered" -gt 0 ] 2>/dev/null && qlabel="$qlabel (+$q_answered✓)"
+        [ "$q_answered" -gt 0 ] 2>/dev/null && qlabel="$qlabel, $q_answered replied (pending run)"
       elif [ "$q_answered" -gt 0 ] 2>/dev/null; then
-        qlabel="0 open ($q_answered✓ pending run)"
+        qlabel="0 open, $q_answered replied (pending run)"
+      fi
+      # `*` = this file changed since you last opened it via `scheduler
+      # questions`/`status` -- added 2026-07-22 so an open count doesn't
+      # read the same whether it's brand new or something you've already
+      # seen and just haven't gotten to. Approximate (file mtime vs a
+      # per-project "last opened" timestamp), not a real read-receipt.
+      if [ "$q_unanswered" -gt 0 ] 2>/dev/null; then
+        local qmtime qseen
+        qmtime="$(stat -c %Y "$qfile" 2>/dev/null || echo 0)"
+        qseen="$(get_seen "$proj")"
+        [ "$qmtime" -gt "$qseen" ] 2>/dev/null && qlabel="*$qlabel"
       fi
     fi
 
@@ -311,11 +347,17 @@ cmd_glance() {
     if [ "$bn" -gt 0 ] 2>/dev/null; then
       blabel="$bn"
       any_blockers=1
+      if [ -f "$SCHED_ROOT/BLOCKERS.md" ]; then
+        local bmtime bseen
+        bmtime="$(stat -c %Y "$SCHED_ROOT/BLOCKERS.md" 2>/dev/null || echo 0)"
+        bseen="$(get_seen "__blockers__")"
+        [ "$bmtime" -gt "$bseen" ] 2>/dev/null && blabel="*$blabel"
+      fi
     fi
 
     local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
     local row
-    row="$(printf '  %-16s %-9s %s' "$proj" "$qlabel" "$blabel")"
+    row="$(printf '  %-16s %-20s %s' "$proj" "$qlabel" "$blabel")"
     rows="$rows$score"$'\t'"$row"$'\n'
   done < <(projects)
   printf '%s' "$rows" | sort -t $'\t' -k1,1rn | cut -f2-
@@ -622,6 +664,7 @@ cmd_status() {
     echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
     exit 1
   fi
+  mark_seen "$proj"
 
   local job_name
   job_name="$(conf_field "$proj" BATCH_JOB_NAME)"
@@ -661,13 +704,14 @@ Use this as your starting context for looking into $proj -- feel free to dig int
 
 case "${1:-}" in
   ""|glance) cmd_glance ;;
-  blockers|-b) open_file "$SCHED_ROOT/BLOCKERS.md" ;;
+  blockers|-b) mark_seen "__blockers__"; open_file "$SCHED_ROOT/BLOCKERS.md" ;;
   focus|-f)
     require_project focus "${2:-}"
     open_file "$SCHED_ROOT/focus/$2.md"
     ;;
   questions|-q)
     require_project questions "${2:-}"
+    mark_seen "$2"
     open_file "$SCHED_ROOT/questions/$2.md"
     ;;
   report|-r)
