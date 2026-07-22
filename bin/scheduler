@@ -257,9 +257,20 @@ cmd_glance() {
       # entirely either way (case-insensitive via tolower(), not just
       # the first letter -- a plain-ASCII "resolved|acknowledged" regex
       # match silently missed full-caps "RESOLVED" during testing).
+      # Real question bullets always start `- **YYYY-MM-DD` (the format
+      # every command is told to append) -- requiring that date prefix,
+      # plus skipping fenced ``` code blocks, excludes the template's own
+      # "How to answer" boilerplate (an example bullet inside a code
+      # fence, plus prose bullets like "- **`/nightly-batch` owns
+      # answer-processing.**") which a bare `/^- \*\*/` match was
+      # wrongly counting as real open questions on every project using
+      # the standard QUESTIONS.md template (found 2026-07-22: every
+      # project showed 2-4 phantom "open questions" from this).
       read -r q_unanswered q_answered <<<"$(awk '
-        BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0}
-        /^- \*\*/ {
+        BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0; infence=0}
+        /^```/ { infence = !infence; next }
+        infence { next }
+        /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
           if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
           started=1
           is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
@@ -283,11 +294,17 @@ cmd_glance() {
       fi
     fi
 
+    # Excludes bullets already marked RESOLVED/PARKED inline (BLOCKERS.md's
+    # own convention -- e.g. crt's "- **OctoPrint** — **RESOLVED
+    # 2026-07-20**: ...") -- a bare bullet count was showing crt as "7"
+    # blockers when most of that section was already resolved/parked,
+    # same "meaningless count" bug class as the questions fix above
+    # (found 2026-07-22).
     local bn=0
     [ -f "$SCHED_ROOT/BLOCKERS.md" ] && bn="$(awk -v want="$proj" '
       BEGIN{c=0; insec=0}
       /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
-      insec && /^- \*\*/ { c++ }
+      insec && /^- \*\*/ { if (tolower($0) !~ /resolved|parked/) c++ }
       END { print c }
     ' "$SCHED_ROOT/BLOCKERS.md")"
     local blabel="-"
@@ -545,7 +562,10 @@ build_status_report() {
     local unanswered
     unanswered="$(awk '
       function flush() { if (started && !is_resolved && !has_reply) print buf }
-      /^- \*\*/ {
+      BEGIN { infence=0 }
+      /^```/ { infence = !infence; next }
+      infence { next }
+      /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
         flush()
         started=1
         is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
