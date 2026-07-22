@@ -670,6 +670,20 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 (diagnosed via wtul questions-pane investigation):** audit
+  every project's nightly-batch/questions convention for the same gap just
+  fixed in wtul and here: `services/vkv-inventory/command-nightly-batch.md`
+  never runs `collect-feedback.sh --consume` against its own
+  `.claude/QUESTIONS.md` either (chezz already has it; home-assistant
+  doesn't use QUESTIONS.md at all, so N/A). Propagate the same Orient-step
+  fix wtul-batch.md and this file's own nightly-batch.md just got, or flag
+  vkv-inventory's owner (realisateur, per the FOCUS/ROADMAP reconciliation
+  it's already doing for wtul) to add it. Root cause was: QUESTIONS.md is
+  append-only by convention, and nothing consumed a user's inline `> `
+  reply unless a project's batch command explicitly ran collect-feedback
+  against it — an easy step to drop when adapting the template for a
+  no-tracker project (as wtul did).
+
 - **2026-07-22 15:54 (via `scheduler -i`):** the push of new ideas to archives has a little lag after ideas submit. can that happen after the command sends, and push a notification via kde or similar, perhaps waiting in case a batch of ideas comes in worth pushing all at once. clones should be aware of uncommited work, or should check for them, in case a race condition emerges. but that's an unecessary ui friction point for when I'm looking to drop several ideas in a row
 
 - **2026-07-22 15:52 (via `scheduler -i`):** wtul's 7-18 note about NEEDS HANDS-ON HARDWARE VERIFICATION is properly a blocker, not a question. figure out if scheduler is responsible for enforcing this, or wtul needs a note on what counts as what.

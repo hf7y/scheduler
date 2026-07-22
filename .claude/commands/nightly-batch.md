@@ -10,12 +10,21 @@ cron jobs.
 
 ## Orient (do this first)
 
-1. Read `.scheduler/FOCUS.md` — it states the current posture, the
+1. Read `.scheduler/QUESTIONS.md` and process any answers. Run
+   `bin/collect-feedback.sh .scheduler/QUESTIONS.md --consume` — it
+   surfaces the user's inline `> ` replies (QUESTIONS.md is append-only by
+   convention, so nothing else reads them back). For each reply: act on it,
+   then delete that question's whole entry (`--consume` only strips the
+   reply line itself). This gap — a written reply nothing ever consumed —
+   is exactly what left a stale, already-resolved question sitting in
+   wtul's own QUESTIONS.md until a human flagged it by hand; don't let the
+   same thing happen here.
+2. Read `.scheduler/FOCUS.md` — it states the current posture, the
    current focus, AND the backlog (its "Backlog" section). There is no
    separate `TODO.md` anymore; FOCUS.md is both scope and backlog.
-2. Read `README.md` — the architecture and the decisions already made, so
+3. Read `README.md` — the architecture and the decisions already made, so
    you don't re-litigate or undo them.
-3. Skim recent reports in `~/reports/scheduler/` if any, to see what prior
+4. Skim recent reports in `~/reports/scheduler/` if any, to see what prior
    runs already did or deferred.
 
 ## Pick work
