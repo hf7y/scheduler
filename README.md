@@ -57,6 +57,7 @@ is fully regenerated from whatever confs currently exist).
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in. |
 | `INTAKE.md` | The web-tracker HTTP contract a project's backend implements to plug in. |
 | `docs/offline-first-checks.md` | The reusable pattern behind `bin/scheduler status`: build a check entirely out of deterministic scripts first, layer AI on top only as an opt-in (one-shot summary or interactive session) — a template for any project that wants the same kind of status check. |
+| `docs/priority-weight.md` | The optional `weight` field in `schedule/_paced.conf`: scheduler enforces it mechanically, realisateur is the one expected to set it based on cross-project vision judgment. |
 
 ## The conf file: `schedule/<project>.conf`
 
