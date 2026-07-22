@@ -85,7 +85,7 @@ mark_seen() {
   # you already know about and haven't gotten to). Deliberately a plain
   # tsv, not a database -- same style as everything else here.
   local key="$1" now
-  now="$(date +%s)"
+  now="${2:-$(date +%s)}"
   mkdir -p "$(dirname "$SEEN_FILE")"
   touch "$SEEN_FILE"
   grep -v "^${key}	" "$SEEN_FILE" > "$SEEN_FILE.tmp" 2>/dev/null || true
@@ -269,8 +269,11 @@ cmd_commit_file() {
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
-  printf '  %-16s %-20s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS.md"
-  echo "  (* = changed since you last opened it here)"
+  printf '  %-16s %-10s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS"
+  echo "  (* = changed since you last opened it here. QUESTIONS is unopened/total --"
+  echo "  total includes ones you've already replied to inline but whose project run"
+  echo "  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish"
+  echo "  notes in \`scheduler\` usage/docs/feedback-tags.md for what 'total' counts.)"
   local any_blockers=0
   # Rows are collected as "<score>\t<rendered line>" and sorted by score
   # descending after the loop, so projects with open questions/blockers
@@ -323,11 +326,9 @@ cmd_glance() {
               print unanswered, answered }
       ' "$qfile" 2>/dev/null)"
       q_unanswered="${q_unanswered:-0}"; q_answered="${q_answered:-0}"
-      if [ "$q_unanswered" -gt 0 ] 2>/dev/null; then
-        qlabel="$q_unanswered open"
-        [ "$q_answered" -gt 0 ] 2>/dev/null && qlabel="$qlabel, $q_answered replied (pending run)"
-      elif [ "$q_answered" -gt 0 ] 2>/dev/null; then
-        qlabel="0 open, $q_answered replied (pending run)"
+      local q_total=$(( q_unanswered + q_answered ))
+      if [ "$q_total" -gt 0 ] 2>/dev/null; then
+        qlabel="$q_unanswered/$q_total"
       fi
       # `*` = this file changed since you last opened it via `scheduler
       # questions`/`status` -- added 2026-07-22 so an open count doesn't
@@ -348,28 +349,37 @@ cmd_glance() {
     # blockers when most of that section was already resolved/parked,
     # same "meaningless count" bug class as the questions fix above
     # (found 2026-07-22).
-    local bn=0
-    [ -f "$SCHED_ROOT/BLOCKERS.md" ] && bn="$(awk -v want="$proj" '
-      BEGIN{c=0; insec=0}
-      /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
-      insec && /^- \*\*/ { if (tolower($0) !~ /resolved|parked/) c++ }
-      END { print c }
-    ' "$SCHED_ROOT/BLOCKERS.md")"
+    local bn=0 bsection=""
+    if [ -f "$SCHED_ROOT/BLOCKERS.md" ]; then
+      bn="$(awk -v want="$proj" '
+        BEGIN{c=0; insec=0}
+        /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
+        insec && /^- \*\*/ { if (tolower($0) !~ /resolved|parked/) c++ }
+        END { print c }
+      ' "$SCHED_ROOT/BLOCKERS.md")"
+      # Hashed per-project (not whole-file mtime, fixed 2026-07-22): the old
+      # check flagged EVERY project with `*` whenever anyone's blocker entry
+      # was edited anywhere in BLOCKERS.md -- e.g. updating crt's "DAC
+      # arriving Tuesday" ETA note used to mark aedile's row stale too, even
+      # though aedile's own section hadn't changed. Only this project's own
+      # section content now drives its `*`.
+      bsection="$(awk -v want="$proj" '
+        /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
+        insec { print }
+      ' "$SCHED_ROOT/BLOCKERS.md" | md5sum | cut -d" " -f1)"
+    fi
     local blabel="-"
     if [ "$bn" -gt 0 ] 2>/dev/null; then
       blabel="$bn"
       any_blockers=1
-      if [ -f "$SCHED_ROOT/BLOCKERS.md" ]; then
-        local bmtime bseen
-        bmtime="$(stat -c %Y "$SCHED_ROOT/BLOCKERS.md" 2>/dev/null || echo 0)"
-        bseen="$(get_seen "__blockers__")"
-        [ "$bmtime" -gt "$bseen" ] 2>/dev/null && blabel="*$blabel"
-      fi
+      local bseen
+      bseen="$(get_seen "blockers:$proj")"
+      [ -n "$bsection" ] && [ "$bsection" != "$bseen" ] && blabel="*$blabel"
     fi
 
     local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
     local row
-    row="$(printf '  %-16s %-20s %s' "$proj" "$qlabel" "$blabel")"
+    row="$(printf '  %-16s %-10s %s' "$proj" "$qlabel" "$blabel")"
     rows="$rows$score"$'\t'"$row"$'\n'
   done < <(projects)
   printf '%s' "$rows" | sort -t $'\t' -k1,1rn | cut -f2-
@@ -714,9 +724,24 @@ Use this as your starting context for looking into $proj -- feel free to dig int
   esac
 }
 
+mark_blockers_seen() {
+  # Snapshots every project's own section hash at open-time (see the
+  # per-project freshness fix in cmd_glance) so `*` only reappears for a
+  # project once ITS section changes again, not on every BLOCKERS.md edit.
+  [ -f "$SCHED_ROOT/BLOCKERS.md" ] || return 0
+  while IFS= read -r proj; do
+    local h
+    h="$(awk -v want="$proj" '
+      /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
+      insec { print }
+    ' "$SCHED_ROOT/BLOCKERS.md" | md5sum | cut -d" " -f1)"
+    mark_seen "blockers:$proj" "$h"
+  done < <(projects)
+}
+
 case "${1:-}" in
   ""|glance) cmd_glance ;;
-  blockers|-b) mark_seen "__blockers__"; open_file "$SCHED_ROOT/BLOCKERS.md" ;;
+  blockers|-b) mark_blockers_seen; open_file "$SCHED_ROOT/BLOCKERS.md" ;;
   focus|-f)
     require_project focus "${2:-}"
     open_file "$SCHED_ROOT/focus/$2.md"
