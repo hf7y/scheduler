@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 15:19 (via `scheduler -i`):** should the idea intake in scheduler actually file things to realisateur first so it can triage/prioritize? or actually file in both locations. should realisateur properly run before other jobs within a certain window? or should those ideas await implementation until realisateur analyses them? wondering how ideas intake should evolve based on the evolving scheduler/realisateur split. drop questions to me about this if appropriate but also pick off low hanging fruit if an obvious principled first step or steps is available right now
+
 - **2026-07-22 14:17 (via `scheduler -i`):** committed locally in /home/zach/Documents/Project Archive/scheduler -- run 'git -C /home/zach/Documents/Project
 
 - **2026-07-22 14:13 (via `scheduler -i`):** fix the graphical display of the no args schduler view. columns don't really make sense. implement the merger of questions and blockers into one view (at least inside this bin utility ahead of formal merge). drop a line explaining + and ✓ convention. introduce estimated run time, estimated usage, and also number of tasks open. number of tasks expected to run
