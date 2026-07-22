@@ -51,7 +51,7 @@ is fully regenerated from whatever confs currently exist).
 | `bin/sync-crontab.sh` | Reads every `schedule/*.conf`, rewrites only the scheduler-managed crontab block, auto-staggers `BATCH_CRON=auto` slots, syncs `questions/`+`focus/` symlinks. Preview by default; `--apply` writes. |
 | `bin/tracker-bug-sweep-precheck.sh` | Reusable `PRECHECK_CMD` gate: skips the `claude` call entirely when the tracker's open-report set is unchanged. |
 | `bin/morning-report.sh` | **Deprecated 2026-07-20** — superseded by `bin/scheduler` (see below). Aggregates every project's `~/reports/<project>/LATEST.md` + flagged questions, prints a `DEPLOY PENDING` line for a stale deploy. Left working, not the thing to build against now. |
-| `bin/scheduler` | The current CLI — `scheduler` (glance), `scheduler -b/-f/-q/-r [project]`, `scheduler -i <project> "idea"` (auto-commits, never auto-pushes). `~/.local/bin/scheduler` is a symlink to this file (see `.scheduler/FOCUS.md` item 3). |
+| `bin/scheduler` | The current CLI — `scheduler` (glance), `scheduler -b/-f/-q/-r [project]`, `scheduler -i <project> "idea"` (auto-commits, never auto-pushes), `scheduler status <project>` (`-c`; offline git/feedback/questions/last-run deep-dive, no AI by default — `--claude` for a read-only one-shot summary, `--interactive`/`-I` for a live session preloaded with the same report). `~/.local/bin/scheduler` is a symlink to this file (see `.scheduler/FOCUS.md` item 3). |
 | `bin/build-services-view.sh` | Regenerates the plain-text per-service audit under `services/`. |
 | `schedule/*.conf` | One per registered project (`_batch.conf` is global auto-stagger config). |
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in. |
