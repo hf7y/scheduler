@@ -670,6 +670,41 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 15:48 (via `scheduler -i`):**   (* = changed since you last opened it here. QUESTIONS is unopened/total --
+  total includes ones you've already replied to inline but whose project run
+  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish
+  notes in scheduler — 2026-07-22 15:48 (paced rotation, dispatched whenever usage-gate.sh has spare quota)
+
+  PROJECT          QUESTIONS  BLOCKERS  NEXT UP
+  (* = changed since you last opened it here. QUESTIONS is unopened/total --
+  total includes ones you've already replied to inline but whose project run
+  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish
+  notes in `scheduler` usage/docs/feedback-tags.md for what 'total' counts.
+  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- NOT an ETA,
+  just what the next run reads first; paced projects run whenever
+  usage-gate.sh has spare quota, not on a fixed clock.)
+  crt              0/1        4         1/9: Check crt-vm's own `.claude…
+  wtul             *3/3       1         -
+  vkv-inventory    *3/5       -         1/3: End every nightly run with …
+  aedile           -          2         1/5: Only touch `aedile/`.
+  chezz            *1/3       -         -
+  gardien          1/1        -         1/4: RAID mount guard rail
+  home-assistant   *1/3       -         -
+  senechal         *1/1       -         1/4: Broaden the default watch l…
+  groc-mangr       -          -         -
+  nine-speakers    -          -         -
+  realisateur      -          -         1/3: Idea-incubation "steward"/"…
+  scheduler        -          -         1/36: What actually pulled toward…
+  sequestria       -          -         -
+  vim-arcade       -          -         1/4: vim
+
+-> scheduler blockers   (or: scheduler -b)
+-> scheduler focus/questions/report <project> to jump straight in usage/docs/feedback-tags.md for what 'total' counts.
+  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- NOT an ETA,
+  just what the next run reads first; paced projects run whenever
+  usage-gate.sh has spare quota, not on a fixed clock.)
+ move all this text to a man page, reduce to a single line summary above the column headers. formatting should leave blank spaces so asterisks don't nudge fractions over. try to get all the / to line up in a column if that's easy. same for next up. aim to have the / line up and the : line up, pad with whitespace if necessay
+
 - **2026-07-22 15:44 (via `scheduler -i`):** separate vaporwave and zach jobs which are running on different accounts visually since they have different quotas. print current quota information at the top of each section for context as well as an estimate for when the next job would run based on current quota info. non-ai call. generally scheduler bin interaction should be non-ai unless explicitly requested via flag
 
 - **2026-07-22 (folded from questions/scheduler.md, originally raised
