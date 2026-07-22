@@ -420,6 +420,67 @@ cmd_sweep() {
   fi
 }
 
+extract_next_items() {
+  # Best-effort, offline (no `claude` call) extraction of "what's next" out
+  # of a project's own FOCUS.md -- a rough heuristic, not a real parser
+  # (same honesty standard as cmd_glance's question-count awk block): finds
+  # a heading matching current focus/priority/backlog, pulls its top-level
+  # numbered/bulleted lines, and guesses bug vs feature vs unlabeled by
+  # keyword. Projects whose FOCUS.md is mostly prose/HTML-comment design
+  # notes (e.g. chezz) will under-match -- that's a real limitation, not a
+  # bug in this function; real priority/bug-feature tagging needs a schema
+  # decision (see FOCUS.md's 2026-07-22 backlog note), this is the
+  # stopgap that works today against well-structured files.
+  local focus_path="$1"
+  [ -f "$focus_path" ] || { echo "no FOCUS.md found at $focus_path"; return; }
+
+  local items
+  items="$(awk '
+    BEGIN{ incomment=0; inscope=0; n=0 }
+    {
+      line=$0
+      if (incomment) {
+        if (line ~ /-->/) { incomment=0 }
+        next
+      }
+      if (line ~ /<!--/ && line !~ /-->/) { incomment=1; next }
+      if (line ~ /<!--.*-->/) { next }
+    }
+    /^#+/ {
+      inscope = (tolower($0) ~ /current focus|priority queue|priority|backlog/) ? 1 : 0
+      next
+    }
+    inscope && /^[ \t]*([0-9]+\.|-[ \t])/ {
+      # only top-level items (<=1 leading space of indent) -- skip nested
+      # sub-bullets/notes so this stays a short "next up" list, not a dump
+      if ($0 ~ /^[ \t]?([0-9]+\.|-[ \t])/) { print; n++ }
+    }
+    n>=12 { exit }
+  ' "$focus_path")"
+
+  if [ -z "$items" ]; then
+    echo "no clearly structured focus/backlog list found -- open the focus file directly (scheduler focus <project>)"
+    return
+  fi
+
+  local shown=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    shown=$((shown + 1))
+    [ "$shown" -gt 8 ] && { echo "... (more in $focus_path -- \`scheduler focus <project>\` for the rest)"; break; }
+    local clean tag
+    clean="$(printf '%s' "$line" | sed -E 's/^[ \t]*([0-9]+\.|-)[ \t]*//; s/\*\*//g' | cut -c1-110)"
+    if printf '%s' "$line" | grep -qiE '\b(bug|fix|broken|crash|regression|error)\b'; then
+      tag="[bug]"
+    elif printf '%s' "$line" | grep -qiE '\b(feature|implement|add|build|new)\b'; then
+      tag="[feature]"
+    else
+      tag="[item]"
+    fi
+    printf '  %-9s %s\n' "$tag" "$clean"
+  done <<< "$items"
+}
+
 build_status_report() {
   # All plain bash/awk/git -- no `claude` invocation. This is the entire
   # point of `scheduler status`: the common "how's <project> doing" check
@@ -469,6 +530,10 @@ build_status_report() {
     [ -n "$fb" ] && printf '%s\n' "$fb"
     [ -n "$bb" ] && printf '%s\n' "$bb"
   fi
+
+  echo
+  echo "-- next up ($SCHED_ROOT/focus/$proj.md) --"
+  extract_next_items "$SCHED_ROOT/focus/$proj.md"
 
   echo
   echo "-- open questions ($SCHED_ROOT/questions/$proj.md) --"
