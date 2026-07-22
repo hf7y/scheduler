@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 15:49 (via `scheduler -i`):** propagate to other projects the next up convention of a short (<10 char) summary of each action. that way actions are ready with a readable title, short description that scheduler can easily grab.
+
 - **2026-07-22 15:48 (via `scheduler -i`):**   (* = changed since you last opened it here. QUESTIONS is unopened/total --
   total includes ones you've already replied to inline but whose project run
   hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish
