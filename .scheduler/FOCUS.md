@@ -670,6 +670,34 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 (folded from questions/scheduler.md, originally raised
+  2026-07-20 by crt's own session building a voice-console morning-report
+  presenter): two findings, human-answered, filed here as the answers
+  directed.**
+  1. **`bin/morning-report.sh` hangs (120s timeout, reproduced twice,
+     standalone, unrelated to crt).** Not traced yet — likely a slow/
+     unreachable per-project `DEPLOY_FRESH_CMD` probe (home-assistant's
+     own report already documents an unreachable-Pi/network-mismatch
+     scenario matching this shape). **Human direction: fold tracing this
+     into the next batch pass, BUT note explicitly that scheduler's
+     report shape is mid-redesign (FOCUS item 0, the merged
+     report+questions file) — morning-report.sh itself may end up
+     superseded rather than worth deep-fixing.** Whoever picks this up
+     should check item 0's status first; a quick trace-and-patch is
+     still worth doing regardless (a hanging script is a real problem
+     even mid-redesign), just don't over-invest in it.
+  2. **Standardize a machine-parseable per-project headline field in
+     report templates — human-approved ("yes there should be
+     standardization of report formats like that").** Concrete ask: every
+     project's `LATEST.md` template emits a literal `**Headline:** ...`
+     line near the top, so any downstream consumer (crt's voice console
+     presenter, or anything else aggregating across projects) gets a
+     reliable one-line summary instead of guessing from the first
+     non-empty line (today's heuristic, which reads poorly for reports
+     that open with prose instead of a title). Cross-project change —
+     touches the shared report template every project's nightly-batch
+     writes into, not just scheduler's own files.
+
 - **2026-07-22 15:19 (via `scheduler -i`):** should the idea intake in scheduler actually file things to realisateur first so it can triage/prioritize? or actually file in both locations. should realisateur properly run before other jobs within a certain window? or should those ideas await implementation until realisateur analyses them? wondering how ideas intake should evolve based on the evolving scheduler/realisateur split. drop questions to me about this if appropriate but also pick off low hanging fruit if an obvious principled first step or steps is available right now
 
 - **2026-07-22 14:17 (via `scheduler -i`):** committed locally in /home/zach/Documents/Project Archive/scheduler -- run 'git -C /home/zach/Documents/Project
