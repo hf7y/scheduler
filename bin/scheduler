@@ -14,7 +14,7 @@ REPORTS_ROOT="$HOME/reports"
 EDITOR="${EDITOR:-vim}"
 
 usage() {
-  cat <<EOF
+  cat <<'EOF'
 usage: scheduler [command] [project]
 
   (no args)             one-screen glance: every registered project, open

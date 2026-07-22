@@ -670,6 +670,35 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 (Zach, via chat): `bin/scheduler` no-args glance should be
+  priority-ordered, not registration-ordered.** Top row = whatever's next
+  scheduled to actually run (soonest dispatch under the pacing governor),
+  not just the first project alphabetically/by conf order. Each row
+  should show: cached quota state (reuse the last `usage-gate.sh` verdict
+  from `usage-paced-runner.sh`'s log — do NOT spend a fresh `claude`
+  call just to render the glance), an estimated next-run time (derived
+  from the burn-line trend in that log), a rough estimated usage cost for
+  that run if known, and open-job count. Motivating moment: today's
+  glance (see `bin/scheduler` no-args output) shows question/blocker
+  counts per project but nothing about scheduling order or quota, so a
+  "why hasn't anything run" question requires manually reading
+  `~/.local/share/scheduler-paced-runner/run.log` by hand.
+
+- **2026-07-22 (Zach, via chat): fixed a real bug in `bin/scheduler`'s
+  `usage()` — the heredoc at line 17 (`cat <<EOF`) was unquoted, so bash
+  tried to expand the literal backticks in the help text itself
+  (`` `-i` `` at line 42, `` `> ` `` at line 48) as command substitutions,
+  producing `-i: command not found` and a syntax error on `` `> ` ``.
+  Fixed by quoting the delimiter (`cat <<'EOF'`) since that heredoc has
+  no variables to interpolate. Also confirmed the "scheduler doesn't
+  have anything pending" symptom from the same report is NOT a bug: the
+  paced runner is correctly HOLDing because usage is running ahead of
+  the burn-line (43% used vs 25% target as of 13:30) — working as
+  designed, see [[scheduler-usage-pacing]]. One transient
+  `verdict=ERROR reason=no_headers http_code=401` at 10:45:59 self-
+  recovered next tick; consistent with the known OAuth-token-expiry
+  pattern, not worth chasing further.
+
 - **2026-07-22 (Zach, via chat): move toward auto-push with revert-on-
   review, for changes that are cheaply and safely reversible — not
   built yet, flagging for a future cycle to design/scope.** Motivating
