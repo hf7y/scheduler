@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 14:13 (via `scheduler -i`):** fix the graphical display of the no args schduler view. columns don't really make sense. implement the merger of questions and blockers into one view (at least inside this bin utility ahead of formal merge). drop a line explaining + and ✓ convention. introduce estimated run time, estimated usage, and also number of tasks open. number of tasks expected to run
+
 - **2026-07-22 (Zach, via chat): shipped the cheap slice of priority
   ordering — `bin/scheduler`'s no-arg glance now sorts rows by
   `q_unanswered + blocker count` descending instead of conf/registration
