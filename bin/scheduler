@@ -39,8 +39,10 @@ usage: scheduler [command] [project]
                          for uncommitted/unpushed/diverged state the hook
                          may have missed (e.g. a long-running vim session
                          that predates a ~/.vimrc change never fires new
-                         autocmds). Safely auto-commits dirty *.md files
-                         one at a time (same tested logic as `-i`); never
+                         autocmds). Safely auto-commits AND pushes dirty
+                         *.md files one at a time (same tested logic as
+                         `-i`; auto-push skipped and left local-only if
+                         behind origin); never
                          touches non-.md files or attempts to resolve a
                          genuine ahead+behind divergence -- those are only
                          ever reported, never auto-resolved.
@@ -213,12 +215,18 @@ cmd_commit_file() {
   # here once, both callers get it. (Renamed from cmd_idea_push_reminder
   # 2026-07-20 when this stopped being idea-specific.)
   #
-  # Auto-COMMITS (never auto-pushes -- push always stays a human step).
-  # This project's scheduled jobs run against a dedicated clone that
-  # resets hard to origin before every dispatch, so a file sitting merely
-  # committed-but-unpushed is exactly as invisible to it as an
-  # uncommitted one -- only the commit step was the one people (and
-  # agents) kept forgetting.
+  # Auto-COMMITS and, as of 2026-07-22, auto-PUSHES too (changed from
+  # "never automatic" -- Zach's own call: every commit through this path
+  # is a single markdown file, exactly the "trivially revertible" class
+  # already named in FOCUS.md's auto-push backlog note, and every
+  # registered project's scheduled jobs run against a dedicated clone
+  # that resets hard to origin before each dispatch -- a commit sitting
+  # local-only is exactly as invisible to that clone as an uncommitted
+  # edit, so withholding the push bought no real safety, just latency).
+  # Still safe by construction: push is only attempted when NOT behind
+  # origin (a real fast-forward), and a push failure here never forces or
+  # rewrites anything -- it just falls back to the old "commit locally,
+  # push by hand" message.
   local path="$1" msg="${2:-}" repo
   repo="$(git -C "$(dirname "$path")" rev-parse --show-toplevel 2>/dev/null)"
   [ -n "$repo" ] || return 0
@@ -248,7 +256,11 @@ cmd_commit_file() {
   fi
   [ -n "$msg" ] || msg="Human edit via scheduler: $(basename "$path") ($(date '+%Y-%m-%dT%H:%M'))"
   if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "$msg" -- "$path"; then
-    echo "committed locally in $repo -- run 'git -C \"$repo\" push' whenever you're ready (never automatic)"
+    if [ "${behind:-0}" -eq 0 ] 2>/dev/null && git -C "$repo" push --quiet 2>/dev/null; then
+      echo "committed + pushed in $repo"
+    else
+      echo "committed locally in $repo -- run 'git -C \"$repo\" push' by hand (auto-push skipped: $([ "${behind:-0}" -gt 0 ] 2>/dev/null && echo "behind origin, resolve divergence first" || echo "push failed, check credentials/network"))"
+    fi
   else
     echo "(auto-commit failed -- left as an uncommitted edit at $path; commit by hand)" >&2
   fi

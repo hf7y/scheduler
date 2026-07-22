@@ -670,8 +670,6 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
-- **2026-07-22 15:26 (via `scheduler -i`):** test: verifying auto-push works end to end (2026-07-22, safe to delete this line once confirmed)
-
 - **2026-07-22 15:19 (via `scheduler -i`):** should the idea intake in scheduler actually file things to realisateur first so it can triage/prioritize? or actually file in both locations. should realisateur properly run before other jobs within a certain window? or should those ideas await implementation until realisateur analyses them? wondering how ideas intake should evolve based on the evolving scheduler/realisateur split. drop questions to me about this if appropriate but also pick off low hanging fruit if an obvious principled first step or steps is available right now
 
 - **2026-07-22 14:17 (via `scheduler -i`):** committed locally in /home/zach/Documents/Project Archive/scheduler -- run 'git -C /home/zach/Documents/Project
@@ -762,6 +760,25 @@ to build sooner.
   a suggestion per commit rather than auto-deciding. **Do not build the
   auto-push mechanism itself without that design pass — this entry is
   the flag, not the go-ahead.**
+
+  **DONE, narrower scope, 2026-07-22 (Zach, via chat, direct go-ahead
+  this time):** the risk bar this entry asked for turned out to be
+  simple for the one path that actually mattered today —
+  `cmd_commit_file()` (shared by `scheduler -i` and `scheduler sweep`)
+  only EVER commits one markdown file at a time, already exactly the
+  "trivially revertible" class described above. It now auto-pushes right
+  after committing, skipped (falls back to the old local-only message)
+  if the repo is behind origin or the push itself fails — never forces,
+  never touches anything but that one file. Verified end-to-end against
+  the scheduler repo itself. **Still explicitly NOT covered by this
+  change: this repo's own self-hosting nightly-batch/paced-dev-cycle
+  push policy** (see "This project dogfoods its own system" /
+  "Push policy" above) — that's a different code path with its own
+  separate, already-documented rules; this entry is only about the
+  `scheduler -i`/`sweep` idea-and-doc-edit path. A broader auto-push
+  policy for other kinds of commits (code changes, non-.md files) is
+  still not designed and still needs the fuller pass this entry
+  originally asked for.
 
 - **⚠️ FLAGGED, NOT BUILT (2026-07-21, human's own idea, self-caught as
   "ideating mid-execution" — genuinely worth revisiting later, not
