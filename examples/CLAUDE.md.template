@@ -1,0 +1,30 @@
+<!-- Optional but recommended: copy this to CLAUDE.md at a project's repo
+     root (or append this section to an existing one). Generalizes a
+     convention chezz's real CLAUDE.md already has -- read that directly
+     for the project-with-its-own-/ideate case; this template is for
+     every OTHER registered project, which relies on realisateur's
+     ecosystem-wide /ideate instead of a local one. -->
+
+## When to suggest `/ideate` instead of just implementing
+
+If an interactive request looks like open-ended prioritization, "what
+should we build next," a genuine design fork with no single obviously
+correct shape, a broad "check in on the project" ask, or something that
+reads more like a bigger/still-forming dream than a near-term build --
+suggest running `/ideate <this-project-name>` from realisateur
+(`~/Documents/Projects/realisateur`) instead of diving straight into
+implementation. This is a suggestion, not a gate: if the user says to
+just build/fix something specific, do that normally, in the same
+session, no detour required.
+
+`/ideate` exists to pull real cross-project state, ask direct questions
+on genuine forks, and record/queue decisions (into THIS project's own
+`.claude/FOCUS.md`/`.claude/QUESTIONS.md`, tagged `(realisateur)`) for
+`/nightly-batch` to actually build later -- not something to silently
+emulate inline. Part of its value is the durable, ecosystem-aware record
+it leaves; skipping it for a vision-shaped ask loses that.
+
+If this project ever gets its own local `/ideate` (chezz's model, for a
+project mature/active enough to warrant one), prefer that over
+realisateur's ecosystem-wide version for project-scoped questions --
+update this section to say so when that happens.

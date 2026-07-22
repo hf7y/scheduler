@@ -54,7 +54,7 @@ is fully regenerated from whatever confs currently exist).
 | `bin/scheduler` | The current CLI — `scheduler` (glance), `scheduler -b/-f/-q/-r [project]`, `scheduler -i <project> "idea"` (auto-commits, never auto-pushes), `scheduler status <project>` (`-c`; offline git/feedback/questions/last-run deep-dive, no AI by default — `--claude` for a read-only one-shot summary, `--interactive`/`-I` for a live session preloaded with the same report). `~/.local/bin/scheduler` is a symlink to this file (see `.scheduler/FOCUS.md` item 3). |
 | `bin/build-services-view.sh` | Regenerates the plain-text per-service audit under `services/`. |
 | `schedule/*.conf` | One per registered project (`_batch.conf` is global auto-stagger config). |
-| `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in. |
+| `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in, plus `CLAUDE.md.template` (the "suggest `/ideate` instead of implementing" guardrail — see `docs/priority-weight.md` for the realisateur/scheduler split this belongs to). |
 | `INTAKE.md` | The web-tracker HTTP contract a project's backend implements to plug in. |
 | `docs/offline-first-checks.md` | The reusable pattern behind `bin/scheduler status`: build a check entirely out of deterministic scripts first, layer AI on top only as an opt-in (one-shot summary or interactive session) — a template for any project that wants the same kind of status check. |
 | `docs/priority-weight.md` | The optional `weight` field in `schedule/_paced.conf`: scheduler enforces it mechanically, realisateur is the one expected to set it based on cross-project vision judgment. |
