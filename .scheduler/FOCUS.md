@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 15:44 (via `scheduler -i`):** separate vaporwave and zach jobs which are running on different accounts visually since they have different quotas. print current quota information at the top of each section for context as well as an estimate for when the next job would run based on current quota info. non-ai call. generally scheduler bin interaction should be non-ai unless explicitly requested via flag
+
 - **2026-07-22 (folded from questions/scheduler.md, originally raised
   2026-07-20 by crt's own session building a voice-console morning-report
   presenter): two findings, human-answered, filed here as the answers
