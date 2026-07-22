@@ -670,6 +670,32 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-22 (Zach, via chat): move toward auto-push with revert-on-
+  review, for changes that are cheaply and safely reversible — not
+  built yet, flagging for a future cycle to design/scope.** Motivating
+  moment: after `bin/scheduler status` shipped (commit `bc88ec8` here,
+  `4399728` in realisateur), Zach pushed both by hand and named the
+  friction directly — every commit in this repo today is exactly the
+  kind of change (docs, a new CLI subcommand additive to existing ones,
+  a FOCUS.md note) that's trivially `git revert`-able, so requiring a
+  human push for each one is pure latency, not a real safety gate.
+  Candidate shape (needs real design, not assumed as final): auto-push
+  by default for changes below some risk bar (e.g. commits that only
+  touch docs/`.md` files, or commits from a review-gated worktree cycle
+  that already passed whatever gate that cycle has), paired with a fast,
+  reliable revert path (`git revert` + re-push, not `reset --hard`
+  against a shared branch) if a human review afterward says no. Needs to
+  answer, explicitly, before landing: which projects/branches this
+  applies to (this repo's own self-hosting model — see "This project
+  dogfoods its own system" below — currently never auto-pushes at all,
+  on purpose); what counts as "safely revertible" (a docs/config change
+  is not the same risk class as anything touching real credentials,
+  external side effects, or another human's shared branch); and whether
+  the bar is a hard rule or something `bin/scheduler` itself surfaces as
+  a suggestion per commit rather than auto-deciding. **Do not build the
+  auto-push mechanism itself without that design pass — this entry is
+  the flag, not the go-ahead.**
+
 - **⚠️ FLAGGED, NOT BUILT (2026-07-21, human's own idea, self-caught as
   "ideating mid-execution" — genuinely worth revisiting later, not
   acted on now):** `.gitignore`-ing `.claude/` (used by wavebucks and
