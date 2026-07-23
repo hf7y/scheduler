@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-23 12:50 (via `scheduler -i`):** eventually during high season, we'll need google calendar integration. a way to invite small teams to their meetings, input deadlines, etc
+
 - **2026-07-23 09:24 (via `scheduler -i`):** add a column in scheduler noargs view to show last run as well as next up. last run timestamp, next run timestamp. specific next up task text can be moved to projects individual status view to save space, though open jobs can stay.
 
 - **2026-07-22 (diagnosed via wtul questions-pane investigation):** audit
