@@ -87,19 +87,21 @@ happened yet for any of them.
   it); not on the critical path, deliberately deprioritized rather than
   actively blocked-and-waiting.
 
-- **Physical hookswitch build needs real measurements.** `cad/params.scad`
-  ships generic placeholder dimensions — measure the actual handset
-  barrel diameter and the actual microswitch's body/hole spacing, edit
-  `params.scad` (or hand the numbers to a session and it'll do the edit),
-  then `cad/export_stl.sh` + print + assemble. **Caliper on hand**
-  (https://www.amazon.com/dp/B09R84QZ2P) — measurements not taken yet.
-  > attempt to make an educated guess based on other information. handset
-  > feels "standard" in size. perhaps an existing stl of a similar phone
-  > handset can be used for development while exact measurements await.
-  > also make a note of where exactly measurments should be taken, with
-  > graphical indications, to make it easy for Zach to report requested
-  > measurements. but develop this based on educated guess; don't let
-  > missing exact measurements block.
+- **UPDATED 2026-07-24: stale — barrel diameter and switch dims were
+  already real-calipered 2026-07-20** (see `cad/CAD-BACKLOG.md`); this
+  note just never got marked resolved. What genuinely remained ungauged
+  (full-body handset: overall length, earpiece/mouthpiece cup diameters,
+  weight) is now unblocked too, per Zach's steer not to let it block —
+  educated-guess values (handset "feels standard") sized off a typical
+  corded handset are in `cad/params.scad`, clearly marked GUESS, and
+  `wall_hook.scad` now derives from them instead of standalone magic
+  numbers. Reused the already-downloaded
+  `~/Downloads/Phone handset hook cradle - 3928257/.../
+  Phone_Handset_Cradle_3.stl` as the "similar existing handset STL" for
+  dev rather than sourcing a new one. New `cad/HANDSET-MEASUREMENTS.md`
+  has an ASCII diagram of exactly where to caliper each GUESS value —
+  **Caliper on hand** (https://www.amazon.com/dp/B09R84QZ2P), whenever
+  convenient, not blocking anything in the meantime.
 
 - **OctoPrint** — **RESOLVED 2026-07-20**: confirmed reachable at
   `192.168.0.43` (HTTP 302, alive) during a live crt session with real
