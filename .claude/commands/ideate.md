@@ -24,10 +24,13 @@ Pull real, current state before saying anything about status:
   --count origin/main...main` -- sync first if behind (stash/pop around
   any uncommitted `QUESTIONS.md` answer sitting there).
 - **Live quota**, if the question touches pacing/burndown: `bash
-  bin/usage-gate.sh`. Remember the headers are whichever account the CLI
-  is currently logged into -- the user hops accounts (zach personal /
-  svc-vaporwave team) when one caps, so a single reading is not "the"
-  quota, it's "the account you're camped on right now."
+  bin/usage-gate.sh`. It reads whichever account the CLI is logged into.
+  Account model (decided 2026-07-24, see DESIGN-NOTES): primary = Claude
+  Max, **always logged in**, pools all personal work; svc-vaporwave =
+  nonprofit only. So a primary reading is now stable and trustworthy --
+  but during the transition confirm you're actually on the primary before
+  attributing a number to it (an earlier pass misread svc-vaporwave's
+  quota as the primary's).
 - `.scheduler/FOCUS.md` (Current focus, Backlog, Vision, Consolidation
   roadmap), `.scheduler/QUESTIONS.md`, `BLOCKERS.md` -- the existing
   queue and already-decided direction. Don't re-ask a settled decision.
