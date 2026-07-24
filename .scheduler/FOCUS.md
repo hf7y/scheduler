@@ -4,6 +4,31 @@ The scheduler's Tier 2 job (`/nightly-batch`) is scoped by this file, same
 as every other project. Difference: this project is the **meta-tool** that
 controls all the other jobs.
 
+## Stability milestone
+
+**Current:** scheduler dispatches every registered project unattended with zero silent failures — a run that gets cut off, can't push, or has its assumed external dependency (a migrated crontab, a credential) quietly stop being true is always flagged loudly, never left to look like nothing happened — and the user can explain how the system actually works instead of just trusting `bin/scheduler` to smooth over the parts they don't follow — status: in-progress
+Done when:
+- [ ] Stale `.active`-marker / stranded-run detection built (a run cut off before any commit shows up nowhere today — see "NEXT UP" note above, `scheduler sweep`'s natural next extension)
+- [ ] Stale/incomplete-push visibility built (`pushed: no` in `scheduler status`/`sweep.log` says WHY — spend-limit cutoff vs. something else — instead of a silent generic no-op; this is what the 2026-07-24 chezz/wtul credential-gap misdiagnosis actually needed and didn't have)
+- [ ] Generalized "disabled-with-unverified-external-dependency" sweep built (any `_paced.conf` line disabled with a `# migrated to X` comment gets its claimed destination checked to still exist — the exact gap that let aedile/vkv-inventory sit undispatched 4 days undetected, fixed by hand 2026-07-24 but not yet generalized so it can't recur elsewhere)
+- [ ] A real, honest explainer of how the system currently works exists (e.g. `scheduler explain`/`scheduler help` — a walkthrough a human can hold in their head, not another design doc for an agent)
+
+Ideas beyond this bar are PARKED by default (see
+realisateur/STABILITY-MILESTONES.md) — this is a **big reservoir named by
+category, not itemized line-by-line** given this file's size: the merged
+report+questions file / future TUI (item 0), the consolidation roadmap
+(axes 1/3/4/5 — `bin/scheduler-run` migration, `.scheduler/`-subdir
+rollout to remaining projects, no-local-checkout design, cloud hosting),
+`AUTONOMY_TIER` + `REGISTRATION.md` formalization, `BLOCKERS.md`-as-
+computed-view redesign, the active/parked/waiting status-vocabulary
+unification (already routed to this backlog 2026-07-23), and every
+Backlog-section idea (Google Calendar integration, glance-view formatting
+polish, etc.). None of this is discarded — it stays visible below,
+revisit once the checklist above is genuinely done. *(Milestone drafted
+2026-07-24 via realisateur's `/ideate`, human-directed this pass — the
+four checklist items are scheduler's own already-stated "Current focus"
+priorities below, formalized into a checkable bar, not new scope.)*
+
 **Push policy (changed 2026-07-18, human-approved):** the nightly job MAY
 push its own commits directly to `origin/main` — no `nightly/<date>` branch,
 no human merge step required. This is *not* a license to skip review after
@@ -300,6 +325,12 @@ non-problem).
 
 ## Current focus
 
+*(This section is where the `## Stability milestone` above was drafted
+FROM, 2026-07-24 — the four checklist items there are items 1-2 below,
+formalized into a checkable bar. Keep them in sync: if this section's
+priority order changes, update the milestone checklist to match, don't
+let the two drift into two different stories about what's active.)*
+
 **SEQUENCING (re-decided AGAIN 2026-07-20, human-directed, later the same
 day — item 0 is PARKED, not top priority, reversing the ordering above
 from earlier today.** Reasoning, stated directly by the user and worth
@@ -366,10 +397,11 @@ smooth over the parts they don't yet follow.** Concretely, in order:
    `bin/scheduler help` or a new `scheduler explain` subcommand that
    prints exactly this, so understanding lives next to the tool, not in
    a file that goes stale. Not started yet.
-3. Only after 1-2 are genuinely solid: revisit item 0, the consolidation
-   roadmap axes below, and any other bigger redesign — same "vision
-   debt" discipline applied to this file's own backlog, not just to
-   individual project ideate sessions.
+3. **(parked, per the Stability milestone above)** Only after 1-2 are
+   genuinely solid: revisit item 0, the consolidation roadmap axes below,
+   and any other bigger redesign — same "vision debt" discipline applied
+   to this file's own backlog, not just to individual project ideate
+   sessions.
 
 **Any new/big idea from here forward gets a durable, findable parking
 spot (this file, or the relevant project's own FOCUS.md/QUESTIONS.md) —
