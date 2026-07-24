@@ -8,7 +8,7 @@ controls all the other jobs.
 **Current:** reliably dispatches every registered project with zero silent failures or stranded commits — status: in-progress
 Done when:
 - [ ] Every registered project's dispatch env has working push credentials for its remote (or a loud, specific failure reason when it doesn't) — see the 2026-07-24 credential-gap backlog entry (chezz/wtul GitHub pushes silently no-op today).
-- [ ] Stale `.active`-marker / stranded-run detection is built into `sweep` (queued 2026-07-20, not started) — catches a run cut off before any commit, which today's dedicated-clone check can't see.
+- [x] Stale `.active`-marker / stranded-run detection is built into `sweep` (queued 2026-07-20, built 2026-07-24 paced cycle) — `cmd_sweep` in `bin/scheduler` now scans `~/.local/share/scheduler-registry/*.active` and flags any marker whose PID is no longer running as stranded (its EXIT trap never fired — killed, crashed, or a reboot, most likely before any commit, which is why the git-based checks above can't see it), plus a softer "still running, unusually long" flag for a live PID past `STALE_ACTIVE_MARKER_SECONDS` (default 7200s). Verified with fabricated markers (a dead-PID one correctly flagged STALE, a live-PID/just-started one correctly silent) — `bash -n bin/scheduler` also clean.
 - [ ] Every registered project's `/nightly-batch` actually consumes its own `QUESTIONS.md` replies via `collect-feedback.sh --consume` (audit opened 2026-07-22; vkv-inventory still unconfirmed).
 - [ ] A `_paced.conf` line disabled with a "migrated to X" comment has its claimed destination verified to exist, not just assumed (root-caused 2026-07-24 from the aedile/vkv-inventory 4-day silent-orphan incident).
 Ideas beyond this bar are PARKED by default (see realisateur/STABILITY-MILESTONES.md).
@@ -314,24 +314,26 @@ smooth over the parts they don't yet follow.** Concretely, in order:
    the untracked-file commit bug, the slow-hook-on-docs-commit waste —
    all fixed same session, this IS what "hardening" looks like in
    practice, not an abstract goal).
-   - **NEXT UP (queued 2026-07-20, human-directed): stale `.active`-marker
-     / stranded-run detection.** Design already written up in this
-     file's stranded-commit section above (record what a run is
-     attempting, and have `bin/scheduler`/`morning-report.sh` flag a
-     `~/.local/share/scheduler-registry/<PROJECT_KEY>.active` marker
-     that's older than a job's typical runtime with no matching
-     completion). `scheduler sweep` now covers the git/commit half of
-     "did a run get cut off" (dedicated-clone check, added same
-     session) — this is the other half: a run that got cut off before
-     ever making a commit at all wouldn't show up in sweep, only in a
-     stale `.active` marker. Natural fit for `sweep` itself once built
-     (same 15-minute tick already exists), not a new mechanism.
-   - **Same shape, found for real 2026-07-24 (see DESIGN-NOTES.md
-     "silently-orphaned finding"): `_paced.conf` disabled aedile and
-     vkv-inventory on the unverified assumption their migration to
-     svc-vaporwave's crontab had completed — it hadn't (`crontab -l`
-     came back empty), so both sat with zero dispatch for 4 days and
-     nothing caught it.** Generalize the sweep to also check: any
+   - **DONE 2026-07-24 paced cycle: stale `.active`-marker / stranded-run
+     detection.** `cmd_sweep` in `bin/scheduler` now scans
+     `~/.local/share/scheduler-registry/*.active` as a third pass (after
+     the working-checkout pass and the dedicated-clone pass) and flags
+     any marker whose recorded PID is no longer alive as STALE — that
+     run's own `trap ... EXIT` (in `lib/sweep-loop-common.sh`) never got
+     to fire, meaning it was killed/crashed/rebooted, most likely before
+     making any commit at all, which is exactly the case the git-based
+     dedicated-clone check can't see. A live PID still gets a softer flag
+     if it's been running past `STALE_ACTIVE_MARKER_SECONDS` (default
+     7200s), for a hang rather than a crash. Verified with fabricated
+     dead-PID and live-PID markers (correct STALE vs. silent output) and
+     `bash -n bin/scheduler`.
+   - **NEXT UP: the same "verify a claimed migration destination, don't
+     just assume it" shape, found for real 2026-07-24** (see
+     DESIGN-NOTES.md "silently-orphaned finding"): `_paced.conf` disabled
+     aedile and vkv-inventory on the unverified assumption their
+     migration to svc-vaporwave's crontab had completed — it hadn't
+     (`crontab -l` came back empty), so both sat with zero dispatch for 4
+     days and nothing caught it. Generalize the sweep to also check: any
      `_paced.conf` line disabled with a `# migrated to X` comment should
      have its claimed destination (a crontab entry, another conf's
      participant line, whatever X is) verified to actually exist —

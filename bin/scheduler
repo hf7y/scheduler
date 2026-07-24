@@ -540,6 +540,45 @@ cmd_sweep() {
     fi
   done
 
+  # Third pass: stale/stranded ~/.local/share/scheduler-registry/*.active
+  # markers (lib/sweep-loop-common.sh writes one per PROJECT_KEY on start
+  # and `trap ... EXIT` removes it on a normal exit). A marker whose PID is
+  # no longer running means that trap never fired -- the run was killed,
+  # crashed, or the machine went down before it could clean up. That's the
+  # other half of "did a run get cut off" the two passes above can't see:
+  # they only catch a run that got far enough to make a commit (dirty repo,
+  # unpushed clone). A run cut off BEFORE any commit leaves no git trace at
+  # all -- only this marker. Queued in FOCUS.md's stability milestone
+  # 2026-07-20, built here.
+  local stale_found=0
+  local registry_dir="$HOME/.local/share/scheduler-registry"
+  if [ -d "$registry_dir" ]; then
+    for marker in "$registry_dir"/*.active; do
+      [ -f "$marker" ] || continue
+      local proj_key pid started_at job_field age_seconds started_epoch
+      proj_key="$(basename "$marker" .active)"
+      pid="$(sed -n 's/.*"pid":\([0-9]*\).*/\1/p' "$marker")"
+      started_at="$(sed -n 's/.*"started_at":"\([^"]*\)".*/\1/p' "$marker")"
+      job_field="$(sed -n 's/.*"job":"\([^"]*\)".*/\1/p' "$marker")"
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        started_epoch="$(date -d "$started_at" +%s 2>/dev/null || echo "")"
+        if [ -n "$started_epoch" ]; then
+          age_seconds=$(( $(date +%s) - started_epoch ))
+          if [ "$age_seconds" -ge "${STALE_ACTIVE_MARKER_SECONDS:-7200}" ]; then
+            echo "== [registry] $proj_key: marker active ${age_seconds}s (job=$job_field, pid=$pid, started=$started_at) -- process is still alive, but this is longer than any known job normally runs. Worth a look, not auto-flagged as stranded. =="
+            stale_found=1
+          fi
+        fi
+      else
+        echo "== [registry] $proj_key: STALE marker -- pid ${pid:-?} not running (job=$job_field, started=$started_at). The run that created this never reached its own EXIT trap (killed, crashed, or machine restarted), most likely before making any commit -- that's why the git-based checks above wouldn't catch it. Safe to remove once confirmed dead: rm '$marker' =="
+        stale_found=1
+      fi
+    done
+  fi
+  if [ "$stale_found" = "0" ]; then
+    echo "no stale/stranded registry (.active) markers found"
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."
