@@ -46,6 +46,12 @@ usage: scheduler [command] [project]
                          touches non-.md files or attempts to resolve a
                          genuine ahead+behind divergence -- those are only
                          ever reported, never auto-resolved.
+  explain, -e            print a plain-English walkthrough of how the
+                         whole system actually works right now (paced vs.
+                         cron dispatch, the review/push/merge gates,
+                         where scope + questions live and how a reply
+                         round-trips) -- for YOUR understanding, not
+                         another design doc for an agent to read.
   status <project>, -c  offline (no AI) deep-dive on one project: git
                          health (dirty/ahead/behind/diverged, + dedicated
                          clone divergence), pending %%TAG/`> ` feedback
@@ -64,6 +70,106 @@ Examples: scheduler -b   |   scheduler focus crt   |   scheduler report wtul
           scheduler status realisateur
           scheduler status realisateur --claude
           scheduler status realisateur --interactive
+EOF
+}
+
+cmd_explain() {
+  # A "here's what happens when you do X" walkthrough for the human, not
+  # another design doc for an agent -- see FOCUS.md "Current focus" item 2
+  # (2026-07-20): "write a clear, honest explainer of how the current
+  # system actually works, for the user's own understanding". Describes
+  # the system AS IT EXISTS TODAY only -- no AUTONOMY_TIER, no merged
+  # report/questions file, no scheduler-owned scope; those are roadmap
+  # items in FOCUS.md, not built yet, and don't belong here until they are.
+  cat <<'EOF'
+scheduler -- how it actually works today
+
+WHAT RUNS, AND WHEN
+  Each registered project has a schedule/<project>.conf. A project's jobs
+  fall into one of two dispatch shapes:
+    - cron-timed: a fixed crontab entry (see `crontab -l`, installed from
+      schedule/*.conf by bin/sync-crontab.sh -- never edit crontab by hand).
+    - paced: no fixed time. bin/usage-paced-runner.sh rotates through every
+      paced project on a short interval and asks bin/usage-gate.sh "do I
+      have spare weekly/5-hour quota right now?" (a live probe against
+      YOUR real account-wide usage, not a guess). If yes, the next project
+      in rotation gets its turn; if no, nothing runs until quota frees up.
+      This is why paced projects show "NEXT: paced (#N/M)" in `scheduler`
+      instead of a clock time -- there isn't one.
+  Either way, the actual job is one call to bin/scheduler-run
+  <project> <sweep|batch>, which sources that project's conf and hands off
+  to lib/sweep-loop-common.sh -- ONE shared engine every project runs
+  through, not a bespoke script per project. (A project can still pin a
+  legacy <TIER>_SCRIPT wrapper instead; scheduler-run refuses to run
+  for that tier and says so, rather than silently double-running it.)
+
+WHAT A RUN ACTUALLY DOES
+  The engine clones (or reuses a dedicated local clone of) the project's
+  REPO_URL fresh, resets hard to origin, reads that project's own
+  FOCUS.md/QUESTIONS.md from the checkout it just made (not from any
+  symlink you might have open), and runs `claude -p` with that project's
+  own prompt. Whatever it changes, it commits there, in that checkout --
+  never anywhere else.
+
+REVIEW GATES -- WHO PUSHES, WHO MERGES
+  This differs per project and is controlled by each conf, not a single
+  global rule:
+    - PUSH to the remote: most projects commit locally only, for a human
+      to review and push by hand. A project can be explicitly upgraded to
+      push its own commits straight to origin (scheduler itself has been,
+      since 2026-07-18) -- but even then, every such push MUST be flagged
+      in that run's report (what, why, how to `git revert` it). Pushing
+      is never silent just because it's allowed.
+    - MERGE into local main: separately, bin/scheduler-dev-cycle.sh can
+      merge a finished paced cycle's branch into local main right after
+      the cycle, controlled by a toggle file
+      (~/.local/share/scheduler-paced-dev/merge_mode: "merge" or
+      "branch"), independent of whether anything ever reaches origin.
+  Bottom line: "committed" does NOT mean "pushed", and "pushed" does NOT
+  mean "some other project got auto-merged into" -- check the specific
+  project's own policy notes in FOCUS.md before assuming either.
+
+WHERE SCOPE AND QUESTIONS LIVE, AND HOW A REPLY ROUND-TRIPS
+  Each project owns its own FOCUS.md (scope + backlog, one file, no
+  separate TODO.md) and QUESTIONS.md (append-only log of things needing a
+  human decision) inside its own repo, today. `scheduler`'s focus/ and
+  questions/ folders are symlinks INTO each project's checkout for your
+  convenience -- editing through the symlink edits the real file, but a
+  clone-based run never reads through the symlink; it reads its own fresh
+  clone of the same repo, so your edit still has to be committed (and, if
+  that project doesn't auto-push, pushed) before the next run's clone
+  will see it.
+  To answer a question: open it (`scheduler questions <project>`), write
+  a `> ` reply directly under the entry, save. The next run of that
+  project is expected to call bin/collect-feedback.sh --consume against
+  its own QUESTIONS.md, which reads your `> ` reply and deletes that
+  question's entry -- if a project's own nightly-batch command skips that
+  step, your reply sits there unread indefinitely (a real, previously-hit
+  bug class; FOCUS.md's backlog tracks which projects still need this
+  audited).
+
+WHAT `scheduler` (THIS TOOL) DOES AND DOESN'T DO
+  It is a thin, read-only-by-default navigation wrapper around the real
+  files above -- `scheduler` with no args prints one glance screen built
+  fresh from questions/*.md, BLOCKERS.md, and each project's FOCUS.md
+  every time you run it (no cache, no daemon); `scheduler <verb>
+  [project]` just execs $EDITOR on the real file. `scheduler sweep` is
+  the one exception that writes on its own: a reactive backstop that
+  auto-commits (and, where safe, auto-pushes) dirty *.md files a vim
+  autocmd hook may have missed -- it never touches non-.md files and
+  never resolves a genuine ahead+behind divergence itself, only reports
+  it. Nothing this tool does merges a branch or deploys anything.
+
+WHAT'S NOT BUILT YET (don't assume these exist)
+  - AUTONOMY_TIER (a per-project push/merge/deploy trust dial) is
+    designed in FOCUS.md but no conf sets it yet -- push/merge policy
+    today lives only in each project's prose + the toggle file above.
+  - A single merged report+questions file per project, and a `scheduler
+    blockers` that's a live aggregated view instead of a hand-maintained
+    BLOCKERS.md, are both designed but not built -- BLOCKERS.md today is
+    a real separate file someone has to remember to update.
+  - No project has moved off having a local checkout; the
+    "scheduler owns scope, runs from anywhere" design is groundwork only.
 EOF
 }
 
@@ -906,6 +1012,7 @@ case "${1:-}" in
     open_file "$REPORTS_ROOT/$2/LATEST.md"
     ;;
   idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  explain|-e) cmd_explain ;;
   _commit-file)
     # Internal, not a documented user-facing verb (leading underscore
     # matches the schedule/_*.conf "meta, not a project" convention) --

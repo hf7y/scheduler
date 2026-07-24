@@ -355,13 +355,19 @@ smooth over the parts they don't yet follow.** Concretely, in order:
      won't reflect a reply left only in `LATEST.md`. A documentation/
      audit-trail gap, not an operational one — fine to leave queued
      behind higher-value work, not urgent.
-2. **Write a clear, honest explainer of how the current system actually
-   works, for the user's own understanding** — not another design doc
-   for an agent to read, a genuine "here's what happens when you do X"
-   walkthrough a human can hold in their head. Concrete candidate home:
-   `bin/scheduler help` or a new `scheduler explain` subcommand that
-   prints exactly this, so understanding lives next to the tool, not in
-   a file that goes stale. Not started yet.
+2. **DONE 2026-07-24 paced cycle: `scheduler explain` (`-e`).** Prints a
+   plain-English "here's what happens when you do X" walkthrough covering
+   paced vs. cron dispatch, what a run actually does (fresh clone, reads
+   scope from the checkout not the symlink), the push/merge review gates
+   (per-project, not one global rule), how a `> ` reply round-trips via
+   `collect-feedback.sh --consume`, and what `scheduler` itself does vs.
+   doesn't do — plus an explicit "not built yet" section (AUTONOMY_TIER,
+   merged report file, scheduler-owned scope) so it doesn't overclaim
+   design work as shipped. Lives next to the tool (`bin/scheduler`,
+   `cmd_explain`), not a file that goes stale. Verified: `bash -n
+   bin/scheduler` clean, ran `scheduler explain` and `scheduler -e` and
+   read the output end to end for accuracy against the actual scripts
+   (`bin/scheduler-run`, `lib/sweep-loop-common.sh`, `bin/usage-gate.sh`).
 3. Only after 1-2 are genuinely solid: revisit item 0, the consolidation
    roadmap axes below, and any other bigger redesign — same "vision
    debt" discipline applied to this file's own backlog, not just to
