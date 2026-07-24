@@ -46,7 +46,20 @@ only ever sees its own section, never another project's.
   needed — worth trimming on rotation even if not urgent today), then
   `echo <new-token> | gh auth login --with-token`.
 
+## chezz
+- **Needs a GitHub deploy key for the dispatch environment** (decided
+  2026-07-24, see DESIGN-NOTES.md — deploy keys chosen over agent
+  forwarding or a shared key). Until generated and installed, chezz's
+  nightly commits push locally-only against `git@github.com:hf7y/chezz.git`
+  and need a manual push. Steps queued in DESIGN-NOTES.md's 2026-07-24
+  "chezz/wtul push-gap fix" entry — human-only (key generation/
+  installation), not agent-executable.
+
 ## wtul
+- **Needs a GitHub deploy key for the dispatch environment** — same fix
+  and same steps as chezz's entry above, separate dedicated key (not
+  shared). See DESIGN-NOTES.md 2026-07-24.
+
 - **ROADMAP #2 (AcoustID/Discogs metadata fallback) — AcoustID done,
   Discogs still pending.** AcoustID key obtained and wired 2026-07-20
   (`lib/metadata_lookup.py`, offered as a suggestion at the `fix <discid>`

@@ -674,3 +674,49 @@ realisateur interprets vision/judgment"):
   human sign-off) — matches zach's own request this pass to grant himself
   broader access to svc-vaporwave's home directory rather than have an
   agent attempt it.
+
+## 2026-07-24 — /ideate pass #3: chezz/wtul push-gap fix, decided
+
+Root cause (found by realisateur, routed here per its own ideate.md step
+5 rather than hand-fixed): chezz/wtul's "stranded local commit" pattern
+isn't a dedicated-clone-vs-working-checkout race, it's a credential gap —
+the dispatch environment can push to local bare remotes (crt,
+realisateur, gardien, senechal) fine, but has no SSH credentials for
+GitHub-hosted remotes (`git@github.com:hf7y/{chezz,wtul}.git`). Nightly
+runs commit successfully but the push silently no-ops, leaving commits
+local until a human (or an interactive session with working creds)
+pushes by hand — confirmed same night by manually pushing wtul's
+`51e2545` and chezz's `0189195`.
+
+**Decided (human-directed): give the dispatch environment real,
+scoped GitHub access — deploy keys, not agent forwarding, not a shared
+key.** Rejected alternative: leaving it credential-free and just making
+the silent failure loud in `scheduler status`/`sweep.log`. That's still
+worth doing as a belt-and-suspenders safety net regardless (a
+stranded-commit warning should never be silent), but the chosen fix
+closes the gap for real — chezz/wtul push same-run like every other
+project — rather than permanently requiring a human push step.
+
+**Queued as human-only follow-up (key generation/installation is a
+cross-boundary credential action, not something an agent should execute
+unattended):**
+1. Generate a dedicated deploy key per repo (not one shared key across
+   both) — `ssh-keygen -t ed25519 -f ~/.ssh/deploy_chezz -N ""` and same
+   for wtul.
+2. Add each public key as a **deploy key with write access** on the
+   corresponding GitHub repo (Settings → Deploy keys → Add deploy key,
+   check "Allow write access").
+3. Wire each private key into the dispatch environment's SSH config
+   (an `IdentityFile`/`Host` alias per repo, same pattern already used
+   for scheduler's own per-repo deploy keys — see
+   [[scheduler-cron-ssh-auth]]) so `git push` resolves to the right key
+   without touching any other repo's credentials.
+4. Verify with a real push on each project's next scheduled dispatch
+   (or force one) — confirm `sweep.log` shows `pushed: yes` instead of
+   the current silent no-op.
+Still worth doing independent of the above: make a genuinely silent
+`pushed: no` loud in `scheduler status`/`sweep.log` for ANY project, not
+just these two — this was the credential gap's real blast radius (nobody
+noticed for however long until tonight's manual check), and the deploy
+keys don't prevent some future, different credential gap from being
+silent again.
