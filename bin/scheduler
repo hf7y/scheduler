@@ -12,6 +12,48 @@ set -uo pipefail
 SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
 REPORTS_ROOT="$HOME/reports"
 EDITOR="${EDITOR:-vim}"
+PACED_LOG="$HOME/.local/share/scheduler-paced-runner/run.log"
+
+# project_cadence_seconds <proj> -- average real wall-clock gap between this
+# project's last few DISPATCH lines in the paced runner's log (see
+# bin/usage-paced-runner.sh). This is the ONLY timing signal available:
+# there's no scheduled clock to read an ETA off of (paced projects run
+# whenever usage-gate.sh reports spare quota, not on a fixed cadence), so an
+# estimate has to come from how often this project has actually gotten a
+# turn recently. Returns nothing (and a nonzero exit) if there aren't at
+# least 2 samples yet -- callers must treat that as "no estimate", not 0.
+project_cadence_seconds() {
+  local proj="$1"
+  [ -f "$PACED_LOG" ] || return 1
+  local stamps=() ts
+  while IFS= read -r ts; do stamps+=("$ts"); done < <(
+    grep -E "DISPATCH \[[0-9]+/[0-9]+\] ${proj} ->" "$PACED_LOG" | awk '{print $1}' | tail -8
+  )
+  [ "${#stamps[@]}" -ge 2 ] || return 1
+  local prev="" cur total=0 count=0
+  for ts in "${stamps[@]}"; do
+    cur="$(date -d "$ts" +%s 2>/dev/null)" || continue
+    if [ -n "$prev" ]; then
+      total=$(( total + (cur - prev) ))
+      count=$(( count + 1 ))
+    fi
+    prev="$cur"
+  done
+  [ "$count" -gt 0 ] || return 1
+  echo $(( total / count ))
+}
+
+# fmt_duration <seconds> -- human-readable, capped at day/hour/minute
+# granularity (this is a rough estimate, not a precise countdown).
+fmt_duration() {
+  local secs="${1:-0}"
+  [ "$secs" -lt 0 ] 2>/dev/null && secs=0
+  local days=$(( secs / 86400 )) hours=$(( (secs % 86400) / 3600 )) mins=$(( (secs % 3600) / 60 ))
+  if [ "$days" -gt 0 ]; then printf '%dd %dh' "$days" "$hours"
+  elif [ "$hours" -gt 0 ]; then printf '%dh %dm' "$hours" "$mins"
+  else printf '%dm' "$mins"
+  fi
+}
 
 usage() {
   cat <<'EOF'
@@ -20,7 +62,11 @@ usage: scheduler [command] [project]
   (no args)             one-screen glance: every registered project,
                          sorted by open question/blocker count (most
                          pressing first), a `*` marking anything changed
-                         since you last opened it via this tool
+                         since you last opened it via this tool. Also
+                         shows a rough per-project ETA (FOCUS.md backlog
+                         size x that project's own recent paced-dispatch
+                         cadence) and an overall "time to burn down every
+                         backlog" estimate -- real history, not a promise.
   blockers, -b          open BLOCKERS.md
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
   questions [project], -q
@@ -49,9 +95,11 @@ usage: scheduler [command] [project]
   status <project>, -c  offline (no AI) deep-dive on one project: git
                          health (dirty/ahead/behind/diverged, + dedicated
                          clone divergence), pending %%TAG/`> ` feedback
-                         (via collect-feedback.sh), open QUESTIONS.md
-                         entries, and the last scheduled run's outcome
-                         from its log. Append --claude for a one-shot
+                         (via collect-feedback.sh), each FOCUS.md backlog
+                         item with a rough cumulative ETA off this
+                         project's own recent paced-dispatch cadence, open
+                         QUESTIONS.md entries, and the last scheduled run's
+                         outcome from its log. Append --claude for a one-shot
                          read-only `claude -p` narrated summary of the
                          same report, or --interactive (-I) to drop into
                          a live `claude` session in the project's repo
@@ -269,15 +317,20 @@ cmd_commit_file() {
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
-  printf '  %-16s %-10s %-9s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "NEXT UP"
+  printf '  %-16s %-10s %-9s %-10s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "ETA" "NEXT UP"
   echo "  (* = changed since you last opened it here. QUESTIONS is unopened/total --"
   echo "  total includes ones you've already replied to inline but whose project run"
   echo "  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish"
   echo "  notes in \`scheduler\` usage/docs/feedback-tags.md for what 'total' counts."
-  echo "  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- NOT an ETA,"
-  echo "  just what the next run reads first; paced projects run whenever"
-  echo "  usage-gate.sh has spare quota, not on a fixed clock.)"
+  echo "  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- just what the"
+  echo "  next run reads first, may reprioritize instead of clearing it outright."
+  echo "  ETA is FOCUS.md backlog size x this project's own average recent gap"
+  echo "  between paced dispatches (from usage-paced-runner.sh's log) -- a rough"
+  echo "  projection off real history, NOT a promise: assumes 1 backlog item"
+  echo "  clears per cycle, backlog size stays fixed, and recent pace holds."
+  echo "  'no history' = fewer than 2 recorded dispatches yet for that project.)"
   local any_blockers=0
+  local global_eta_secs=0 global_eta_proj="" any_unknown_eta=0
   # Rows are collected as "<score>\t<rendered line>" and sorted by score
   # descending after the loop, so projects with open questions/blockers
   # float to the top instead of showing in registration/conf-file order
@@ -424,13 +477,36 @@ cmd_glance() {
       fi
     fi
 
+    # ETA: this project's own backlog size x its own recent dispatch cadence
+    # (see project_cadence_seconds) -- deliberately per-project, not a share
+    # of some global rate, since cadence already reflects this project's
+    # rotation weight and how often the gate has actually let it run.
+    local etalabel="-"
+    if [ -n "$f_total" ] && [ "$f_total" -gt 0 ] 2>/dev/null; then
+      local cadence
+      cadence="$(project_cadence_seconds "$proj" 2>/dev/null)"
+      if [ -n "$cadence" ] && [ "$cadence" -gt 0 ] 2>/dev/null; then
+        local proj_eta=$(( cadence * f_total ))
+        etalabel="~$(fmt_duration "$proj_eta")"
+        if [ "$proj_eta" -gt "$global_eta_secs" ]; then
+          global_eta_secs="$proj_eta"; global_eta_proj="$proj"
+        fi
+      else
+        etalabel="no history"
+        any_unknown_eta=1
+      fi
+    fi
+
     local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
     local row
-    row="$(printf '  %-16s %-10s %-9s %s' "$proj" "$qlabel" "$blabel" "$next")"
+    row="$(printf '  %-16s %-10s %-9s %-10s %s' "$proj" "$qlabel" "$blabel" "$etalabel" "$next")"
     rows="$rows$score"$'\t'"$row"$'\n'
   done < <(projects)
   printf '%s' "$rows" | sort -t $'\t' -k1,1rn | cut -f2-
   echo
+  if [ "$global_eta_secs" -gt 0 ]; then
+    echo "est. time to burn down every project's current FOCUS.md backlog: ~$(fmt_duration "$global_eta_secs") (bound by $global_eta_proj's own backlog x pace)$([ "$any_unknown_eta" = "1" ] && echo " -- some projects show 'no history' and aren't in this estimate")"
+  fi
   if [ "$any_blockers" = "1" ]; then
     echo "-> scheduler blockers   (or: scheduler -b)"
   fi
@@ -559,7 +635,7 @@ extract_next_items() {
   # bug in this function; real priority/bug-feature tagging needs a schema
   # decision (see FOCUS.md's 2026-07-22 backlog note), this is the
   # stopgap that works today against well-structured files.
-  local focus_path="$1"
+  local focus_path="$1" cadence="${2:-}"
   [ -f "$focus_path" ] || { echo "no FOCUS.md found at $focus_path"; return; }
 
   local items
@@ -605,7 +681,17 @@ extract_next_items() {
     else
       tag="[item]"
     fi
-    printf '  %-9s %s\n' "$tag" "$clean"
+    # Cumulative ETA assumes strict FIFO (item N clears after N of this
+    # project's own cycles) and 1 item clearing per cycle -- both rough;
+    # see cmd_glance's ETA-column caveat for the same assumptions spelled
+    # out in full. No cadence (fewer than 2 recorded dispatches yet) -> the
+    # caller already printed one "no ETA yet" note, so just omit the column
+    # here rather than repeating "unknown" on every single line.
+    if [ -n "$cadence" ] && [ "$cadence" -gt 0 ] 2>/dev/null; then
+      printf '  %-9s %-9s %s\n' "$tag" "~$(fmt_duration "$(( cadence * shown ))")" "$clean"
+    else
+      printf '  %-9s %s\n' "$tag" "$clean"
+    fi
   done <<< "$items"
 }
 
@@ -661,7 +747,12 @@ build_status_report() {
 
   echo
   echo "-- next up ($SCHED_ROOT/focus/$proj.md) --"
-  extract_next_items "$SCHED_ROOT/focus/$proj.md"
+  local proj_cadence
+  proj_cadence="$(project_cadence_seconds "$proj" 2>/dev/null)"
+  if [ -z "$proj_cadence" ]; then
+    echo "(no ETA yet -- fewer than 2 recorded paced dispatches for $proj)"
+  fi
+  extract_next_items "$SCHED_ROOT/focus/$proj.md" "$proj_cadence"
 
   echo
   echo "-- open questions ($SCHED_ROOT/questions/$proj.md) --"
