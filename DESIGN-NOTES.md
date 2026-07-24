@@ -499,3 +499,57 @@ real installed scripts; stale-`.active`-marker detection is designed and
 queued as the next concrete piece; `AUTONOMY_TIER`/the registration
 contract stay parked behind the hardening-first priority, correctly not
 built speculatively.
+
+## 2026-07-23 — vision-burndown /ideate pass (weights, two-account reality)
+
+Interactive `/ideate` session (this command was ported into
+`.claude/commands/ideate.md` from chezz the same session). No
+implementation code touched; decisions recorded and queued only.
+
+**The question:** realistic burndown of the *vision* backlog given
+current quota, under a zach-personal / svc-vaporwave two-account split.
+
+**What the numbers said (rough, honest):**
+- Backlog ≈ 25–27 open vision items (~23 Backlog bullets + 4 roadmap
+  axes). Intake via `scheduler -i` is **non-AI, zero quota cost, no
+  throttle** — ~10/week sustained with bursts (11 landed 2026-07-22).
+- Clearing is quota-gated and only **two** paced jobs touch the vision
+  backlog (`scheduler`, `realisateur`); they share slack with 10
+  operational batches and lose to interactive human chat (~73% of spend
+  per the 2026-07-18 audit). Realistic clear ≈ 2–4 items/week.
+- **Net −6 to −10/week — the backlog diverges.** This is the named
+  "vision debt" pattern, not a tooling failure.
+
+**Two-account reality (user-corrected):** there is *no* clean split right
+now. The user is logged into svc-vaporwave for crt dev; they hop accounts
+when one caps — the account-hop is the current load-balancer. So a single
+`usage-gate.sh` reading is "the account you're camped on," not a stable
+per-account budget. Two quotas help *operational* separation but do
+**not** add vision throughput, because the vision-clearing jobs run
+wherever zach is and vaporwave quota can't cleanly be spent on scheduler
+vision work (it's the Krewe nonprofit's service account; acceptable as
+general AI-R&D, but a boundary smell). Verdict: **two accounts as split
+today are not enough to burn down vision** — the real levers are (a) less
+interactive human spend on the vision-clearing account and (b) segregation
+tooling so the split is deliberate, not reactive account-hopping.
+
+**Decision 1 — weights.** `scheduler` and `realisateur` bumped 1→3 in
+`schedule/_paced.conf` (was: default 1). Rationale: they're the only
+vision-clearing jobs, so they should dominate available slack. **Weight 3,
+NOT always-top** — always-top starves the 10 operational batches and just
+converts vision debt into operational debt elsewhere. realisateur owns
+re-tuning this (docs/priority-weight.md); it already ran its own /ideate
+2026-07-23 adjusting nine-speakers, so the triage-owner loop is live.
+
+**Decision 2 — does intake-triage follow from reweighting?** Not
+mechanically: weights touch the clear side; `scheduler -i` intake stays
+unbounded regardless. But reweighting *raises the cost* of an un-triaged
+backlog (prioritized quota wasted on low-value items). The one path where
+triage does ride along: realisateur is both a vision-clearing job AND the
+chartered pruner, so routing the extra turns through realisateur (not just
+scheduler) means more turns → more pruning. So triage follows from
+reweighting **iff the turns go to realisateur.**
+
+**Queued for the user (QUESTIONS.md):** build account-segregation tooling
+so zach/vaporwave usage is deliberately split rather than reactive
+account-hopping; user flagged this as a discipline gap to address soon.
