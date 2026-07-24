@@ -278,6 +278,8 @@ cmd_glance() {
   echo "  just what the next run reads first; paced projects run whenever"
   echo "  usage-gate.sh has spare quota, not on a fixed clock.)"
   local any_blockers=0
+  local any_unpushed=0
+  local unpushed_list=""
   # Rows are collected as "<score>\t<rendered line>" and sorted by score
   # descending after the loop, so projects with open questions/blockers
   # float to the top instead of showing in registration/conf-file order
@@ -424,6 +426,30 @@ cmd_glance() {
       fi
     fi
 
+    # Stranded-push awareness (2026-07-24, closes the "make it loud for
+    # ANY project, not just chezz/wtul" half of the credential-gap
+    # backlog item -- `cmd_sweep`'s dedicated-clone pass already detects
+    # this per-run, but only if you remember to run `scheduler sweep`
+    # separately; this surfaces the same signal in the view you actually
+    # open daily). Reads the dedicated clone's already-known local refs
+    # (no fetch -- same no-network assumption `report_divergence` already
+    # makes), so a real credential/push gap (root-caused 2026-07-24 for
+    # chezz/wtul: commits succeed, the push silently no-ops) shows up here
+    # instead of requiring a separate `sweep` run to notice.
+    local job_name
+    job_name="$(conf_field "$proj" BATCH_JOB_NAME)"
+    [ -n "$job_name" ] || job_name="$(conf_field "$proj" SWEEP_JOB_NAME)"
+    if [ -n "$job_name" ] && [ -d "$HOME/.local/share/$job_name/repo/.git" ]; then
+      local clone="$HOME/.local/share/$job_name/repo"
+      local cbranch cahead
+      cbranch="$(git -C "$clone" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+      cahead="$(git -C "$clone" rev-list --count "origin/$cbranch..HEAD" 2>/dev/null || echo 0)"
+      if [ "${cahead:-0}" -gt 0 ] 2>/dev/null; then
+        any_unpushed=1
+        unpushed_list="$unpushed_list$proj ($cahead unpushed), "
+      fi
+    fi
+
     local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
     local row
     row="$(printf '  %-16s %-10s %-9s %s' "$proj" "$qlabel" "$blabel" "$next")"
@@ -433,6 +459,10 @@ cmd_glance() {
   echo
   if [ "$any_blockers" = "1" ]; then
     echo "-> scheduler blockers   (or: scheduler -b)"
+  fi
+  if [ "$any_unpushed" = "1" ]; then
+    echo "-> stranded local commits in a dedicated clone (push likely failed silently): ${unpushed_list%, }"
+    echo "   run 'scheduler sweep' for detail, or push by hand from that clone"
   fi
   echo "-> scheduler focus/questions/report <project> to jump straight in"
 }
