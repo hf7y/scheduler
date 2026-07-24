@@ -767,6 +767,21 @@ to build sooner.
 - **2026-07-23 12:50 (via `scheduler -i`):** eventually during high season, we'll need google calendar integration. a way to invite small teams to their meetings, input deadlines, etc
 
 - **2026-07-23 09:24 (via `scheduler -i`):** add a column in scheduler noargs view to show last run as well as next up. last run timestamp, next run timestamp. specific next up task text can be moved to projects individual status view to save space, though open jobs can stay.
+  **Partial progress, 2026-07-24 paced cycle:** `cmd_glance` (bare `scheduler`)
+  now has a `LAST RUN` column — age of that project's own
+  `~/reports/<project>/LATEST.md` (Xm/Xh/Xd ago), the same file `scheduler
+  report <project>` opens, so it's a proxy for "last completed run" rather
+  than a new tracked timestamp. Verified live: ran `scheduler` and confirmed
+  every registered project shows a plausible age (crosschecked wtul's "1h
+  ago" against `stat` on its actual `LATEST.md`), `bash -n bin/scheduler`
+  clean. **NEXT-run timestamp deliberately deferred, not built this cycle:**
+  a real ETA needs expanding `schedule/_paced.conf`'s weighted participant
+  list against the live `rotation.idx` pointer (for paced projects) plus
+  parsing each `schedule/<proj>.conf`'s cron fields (for fixed-time ones) --
+  two different mental models to reconcile correctly, not a one-line add
+  like LAST RUN was, and getting it subtly wrong (a false "next in 5 min")
+  seemed worse than leaving NEXT UP as the existing non-ETA backlog-position
+  label. Left as open backlog, not attempted half-verified.
 
 - **2026-07-22 (diagnosed via wtul questions-pane investigation):** audit
   every project's nightly-batch/questions convention for the same gap just

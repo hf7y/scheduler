@@ -375,11 +375,13 @@ cmd_commit_file() {
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
-  printf '  %-16s %-10s %-9s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "NEXT UP"
+  printf '  %-16s %-10s %-9s %-10s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "LAST RUN" "NEXT UP"
   echo "  (* = changed since you last opened it here. QUESTIONS is unopened/total --"
   echo "  total includes ones you've already replied to inline but whose project run"
   echo "  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish"
   echo "  notes in \`scheduler\` usage/docs/feedback-tags.md for what 'total' counts."
+  echo "  LAST RUN is the age of that project's ~/reports/<project>/LATEST.md (a"
+  echo "  proxy for its last completed run, not a scheduler-tracked timestamp)."
   echo "  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- NOT an ETA,"
   echo "  just what the next run reads first; paced projects run whenever"
   echo "  usage-gate.sh has spare quota, not on a fixed clock.)"
@@ -556,9 +558,30 @@ cmd_glance() {
       fi
     fi
 
+    # LAST RUN: age of ~/reports/<project>/LATEST.md, the same file `scheduler
+    # report <project>` opens -- a proxy for "last completed run" (mtime
+    # only updates when a run actually writes a report, never a scheduler-
+    # tracked dispatch timestamp), added 2026-07-24 per the "add a last-run
+    # column" backlog item. Rendered as a coarse age bucket (Xm/Xh/Xd ago) so
+    # it's scannable at a glance rather than a raw timestamp.
+    local lastrun="-" lfile="$REPORTS_ROOT/$proj/LATEST.md"
+    if [ -f "$lfile" ]; then
+      local lmtime lnow lage
+      lmtime="$(stat -c %Y "$lfile" 2>/dev/null || echo 0)"
+      lnow="$(date +%s)"
+      lage=$(( lnow - lmtime ))
+      if [ "$lage" -lt 3600 ]; then
+        lastrun="$(( lage / 60 ))m ago"
+      elif [ "$lage" -lt 86400 ]; then
+        lastrun="$(( lage / 3600 ))h ago"
+      else
+        lastrun="$(( lage / 86400 ))d ago"
+      fi
+    fi
+
     local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
     local row
-    row="$(printf '  %-16s %-10s %-9s %s' "$proj" "$qlabel" "$blabel" "$next")"
+    row="$(printf '  %-16s %-10s %-9s %-10s %s' "$proj" "$qlabel" "$blabel" "$lastrun" "$next")"
     rows="$rows$score"$'\t'"$row"$'\n'
   done < <(projects)
   printf '%s' "$rows" | sort -t $'\t' -k1,1rn | cut -f2-
