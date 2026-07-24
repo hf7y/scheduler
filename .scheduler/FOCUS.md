@@ -9,7 +9,7 @@ controls all the other jobs.
 Done when:
 - [ ] Every registered project's dispatch env has working push credentials for its remote (or a loud, specific failure reason when it doesn't) — see the 2026-07-24 credential-gap backlog entry (chezz/wtul GitHub pushes silently no-op today). The "loud reason" half progressed 2026-07-24 paced cycle: `scheduler` (bare, the daily glance view) now surfaces stranded-unpushed-clone commits for every registered project, not just via a separate `sweep` run — see the backlog entry's "Partial progress" note. The credentials half (a real deploy key per repo) is still human-only, unchanged.
 - [x] Stale `.active`-marker / stranded-run detection is built into `sweep` (queued 2026-07-20, built 2026-07-24 paced cycle) — `cmd_sweep` in `bin/scheduler` now scans `~/.local/share/scheduler-registry/*.active` and flags any marker whose PID is no longer running as stranded (its EXIT trap never fired — killed, crashed, or a reboot, most likely before any commit, which is why the git-based checks above can't see it), plus a softer "still running, unusually long" flag for a live PID past `STALE_ACTIVE_MARKER_SECONDS` (default 7200s). Verified with fabricated markers (a dead-PID one correctly flagged STALE, a live-PID/just-started one correctly silent) — `bash -n bin/scheduler` also clean.
-- [ ] Every registered project's `/nightly-batch` actually consumes its own `QUESTIONS.md` replies via `collect-feedback.sh --consume` (audit opened 2026-07-22; vkv-inventory still unconfirmed).
+- [ ] Every registered project's `/nightly-batch` actually consumes its own `QUESTIONS.md` replies via `collect-feedback.sh --consume` (audit opened 2026-07-22; vkv-inventory gap CONFIRMED 2026-07-24 paced cycle via read-only check of its dedicated clone -- see the matching Backlog entry below for the evidence. Fix is outside this repo's scope (vkv-inventory's own `.claude/commands/nightly-batch.md`), routed to realisateur per that entry.).
 - [x] A `_paced.conf` line disabled with a "migrated to X" comment has its claimed destination verified to exist, not just assumed (root-caused 2026-07-24 from the aedile/vkv-inventory 4-day silent-orphan incident; built 2026-07-24 paced cycle) -- `cmd_sweep` in `bin/scheduler` now scans every `schedule/*.conf` for a `MIGRATED to <host>` comment (aedile, vkv-inventory both claim `svc-vaporwave`) and re-checks it every sweep: SSH-unreachable from here reports UNVERIFIED (never silently treated as confirmed), reachable-but-no-matching-crontab-entry reports ORPHANED, reachable-and-found reports verified. Verified live against the real aedile/vkv-inventory case tonight -- `svc-vaporwave` correctly comes back UNVERIFIED (no SSH alias/network path from this environment), fails fast (~0.05s, no hang) rather than blocking the sweep. The reachable/ORPHANED and reachable/verified branches are simple two-line `crontab -l | grep` checks not independently live-tested (no local sshd to fabricate against), same honesty standard as the stale-marker pass's own fabricated-marker verification. `bash -n bin/scheduler` clean.
 Ideas beyond this bar are PARKED by default (see realisateur/STABILITY-MILESTONES.md).
 
@@ -781,6 +781,16 @@ to build sooner.
   reply unless a project's batch command explicitly ran collect-feedback
   against it — an easy step to drop when adapting the template for a
   no-tracker project (as wtul did).
+  **CONFIRMED 2026-07-24 paced cycle** (was "unconfirmed" — this cycle
+  read-only-verified, did not edit): checked vkv-inventory's own dedicated
+  clone at `~/.local/share/vkv-inventory-nightly-batch/repo/.claude/commands/nightly-batch.md`
+  directly (reading outside this repo is fine, editing isn't — same rule
+  already used for `~/.local/bin/*-loop.sh` wrappers elsewhere in this
+  file) — no `collect-feedback.sh --consume` call anywhere in it, gap is
+  real, not stale. Scheduler can't fix it directly (outside this repo);
+  routing stays as described above — this line is scheduler's front-door
+  record for realisateur to pick up, per the same pattern the "stranded
+  local commit" backlog item below already uses.
 
 - **2026-07-22 15:54 (via `scheduler -i`):** the push of new ideas to archives has a little lag after ideas submit. can that happen after the command sends, and push a notification via kde or similar, perhaps waiting in case a batch of ideas comes in worth pushing all at once. clones should be aware of uncommited work, or should check for them, in case a race condition emerges. but that's an unecessary ui friction point for when I'm looking to drop several ideas in a row
 
