@@ -15,11 +15,23 @@ run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
 ## aedile
-- **svc-vaporwave migration in progress, not yet deployed** (2026-07-20).
-  vkv-inventory already migrated and confirmed working; aedile's rewrite
-  is drafted (dedicated clone, always-push + `gh pr create`, no more
-  worktree-off-real-checkout) but not yet copied to svc-vaporwave's
-  crontab. Full handoff/remaining-steps note:
+- **svc-vaporwave migration not actually deployed for EITHER project —
+  corrected 2026-07-24.** Previously claimed "vkv-inventory already
+  migrated and confirmed working" — that was wrong. Confirmed directly
+  2026-07-24 (`sudo -u svc-vaporwave crontab -l` → "no crontab for
+  svc-vaporwave"): no crontab exists at all on that account, so aedile
+  AND vkv-inventory have both been sitting disabled in this repo's
+  `schedule/_paced.conf` since 2026-07-20 with zero unattended dispatch,
+  undetected for 4 days. `svc-vaporwave`'s own `.credentials.json` does
+  exist and isn't obviously expired (last touched 2026-07-21), so that's
+  not what's blocking this. See DESIGN-NOTES.md 2026-07-24
+  "silently-orphaned finding" for the full writeup — judgment call on
+  whether to finish this migration or pull both back to zach's own
+  rotation is filed to realisateur's inbox, not decided here. aedile's
+  rewrite is drafted (dedicated clone, always-push + `gh pr create`, no
+  more worktree-off-real-checkout) but not yet copied to svc-vaporwave's
+  crontab regardless of which way that call goes. Full handoff/
+  remaining-steps note:
   `~/Documents/vkv/wavebucks/aedile/.claude/NEXT-STEPS.md` (local-only,
   gitignored in that repo, not visible from here).
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires

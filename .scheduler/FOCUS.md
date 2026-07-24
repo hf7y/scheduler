@@ -247,6 +247,39 @@ Findings, so this doesn't get re-litigated or blamed on the wrong thing:
   concrete, cheap win — fold it into the "Optimal-usage scheduling" backlog
   item below rather than treating it as a new one-off.
 
+## Short list + roadmap (2026-07-24, /ideate pass #3 — derived from a longer
+vision list the same pass; see DESIGN-NOTES.md for the full writeup)
+
+**Blockers to clear before batch work resumes (only 2 of the original 8
+long-list items actually gated anything — the rest are real but don't
+block scheduler/realisateur's own weight-3 work, since neither touches
+svc-vaporwave):**
+1. Zach grants himself broader access to `svc-vaporwave`'s home
+   directory — human-only, crosses an account boundary, not
+   agent-executable. **Still open.**
+2. Correct the stale "migrated"/"confirmed working" claims about
+   aedile/vkv-inventory's svc-vaporwave crontab — **DONE this pass**
+   (BLOCKERS.md's aedile section, `_paced.conf`'s aedile/vkv-inventory
+   comments).
+
+**Roadmap — batch work under fresh Max quota + the priority buildout:**
+1. Let scheduler + realisateur (weight-3) run under the newly-`RUN`
+   quota reading — watch `run.log` to confirm they actually dispatch,
+   not just eligible. Passive, no action needed unless it doesn't
+   happen.
+2. Realisateur's next cycle processes two inbox items: the pruner-
+   ownership decision (pass #2) and the aedile/vkv-inventory
+   finish-vs-pull-back judgment call (pass #3).
+3. Once realisateur answers #2, execute whichever path it judges —
+   still a human action either way (crontab install, or re-enabling the
+   `_paced.conf` lines here).
+4. Weight-3 is explicitly time-boxed (see `_paced.conf` bootstrap
+   comment) — drop scheduler + realisateur back to weight 1 once
+   realisateur's stability-milestone + default-park convention lands.
+5. The hardening-vs-consolidation resequencing question (does abundant
+   quota change the "hardening first" priority below?) stays parked —
+   not urgent enough to gate 1-4, revisit after they settle.
+
 ## Current focus
 
 **SEQUENCING (re-decided AGAIN 2026-07-20, human-directed, later the same
