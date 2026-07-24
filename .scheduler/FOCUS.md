@@ -215,6 +215,14 @@ bespoke ones:
 
 ## Cost insight (2026-07-18 usage audit — read before touching model/effort settings)
 
+> **2026-07-24 amendment (post-Max):** the primary account is now Claude
+> Max (5x), always logged in; svc-vaporwave is nonprofit-only. Under a
+> subscription the lever is **weekly quota-tokens, not dollars** — but the
+> conclusions below still hold, because Opus burns *quota* ~5x faster than
+> Sonnet just as it burned dollars. Read "$" below as "quota." See
+> DESIGN-NOTES.md 2026-07-24 for the full account-model decision.
+
+
 Audited real token usage across `~/.claude/projects/*.jsonl` since 2026-07-17.
 Findings, so this doesn't get re-litigated or blamed on the wrong thing:
 

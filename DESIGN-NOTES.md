@@ -553,3 +553,46 @@ reweighting **iff the turns go to realisateur.**
 **Queued for the user (QUESTIONS.md):** build account-segregation tooling
 so zach/vaporwave usage is deliberately split rather than reactive
 account-hopping; user flagged this as a discipline gap to address soon.
+
+## 2026-07-24 — account model decided: Max primary + nonprofit-only vaporwave
+
+Follows the 2026-07-23 vision-burndown pass. Decision (user-directed):
+**move the primary account to Claude Max (5x), stay logged into it always,
+and use svc-vaporwave ONLY for the nonprofit** (its batch jobs + nonprofit
+interactive). No `svc-vision`, no account-hopping.
+
+**Why this over the 3-base-account split:** a service user only pays off
+while it can stay a cheap base-tier quota soaking spillover. The token
+math (~40–80 Mtok/wk to keep pace with vision) exceeds a base quota, so a
+vision service user would have needed a Max upgrade anyway — and a
+*siloed* Max is strictly worse than a *pooled* Max (same price, can't lend
+idle capacity to chat or vice versa). At ~14 projects and already hopping,
+personal-side demand is already >1 base quota. So: one pooled Max beats
+three siloed base accounts.
+
+**Consequences for the game plan:**
+- **Segregation tooling retired.** No `account` field in `_paced.conf`, no
+  per-account `usage-gate` probe. Those existed to disambiguate hopping;
+  hopping is now eliminated by policy, not code. Cheaper and cleaner.
+- **Estimates become trustworthy.** `usage-gate.sh` now reads one stable
+  primary account, so pacing/burndown readings mean what they say. (Every
+  earlier number here was muddied by "which account am I probing" — the
+  71%/7d in the 07-23 pass was actually vaporwave, not zach.)
+- **Capacity stops the bleed but does NOT converge the debt.** ~5Q pooled
+  lets vision draw its keep-pace ~40–80 Mtok/wk (was ~10–15 as leftover
+  slack), moving net accrual-vs-clear from −6..−10/wk toward ~0. But
+  intake stays unbounded and zero-cost, so **Max raises the ceiling the
+  debt diverges under; realisateur pruning is still the only thing that
+  converges it.** Do not let the Max purchase quietly cancel the pruner
+  work.
+- **Weight-3 bump: unchanged.** Max reduces contention so weight matters
+  less on slack nights, but the exit condition stays realisateur's pruner
+  standing up (per _paced.conf bootstrap note), NOT "Max landed."
+- **Cost framing flips $ -> quota.** Max is flat monthly + a quota ceiling;
+  the lever is quota-tokens, not dollars. Sonnet-default (07-18 audit)
+  still right because Opus burns *quota* ~5x faster.
+- **OAuth side benefit.** Primary always-logged-in keeps its CLI creds
+  fresh -> the "Not logged in" unattended failure mode largely goes away
+  for personal jobs. Open follow-up (QUESTIONS.md): verify svc-vaporwave's
+  cron creds get refreshed by its own interactive use, or it can still
+  lapse mid-week.
