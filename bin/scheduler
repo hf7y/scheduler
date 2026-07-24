@@ -13,6 +13,48 @@ SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
 REPORTS_ROOT="$HOME/reports"
 EDITOR="${EDITOR:-vim}"
 PACED_LOG="$HOME/.local/share/scheduler-paced-runner/run.log"
+PACED_CONF="$SCHED_ROOT/schedule/_paced.conf"
+PACED_PTR="$HOME/.local/share/scheduler-paced-runner/rotation.idx"
+
+# load_paced_pool -- parses PACED_CONF the exact same way
+# bin/usage-paced-runner.sh does (name|enabled|[weight|]command, weight
+# defaults to 1, repeated N times in the pool for a weight-N participant)
+# so `scheduler next`/`run`/`weight` stay in lockstep with what the real
+# runner will actually do -- no second source of truth for this parsing.
+# Populates the global arrays POOL_NAMES/POOL_CMDS.
+load_paced_pool() {
+  POOL_NAMES=(); POOL_CMDS=()
+  [ -f "$PACED_CONF" ] || return 1
+  local name enabled rest weight maybe_weight cmd _w
+  while IFS='|' read -r name enabled rest; do
+    case "$name" in ''|\#*) continue ;; esac
+    [ "${enabled// /}" = "1" ] || continue
+    name="${name// /}"
+    rest="${rest#"${rest%%[![:space:]]*}"}"
+    weight=1
+    case "$rest" in
+      [0-9]*'|'*)
+        maybe_weight="${rest%%|*}"
+        if [[ "$maybe_weight" =~ ^[0-9]+$ ]] && [ "$maybe_weight" -ge 1 ]; then
+          weight="$maybe_weight"
+          rest="${rest#*|}"
+          rest="${rest#"${rest%%[![:space:]]*}"}"
+        fi
+        ;;
+    esac
+    cmd="$rest"
+    for ((_w=0; _w<weight; _w++)); do
+      POOL_NAMES+=("$name"); POOL_CMDS+=("$cmd")
+    done
+  done < "$PACED_CONF"
+  [ "${#POOL_NAMES[@]}" -gt 0 ]
+}
+
+# paced_conf_line <proj> -- raw schedule/_paced.conf line for a project, or
+# empty + nonzero exit if it isn't a paced participant (enabled or not).
+paced_conf_line() {
+  grep -E "^${1}\|" "$PACED_CONF" 2>/dev/null
+}
 
 # project_cadence_seconds <proj> -- average real wall-clock gap between this
 # project's last few DISPATCH lines in the paced runner's log (see
@@ -67,11 +109,39 @@ usage: scheduler [command] [project]
                          size x that project's own recent paced-dispatch
                          cadence) and an overall "time to burn down every
                          backlog" estimate -- real history, not a promise.
-  blockers, -b          open BLOCKERS.md
+  blockers [project] [n], -b
+                         open BLOCKERS.md; with a project + number, jump vim
+                         straight to that project's Nth open blocker bullet
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
-  questions [project], -q
-                         open a project's QUESTIONS.md (list if omitted)
+  questions [project] [n], -q
+                         open a project's QUESTIONS.md (list if omitted);
+                         with a number, jump vim straight to that bullet
+                         instead of opening at the top of the file
   report [project], -r  open a project's latest report (LATEST.md)
+  next [n], -n           what usage-paced-runner.sh will actually dispatch
+                         next, in real rotation order (reads its rotation
+                         pointer + this session's _paced.conf weights --
+                         same round-robin math the runner itself uses, no
+                         new state). Defaults to the next 8 slots.
+  run <project>          dispatch one project's paced wrapper right now,
+                         bypassing usage-gate.sh (each wrapper is already
+                         self-contained: own flock + logging). Works even
+                         if the project is currently disabled in
+                         _paced.conf -- runs it once, doesn't re-enable it.
+  overview <project>, -o
+                         one screen: that project's `## Stability
+                         milestone` checklist straight out of FOCUS.md (if
+                         it has one). For git/questions/blockers detail see
+                         `scheduler status <project>`.
+  weight <project> [n]  show (no n) or set (with n) a project's
+                         schedule/_paced.conf pace weight. Setting it also
+                         drops a `.idea` note in realisateur's inbox so its
+                         next pass knows a human overrode its last-set
+                         value (see docs/priority-weight.md -- the number
+                         itself is realisateur's judgment call, this
+                         command only edits + flags, never silently).
+  paced, -p              open schedule/_paced.conf directly (enable/disable
+                         participants, reorder round-robin tie-breaks)
   idea <project> "text", -i
                          drop a new idea/feature-request for a project
                          without opening an editor. realisateur gets a new
@@ -167,7 +237,8 @@ require_project() {
 }
 
 conf_field() {
-  local proj="$1" field="$2" conf="$SCHED_ROOT/schedule/$proj.conf"
+  local proj="$1" field="$2"
+  local conf="$SCHED_ROOT/schedule/$proj.conf"
   [ -f "$conf" ] || return 1
   grep -E "^${field}=" "$conf" | head -1 | cut -d= -f2- | tr -d '"'
 }
@@ -314,6 +385,180 @@ cmd_commit_file() {
   fi
 }
 
+cmd_next() {
+  local count="${1:-8}"
+  case "$count" in ''|*[!0-9]*) count=8 ;; esac
+  load_paced_pool || { echo "scheduler: no enabled participants in $PACED_CONF" >&2; exit 1; }
+  local n="${#POOL_NAMES[@]}"
+  local last=-1
+  [ -f "$PACED_PTR" ] && last="$(cat "$PACED_PTR" 2>/dev/null || echo -1)"
+  case "$last" in ''|*[!0-9-]*) last=-1 ;; esac
+  echo "scheduler next -- real usage-paced-runner.sh rotation order (dispatched whenever"
+  echo "usage-gate.sh reports spare weekly quota, NOT a fixed clock -- see run.log for when)"
+  echo
+  local i idx
+  for ((i=1; i<=count && i<=n; i++)); do
+    idx=$(( (last + i) % n ))
+    printf '  %2d. %s\n' "$i" "${POOL_NAMES[$idx]}"
+  done
+  echo
+  echo "(rotation pool size $n, incl. weight-repeats -- see schedule/_paced.conf/scheduler weight;"
+  echo " last actually dispatched pool slot: $last -- see ~/.local/share/scheduler-paced-runner/run.log)"
+}
+
+cmd_run() {
+  local proj="${1:-}"
+  if [ -z "$proj" ]; then
+    echo "usage: scheduler run <project>"
+    echo
+    echo "paced participants:"
+    awk -F'|' '$1!~/^#/ && $1!="" {print "  "$1}' "$PACED_CONF" 2>/dev/null
+    exit 1
+  fi
+  local line
+  line="$(paced_conf_line "$proj")"
+  if [ -z "$line" ]; then
+    echo "scheduler: '$proj' is not a participant in $PACED_CONF" >&2
+    exit 1
+  fi
+  local name enabled rest maybe_weight cmd
+  IFS='|' read -r name enabled rest <<<"$line"
+  rest="${rest#"${rest%%[![:space:]]*}"}"
+  case "$rest" in
+    [0-9]*'|'*)
+      maybe_weight="${rest%%|*}"
+      if [[ "$maybe_weight" =~ ^[0-9]+$ ]]; then rest="${rest#*|}"; fi
+      ;;
+  esac
+  cmd="${rest%%#*}"
+  cmd="$(printf '%s' "$cmd" | sed -e 's/[[:space:]]*$//')"
+  if [ "${enabled// /}" != "1" ]; then
+    echo "NOTE: $proj is disabled (enabled=0) in _paced.conf -- running it once anyway;"
+    echo "it stays out of the automatic rotation until you re-enable it there."
+  fi
+  echo "scheduler run: dispatching $proj -> $cmd (bypassing usage-gate.sh, one cycle, right now)"
+  # shellcheck disable=SC2086
+  exec $cmd
+}
+
+cmd_overview() {
+  local proj="$1"
+  local ffile="$SCHED_ROOT/focus/$proj.md"
+  echo "scheduler overview: $proj -- $(date '+%Y-%m-%d %H:%M')"
+  echo
+  if [ ! -f "$ffile" ]; then
+    echo "no FOCUS.md at $ffile yet"
+    return
+  fi
+  if grep -q '^## Stability milestone' "$ffile"; then
+    awk '
+      /^## Stability milestone/ { p=1; print; next }
+      p && /^## / { exit }
+      p { print }
+    ' "$ffile"
+  else
+    echo "no \"## Stability milestone\" section in $ffile yet -- this project hasn't had"
+    echo "one drafted (see realisateur/STABILITY-MILESTONES.md for the convention)"
+  fi
+  echo
+  echo "-> scheduler status $proj   for git/questions/blockers/run-log detail"
+}
+
+cmd_weight() {
+  local proj="${1:-}" newval="${2:-}"
+  if [ -z "$proj" ]; then
+    echo "usage: scheduler weight <project> [n]"
+    exit 1
+  fi
+  local line
+  line="$(paced_conf_line "$proj")"
+  if [ -z "$line" ]; then
+    echo "scheduler: '$proj' is not a participant in $PACED_CONF" >&2
+    exit 1
+  fi
+  local name enabled rest maybe_weight cur_weight=1 tail_field
+  IFS='|' read -r name enabled rest <<<"$line"
+  tail_field="${rest#"${rest%%[![:space:]]*}"}"
+  case "$tail_field" in
+    [0-9]*'|'*)
+      maybe_weight="${tail_field%%|*}"
+      if [[ "$maybe_weight" =~ ^[0-9]+$ ]]; then
+        cur_weight="$maybe_weight"
+        tail_field="${tail_field#*|}"
+      fi
+      ;;
+  esac
+
+  if [ -z "$newval" ]; then
+    echo "$proj: weight=$cur_weight enabled=$enabled"
+    return
+  fi
+  if ! [[ "$newval" =~ ^[0-9]+$ ]] || [ "$newval" -lt 1 ]; then
+    echo "scheduler: weight must be a positive integer" >&2
+    exit 1
+  fi
+  if [ "$newval" = "$cur_weight" ]; then
+    echo "$proj: weight already $cur_weight, nothing to change"
+    return
+  fi
+
+  local newline="${name}|${enabled}|${newval}|${tail_field}"
+  awk -v proj="$proj" -v newline="$newline" -F'|' '
+    $1==proj { print newline; next } { print }
+  ' "$PACED_CONF" > "$PACED_CONF.tmp" && mv "$PACED_CONF.tmp" "$PACED_CONF"
+  echo "set $proj weight: $cur_weight -> $newval"
+  cmd_commit_file "$PACED_CONF" "scheduler weight: $proj $cur_weight -> $newval (human override via \`scheduler weight\`)"
+
+  # Flag the override for realisateur -- same .idea inbox convention as
+  # `scheduler idea realisateur "..."` (see docs/priority-weight.md: the
+  # weight VALUE is realisateur's judgment call, this command only edits +
+  # flags, never silently overrides its next pass without a trace).
+  local repo_path
+  repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
+  if [ -n "$repo_path" ]; then
+    local ts idea_file
+    ts="$(date +%Y%m%d-%H%M%S)"
+    idea_file="$repo_path/weight-override-${proj}-${ts}.idea"
+    printf 'Human set %s pace weight %s -> %s directly in _paced.conf via `scheduler weight` on %s. FYI, not a request to revert it -- just flagging the override so your next pass has the full picture instead of assuming its own last-set value still holds.\n' \
+      "$proj" "$cur_weight" "$newval" "$(date '+%Y-%m-%d %H:%M')" > "$idea_file"
+    echo "flagged for realisateur: $idea_file"
+  fi
+}
+
+cmd_questions_jump() {
+  local proj="$1" idx="$2"
+  local qfile="$SCHED_ROOT/questions/$proj.md"
+  [ -f "$qfile" ] || { echo "scheduler: no file yet at $qfile" >&2; exit 1; }
+  local lineno
+  lineno="$(awk -v want="$idx" '
+    BEGIN{infence=0; n=0}
+    /^```/ { infence=!infence; next }
+    infence { next }
+    /^- \*\*/ { n++; if (n==want) { print NR; exit } }
+  ' "$qfile")"
+  if [ -z "$lineno" ]; then
+    echo "scheduler: no question #$idx in $qfile" >&2
+    exit 1
+  fi
+  exec "$EDITOR" "+$lineno" "$qfile"
+}
+
+cmd_blockers_jump() {
+  local proj="$1" idx="$2"
+  [ -f "$SCHED_ROOT/BLOCKERS.md" ] || { echo "scheduler: no BLOCKERS.md yet" >&2; exit 1; }
+  local lineno
+  lineno="$(awk -v want_proj="$proj" -v want="$idx" '
+    BEGIN{insec=0; n=0}
+    /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want_proj) "$")); next }
+    insec && /^- \*\*/ { n++; if (n==want) { print NR; exit } }
+  ' "$SCHED_ROOT/BLOCKERS.md")"
+  if [ -z "$lineno" ]; then
+    echo "scheduler: no blocker #$idx for '$proj' in BLOCKERS.md" >&2
+    exit 1
+  fi
+  exec "$EDITOR" "+$lineno" "$SCHED_ROOT/BLOCKERS.md"
+}
+
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
@@ -454,19 +699,56 @@ cmd_glance() {
         # inbox dump, not scoped backlog -- realisateur/the next batch run
         # still has to triage them into real scope, so they should not
         # count or supply the keyword.
-        /^##/ { inideas = (tolower($0) ~ /ideas/); next }
+        # "backlog" alone is NOT a safe un-exclude signal -- some projects
+        # (scheduler'"'"'s own FOCUS.md, aedile) literally name their raw
+        # unprocessed-idea intake section "## Backlog (the intake -- ...)",
+        # same dump semantics as an "Ideas" heading, just a different word.
+        # "feature request" is the narrower, unambiguous phrase actually
+        # used (only by home-assistant/realisateur) for a real, already-
+        # scoped section -- see docs below for why this stays narrow.
+        /^##/ {
+          inideas = (tolower($0) ~ /ideas|intake/)
+          in_scoped_backlog = (tolower($0) ~ /feature request/)
+          in_priority_queue = (tolower($0) ~ /priority queue/)
+          next
+        }
         inideas { next }
         /^- \*\*/ {
           line=$0
           sub(/^- \*\*/, "", line)
           idx=index(line, "**")
           bullet = (idx>0) ? substr(line,1,idx-1) : line
-          # Skip raw "YYYY-MM-DD (via `scheduler -i`/realisateur...)" bullets
-          # that slipped in outside a recognized Ideas heading -- same
-          # unprocessed-dump shape, just not sectioned off.
-          if (bullet ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/) next
+          # Skip raw "YYYY-MM-DD (via `scheduler -i`/realisateur...)"
+          # bullets UNLESS they are under a heading confirmed scoped (see
+          # in_scoped_backlog above) -- most projects'"'"' FOCUS.md files
+          # mix real backlog with a long history of dated DONE/deferred/
+          # journal-style bullets (crt.md, scheduler.md itself) that look
+          # identical in shape to a real backlog item but are not "what
+          # the next run reads first" -- narrowed 2026-07-24 to also fix
+          # home-assistant (a properly-sectioned `- ** 2026-07-20 ... (via
+          # scheduler -i)` bullet under "## Feature requests / backlog"
+          # was being excluded as if it were unsectioned noise) without
+          # reopening that flood for every other project.
+          if (!in_scoped_backlog && bullet ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/) next
           total++
           if (total == 1) keyword = bullet
+          next
+        }
+        # Top-level numbered-list backlogs, scoped ONLY to a heading
+        # literally named "Priority queue" (currently just chezz) --
+        # added 2026-07-24. Deliberately NOT a blanket "any column-0
+        # numbered line" rule: crt.md and scheduler.md own FOCUS.md are
+        # full of unrelated column-0 numbered lists inside ordinary prose
+        # (sequencing steps, roadmap reasoning, DONE-item lists) that are
+        # NOT "what the next run reads first" -- a blanket rule silently
+        # inflated crt from 11 to 63 and scheduler from 36 to 90 items
+        # when first tried, all noise.
+        in_priority_queue && /^[0-9]+\. / {
+          line=$0
+          sub(/^[0-9]+\.[ \t]*/, "", line)
+          gsub(/\*\*/, "", line)
+          total++
+          if (total == 1) keyword = line
         }
         END { printf "%d\t%s\n", total+0, keyword }
       ' "$ffile" 2>/dev/null)"
@@ -879,7 +1161,14 @@ mark_blockers_seen() {
 
 case "${1:-}" in
   ""|glance) cmd_glance ;;
-  blockers|-b) mark_blockers_seen; open_file "$SCHED_ROOT/BLOCKERS.md" ;;
+  blockers|-b)
+    mark_blockers_seen
+    if [ -n "${2:-}" ] && [ -n "${3:-}" ]; then
+      cmd_blockers_jump "$2" "$3"
+    else
+      open_file "$SCHED_ROOT/BLOCKERS.md"
+    fi
+    ;;
   focus|-f)
     require_project focus "${2:-}"
     open_file "$SCHED_ROOT/focus/$2.md"
@@ -887,13 +1176,25 @@ case "${1:-}" in
   questions|-q)
     require_project questions "${2:-}"
     mark_seen "$2"
-    open_file "$SCHED_ROOT/questions/$2.md"
+    if [ -n "${3:-}" ]; then
+      cmd_questions_jump "$2" "$3"
+    else
+      open_file "$SCHED_ROOT/questions/$2.md"
+    fi
     ;;
   report|-r)
     require_project report "${2:-}"
     open_file "$REPORTS_ROOT/$2/LATEST.md"
     ;;
   idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  next|-n) cmd_next "${2:-}" ;;
+  run) cmd_run "${2:-}" ;;
+  overview|-o)
+    require_project overview "${2:-}"
+    cmd_overview "$2"
+    ;;
+  weight) cmd_weight "${2:-}" "${3:-}" ;;
+  paced|-p) open_file "$PACED_CONF" ;;
   _commit-file)
     # Internal, not a documented user-facing verb (leading underscore
     # matches the schedule/_*.conf "meta, not a project" convention) --
