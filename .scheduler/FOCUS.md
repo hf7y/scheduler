@@ -4,6 +4,15 @@ The scheduler's Tier 2 job (`/nightly-batch`) is scoped by this file, same
 as every other project. Difference: this project is the **meta-tool** that
 controls all the other jobs.
 
+## Stability milestone
+**Current:** reliably dispatches every registered project with zero silent failures or stranded commits — status: in-progress
+Done when:
+- [ ] Every registered project's dispatch env has working push credentials for its remote (or a loud, specific failure reason when it doesn't) — see the 2026-07-24 credential-gap backlog entry (chezz/wtul GitHub pushes silently no-op today).
+- [ ] Stale `.active`-marker / stranded-run detection is built into `sweep` (queued 2026-07-20, not started) — catches a run cut off before any commit, which today's dedicated-clone check can't see.
+- [ ] Every registered project's `/nightly-batch` actually consumes its own `QUESTIONS.md` replies via `collect-feedback.sh --consume` (audit opened 2026-07-22; vkv-inventory still unconfirmed).
+- [ ] A `_paced.conf` line disabled with a "migrated to X" comment has its claimed destination verified to exist, not just assumed (root-caused 2026-07-24 from the aedile/vkv-inventory 4-day silent-orphan incident).
+Ideas beyond this bar are PARKED by default (see realisateur/STABILITY-MILESTONES.md).
+
 **Push policy (changed 2026-07-18, human-approved):** the nightly job MAY
 push its own commits directly to `origin/main` — no `nightly/<date>` branch,
 no human merge step required. This is *not* a license to skip review after
@@ -725,8 +734,6 @@ to build sooner.
 ## Backlog (the intake — add a line to propose an idea)
 
 - **2026-07-24 01:33 (via `scheduler -i`):** Root cause found 2026-07-24 for the 'stranded local commit' pattern seen on chezz and wtul nightly-batch runs (previously misdiagnosed by realisateur's /ideate as a dedicated-clone-vs-working-checkout push race): it's a credential gap, not a race. The dispatch environment can push to local bare remotes (crt, realisateur, gardien, senechal) fine, but has no SSH credentials for GitHub-hosted remotes (chezz + wtul both use git@github.com:hf7y/...). Their nightly-batch runs commit successfully but the push step silently fails/is skipped, leaving commits local-only until a human or interactive Claude Code session (which does have working credentials) pushes them by hand -- confirmed tonight by manually pushing wtul's 51e2545 and chezz's 0189195, both landed cleanly. Proposal: either (a) give the dispatch environment's SSH agent/keys access to the github.com host (deploy keys or agent forwarding, scoped read+write to just these two repos), or (b) if that's intentionally not wanted (e.g. credential-scope hygiene), make the failure LOUD in scheduler status / sweep.log instead of the current silent 'pushed: no' with no reason given, so it reads as 'needs a human push' rather than looking like a generic failed run. Either is scheduler's call -- routing here per realisateur's ideate.md step 5 front door rather than hand-fixing dispatch config from realisateur.
-
-- **2026-07-24 00:57 (via `scheduler -i`):** Realisateur's stability-milestone convention (see realisateur/STABILITY-MILESTONES.md) asks whether scheduler itself (the engine, not a scaffolded project) should participate. Decided 2026-07-24 via /ideate: yes, give the engine a milestone too -- even mechanism benefits from a stated stability bar (e.g. 'reliably dispatches N registered projects with zero silent failures/stranded commits'). milestone-audit.sh currently reads scheduler as no-focus since its FOCUS lives under .scheduler/ not .claude/ -- either teach milestone-audit.sh to also check .scheduler/FOCUS.md, or add a lightweight '## Stability milestone' section directly to scheduler's own .scheduler/FOCUS.md. This is scheduler's own engine/FOCUS file to decide the shape of, routed here per realisateur's ideate.md step 5 front-door rule rather than hand-edited from realisateur.
 
 - **2026-07-23 23:55 (via `scheduler -i`):** Unify a status/admission taxonomy across the ecosystem: 'active vs parked vs waiting' for vision/idea items is the SAME underlying need as the BLOCKERS.md blocking/waiting/fyi taxonomy (the parked 'Spec-out-a-more-principled-eco' idea). Proposal: one shared status vocabulary + convention that serves both vision-backlog items (FOCUS.md) and blockers (BLOCKERS.md), so counts reflect real commitments, not the free-growing reservoir. Surfaced by realisateur /ideate 2026-07-23 vision-debt strategy pass (see realisateur FOCUS.md) — this is the mechanism that makes milestone-gated parking legible in glance/status views. Realisateur owns the vision-item half; this -i note is for scheduler's convention/engine half.
 
