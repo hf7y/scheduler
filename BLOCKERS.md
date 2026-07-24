@@ -15,25 +15,22 @@ run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
 ## aedile
-- **svc-vaporwave migration not actually deployed for EITHER project —
-  corrected 2026-07-24.** Previously claimed "vkv-inventory already
-  migrated and confirmed working" — that was wrong. Confirmed directly
-  2026-07-24 (`sudo -u svc-vaporwave crontab -l` → "no crontab for
-  svc-vaporwave"): no crontab exists at all on that account, so aedile
-  AND vkv-inventory have both been sitting disabled in this repo's
-  `schedule/_paced.conf` since 2026-07-20 with zero unattended dispatch,
-  undetected for 4 days. `svc-vaporwave`'s own `.credentials.json` does
-  exist and isn't obviously expired (last touched 2026-07-21), so that's
-  not what's blocking this. See DESIGN-NOTES.md 2026-07-24
-  "silently-orphaned finding" for the full writeup — judgment call on
-  whether to finish this migration or pull both back to zach's own
-  rotation is filed to realisateur's inbox, not decided here. aedile's
-  rewrite is drafted (dedicated clone, always-push + `gh pr create`, no
-  more worktree-off-real-checkout) but not yet copied to svc-vaporwave's
-  crontab regardless of which way that call goes. Full handoff/
-  remaining-steps note:
-  `~/Documents/vkv/wavebucks/aedile/.claude/NEXT-STEPS.md` (local-only,
-  gitignored in that repo, not visible from here).
+- **RESOLVED 2026-07-24: svc-vaporwave crontab installed for both
+  aedile and vkv-inventory.** Root cause was real (see DESIGN-NOTES.md
+  2026-07-24 "silently-orphaned finding" for the full writeup) — a prior
+  session's "confirmed working" claim was wrong, and no crontab entry
+  had ever actually been installed for this account (`/var/log/syslog*`
+  full retention back to 2026-06-14 showed zero REPLACE/EDIT events for
+  svc-vaporwave's crontab, only LIST). Fixed this session: home-dir
+  access granted, then `0 3 * * * .../aedile-nightly-batch-loop.sh` and
+  `0 4 * * * .../vkv-inventory-nightly-batch-loop.sh` installed and
+  confirmed via `crontab -l`. Realisateur judged the right call was
+  finish-the-migration (not pull back to zach's own rotation) — this
+  closes that out. aedile's rewrite (dedicated clone, always-push +
+  `gh pr create`) was already drafted; worth confirming its first real
+  cron-driven cycle (not just today's manual check) in a day or two.
+  Full handoff note: `~/Documents/vkv/wavebucks/aedile/.claude/
+  NEXT-STEPS.md` (local-only, gitignored in that repo).
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
   `aedile-nightly/<date>` to `github-wavebucks` — nothing else in the

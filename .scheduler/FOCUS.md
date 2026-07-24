@@ -255,12 +255,22 @@ long-list items actually gated anything — the rest are real but don't
 block scheduler/realisateur's own weight-3 work, since neither touches
 svc-vaporwave):**
 1. Zach grants himself broader access to `svc-vaporwave`'s home
-   directory — human-only, crosses an account boundary, not
-   agent-executable. **Still open.**
+   directory — **DONE 2026-07-24** (`chmod 777`).
 2. Correct the stale "migrated"/"confirmed working" claims about
    aedile/vkv-inventory's svc-vaporwave crontab — **DONE this pass**
    (BLOCKERS.md's aedile section, `_paced.conf`'s aedile/vkv-inventory
-   comments).
+   comments, and the local `NEXT-STEPS.md` handoff note itself).
+3. **DONE 2026-07-24, added mid-pass:** svc-vaporwave's crontab was
+   never actually installed (confirmed via full-retention `syslog`
+   check — no REPLACE/EDIT event ever, only LIST). Installed for real
+   this session: `0 3 * * * .../aedile-nightly-batch-loop.sh` and
+   `0 4 * * * .../vkv-inventory-nightly-batch-loop.sh`, confirmed via
+   `crontab -l`. Worth a follow-up check in a day or two that the first
+   real cron-driven cycle (not today's manual verification) actually
+   ran clean.
+4. **Still open:** chezz/wtul GitHub deploy keys (see DESIGN-NOTES.md
+   2026-07-24 "chezz/wtul push-gap fix, decided") — human-only key
+   generation/installation, not yet done.
 
 **Roadmap — batch work under fresh Max quota + the priority buildout:**
 1. Let scheduler + realisateur (weight-3) run under the newly-`RUN`
