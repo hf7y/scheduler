@@ -670,6 +670,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-23 23:55 (via `scheduler -i`):** Unify a status/admission taxonomy across the ecosystem: 'active vs parked vs waiting' for vision/idea items is the SAME underlying need as the BLOCKERS.md blocking/waiting/fyi taxonomy (the parked 'Spec-out-a-more-principled-eco' idea). Proposal: one shared status vocabulary + convention that serves both vision-backlog items (FOCUS.md) and blockers (BLOCKERS.md), so counts reflect real commitments, not the free-growing reservoir. Surfaced by realisateur /ideate 2026-07-23 vision-debt strategy pass (see realisateur FOCUS.md) — this is the mechanism that makes milestone-gated parking legible in glance/status views. Realisateur owns the vision-item half; this -i note is for scheduler's convention/engine half.
+
 - **2026-07-23 12:50 (via `scheduler -i`):** eventually during high season, we'll need google calendar integration. a way to invite small teams to their meetings, input deadlines, etc
 
 - **2026-07-23 09:24 (via `scheduler -i`):** add a column in scheduler noargs view to show last run as well as next up. last run timestamp, next run timestamp. specific next up task text can be moved to projects individual status view to save space, though open jobs can stay.
