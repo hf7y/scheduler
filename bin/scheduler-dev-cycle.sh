@@ -103,7 +103,7 @@ Commit each finished change with a clear message. Then append a section for THIS
   CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
   if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then
     echo "WARNING: live crontab CHANGED during a paced cycle -- investigate"
-    notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG"
+    notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG" 2>/dev/null || true
   fi
 
   MERGED=0

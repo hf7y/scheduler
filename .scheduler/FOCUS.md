@@ -1001,17 +1001,18 @@ to build sooner.
   `.active` markers alongside its own. Purely additive observability,
   doesn't touch orchestration/timing on either account.
 
-- **2026-07-20 21:40 (via chat, queued for later):** `lib/sweep-loop-common.sh`'s
-  `notify-send` calls have no `2>/dev/null || true` guard (unlike aedile's
-  bespoke wrapper, which already has this) -- on a headless account with
-  no D-Bus/desktop session (confirmed on `svc-vaporwave` running
-  `vkv-inventory-nightly-batch-loop.sh`: `Error calling StartServiceByName
-  for org.freedesktop.Notifications: Timeout was reached`), each call
-  burns real wall-clock time waiting on a timeout instead of failing
-  fast. Not correctness-breaking (the run still completes), just wasted
-  time on every cron fire for any headless account sourcing this engine.
-  Fix: add the same `2>/dev/null || true` guard to every `notify-send`
-  call in the shared engine.
+- **DONE 2026-07-24 (paced cycle):** `lib/sweep-loop-common.sh`'s
+  `notify-send` calls (queued 2026-07-20, no `2>/dev/null || true` guard,
+  unlike aedile's bespoke wrapper) hung on a headless account with no
+  D-Bus/desktop session (confirmed on `svc-vaporwave`: `Error calling
+  StartServiceByName for org.freedesktop.Notifications: Timeout was
+  reached`) instead of failing fast. Guard added to all 3 calls in
+  `lib/sweep-loop-common.sh`, plus 3 more of the same unguarded shape
+  found in `bin/scheduler-dev-cycle.sh` and `bin/overnight-dev.sh` (this
+  repo's own self-hosting cycle scripts, same headless-notify-send risk).
+  Verified: `bash -n` on all three files, plus `env -u
+  DBUS_SESSION_BUS_ADDRESS -u DISPLAY notify-send ... 2>/dev/null || true`
+  returns immediately (exit 0) instead of hanging on the D-Bus timeout.
 
 - **2026-07-20 20:27 (via chat, queued for next nightly cycle):** propagate
   the "no long/multi-line copy-paste commands for the user" preference
