@@ -39,3 +39,25 @@ its line once you've actually read and dealt with it.
   reconcile (rebase this branch onto `main`, merge `main` in, or merge
   this branch's commits into `main` and rebuild this worktree from there)
   before either side's unique work is lost to a careless merge later.
+
+- **2026-07-24 (via /nightly-batch, paced cycle): gardien/senechal's
+  `AUTONOMY_TIER` left UNSET, real judgment call not guessed.** Declaring
+  `AUTONOMY_TIER` per project (FOCUS.md axis 1.5) for 12 of 14 registered
+  projects this cycle, using already-decided evidence (the FOCUS.md
+  "Target UX" mockup, or a project's own conf/FOCUS.md push-policy
+  language). gardien and senechal have neither: they're on the
+  self-spawned/local-bare-remote precedent (which elsewhere maps to
+  `high`), but their own `.claude/FOCUS.md`/conf comments talk only about
+  a *scope* gate (no unattended run may touch the real RAID mount / real
+  home directory yet) -- silent on push/merge autonomy specifically, and
+  that scope gate is the separate "irreversibility" axis the Vision
+  section says sits ABOVE tier, not a stand-in for it. Rather than assume
+  `high` from the bare-remote precedent alone, left both unset per the
+  instruction ("if a project's actual policy is unclear or contested,
+  leave AUTONOMY_TIER unset and flag it... rather than guessing"). Your
+  call: are gardien/senechal `high` (bare-remote containment already
+  covers it) or does the physical-effect nature of their eventual real
+  work (RAID writes, real home-directory scanning) argue for `medium`
+  instead, independent of the remote-credential question? Once answered,
+  the field can be added to `schedule/gardien.conf`/`schedule/senechal.conf`
+  in a follow-up cycle.

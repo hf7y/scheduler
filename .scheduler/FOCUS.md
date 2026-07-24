@@ -1429,6 +1429,27 @@ now need converging, in this order:
    contested, leave `AUTONOMY_TIER` unset and flag it as a QUESTIONS.md
    entry rather than guessing.
 
+   **DONE, ahead of the axis-1 migration this bundles into, 2026-07-24
+   (paced cycle):** declared `AUTONOMY_TIER` in 12 of 14 registered
+   projects' `schedule/*.conf` (unused by any code today, declare-only per
+   this item's own scope) — `chezz`/`vkv-inventory`/`crt`="medium",
+   `home-assistant`/`wtul`/`aedile`="low", `scheduler`/`realisateur`/
+   `groc-mangr`/`nine-speakers`/`sequestria`/`vim-arcade`="high" — read
+   straight off the already-decided FOCUS.md "Target UX" mockup (2026-07-20)
+   plus each project's own conf/FOCUS.md push-policy language (e.g.
+   aedile's conf explicitly states "REVIEW-GATED, never auto-push/
+   auto-merge" → low), not invented fresh. `gardien`/`senechal` left
+   UNSET and flagged to `.scheduler/QUESTIONS.md` — their own docs only
+   state a physical-effect *scope* gate (no unattended RAID/home-directory
+   access yet), silent on push/merge autonomy specifically, so guessing
+   `high` off the bare-remote precedent alone would be exactly the kind of
+   unilateral judgment call this item warns against. Verified: `bin/
+   sync-crontab.sh` preview output is byte-identical before/after (new
+   field is a `source`d no-op, confirmed by reading the loop in
+   `bin/sync-crontab.sh` — it only reads `PROJECT`/`SWEEP_*`/`BATCH_*`/
+   `REPO_URL`/`SCHEDULER_SUBDIR` by name), `bash -n` clean on every edited
+   conf.
+
 2. **Sweep pacing** — Tier 1 bug-sweeps (chezz, vkv-inventory) have been
    sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
    migration orphaned them. **Decision made 2026-07-20: fold sweeps into
