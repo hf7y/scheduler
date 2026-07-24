@@ -10,7 +10,7 @@ Done when:
 - [ ] Every registered project's dispatch env has working push credentials for its remote (or a loud, specific failure reason when it doesn't) — see the 2026-07-24 credential-gap backlog entry (chezz/wtul GitHub pushes silently no-op today).
 - [x] Stale `.active`-marker / stranded-run detection is built into `sweep` (queued 2026-07-20, built 2026-07-24 paced cycle) — `cmd_sweep` in `bin/scheduler` now scans `~/.local/share/scheduler-registry/*.active` and flags any marker whose PID is no longer running as stranded (its EXIT trap never fired — killed, crashed, or a reboot, most likely before any commit, which is why the git-based checks above can't see it), plus a softer "still running, unusually long" flag for a live PID past `STALE_ACTIVE_MARKER_SECONDS` (default 7200s). Verified with fabricated markers (a dead-PID one correctly flagged STALE, a live-PID/just-started one correctly silent) — `bash -n bin/scheduler` also clean.
 - [ ] Every registered project's `/nightly-batch` actually consumes its own `QUESTIONS.md` replies via `collect-feedback.sh --consume` (audit opened 2026-07-22; vkv-inventory still unconfirmed).
-- [ ] A `_paced.conf` line disabled with a "migrated to X" comment has its claimed destination verified to exist, not just assumed (root-caused 2026-07-24 from the aedile/vkv-inventory 4-day silent-orphan incident).
+- [x] A `_paced.conf` line disabled with a "migrated to X" comment has its claimed destination verified to exist, not just assumed (root-caused 2026-07-24 from the aedile/vkv-inventory 4-day silent-orphan incident; built 2026-07-24 paced cycle) -- `cmd_sweep` in `bin/scheduler` now scans every `schedule/*.conf` for a `MIGRATED to <host>` comment (aedile, vkv-inventory both claim `svc-vaporwave`) and re-checks it every sweep: SSH-unreachable from here reports UNVERIFIED (never silently treated as confirmed), reachable-but-no-matching-crontab-entry reports ORPHANED, reachable-and-found reports verified. Verified live against the real aedile/vkv-inventory case tonight -- `svc-vaporwave` correctly comes back UNVERIFIED (no SSH alias/network path from this environment), fails fast (~0.05s, no hang) rather than blocking the sweep. The reachable/ORPHANED and reachable/verified branches are simple two-line `crontab -l | grep` checks not independently live-tested (no local sshd to fabricate against), same honesty standard as the stale-marker pass's own fabricated-marker verification. `bash -n bin/scheduler` clean.
 Ideas beyond this bar are PARKED by default (see realisateur/STABILITY-MILESTONES.md).
 
 **Push policy (changed 2026-07-18, human-approved):** the nightly job MAY
@@ -327,20 +327,23 @@ smooth over the parts they don't yet follow.** Concretely, in order:
      7200s), for a hang rather than a crash. Verified with fabricated
      dead-PID and live-PID markers (correct STALE vs. silent output) and
      `bash -n bin/scheduler`.
-   - **NEXT UP: the same "verify a claimed migration destination, don't
-     just assume it" shape, found for real 2026-07-24** (see
-     DESIGN-NOTES.md "silently-orphaned finding"): `_paced.conf` disabled
-     aedile and vkv-inventory on the unverified assumption their
-     migration to svc-vaporwave's crontab had completed — it hadn't
-     (`crontab -l` came back empty), so both sat with zero dispatch for 4
-     days and nothing caught it. Generalize the sweep to also check: any
-     `_paced.conf` line disabled with a `# migrated to X` comment should
-     have its claimed destination (a crontab entry, another conf's
-     participant line, whatever X is) verified to actually exist —
-     flag drift the same way a stale `.active` marker gets flagged.
-     Scheduler's job here is only the mechanism check; what to DO about
-     a confirmed-orphaned participant (finish the migration vs. pull it
-     back) is realisateur's call, queued to its inbox separately.
+   - **DONE 2026-07-24 paced cycle: migration-destination verification.**
+     The same "verify a claimed migration destination, don't just assume
+     it" shape found for real 2026-07-24 (see DESIGN-NOTES.md
+     "silently-orphaned finding") — `_paced.conf` disabled aedile and
+     vkv-inventory on the unverified assumption their migration to
+     svc-vaporwave's crontab had completed, it hadn't, and both sat with
+     zero dispatch for 4 days undetected. `cmd_sweep` now has a fourth
+     pass: it scans every `schedule/*.conf` for a `MIGRATED to <host>`
+     comment and re-verifies it every sweep (SSH-unreachable → UNVERIFIED,
+     reachable-but-absent → ORPHANED, reachable-and-present → verified),
+     the same flag-drift treatment the stale `.active`-marker pass already
+     gets. Verified live against the real aedile/vkv-inventory case —
+     `svc-vaporwave` correctly comes back UNVERIFIED, fails fast (~0.05s),
+     no hang. Scheduler's job here is only the mechanism check; what to DO
+     about a confirmed-orphaned participant (finish the migration vs. pull
+     it back) stays realisateur's call, queued to its inbox separately —
+     unchanged by this.
    - **PARKED (human-directed 2026-07-20), explicitly NOT a live risk:**
      the `LATEST.md`-symlink fix from earlier today. Verified directly
      against `lib/sweep-loop-common.sh`: `collect-feedback.sh` reads

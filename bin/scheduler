@@ -579,6 +579,40 @@ cmd_sweep() {
     echo "no stale/stranded registry (.active) markers found"
   fi
 
+  # Fourth pass: verify claimed migration destinations. A project's own
+  # schedule/<proj>.conf sometimes documents itself as "MIGRATED to
+  # <host>'s own crontab" (aedile, vkv-inventory, both 2026-07-20) --
+  # exactly the claim that sat WRONG for 4 days undetected (the migration
+  # was never actually completed; see DESIGN-NOTES.md's "silently-orphaned
+  # finding", root-caused 2026-07-24). A stranded-commit sweep can't catch
+  # this class of drift at all -- there's no local git state to look at,
+  # the whole point is the job moved OUTSIDE this scheduler's view. This
+  # re-checks the claim every sweep instead of trusting it was ever true.
+  # Best-effort only: if the destination host isn't SSH-reachable from
+  # HERE (no alias, no network, no creds for that account), that's
+  # reported as unverifiable, never silently treated as confirmed --
+  # matches the honesty standard the stale-marker pass above already
+  # holds itself to.
+  local migration_found=0
+  for conf in "$SCHED_ROOT"/schedule/*.conf; do
+    [ -f "$conf" ] || continue
+    local proj dest
+    proj="$(basename "$conf" .conf)"
+    dest="$(grep -iom1 'MIGRATED to [A-Za-z0-9_-]*' "$conf" | awk '{print $NF}')"
+    [ -n "$dest" ] || continue
+    migration_found=1
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=4 "$dest" true 2>/dev/null; then
+      echo "== [migration-check] $proj: claims MIGRATED to '$dest' but that host isn't SSH-reachable from here (no alias/network/creds) -- can't verify the crontab claim from this environment; treat as UNVERIFIED, not confirmed =="
+    elif ssh -o BatchMode=yes -o ConnectTimeout=4 "$dest" crontab -l 2>/dev/null | grep -qi "$proj"; then
+      echo "== [migration-check] $proj: MIGRATED-to claim for '$dest' verified -- a matching crontab entry exists there =="
+    else
+      echo "== [migration-check] $proj: ORPHANED -- claims MIGRATED to '$dest' but no matching crontab entry found there. Needs a human/realisateur decision (finish the migration or re-enable it here) =="
+    fi
+  done
+  if [ "$migration_found" = "0" ]; then
+    echo "no schedule/*.conf claims a MIGRATED-to destination"
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."
