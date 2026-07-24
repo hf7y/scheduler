@@ -45,6 +45,10 @@ only ever sees its own section, never another project's.
   `sudo apt install -y libchromaprint-tools` needs an interactive sudo
   prompt no unattended run can supply.
   > Discogs token hopefully: user "localshow" : cHvFpfwlzgMgELLGiBqGkcaorBLehdunZEmwGaSE
+  > [reviewed in scheduler /ideate 2026-07-24: this is a committed+pushed
+  > credential (in git history), flagged against CLAUDE.md "no secret in a
+  > tracked file"; user judged the free low-value token acceptable to LEAVE.
+  > Rotation at discogs.com remains the only real un-leak if that ever changes.]
   > libchromaprint-tools installed = CLEARED
 
 ## crt

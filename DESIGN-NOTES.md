@@ -596,3 +596,34 @@ three siloed base accounts.
   for personal jobs. Open follow-up (QUESTIONS.md): verify svc-vaporwave's
   cron creds get refreshed by its own interactive use, or it can still
   lapse mid-week.
+
+## 2026-07-24 — /ideate pass #2: pruner ownership, intake policy, housekeeping
+
+Second interactive /ideate pass the same day. Decisions:
+
+- **Convergence pruner is realisateur's to build (not scheduler's).**
+  realisateur already owns cross-project triage, runs its own /ideate, and
+  edits `_paced.conf` weights, so it owns the two-part exit condition:
+  (a) a per-project stability-milestone convention, (b) default-PARK ideas
+  that land past the current milestone. Queued to its inbox via
+  `scheduler -i realisateur "..."` this pass. When (a)+(b) exist, drop
+  scheduler+realisateur weights back toward 1.
+- **Intake stays frictionless.** `scheduler -i` is unchanged; capturing
+  ideas at zero friction is worth keeping. ALL triage/parking happens
+  downstream in realisateur, not at intake. (Rejected: tagging at intake —
+  adds friction to the one habit that's working.)
+- **Leaked-credential call (BLOCKERS.md wtul section):** the Discogs token
+  there is committed + pushed (in git history), which violates CLAUDE.md's
+  "no secret in a tracked file." Surfaced; user judged the free, low-value
+  token acceptable to LEAVE. Documented as an accepted risk inline in
+  BLOCKERS.md so future passes don't re-flag it; rotation remains the only
+  real un-leak if that judgment ever changes. NOT removed.
+- **Fixed drift:** the ported `.claude/commands/ideate.md` still described
+  account-hopping in its orient step; updated to the 2026-07-24 stable
+  primary-Max model.
+
+**Vision-debt visibility (step 4.5):** still diverging. 17 intake commits
+(3 on 07-20, 11 on 07-22, 3 on 07-23); backlog ~42 markers; nothing drained
+this week (quota on HOLD every reading, primary not yet on Max). Expected
+to keep widening until Max lands AND realisateur's pruner exists — the
+former stops the bleed, only the latter converges it.
