@@ -627,3 +627,50 @@ Second interactive /ideate pass the same day. Decisions:
 this week (quota on HOLD every reading, primary not yet on Max). Expected
 to keep widening until Max lands AND realisateur's pruner exists — the
 former stops the bleed, only the latter converges it.
+
+## 2026-07-24 — /ideate pass #3: svc-vaporwave silently-orphaned finding, ownership split
+
+Live-checked the open svc-vaporwave OAuth question from pass #1's
+QUESTIONS.md entry (`sudo -u svc-vaporwave stat`/`crontab -l`, run by the
+user). Findings:
+- `.credentials.json` exists, last touched 2026-07-21 20:27 — not
+  obviously expired, but nothing has exercised it since (see next point).
+- **`crontab -l` returns "no crontab for svc-vaporwave" — literally
+  empty.** `schedule/_paced.conf` disables aedile and vkv-inventory with
+  `# migrated to svc-vaporwave's own crontab 2026-07-20` — that migration
+  was never actually completed. Both projects have had **zero unattended
+  dispatch for 4 days**, not "safely paused elsewhere." BLOCKERS.md's
+  vkv-inventory entry ("Recently resolved," tracker 403) is misleading in
+  the same way — the tracker fix is real, but the project hasn't run at
+  all since, migrated or not.
+
+**Ownership question this surfaced: who's responsible for catching a
+silently-orphaned participant like this?** Resolved by applying the
+division of labor already standing in this repo (`docs/priority-weight.md`,
+FOCUS.md's cross-project-blocking section — "scheduler stays mechanism,
+realisateur interprets vision/judgment"):
+- **Scheduler owns detecting it.** The actual bug is a mechanism gap:
+  `_paced.conf` disabled two participants on an unverified assumption
+  about an external destination (a crontab entry on another account) and
+  nothing ever checked that assumption held. This is the same shape of
+  risk as the stranded `.active`-marker detection already queued in
+  FOCUS.md's "Current focus" item 1 (NEXT UP) — a disabled-with-unverified-
+  external-dependency state deserves the same generalized sweep, just not
+  yet built to cover this case. Queued there as a mechanism to build:
+  periodically verify that any `_paced.conf` line disabled with a
+  "migrated to X" comment still has a real, live X.
+- **Realisateur owns the judgment call** once it's surfaced: finish the
+  svc-vaporwave migration (actually install the crontab) vs. pull both
+  projects back into zach's own `_paced.conf` rotation now that Max
+  removes the quota-pressure reason a second account existed for. Queued
+  to its inbox via `scheduler -i realisateur` this pass (dropped as a new
+  standalone `.idea` file, not a direct edit — realisateur's own cycle was
+  running at the time this was filed).
+- **The human owns the actual account-boundary action** — anything
+  touching svc-vaporwave's crontab, credentials, or home-directory
+  permissions is cross-account and hard-to-reverse-by-an-agent, so it
+  stays a human action under this repo's own autonomy-tier framing
+  (irreversible/external-boundary actions sit above any tier, always
+  human sign-off) — matches zach's own request this pass to grant himself
+  broader access to svc-vaporwave's home directory rather than have an
+  agent attempt it.

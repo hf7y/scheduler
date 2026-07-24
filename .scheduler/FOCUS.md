@@ -284,6 +284,19 @@ smooth over the parts they don't yet follow.** Concretely, in order:
      ever making a commit at all wouldn't show up in sweep, only in a
      stale `.active` marker. Natural fit for `sweep` itself once built
      (same 15-minute tick already exists), not a new mechanism.
+   - **Same shape, found for real 2026-07-24 (see DESIGN-NOTES.md
+     "silently-orphaned finding"): `_paced.conf` disabled aedile and
+     vkv-inventory on the unverified assumption their migration to
+     svc-vaporwave's crontab had completed — it hadn't (`crontab -l`
+     came back empty), so both sat with zero dispatch for 4 days and
+     nothing caught it.** Generalize the sweep to also check: any
+     `_paced.conf` line disabled with a `# migrated to X` comment should
+     have its claimed destination (a crontab entry, another conf's
+     participant line, whatever X is) verified to actually exist —
+     flag drift the same way a stale `.active` marker gets flagged.
+     Scheduler's job here is only the mechanism check; what to DO about
+     a confirmed-orphaned participant (finish the migration vs. pull it
+     back) is realisateur's call, queued to its inbox separately.
    - **PARKED (human-directed 2026-07-20), explicitly NOT a live risk:**
      the `LATEST.md`-symlink fix from earlier today. Verified directly
      against `lib/sweep-loop-common.sh`: `collect-feedback.sh` reads
