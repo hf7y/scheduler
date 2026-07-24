@@ -268,9 +268,17 @@ svc-vaporwave):**
    `crontab -l`. Worth a follow-up check in a day or two that the first
    real cron-driven cycle (not today's manual verification) actually
    ran clean.
-4. **Still open:** chezz/wtul GitHub deploy keys (see DESIGN-NOTES.md
-   2026-07-24 "chezz/wtul push-gap fix, decided") — human-only key
-   generation/installation, not yet done.
+4. **RETRACTED, not actually needed:** chezz/wtul already have working,
+   write-verified GitHub deploy keys (`github-chezz-deploy`/
+   `github-wtul-deploy` in `~/.ssh/config`) — the "credential gap"
+   diagnosis was wrong, caught and corrected same pass (zach: "don't
+   they have deploy?"). See DESIGN-NOTES.md 2026-07-24 for the
+   correction and what actually explains any stranded commits instead
+   (the already-documented spend-limit-cutoff pattern, not credentials).
+
+**Short list is now fully clear** — all 4 items resolved (1 done by
+zach, 2 corrected docs, 1 installed crontab, 1 retracted as a
+non-problem).
 
 **Roadmap — batch work under fresh Max quota + the priority buildout:**
 1. Let scheduler + realisateur (weight-3) run under the newly-`RUN`

@@ -44,18 +44,22 @@ only ever sees its own section, never another project's.
   `echo <new-token> | gh auth login --with-token`.
 
 ## chezz
-- **Needs a GitHub deploy key for the dispatch environment** (decided
-  2026-07-24, see DESIGN-NOTES.md — deploy keys chosen over agent
-  forwarding or a shared key). Until generated and installed, chezz's
-  nightly commits push locally-only against `git@github.com:hf7y/chezz.git`
-  and need a manual push. Steps queued in DESIGN-NOTES.md's 2026-07-24
-  "chezz/wtul push-gap fix" entry — human-only (key generation/
-  installation), not agent-executable.
+- **RETRACTED 2026-07-24: no deploy key needed — it already exists and
+  works.** The "credential gap" diagnosis this pass was wrong. Verified
+  directly: `~/.local/share/chezz-nightly-batch/repo`'s `origin` is
+  already `git@github-chezz-deploy:hf7y/chezz.git`, a real deploy-key
+  alias in `~/.ssh/config` (`IdentityFile ~/.ssh/chezz_deploy_key`) —
+  `ssh -T` authenticates and a real test push (throwaway branch, pushed
+  then deleted) succeeded with write access. See DESIGN-NOTES.md
+  2026-07-24 for the correction and what actually explains stranded
+  commits instead (most likely the already-documented account-wide
+  spend-limit-cutoff pattern from 2026-07-20, not a credential issue).
 
 ## wtul
-- **Needs a GitHub deploy key for the dispatch environment** — same fix
-  and same steps as chezz's entry above, separate dedicated key (not
-  shared). See DESIGN-NOTES.md 2026-07-24.
+- **RETRACTED 2026-07-24 — same correction as chezz's entry above.**
+  `~/.local/share/wtul-batch/repo`'s `origin` is already
+  `git@github-wtul-deploy:hf7y/wtul.git`; test push verified working
+  with write access. No deploy key needed.
 
 - **ROADMAP #2 (AcoustID/Discogs metadata fallback) — AcoustID done,
   Discogs still pending.** AcoustID key obtained and wired 2026-07-20

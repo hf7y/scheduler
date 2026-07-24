@@ -720,3 +720,29 @@ just these two — this was the credential gap's real blast radius (nobody
 noticed for however long until tonight's manual check), and the deploy
 keys don't prevent some future, different credential gap from being
 silent again.
+
+**RETRACTED, same pass (2026-07-24, caught by zach: "don't they have
+deploy?") — the credential-gap diagnosis above was wrong, verified
+directly instead of assumed.** `~/.local/share/chezz-nightly-batch/repo`
+and `~/.local/share/wtul-batch/repo` already have `origin` pointed at
+`git@github-chezz-deploy:hf7y/chezz.git` / `git@github-wtul-deploy:hf7y/
+wtul.git` — real deploy-key `Host` aliases already in `~/.ssh/config`
+(`chezz_deploy_key`/`wtul_deploy_key`, matching the [[scheduler-cron-ssh-auth]]
+pattern already used for crt/ha/vkv). `ssh -T` authenticated cleanly for
+both, and a real test push (throwaway branch, pushed then immediately
+deleted) confirmed actual write access for both. **No deploy key work is
+needed — retracting the "decided" plan above.** BLOCKERS.md's chezz/wtul
+sections corrected to match.
+
+What this means for the ORIGINAL symptom (chezz's `152e803`/wtul's
+stranded commits realisateur saw): the credential-gap explanation was
+never actually tested against the working keys before being routed here —
+the real, already-documented explanation is almost certainly the
+account-wide spend-limit-cutoff pattern from 2026-07-20 (see FOCUS.md
+"Avoid stranded state when a run gets cut off mid-way" — commits land,
+push doesn't happen because the run got cut off by quota exhaustion
+mid-cycle, not because credentials were missing). That gap's real fix is
+the visibility work already queued there (surface a stale/incomplete
+push in `scheduler status`/`sweep.log`), not new credentials. Flagging
+back to realisateur so its own memory of this incident gets corrected
+too, not just scheduler's.
