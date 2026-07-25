@@ -1581,6 +1581,7 @@ build_status_report() {
     grep -E '^=== (done|FAILED|skipped)' "$log" | tail -1
     grep '^pushed:' "$log" | tail -1
     grep '^WARNING: local commit made but NOT pushed' "$log" | tail -1
+    grep '^push reason:' "$log" | tail -1
   else
     echo "no log yet at $log"
   fi
