@@ -890,10 +890,18 @@ to build sooner.
   order** (see [[scheduler-usage-pacing]]-adjacent 13:59 backlog entry
   above for the fuller quota/ETA-aware target this is a stand-in for).
   Two related pieces scoped but deliberately NOT built this pass:
-  - **Tab-completion for `scheduler <project>`/subcommands** — a bash
-    `complete -F` function (or `bin/scheduler-completion.bash` to source)
-    reusing the existing `projects()` list in `bin/scheduler`. Purely
-    mechanical, no design work needed, just didn't fit this pass.
+  - **DONE 2026-07-24 (paced cycle): tab-completion for `scheduler
+    <project>`/subcommands.** `bin/scheduler-completion.bash` — a
+    `complete -F` function completing the subcommand list on word 1, and
+    project names (re-globbing `schedule/*.conf` the same way `bin/
+    scheduler`'s own `projects()` does, so it can't drift) on word 2 for
+    every subcommand that takes a project arg. Not auto-sourced anywhere
+    (this repo doesn't touch shell rc files) — README now documents the
+    one `source` line to add. Verified by sourcing it and driving
+    `_scheduler_completion` directly against fabricated `COMP_WORDS`/
+    `COMP_CWORD` (word-1 prefix `foc` → `focus`; word-2 after `focus` →
+    full project list; word-2 after `-q` with prefix `cr` → `crt`);
+    `bash -n bin/scheduler-completion.bash` clean.
   - **`scheduler <project>` direct shorthand** — one truncated view
     combining that project's focus/questions/blockers with "expand"
     hints, instead of requiring `-f`/`-q`/`-r`/`status` separately. A
