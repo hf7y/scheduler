@@ -903,6 +903,23 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-25 17:11 (human-directed session):** `scheduler -b --claude`'s
+  "press Enter to open BLOCKERS.md" pause is **invisible** — bash's
+  `read -p` writes its prompt to **stderr**, and `bin/scheduler:1896`
+  redirects it away (`read -rp "press Enter..." _ 2>/dev/null || true`).
+  Diagnosed live 2026-07-25: after the tidy pass's digest + commit line,
+  the script sat waiting on a prompt the user couldn't see; it looked
+  like the command had exited without opening vim (arrow keys echoed
+  literally as `^[[A^[[B`, confirming a bare `read` was consuming input,
+  not the shell). Ctrl-C there is the by-design "stop at the digest"
+  path, so the mechanism works — only the prompt text is swallowed. Fix:
+  print the prompt explicitly on stdout (`printf 'press Enter to open
+  BLOCKERS.md (Ctrl-C to stop at the digest) '`) then a plain
+  `read -r _ 2>/dev/null || true` — keeps the non-tty guard the
+  redirect was there for while making the pause visible. Witness: next
+  interactive `scheduler -b --claude` run visibly shows the pause prompt
+  after the digest.
+
 - **2026-07-25 17:06 (human-directed session):** Make the usage-gate
   **ceiling settable from a config file**, not only env. Today the 0.85
   cap lives solely in `bin/usage-gate.sh:41`
