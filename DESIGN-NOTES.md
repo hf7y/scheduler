@@ -1243,3 +1243,18 @@ highest-weight participant in `_paced.conf`, so getting that coupling
 wrong would be a real throughput cost, not a cosmetic one). Visible and
 traceable to "waiting on live dexter verification" via the comment left
 in place, not a silent gap.
+
+## 2026-07-24 (same session, fifth follow-up): crt live-verified from dexter, enabled
+
+Closes out QUESTIONS.md item #1 for real. From dexter itself:
+`git ls-remote ssh://mandark-lan/home/zach/git-remotes/crt.git` returned
+real refs (`HEAD`/`refs/heads/main`), and the SSH host key fingerprint
+(`SHA256:L8eHLUaeERW+6p428gZ+V6LjoHqUAlYvuTgEXQyD3Eg`) was cross-checked
+against mandark's actual `/etc/ssh/ssh_host_ed25519_key.pub` and matches --
+not just "something answered on port 22," confirmed to actually be
+mandark. `crt` flipped to `enabled=1` in `schedule/_paced.dexter.conf`.
+
+crt now runs on exactly one host (dexter), reachable over the restricted
+git-shell-only key, source never leaving the LAN. The interim "runs on
+neither host" gap noted in the previous entry is closed as of this
+commit.
