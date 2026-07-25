@@ -1661,13 +1661,24 @@ to build sooner.
   ?scope=sweep-status` returns HTML when stale, JSON when fresh (see that
   repo's `tools/deploy.sh`). Opt-in, so projects with no deploy step are
   unaffected and the report stays byte-identical for them.
-- **Right-size per-tier model choice** (see Cost insight above) — audit each
-  registered project's `schedule/*.conf` `<TIER>_MODEL` fields; identify
-  which nightly/batch tiers are running Opus (or Opus-priced reasoning) for
-  work that's mechanical enough for Sonnet, and propose the downgrade
-  per-project (don't silently change other repos' confs from here — flag it,
-  same as other cross-project proposals). Opus is ~5x Sonnet per token, so
-  this is likely the single cheapest lever for slimming automation cost.
+- **Right-size per-tier model choice — AUDITED 2026-07-25 (paced cycle),
+  no downgrade needed anywhere.** Checked every `<TIER>_MODEL`-shaped
+  field across all real config, not just this repo's: `grep -i model`
+  over every `schedule/*.conf` here (only comment-text false positives,
+  e.g. aedile's "safety model" prose, no project actually sets any
+  `*_MODEL` field), plus every live installed `~/.local/bin/*-loop.sh`
+  wrapper (reading outside this repo is fine, same rule used elsewhere in
+  this file) — only `chezz-bug-sweep-loop.sh` sets `MODEL` at all, and
+  it's already `claude-sonnet-5` (its own comment: "runs the mechanical
+  triage/fix on Sonnet instead of the CLI default"). Confirmed from
+  `lib/sweep-loop-common.sh`'s own header + dispatch line (`${MODEL:+
+  --model "$MODEL"}`) that an unset `MODEL` means no `--model` flag at
+  all, i.e. every other project's nightly/batch/sweep tier already runs
+  on the plain CLI default, never Opus. So there is no live Opus-on-
+  mechanical-work cost to fix — this item's premise (find Opus tiers,
+  propose Sonnet) doesn't apply to anything actually configured today.
+  Revisit only if a project's conf or wrapper is ever changed to set
+  `*_MODEL=claude-opus-*` for routine work.
 
 - **DONE 2026-07-19: inline `%%TAG` feedback in reports.** The human
   reviews a report/tracker file directly in vim (mappings in `~/.vimrc`,
