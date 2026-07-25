@@ -781,20 +781,41 @@ to build sooner.
 
 ## Watch and report tonight
 
-- **Per-project pre-commit hook cost.** Unattended sweep/batch jobs commit
-  *per item*, so each commit pays that project's pre-commit hook. chezz's
-  hook runs the full Playwright suite (>2 min) — observed 2026-07-18 stalling
-  a commit past a 2-min tool timeout. Across several commits that silently
-  eats the turn/time budget and can leave a commit half-made on a timeout.
-  Scheduler is the right place to be aware of this (it owns the budget and
-  the optimal-usage work). Tonight: don't fix it, just **surface it** — note
-  in the report which registered projects have a heavy pre-commit hook and
-  roughly how long, and propose the cheapest awareness mechanism (e.g. the
-  engine timing each `git commit` into the state dir so `morning-report.sh`
-  can sum per-project commit overhead, and/or a conf note per project). A
-  natural sibling to the `USAGE_GATE_CMD`/token-logging idea already in the
-  backlog. Do not touch other projects' hooks or `--no-verify` their commits
-  from here — that's each project's own call.
+- **Per-project pre-commit hook cost — SURVEYED 2026-07-24 (paced cycle),
+  original ask now answered.** This item was flagged in an earlier
+  2026-07-24 cycle's report as an open judgment call ("is this still
+  live, or superseded?") but never actually got a `.scheduler/QUESTIONS.md`
+  entry — the same "flagged in a report, not in the durable inbox" gap
+  this file elsewhere warns against. Closing that gap here with a direct,
+  read-only survey instead: checked every registered project's
+  `git config core.hooksPath` (native `.git/hooks/pre-commit` is
+  irrelevant — nothing here uses it; `chezz` sets `core.hooksPath=.githooks`,
+  same convention `docs/feedback-tags.md` documents). **Result: of all 14
+  registered projects (`aedile`, `chezz`, `crt`, `gardien`, `groc-mangr`,
+  `home-assistant`, `nine-speakers`, `realisateur`, `scheduler`,
+  `senechal`, `sequestria`, `vim-arcade`, `vkv-inventory`, `wtul`), only
+  `chezz` has an actual hook.** Read it directly
+  (`chezz/.githooks/pre-commit`, reading outside this repo is fine, same
+  rule used elsewhere in this file) — it already carries the exact
+  mitigation this backlog item was asking for, dated **2026-07-20** (two
+  days after this item's original 2026-07-18 writeup — the fix landed
+  before today's flag-it-again cycle, which apparently missed it):
+  `check-syntax`/`check-size` run
+  every commit, but the full Playwright suite (3+ min) only runs when a
+  staged file falls outside `.claude/`, `README.md`, `DESIGN-NOTES.md`,
+  `.githooks/`, `.gitignore` — added specifically because "a docs-only
+  commit paid the full 3.4min cost for zero reason" (the hook's own
+  comment). So the generalized awareness mechanism this item proposed
+  (engine-side commit timing in the state dir) would be built for a
+  problem that currently has exactly one instance, and that instance
+  already self-mitigated its worst case. **Downgraded, not struck**:
+  residual risk is real but narrower than originally scoped — a run that
+  makes several *non-docs* chezz commits in one cycle still pays 3+ min
+  per commit and could still stall past a tool timeout. Worth revisiting
+  the generalized timing mechanism only if (a) chezz's hook regresses,
+  (b) another project adds a heavy hook, or (c) that narrower multi-commit
+  case is actually observed. Not worth building speculatively for a
+  single, already-mitigated case today.
 
 ## Backlog (the intake — add a line to propose an idea)
 
