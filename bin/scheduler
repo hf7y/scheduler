@@ -1174,6 +1174,35 @@ cmd_glance() {
     echo "-> stranded local commits in a dedicated clone (push likely failed silently): ${unpushed_list%, }"
     echo "   run 'scheduler sweep' for detail, or push by hand from that clone"
   fi
+  # Branches beyond main sitting on a dedicated clone (e.g. a finished
+  # nightly/<date> or paced/<date> cycle that never got merged) -- the
+  # same signal cmd_sweep's third pass already finds, but that requires
+  # remembering to run `sweep` separately; surfaced here too so it shows
+  # up in the view actually opened daily (target UX, FOCUS.md "Current
+  # focus" item 3(c) -- same reasoning already applied to the stranded
+  # local commits block right above).
+  local any_extra_branch=0
+  local extra_branch_list=""
+  local b ahead
+  while IFS=$'\t' read -r b ahead; do
+    [ -n "$b" ] || continue
+    any_extra_branch=1
+    extra_branch_list="$extra_branch_list  scheduler        $b  $ahead commit(s), not merged\n"
+  done < <(extra_branches_detail "$SCHED_ROOT")
+  for repo in "$HOME"/.local/share/*/repo; do
+    [ -d "$repo/.git" ] || continue
+    job="$(basename "$(dirname "$repo")")"
+    while IFS=$'\t' read -r b ahead; do
+      [ -n "$b" ] || continue
+      any_extra_branch=1
+      extra_branch_list="$extra_branch_list  $job  $b  $ahead commit(s), not merged\n"
+    done < <(extra_branches_detail "$repo")
+  done
+  if [ "$any_extra_branch" = "1" ]; then
+    echo "-> branches awaiting review:"
+    printf '%b' "$extra_branch_list"
+    echo "   run 'scheduler sweep' for full detail, or 'git log <default>..<branch>' / merge by hand"
+  fi
   echo "-> scheduler focus/questions/report <project> to jump straight in"
 }
 
@@ -1218,6 +1247,48 @@ extra_branches() {
     | sed 's#^origin/##' \
     | sort -u \
     | grep -vx -e "$default" -e "HEAD" -e "origin" -e "main" -e "master" || true
+}
+
+# extra_branches_detail <repo> -- like extra_branches, but each line is
+# "<branch>\t<ahead-count>" (commits ahead of that repo's own default
+# branch) instead of a bare name. Built for cmd_glance's footer, which
+# needs the count to be worth surfacing in the view you actually open
+# daily (target UX in FOCUS.md's "Current focus" item 3(c): "branches
+# awaiting review" in the glance screen, not just in a separate `sweep`
+# run) -- a branch with 0 commits ahead (e.g. a stale feature branch
+# already merged and left around) isn't actually awaiting review, so it's
+# filtered out here rather than just reusing extra_branches' bare list.
+extra_branches_detail() {
+  local repo="$1"
+  [ -e "$repo/.git" ] || return 0
+  local default
+  default="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
+  default="${default#origin/}"
+  [ -n "$default" ] || default="main"
+  local b ref ahead
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    # extra_branches strips the "origin/" prefix for display, so a
+    # branch that exists ONLY on origin (no local tracking branch --
+    # e.g. chezz's dedicated clone has origin/readable-html but never
+    # checked it out locally) has no ref resolvable under its bare
+    # short name. Resolve against the local branch if it exists, else
+    # fall back to origin/<name> -- a bare `rev-list default..$b` on a
+    # name that doesn't resolve just fails silently and would have
+    # under-counted this as 0-ahead (found live: chezz's readable-html/
+    # chezz-classic went missing from the list until this fallback was
+    # added).
+    if git -C "$repo" show-ref --verify --quiet "refs/heads/$b"; then
+      ref="$b"
+    elif git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$b"; then
+      ref="origin/$b"
+    else
+      continue
+    fi
+    ahead="$(git -C "$repo" rev-list --count "$default..$ref" 2>/dev/null)"
+    [ -n "$ahead" ] && [ "$ahead" -gt 0 ] 2>/dev/null || continue
+    printf '%s\t%s\n' "$b" "$ahead"
+  done < <(extra_branches "$repo")
 }
 
 cmd_sweep() {
