@@ -76,7 +76,7 @@ batch_slot_time() {
 # each project's BATCH_* config stays intact, so deleting _runner.conf restores
 # the old fixed-time behaviour on the next sync. SWEEP (bug-sweep) tiers are
 # never suppressed.
-RUNNER_JOB=""; RUNNER_CMD=""; RUNNER_CRON=""; PACED_SUPPRESS_BATCH=0
+RUNNER_JOB=""; RUNNER_CMD=""; RUNNER_CRON=""; RUNNER_ENV=""; PACED_SUPPRESS_BATCH=0
 if [ -f "$SCHEDULE_DIR/_runner.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_runner.conf"
@@ -303,7 +303,12 @@ if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
     echo "ERROR [runner]: RUNNER_CRON='$RUNNER_CRON' isn't a valid 5-field cron expression -- runner tick omitted" >&2
     ERRORS=$((ERRORS + 1))
   else
-    MANAGED_LINES+=("$RUNNER_CRON $RUNNER_CMD # scheduler:$RUNNER_JOB:RUNNER (usage-paced dispatch)")
+    # RUNNER_ENV is optional -- "VAR=val VAR2=val2" prepended verbatim
+    # before the command (cron lines run through /bin/sh -c, so plain
+    # leading assignments work same as on any shell command line). Lets
+    # schedule/_runner.conf tune runner behavior (e.g. PACED_MAX_PER_TICK)
+    # without touching RUNNER_CMD itself. See `scheduler pacing`.
+    MANAGED_LINES+=("$RUNNER_CRON ${RUNNER_ENV:+$RUNNER_ENV }$RUNNER_CMD # scheduler:$RUNNER_JOB:RUNNER (usage-paced dispatch)")
   fi
 fi
 

@@ -142,6 +142,20 @@ usage: scheduler [command] [project]
                          command only edits + flags, never silently).
   paced, -p              open schedule/_paced.conf directly (enable/disable
                          participants, reorder round-robin tie-breaks)
+  pacing [show]          usage-paced-runner.sh's tick interval + max
+                         dispatches/tick, the live usage-gate.sh verdict, and
+                         a drift check between repo bin/*.sh and their
+                         deployed ~/.local/bin copies (defaults to `show`)
+  pacing tick '<cron>'  set schedule/_runner.conf's RUNNER_CRON (how often
+                         the dispatcher ticks), re-sync + apply the real
+                         crontab, and commit
+  pacing max <n>         set PACED_MAX_PER_TICK (dispatches allowed per tick
+                         before yielding back to cron even if usage-gate.sh
+                         still says RUN), re-sync + apply, and commit
+  pacing deploy [script] copy drifted repo bin/*.sh over their stale
+                         ~/.local/bin/ counterpart (all drifted scripts if
+                         no name given) -- the manual step `pacing show`'s
+                         DRIFT lines are telling you to take
   idea <project> "text", -i
                          drop a new idea/feature-request for a project
                          without opening an editor. realisateur gets a new
@@ -323,6 +337,136 @@ cmd_idea() {
     echo "appended new section to: $focus_path"
   fi
   cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\`: $(basename "$focus_path")"
+}
+
+RUNNER_CONF="$SCHED_ROOT/schedule/_runner.conf"
+
+runner_conf_field() {
+  local field="$1"
+  [ -f "$RUNNER_CONF" ] || return 1
+  grep -E "^${field}=" "$RUNNER_CONF" | tail -1 | cut -d= -f2- | tr -d '"'
+}
+
+# deployable_scripts -- every repo bin/ file that also exists as a REAL
+# (non-symlinked) file at the same basename under ~/.local/bin. Those are
+# the ones that can drift: a manual `cp` deploy step, not the live
+# symlink `scheduler` itself uses. Shared by `pacing`'s drift report and
+# its `deploy` action so there's one definition of "in scope".
+deployable_scripts() {
+  local f b dep
+  for f in "$SCHED_ROOT"/bin/*.sh "$SCHED_ROOT/bin/scheduler"; do
+    b="$(basename "$f")"
+    dep="$HOME/.local/bin/$b"
+    [ -e "$dep" ] || continue
+    [ -L "$dep" ] && continue
+    echo "$b"
+  done
+}
+
+cmd_pacing_show() {
+  local cron env max
+  cron="$(runner_conf_field RUNNER_CRON)"
+  env="$(runner_conf_field RUNNER_ENV)"
+  max="$(printf '%s\n' "$env" | grep -oE 'PACED_MAX_PER_TICK=[0-9]+' | cut -d= -f2)"
+  [ -n "$max" ] || max="8 (default -- not overridden in RUNNER_ENV)"
+  echo "scheduler pacing -- usage-paced-runner.sh dispatch cadence"
+  echo
+  echo "  tick interval:       ${cron:-<unset -- no _runner.conf tick installed>}"
+  echo "  max dispatches/tick: $max"
+  echo
+  echo "live gate (usage-gate.sh, account-wide):"
+  if [ -x "$HOME/.local/bin/usage-gate.sh" ]; then
+    "$HOME/.local/bin/usage-gate.sh" 2>&1 | sed 's/^/  /'
+  else
+    echo "  (no ~/.local/bin/usage-gate.sh -- not deployed)"
+  fi
+  echo
+  echo "deployed-copy drift (repo bin/ vs ~/.local/bin/, real files only):"
+  local b any=0
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    any=1
+    if diff -q "$SCHED_ROOT/bin/$b" "$HOME/.local/bin/$b" >/dev/null 2>&1; then
+      echo "  OK    $b"
+    else
+      echo "  DRIFT $b   (repo has changes not deployed -- \`scheduler pacing deploy $b\`)"
+    fi
+  done < <(deployable_scripts)
+  [ "$any" = 1 ] || echo "  (nothing deployable found)"
+}
+
+cmd_pacing_tick() {
+  local newcron="$*"
+  [ -n "$newcron" ] || { echo "usage: scheduler pacing tick '<cron-expr>'" >&2; exit 1; }
+  local nf; nf="$(awk '{print NF}' <<<"$newcron")"
+  [ "$nf" -eq 5 ] || { echo "scheduler: cron expr needs exactly 5 fields, got: $newcron" >&2; exit 1; }
+  [ -f "$RUNNER_CONF" ] || { echo "scheduler: no $RUNNER_CONF -- pacing isn't set up" >&2; exit 1; }
+  local old; old="$(runner_conf_field RUNNER_CRON)"
+  if [ "$old" = "$newcron" ]; then
+    echo "RUNNER_CRON already $newcron -- nothing to change"
+    return 0
+  fi
+  sed -i "s|^RUNNER_CRON=.*|RUNNER_CRON=\"$newcron\"|" "$RUNNER_CONF"
+  echo "RUNNER_CRON: ${old:-<unset>} -> $newcron"
+  "$SCHED_ROOT/bin/sync-crontab.sh" --apply
+  cmd_commit_file "$RUNNER_CONF" "scheduler pacing: tick interval ${old:-<unset>} -> $newcron"
+}
+
+cmd_pacing_max() {
+  local n="${1:-}"
+  [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] || { echo "usage: scheduler pacing max <positive integer>" >&2; exit 1; }
+  [ -f "$RUNNER_CONF" ] || { echo "scheduler: no $RUNNER_CONF -- pacing isn't set up" >&2; exit 1; }
+  local old_env old_max
+  old_env="$(runner_conf_field RUNNER_ENV)"
+  old_max="$(printf '%s\n' "$old_env" | grep -oE 'PACED_MAX_PER_TICK=[0-9]+' | cut -d= -f2)"
+  [ -n "$old_max" ] || old_max="8 (default)"
+  if [ "$old_max" = "$n" ]; then
+    echo "PACED_MAX_PER_TICK already $n -- nothing to change"
+    return 0
+  fi
+  if grep -q '^RUNNER_ENV=' "$RUNNER_CONF"; then
+    sed -i "s|^RUNNER_ENV=.*|RUNNER_ENV=\"PACED_MAX_PER_TICK=$n\"|" "$RUNNER_CONF"
+  else
+    sed -i "/^RUNNER_CRON=/a RUNNER_ENV=\"PACED_MAX_PER_TICK=$n\"" "$RUNNER_CONF"
+  fi
+  echo "PACED_MAX_PER_TICK: $old_max -> $n"
+  "$SCHED_ROOT/bin/sync-crontab.sh" --apply
+  cmd_commit_file "$RUNNER_CONF" "scheduler pacing: max dispatches/tick $old_max -> $n"
+}
+
+cmd_pacing_deploy() {
+  local target="${1:-}" b any=0
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    [ -n "$target" ] && [ "$b" != "$target" ] && continue
+    if diff -q "$SCHED_ROOT/bin/$b" "$HOME/.local/bin/$b" >/dev/null 2>&1; then
+      continue
+    fi
+    cp "$SCHED_ROOT/bin/$b" "$HOME/.local/bin/$b"
+    chmod +x "$HOME/.local/bin/$b"
+    echo "deployed $b -> $HOME/.local/bin/$b"
+    any=1
+  done < <(deployable_scripts)
+  if [ "$any" = 0 ]; then
+    if [ -n "$target" ]; then
+      echo "scheduler: '$target' not drifted (or not a deployable script) -- nothing done"
+    else
+      echo "nothing to deploy -- all installed copies already match repo"
+    fi
+  fi
+}
+
+cmd_pacing() {
+  case "${1:-}" in
+    ""|show) cmd_pacing_show ;;
+    tick) shift; cmd_pacing_tick "$@" ;;
+    max) cmd_pacing_max "${2:-}" ;;
+    deploy) cmd_pacing_deploy "${2:-}" ;;
+    *)
+      echo "usage: scheduler pacing [show|tick '<cron-expr>'|max <n>|deploy [script]]" >&2
+      exit 1
+      ;;
+  esac
 }
 
 cmd_commit_file() {
@@ -1195,6 +1339,7 @@ case "${1:-}" in
     ;;
   weight) cmd_weight "${2:-}" "${3:-}" ;;
   paced|-p) open_file "$PACED_CONF" ;;
+  pacing) shift; cmd_pacing "$@" ;;
   _commit-file)
     # Internal, not a documented user-facing verb (leading underscore
     # matches the schedule/_*.conf "meta, not a project" convention) --
