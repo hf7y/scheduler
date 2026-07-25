@@ -2017,18 +2017,47 @@ now need converging, in this order:
    `REPO_URL`/`SCHEDULER_SUBDIR` by name), `bash -n` clean on every edited
    conf.
 
-2. **Sweep pacing** — Tier 1 bug-sweeps (chezz, vkv-inventory) have been
-   sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
+2. **Sweep pacing — chezz DONE 2026-07-25 (paced cycle); vkv-inventory
+   deliberately deferred.** Tier 1 bug-sweeps (chezz, vkv-inventory) had
+   been sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
    migration orphaned them. **Decision made 2026-07-20: fold sweeps into
    the main `_paced.conf` rotation** as ordinary participants alongside
    the Tier 2 batches (not a separate faster rotation) — accept the
    cadence drop (once per full rotation lap instead of every ~15min) as
-   the tradeoff for one dispatcher instead of two. **Next unattended
-   cycle: add chezz's and vkv-inventory's bug-sweep wrappers to
-   `schedule/_paced.conf`, un-pause `SWEEP_JOB_NAME` in their confs**
-   (pointing at the paced runner path, not a fixed cron), verify with a
-   `sync-crontab.sh` preview that the fixed sweep cron lines are now
-   suppressed the same way batch lines already are for paced participants.
+   the tradeoff for one dispatcher instead of two.
+
+   **Real gap found while implementing this, fixed first:**
+   `bin/sync-crontab.sh` only suppressed a paced participant's fixed cron
+   line for the BATCH tier (`is_paced "$PROJECT"` check), never for SWEEP
+   — so literally following this item's own instructions (restore
+   `SWEEP_JOB_NAME`/`SWEEP_CRON`, add the wrapper to `_paced.conf`) would
+   have double-dispatched chezz's bug-sweep: once on a real fixed cron
+   line, once from the paced rotation. Added the same `is_paced` check to
+   the SWEEP tier, mirroring BATCH exactly. Verified as a true no-op today
+   (byte-identical `sync-crontab.sh` stdout/stderr before/after, since no
+   project currently trips the new branch) before relying on it.
+
+   **Then, with that fixed:** added `chezz-sweep` as a new participant in
+   `schedule/_paced.conf` (`chezz-bug-sweep-loop.sh`, enabled, weight 1 —
+   a distinct line from the existing `chezz` BATCH participant, same
+   project) and un-paused `SWEEP_JOB_NAME="chezz-bug-sweep"`/
+   `SWEEP_SCRIPT=".../chezz-bug-sweep-loop.sh"` in `schedule/chezz.conf`
+   (no `SWEEP_CRON` — that's what tells `sync-crontab.sh` to suppress the
+   fixed-cron line now that `is_paced("chezz")` is true). Verified: `bash
+   -n` clean on `sync-crontab.sh`/`scheduler`/`usage-paced-runner.sh`; a
+   `sync-crontab.sh` preview now prints `note [chezz/SWEEP]: paced
+   participant -- fixed cron suppressed` and its stdout (the actual
+   generated crontab) stays byte-identical to before this whole change
+   (the sweep was never in the fixed crontab and still isn't — it's
+   dispatched by the paced runner instead); `scheduler status chezz`,
+   `scheduler` (glance), and `scheduler sweep` all ran clean end to end
+   with the new `chezz-sweep` line present, no confusion between it and
+   the registered `chezz` project. **`vkv-inventory`'s bug-sweep is NOT
+   folded in** — `vkv-inventory` itself is still `enabled=0` in
+   `_paced.conf` pending the separate, already-flagged svc-vaporwave
+   migration judgment call; adding its sweep to the rotation while the
+   project itself is paused would just be more surface on something
+   already blocked. Revisit once that call is made.
 
 3. **File layout — `SCHEDULER_SUBDIR=".scheduler"` propagation.** Was
    blocked on the permission-gate investigation above; that's now
