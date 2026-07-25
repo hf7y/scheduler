@@ -1084,6 +1084,26 @@ to build sooner.
   just what the next run reads first; paced projects run whenever
   usage-gate.sh has spare quota, not on a fixed clock.)
  move all this text to a man page, reduce to a single line summary above the column headers. formatting should leave blank spaces so asterisks don't nudge fractions over. try to get all the / to line up in a column if that's easy. same for next up. aim to have the / line up and the : line up, pad with whitespace if necessay
+  **DONE 2026-07-25 (paced cycle), all three asks:** (1) the 13-line
+  in-glance explanation block collapsed to one legend line above the
+  column headers, full text moved to a real maintained man page —
+  `docs/scheduler-cli.md`, opened by a new `scheduler man` (`-m`)
+  subcommand (this also starts the "man page for scheduler" half of the
+  13:59 entry below; the terse command list deliberately stays ONLY in
+  `scheduler --help` so the two can't drift). (2) QUESTIONS/BLOCKERS
+  now render with a reserved 1-char `*` slot + right-aligned numerator,
+  so a star never nudges the fraction and every `/` lands in the same
+  column. (3) NEXT UP's total is right-aligned (`1/ 7:` vs `1/28:`) so
+  the `/` and `:` both line up. The man page also documents the `*`
+  convention plainly (the 19:56 entry's ask — its `+1✓` complaint
+  refers to notation that no longer exists in the current script, and
+  the proposed `?` marker is still not built, deliberately not
+  documented as if it were). Verified live: before/after runs of
+  `scheduler` (real data), a scratch-`$HOME` run to force starred rows
+  (slash column holds), `PAGER=cat scheduler man` renders the doc, a
+  copy run from a docs-less directory fails loud with a clear error
+  (the deployed-symlink fallback path), `scheduler notaproject` still
+  errors, `bash -n` clean.
 
 - **2026-07-22 15:44 (via `scheduler -i`):** separate vaporwave and zach jobs which are running on different accounts visually since they have different quotas. print current quota information at the top of each section for context as well as an estimate for when the next job would run based on current quota info. non-ai call. generally scheduler bin interaction should be non-ai unless explicitly requested via flag
 
@@ -1207,6 +1227,11 @@ to build sooner.
 - **2026-07-22 14:02 (via `scheduler -i`):** revisit integration with realisateur. realisateur should not promote ideas to scheduler until out of an incubation period. this prevents the scheduler status from getting crowded with nacent ideas. potential automated flag whereby scheduler suggests projects migrate to realisateur if they're underdeveloped (few files, nothing pending). eventual symmetrical structure to move projects to archive once out of development
 
 - **2026-07-22 13:59 (via `scheduler -i`):** streamline the cli flow. scheduler no args should produce what's scheduled, in order of priority, with information about next run, time/cost etc. scheduler <project> should tab-complete. should show more detail about project including next tasks/requests in order of priority. flag design can remain for backwards compatibility. focus questions blockers should all be called out in the project view (truncated with suggested command to expand if too many lines). should have an easy way to promote a project's urgency in both the main scheduler view and it's individual project. start developing and maintaining a man page for scheduler that explains its use.
+  **Man-page half DONE 2026-07-25 (paced cycle):** `docs/scheduler-cli.md`
+  + `scheduler man` (`-m`) — see the 15:48 entry's DONE note above for
+  scope + verification. The rest of this entry (priority-ordered rows
+  landed 2026-07-22; ETA/next-run/cost columns, urgency promotion) stays
+  open as already tracked elsewhere in this backlog.
 
 - **2026-07-22 (Zach, via chat): `bin/scheduler` no-args glance should be
   priority-ordered, not registration-ordered.** Top row = whatever's next
@@ -1384,6 +1409,12 @@ to build sooner.
   that can drift.
 
 - **2026-07-20 19:56 (via `scheduler -i`):** the convention for scheduler on open questions/blockers: use * to indicate new items that haven't been touched by Zach. open blockers that zach has seen are counted but have no freshness flag. ? indicates that the file has been edited and the sweeper hasn't run yet (maybe blockers and questions have been addressed that aren't accounted for. running sweep should clear the questionmarks). The current check off notation is opaque and undocumented +1✓ is unclear to me.
+  **Documentation half DONE 2026-07-25 (paced cycle):** the `*`
+  convention is now documented in `docs/scheduler-cli.md` (`scheduler
+  man`); the `+1✓` notation complained about here no longer exists in
+  the current `bin/scheduler` (predates a rewrite — grep-confirmed).
+  The proposed `?`-means-edited-but-unswept marker is NOT built and
+  stays the open half of this entry.
 
 - **Batched, not built now 2026-07-20: `scheduler -i <project>` with no
   text argument should open `$EDITOR`** instead of failing with a usage

@@ -184,6 +184,10 @@ usage: scheduler [command] [project]
                          where scope + questions live and how a reply
                          round-trips) -- for YOUR understanding, not
                          another design doc for an agent to read.
+  man, -m                open the maintained man page
+                         (docs/scheduler-cli.md) in $PAGER -- glance
+                         column meanings, the `*` convention, where each
+                         number comes from, and the files behind it all.
   <project>              shorthand for `status <project>` below (works
                          with a bare registered project name, no verb)
   status <project>, -c  offline (no AI) deep-dive on one project: git
@@ -307,6 +311,23 @@ WHAT'S NOT BUILT YET (don't assume these exist)
   - No project has moved off having a local checkout; the
     "scheduler owns scope, runs from anywhere" design is groundwork only.
 EOF
+}
+
+# cmd_man -- open the maintained man page (docs/scheduler-cli.md, where
+# the glance view's former in-screen explanation text moved, 2026-07-25).
+# Resolves script-relative first so a dev worktree's copy shows its own
+# doc; the deployed ~/.local/bin/scheduler symlink/copy has no ../docs,
+# so it falls back to the real checkout via SCHED_ROOT.
+cmd_man() {
+  local here doc
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  doc="$here/../docs/scheduler-cli.md"
+  [ -f "$doc" ] || doc="$SCHED_ROOT/docs/scheduler-cli.md"
+  if [ ! -f "$doc" ]; then
+    echo "scheduler: man page not found (expected docs/scheduler-cli.md)" >&2
+    return 1
+  fi
+  "${PAGER:-less}" "$doc"
 }
 
 projects() {
@@ -879,20 +900,12 @@ cmd_blockers_jump() {
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
+  # The full column-by-column explanation that used to print here every
+  # time moved to docs/scheduler-cli.md (`scheduler man`) -- flagged
+  # 2026-07-22: "move all this text to a man page, reduce to a single
+  # line summary above the column headers."
+  echo "  (* = new since you last opened it here; column details: scheduler man)"
   printf '  %-16s %-10s %-9s %-10s %-10s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "LAST RUN" "ETA" "NEXT UP"
-  echo "  (* = changed since you last opened it here. QUESTIONS is unopened/total --"
-  echo "  total includes ones you've already replied to inline but whose project run"
-  echo "  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish"
-  echo "  notes in \`scheduler\` usage/docs/feedback-tags.md for what 'total' counts."
-  echo "  LAST RUN is the age of that project's ~/reports/<project>/LATEST.md (a"
-  echo "  proxy for its last completed run, not a scheduler-tracked timestamp)."
-  echo "  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- just what the"
-  echo "  next run reads first, may reprioritize instead of clearing it outright."
-  echo "  ETA is FOCUS.md backlog size x this project's own average recent gap"
-  echo "  between paced dispatches (from usage-paced-runner.sh's log) -- a rough"
-  echo "  projection off real history, NOT a promise: assumes 1 backlog item"
-  echo "  clears per cycle, backlog size stays fixed, and recent pace holds."
-  echo "  'no history' = fewer than 2 recorded dispatches yet for that project.)"
   local any_blockers=0
   local global_eta_secs=0 global_eta_proj="" any_unknown_eta=0
   local any_unpushed=0
@@ -949,6 +962,7 @@ cmd_glance() {
       ' "$qfile" 2>/dev/null)"
       q_unanswered="${q_unanswered:-0}"; q_answered="${q_answered:-0}"
       local q_total=$(( q_unanswered + q_answered ))
+      local q_star=""
       if [ "$q_total" -gt 0 ] 2>/dev/null; then
         qlabel="$q_unanswered/$q_total"
       fi
@@ -961,8 +975,18 @@ cmd_glance() {
         local qmtime qseen
         qmtime="$(stat -c %Y "$qfile" 2>/dev/null || echo 0)"
         qseen="$(get_seen "$proj")"
-        [ "$qmtime" -gt "$qseen" ] 2>/dev/null && qlabel="*$qlabel"
+        [ "$qmtime" -gt "$qseen" ] 2>/dev/null && q_star="*"
       fi
+    fi
+    # Fixed-shape render: a reserved 1-char `*` slot + right-aligned
+    # numerator, so every row's `/` lands in the same column whether or
+    # not the star is present (flagged 2026-07-22: "formatting should
+    # leave blank spaces so asterisks don't nudge fractions over ...
+    # try to get all the / to line up").
+    if [ "$qlabel" = "-" ]; then
+      qlabel="  -"
+    else
+      qlabel="$(printf '%1s%2s/%s' "$q_star" "$q_unanswered" "$q_total")"
     fi
 
     # Excludes bullets already marked RESOLVED/PARKED inline (BLOCKERS.md's
@@ -990,13 +1014,15 @@ cmd_glance() {
         insec { print }
       ' "$SCHED_ROOT/BLOCKERS.md" | md5sum | cut -d" " -f1)"
     fi
-    local blabel="-"
+    # Same reserved-star-slot treatment as QUESTIONS above, so a `*`
+    # never nudges the count out of column.
+    local blabel=" -"
     if [ "$bn" -gt 0 ] 2>/dev/null; then
-      blabel="$bn"
       any_blockers=1
-      local bseen
+      local bseen bstar=""
       bseen="$(get_seen "blockers:$proj")"
-      [ -n "$bsection" ] && [ "$bsection" != "$bseen" ] && blabel="*$blabel"
+      [ -n "$bsection" ] && [ "$bsection" != "$bseen" ] && bstar="*"
+      blabel="$(printf '%1s%s' "$bstar" "$bn")"
     fi
 
     # Cheap "what's coming" approximation: total bulleted backlog items
@@ -1090,7 +1116,9 @@ cmd_glance() {
       if [ -n "$f_total" ] && [ "$f_total" -gt 0 ] 2>/dev/null; then
         local kw="$f_keyword"
         [ "${#kw}" -gt 28 ] && kw="${kw:0:27}…"
-        next="1/$f_total: $kw"
+        # Right-aligned total so the `/` and `:` line up down the column
+        # (same 2026-07-22 formatting ask as the QUESTIONS column).
+        next="$(printf '1/%2s: %s' "$f_total" "$kw")"
       fi
     fi
 
@@ -1804,6 +1832,7 @@ case "${1:-}" in
   paced|-p) open_file "$PACED_CONF" ;;
   pacing) shift; cmd_pacing "$@" ;;
   explain|-e) cmd_explain ;;
+  man|-m) cmd_man ;;
   _commit-file)
     # Internal, not a documented user-facing verb (leading underscore
     # matches the schedule/_*.conf "meta, not a project" convention) --
