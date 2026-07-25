@@ -291,6 +291,26 @@ $PROMPT"
     git log --oneline "$BEFORE_SHA..$AFTER_SHA"
   else
     echo "WARNING: local commit made but NOT pushed to origin (local=$AFTER_SHA remote=$REMOTE_SHA)"
+    # WHY, not just THAT -- distinguish the recurring causes instead of
+    # leaving every unpushed commit looking like the same generic no-op
+    # (this is the "stale/incomplete-push visibility" stability-milestone
+    # item). All read-only: --dry-run never mutates the remote, so it's
+    # safe to run here even though the same `claude -p` invocation above
+    # may have already attempted and failed its own push.
+    if [ "$STATUS" = "FAILED" ]; then
+      echo "push reason: claude -p itself exited non-zero (see above) -- most likely cut off (turn/spend limit) before it reached a push step, not a push failure per se"
+    elif [ -z "$REMOTE_SHA" ]; then
+      echo "push reason: could not read origin/$BRANCH at all (git ls-remote returned nothing) -- looks like an SSH/auth/network failure reaching origin, not a push rejection"
+    elif git merge-base --is-ancestor "$REMOTE_SHA" "$AFTER_SHA" 2>/dev/null; then
+      DRY_RUN_OUT="$(git push --dry-run origin "HEAD:$BRANCH" 2>&1)"
+      if [ $? -eq 0 ]; then
+        echo "push reason: a plain push would succeed right now (dry-run OK) -- claude's own run likely never attempted git push at all this cycle, not a credential/conflict failure"
+      else
+        echo "push reason: dry-run push failed -- $(echo "$DRY_RUN_OUT" | grep -m1 -v '^$')"
+      fi
+    else
+      echo "push reason: origin/$BRANCH has commit(s) local doesn't (diverged) -- would need a merge/rebase before push, not a credential issue"
+    fi
   fi
 
   echo "=== $STATUS $(date -Is) (${ELAPSED}s) ==="
