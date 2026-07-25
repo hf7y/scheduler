@@ -174,7 +174,7 @@ NOW_IS=$(date -Is)
 
 if [[ "$NOW_IS" > "$EXPIRES_AT" ]]; then
   MSG="Auto-disabled after ${EXPIRY_DAYS} days. Bump EXPIRY_DAYS (or re-run setup) and re-run bin/sync-crontab.sh to renew."
-  notify-send "$JOB_NAME" "$MSG"
+  notify-send "$JOB_NAME" "$MSG" 2>/dev/null || true
   echo "$NOW_IS expired -- no-op this run; ../bin/sync-crontab.sh prunes this job's crontab line on its next run, this script does not touch crontab itself" >> "$LOG"
   exit 0
 fi
@@ -187,7 +187,7 @@ fi
 SECONDS_SINCE=$((NOW_EPOCH - LAST_HEARTBEAT_EPOCH))
 
 if [ "$SECONDS_SINCE" -ge 86400 ]; then
-  notify-send "$JOB_NAME" "Still running. Expires $EXPIRES_AT."
+  notify-send "$JOB_NAME" "Still running. Expires $EXPIRES_AT." 2>/dev/null || true
   echo "$NOW_EPOCH" > "$HEARTBEAT_FILE"
 fi
 
@@ -296,6 +296,6 @@ $PROMPT"
   echo "=== $STATUS $(date -Is) (${ELAPSED}s) ==="
 
   if [ "$STATUS" = "FAILED" ]; then
-    notify-send -u critical "$JOB_NAME FAILED" "See log: $LOG"
+    notify-send -u critical "$JOB_NAME FAILED" "See log: $LOG" 2>/dev/null || true
   fi
 } >> "$LOG" 2>&1

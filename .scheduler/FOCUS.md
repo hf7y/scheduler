@@ -8,10 +8,11 @@ controls all the other jobs.
 
 **Current:** scheduler dispatches every registered project unattended with zero silent failures — a run that gets cut off, can't push, or has its assumed external dependency (a migrated crontab, a credential) quietly stop being true is always flagged loudly, never left to look like nothing happened — and the user can explain how the system actually works instead of just trusting `bin/scheduler` to smooth over the parts they don't follow — status: in-progress
 Done when:
-- [ ] Stale `.active`-marker / stranded-run detection built (a run cut off before any commit shows up nowhere today — see "NEXT UP" note above, `scheduler sweep`'s natural next extension)
-- [ ] Stale/incomplete-push visibility built (`pushed: no` in `scheduler status`/`sweep.log` says WHY — spend-limit cutoff vs. something else — instead of a silent generic no-op; this is what the 2026-07-24 chezz/wtul credential-gap misdiagnosis actually needed and didn't have)
-- [ ] Generalized "disabled-with-unverified-external-dependency" sweep built (any `_paced.conf` line disabled with a `# migrated to X` comment gets its claimed destination checked to still exist — the exact gap that let aedile/vkv-inventory sit undispatched 4 days undetected, fixed by hand 2026-07-24 but not yet generalized so it can't recur elsewhere)
-- [ ] A real, honest explainer of how the system currently works exists (e.g. `scheduler explain`/`scheduler help` — a walkthrough a human can hold in their head, not another design doc for an agent)
+- [x] Stale `.active`-marker / stranded-run detection built (a run cut off before any commit shows up nowhere today) — queued 2026-07-20, built on `paced/2026-07-24` and reconciled into `main` 2026-07-24: `cmd_sweep` in `bin/scheduler` scans `~/.local/share/scheduler-registry/*.active` and flags any marker whose PID is no longer running as stranded (its EXIT trap never fired — killed, crashed, or a reboot, most likely before any commit, which is why the git-based checks can't see it), plus a softer "still running, unusually long" flag for a live PID past `STALE_ACTIVE_MARKER_SECONDS` (default 7200s). Verified with fabricated markers (dead-PID correctly flagged STALE, live-PID/just-started correctly silent).
+- [ ] Stale/incomplete-push visibility built (`pushed: no` in `scheduler status`/`sweep.log` says WHY — spend-limit cutoff vs. something else — instead of a silent generic no-op; this is what the 2026-07-24 chezz/wtul credential-gap misdiagnosis actually needed and didn't have). Partial progress landed alongside this item: `scheduler` (bare, the daily glance view) now surfaces stranded-unpushed-clone commits for every registered project via a "stranded local commits" footer line, not just via a separate `sweep` run — that's *visibility that it's unpushed*, still not *why*. The credentials half (a real deploy key per repo) is still human-only, unchanged.
+- [x] Generalized "disabled-with-unverified-external-dependency" sweep built (any `_paced.conf`/`schedule/*.conf` line with a `MIGRATED to X` comment gets its claimed destination checked to still exist) — the exact gap that let aedile/vkv-inventory sit undispatched 4 days undetected, fixed by hand 2026-07-24 and generalized on `paced/2026-07-24`: `cmd_sweep` now re-checks every claim on every sweep — SSH-unreachable reports UNVERIFIED (never silently treated as confirmed), reachable-but-no-matching-crontab-entry reports ORPHANED, reachable-and-found reports verified. Verified live against the real aedile/vkv-inventory case — `svc-vaporwave` correctly comes back UNVERIFIED, fails fast (~0.05s) rather than hanging.
+- [x] A real, honest explainer of how the system currently works exists — built on `paced/2026-07-24` as `scheduler explain`/`-e`: a plain-English "here's what happens when you do X" walkthrough covering paced vs. cron dispatch, what a run actually does, the push/merge review gates, how a `> ` reply round-trips, and an explicit "not built yet" section so it doesn't overclaim. Lives next to the tool (`cmd_explain` in `bin/scheduler`), not a file that goes stale.
+- [ ] Every registered project's `/nightly-batch` actually consumes its own `QUESTIONS.md` replies via `collect-feedback.sh --consume` (audit opened 2026-07-22; vkv-inventory gap CONFIRMED 2026-07-24 via read-only check of its dedicated clone — see the matching Backlog entry below. Fix is outside this repo's scope (vkv-inventory's own `.claude/commands/nightly-batch.md`), routed to realisateur.)
 
 Ideas beyond this bar are PARKED by default (see
 realisateur/STABILITY-MILESTONES.md) — this is a **big reservoir named by
@@ -25,9 +26,10 @@ unification (already routed to this backlog 2026-07-23), and every
 Backlog-section idea (Google Calendar integration, glance-view formatting
 polish, etc.). None of this is discarded — it stays visible below,
 revisit once the checklist above is genuinely done. *(Milestone drafted
-2026-07-24 via realisateur's `/ideate`, human-directed this pass — the
-four checklist items are scheduler's own already-stated "Current focus"
-priorities below, formalized into a checkable bar, not new scope.)*
+2026-07-24 via realisateur's `/ideate`, human-directed that pass; checkbox
+states reconciled 2026-07-24 when `paced/2026-07-24` — a same-day branch
+that had independently built 3 of these 4 items before this milestone text
+was drafted — was merged into `main`.)*
 
 **Push policy (changed 2026-07-18, human-approved):** the nightly job MAY
 push its own commits directly to `origin/main` — no `nightly/<date>` branch,
@@ -354,31 +356,36 @@ smooth over the parts they don't yet follow.** Concretely, in order:
    the untracked-file commit bug, the slow-hook-on-docs-commit waste —
    all fixed same session, this IS what "hardening" looks like in
    practice, not an abstract goal).
-   - **NEXT UP (queued 2026-07-20, human-directed): stale `.active`-marker
-     / stranded-run detection.** Design already written up in this
-     file's stranded-commit section above (record what a run is
-     attempting, and have `bin/scheduler`/`morning-report.sh` flag a
-     `~/.local/share/scheduler-registry/<PROJECT_KEY>.active` marker
-     that's older than a job's typical runtime with no matching
-     completion). `scheduler sweep` now covers the git/commit half of
-     "did a run get cut off" (dedicated-clone check, added same
-     session) — this is the other half: a run that got cut off before
-     ever making a commit at all wouldn't show up in sweep, only in a
-     stale `.active` marker. Natural fit for `sweep` itself once built
-     (same 15-minute tick already exists), not a new mechanism.
-   - **Same shape, found for real 2026-07-24 (see DESIGN-NOTES.md
-     "silently-orphaned finding"): `_paced.conf` disabled aedile and
+   - **DONE 2026-07-24 paced cycle: stale `.active`-marker / stranded-run
+     detection.** `cmd_sweep` in `bin/scheduler` now scans
+     `~/.local/share/scheduler-registry/*.active` as a third pass (after
+     the working-checkout pass and the dedicated-clone pass) and flags
+     any marker whose recorded PID is no longer alive as STALE — that
+     run's own `trap ... EXIT` (in `lib/sweep-loop-common.sh`) never got
+     to fire, meaning it was killed/crashed/rebooted, most likely before
+     making any commit at all, which is exactly the case the git-based
+     dedicated-clone check can't see. A live PID still gets a softer flag
+     if it's been running past `STALE_ACTIVE_MARKER_SECONDS` (default
+     7200s), for a hang rather than a crash. Verified with fabricated
+     dead-PID and live-PID markers (correct STALE vs. silent output) and
+     `bash -n bin/scheduler`.
+   - **DONE 2026-07-24 paced cycle: migration-destination verification.**
+     The same "verify a claimed migration destination, don't just assume
+     it" shape found for real 2026-07-24 (see DESIGN-NOTES.md
+     "silently-orphaned finding") — `_paced.conf` disabled aedile and
      vkv-inventory on the unverified assumption their migration to
-     svc-vaporwave's crontab had completed — it hadn't (`crontab -l`
-     came back empty), so both sat with zero dispatch for 4 days and
-     nothing caught it.** Generalize the sweep to also check: any
-     `_paced.conf` line disabled with a `# migrated to X` comment should
-     have its claimed destination (a crontab entry, another conf's
-     participant line, whatever X is) verified to actually exist —
-     flag drift the same way a stale `.active` marker gets flagged.
-     Scheduler's job here is only the mechanism check; what to DO about
-     a confirmed-orphaned participant (finish the migration vs. pull it
-     back) is realisateur's call, queued to its inbox separately.
+     svc-vaporwave's crontab had completed, it hadn't, and both sat with
+     zero dispatch for 4 days undetected. `cmd_sweep` now has a fourth
+     pass: it scans every `schedule/*.conf` for a `MIGRATED to <host>`
+     comment and re-verifies it every sweep (SSH-unreachable → UNVERIFIED,
+     reachable-but-absent → ORPHANED, reachable-and-present → verified),
+     the same flag-drift treatment the stale `.active`-marker pass already
+     gets. Verified live against the real aedile/vkv-inventory case —
+     `svc-vaporwave` correctly comes back UNVERIFIED, fails fast (~0.05s),
+     no hang. Scheduler's job here is only the mechanism check; what to DO
+     about a confirmed-orphaned participant (finish the migration vs. pull
+     it back) stays realisateur's call, queued to its inbox separately —
+     unchanged by this.
    - **PARKED (human-directed 2026-07-20), explicitly NOT a live risk:**
      the `LATEST.md`-symlink fix from earlier today. Verified directly
      against `lib/sweep-loop-common.sh`: `collect-feedback.sh` reads
@@ -390,18 +397,23 @@ smooth over the parts they don't yet follow.** Concretely, in order:
      won't reflect a reply left only in `LATEST.md`. A documentation/
      audit-trail gap, not an operational one — fine to leave queued
      behind higher-value work, not urgent.
-2. **Write a clear, honest explainer of how the current system actually
-   works, for the user's own understanding** — not another design doc
-   for an agent to read, a genuine "here's what happens when you do X"
-   walkthrough a human can hold in their head. Concrete candidate home:
-   `bin/scheduler help` or a new `scheduler explain` subcommand that
-   prints exactly this, so understanding lives next to the tool, not in
-   a file that goes stale. Not started yet.
-3. **(parked, per the Stability milestone above)** Only after 1-2 are
-   genuinely solid: revisit item 0, the consolidation roadmap axes below,
-   and any other bigger redesign — same "vision debt" discipline applied
-   to this file's own backlog, not just to individual project ideate
-   sessions.
+2. **DONE 2026-07-24 paced cycle: `scheduler explain` (`-e`).** Prints a
+   plain-English "here's what happens when you do X" walkthrough covering
+   paced vs. cron dispatch, what a run actually does (fresh clone, reads
+   scope from the checkout not the symlink), the push/merge review gates
+   (per-project, not one global rule), how a `> ` reply round-trips via
+   `collect-feedback.sh --consume`, and what `scheduler` itself does vs.
+   doesn't do — plus an explicit "not built yet" section (AUTONOMY_TIER,
+   merged report file, scheduler-owned scope) so it doesn't overclaim
+   design work as shipped. Lives next to the tool (`bin/scheduler`,
+   `cmd_explain`), not a file that goes stale. Verified: `bash -n
+   bin/scheduler` clean, ran `scheduler explain` and `scheduler -e` and
+   read the output end to end for accuracy against the actual scripts
+   (`bin/scheduler-run`, `lib/sweep-loop-common.sh`, `bin/usage-gate.sh`).
+3. Only after 1-2 are genuinely solid: revisit item 0, the consolidation
+   roadmap axes below, and any other bigger redesign — same "vision
+   debt" discipline applied to this file's own backlog, not just to
+   individual project ideate sessions.
 
 **Any new/big idea from here forward gets a durable, findable parking
 spot (this file, or the relevant project's own FOCUS.md/QUESTIONS.md) —
@@ -781,14 +793,43 @@ to build sooner.
 - **2026-07-24 03:40 (via `scheduler -i`):** Two real bugs found 2026-07-24 while setting up realisateur's milestone convention, both stemming from the same wrong assumption: aedile has NO git repo, treated as migrated/defunct. That was wrong -- verified directly (should have done this before writing it down, per tonight's earlier credential-gap lesson): aedile IS a real, actively-committed project (5 recent commits, e.g. 'aedile: DM-tier bump/triage tuning'), just tracked as a subdirectory of the wavebucks monorepo at /home/zach/Documents/vkv/wavebucks (its own .git lives at the parent, not at aedile/ itself). Bug 1: bin/scheduler's git-health check (~line 622) uses [ -d "$repo_path/.git" ], a literal directory check that fails for any PROJECT_REPO_PATH pointing at a subdirectory of a repo rather than a repo root -- same failure mode would hit any future monorepo-subdirectory project, not just aedile. Fix: use 'git -C "$repo_path" rev-parse --is-inside-work-tree' (or similar) instead of the literal .git-dir check. Bug 2: aedile already uses the .scheduler/ subdirectory layout in practice (aedile/.scheduler/FOCUS.md is real, git-tracked, actively updated) but schedule/aedile.conf never declares SCHEDULER_SUBDIR=".scheduler" -- so any tool reading that field (realisateur's milestone-audit.sh, sync-crontab.sh's own symlink logic) misses it. Fix: add SCHEDULER_SUBDIR=".scheduler" to schedule/aedile.conf to match its real layout. Routing both here per realisateur's ideate.md step 5 front door (engine detection logic + registration conf) rather than hand-editing scheduler's own files from realisateur.
 
 - **2026-07-24 01:33 (via `scheduler -i`):** Root cause found 2026-07-24 for the 'stranded local commit' pattern seen on chezz and wtul nightly-batch runs (previously misdiagnosed by realisateur's /ideate as a dedicated-clone-vs-working-checkout push race): it's a credential gap, not a race. The dispatch environment can push to local bare remotes (crt, realisateur, gardien, senechal) fine, but has no SSH credentials for GitHub-hosted remotes (chezz + wtul both use git@github.com:hf7y/...). Their nightly-batch runs commit successfully but the push step silently fails/is skipped, leaving commits local-only until a human or interactive Claude Code session (which does have working credentials) pushes them by hand -- confirmed tonight by manually pushing wtul's 51e2545 and chezz's 0189195, both landed cleanly. Proposal: either (a) give the dispatch environment's SSH agent/keys access to the github.com host (deploy keys or agent forwarding, scoped read+write to just these two repos), or (b) if that's intentionally not wanted (e.g. credential-scope hygiene), make the failure LOUD in scheduler status / sweep.log instead of the current silent 'pushed: no' with no reason given, so it reads as 'needs a human push' rather than looking like a generic failed run. Either is scheduler's call -- routing here per realisateur's ideate.md step 5 front door rather than hand-fixing dispatch config from realisateur.
-
-- **2026-07-24 00:57 (via `scheduler -i`):** Realisateur's stability-milestone convention (see realisateur/STABILITY-MILESTONES.md) asks whether scheduler itself (the engine, not a scaffolded project) should participate. Decided 2026-07-24 via /ideate: yes, give the engine a milestone too -- even mechanism benefits from a stated stability bar (e.g. 'reliably dispatches N registered projects with zero silent failures/stranded commits'). milestone-audit.sh currently reads scheduler as no-focus since its FOCUS lives under .scheduler/ not .claude/ -- either teach milestone-audit.sh to also check .scheduler/FOCUS.md, or add a lightweight '## Stability milestone' section directly to scheduler's own .scheduler/FOCUS.md. This is scheduler's own engine/FOCUS file to decide the shape of, routed here per realisateur's ideate.md step 5 front-door rule rather than hand-edited from realisateur.
+  **Partial progress, option (b), 2026-07-24 paced cycle:** (a) is human-only
+  (deploy-key generation/install, decided + queued in DESIGN-NOTES.md's
+  2026-07-24 "chezz/wtul push-gap fix" entry -- not agent-executable). For
+  (b): `lib/sweep-loop-common.sh` and `scheduler status <proj>` already
+  surfaced a distinct `WARNING: local commit made but NOT pushed` line
+  per-run and `cmd_sweep`'s dedicated-clone pass already flagged any
+  registered project sitting ahead-of-origin unpushed -- but both required
+  opening a specific project or running `sweep` separately to notice.
+  `cmd_glance` (bare `scheduler`, the view actually opened daily) now also
+  checks each project's own dedicated clone and prints a
+  "stranded local commits" hint line naming every affected project, not
+  just chezz/wtul. Verified live: fabricated an empty test commit in
+  chezz's real dedicated clone, confirmed the hint fired with the right
+  project/count, `git reset --hard` back to the original SHA (repo left
+  clean, `git status` confirmed). `bash -n bin/scheduler` clean, no
+  shellcheck available in this environment to run additionally.
 
 - **2026-07-23 23:55 (via `scheduler -i`):** Unify a status/admission taxonomy across the ecosystem: 'active vs parked vs waiting' for vision/idea items is the SAME underlying need as the BLOCKERS.md blocking/waiting/fyi taxonomy (the parked 'Spec-out-a-more-principled-eco' idea). Proposal: one shared status vocabulary + convention that serves both vision-backlog items (FOCUS.md) and blockers (BLOCKERS.md), so counts reflect real commitments, not the free-growing reservoir. Surfaced by realisateur /ideate 2026-07-23 vision-debt strategy pass (see realisateur FOCUS.md) — this is the mechanism that makes milestone-gated parking legible in glance/status views. Realisateur owns the vision-item half; this -i note is for scheduler's convention/engine half.
 
 - **2026-07-23 12:50 (via `scheduler -i`):** eventually during high season, we'll need google calendar integration. a way to invite small teams to their meetings, input deadlines, etc
 
 - **2026-07-23 09:24 (via `scheduler -i`):** add a column in scheduler noargs view to show last run as well as next up. last run timestamp, next run timestamp. specific next up task text can be moved to projects individual status view to save space, though open jobs can stay.
+  **Partial progress, 2026-07-24 paced cycle:** `cmd_glance` (bare `scheduler`)
+  now has a `LAST RUN` column — age of that project's own
+  `~/reports/<project>/LATEST.md` (Xm/Xh/Xd ago), the same file `scheduler
+  report <project>` opens, so it's a proxy for "last completed run" rather
+  than a new tracked timestamp. Verified live: ran `scheduler` and confirmed
+  every registered project shows a plausible age (crosschecked wtul's "1h
+  ago" against `stat` on its actual `LATEST.md`), `bash -n bin/scheduler`
+  clean. **NEXT-run timestamp deliberately deferred, not built this cycle:**
+  a real ETA needs expanding `schedule/_paced.conf`'s weighted participant
+  list against the live `rotation.idx` pointer (for paced projects) plus
+  parsing each `schedule/<proj>.conf`'s cron fields (for fixed-time ones) --
+  two different mental models to reconcile correctly, not a one-line add
+  like LAST RUN was, and getting it subtly wrong (a false "next in 5 min")
+  seemed worse than leaving NEXT UP as the existing non-ETA backlog-position
+  label. Left as open backlog, not attempted half-verified.
 
 - **2026-07-22 (diagnosed via wtul questions-pane investigation):** audit
   every project's nightly-batch/questions convention for the same gap just
@@ -803,6 +844,16 @@ to build sooner.
   reply unless a project's batch command explicitly ran collect-feedback
   against it — an easy step to drop when adapting the template for a
   no-tracker project (as wtul did).
+  **CONFIRMED 2026-07-24 paced cycle** (was "unconfirmed" — this cycle
+  read-only-verified, did not edit): checked vkv-inventory's own dedicated
+  clone at `~/.local/share/vkv-inventory-nightly-batch/repo/.claude/commands/nightly-batch.md`
+  directly (reading outside this repo is fine, editing isn't — same rule
+  already used for `~/.local/bin/*-loop.sh` wrappers elsewhere in this
+  file) — no `collect-feedback.sh --consume` call anywhere in it, gap is
+  real, not stale. Scheduler can't fix it directly (outside this repo);
+  routing stays as described above — this line is scheduler's front-door
+  record for realisateur to pick up, per the same pattern the "stranded
+  local commit" backlog item below already uses.
 
 - **2026-07-22 15:54 (via `scheduler -i`):** the push of new ideas to archives has a little lag after ideas submit. can that happen after the command sends, and push a notification via kde or similar, perhaps waiting in case a batch of ideas comes in worth pushing all at once. clones should be aware of uncommited work, or should check for them, in case a race condition emerges. but that's an unecessary ui friction point for when I'm looking to drop several ideas in a row
 
@@ -887,10 +938,18 @@ to build sooner.
   order** (see [[scheduler-usage-pacing]]-adjacent 13:59 backlog entry
   above for the fuller quota/ETA-aware target this is a stand-in for).
   Two related pieces scoped but deliberately NOT built this pass:
-  - **Tab-completion for `scheduler <project>`/subcommands** — a bash
-    `complete -F` function (or `bin/scheduler-completion.bash` to source)
-    reusing the existing `projects()` list in `bin/scheduler`. Purely
-    mechanical, no design work needed, just didn't fit this pass.
+  - **DONE 2026-07-24 (paced cycle): tab-completion for `scheduler
+    <project>`/subcommands.** `bin/scheduler-completion.bash` — a
+    `complete -F` function completing the subcommand list on word 1, and
+    project names (re-globbing `schedule/*.conf` the same way `bin/
+    scheduler`'s own `projects()` does, so it can't drift) on word 2 for
+    every subcommand that takes a project arg. Not auto-sourced anywhere
+    (this repo doesn't touch shell rc files) — README now documents the
+    one `source` line to add. Verified by sourcing it and driving
+    `_scheduler_completion` directly against fabricated `COMP_WORDS`/
+    `COMP_CWORD` (word-1 prefix `foc` → `focus`; word-2 after `focus` →
+    full project list; word-2 after `-q` with prefix `cr` → `crt`);
+    `bash -n bin/scheduler-completion.bash` clean.
   - **`scheduler <project>` direct shorthand** — one truncated view
     combining that project's focus/questions/blockers with "expand"
     hints, instead of requiring `-f`/`-q`/`-r`/`status` separately. A
@@ -1057,17 +1116,18 @@ to build sooner.
   `.active` markers alongside its own. Purely additive observability,
   doesn't touch orchestration/timing on either account.
 
-- **2026-07-20 21:40 (via chat, queued for later):** `lib/sweep-loop-common.sh`'s
-  `notify-send` calls have no `2>/dev/null || true` guard (unlike aedile's
-  bespoke wrapper, which already has this) -- on a headless account with
-  no D-Bus/desktop session (confirmed on `svc-vaporwave` running
-  `vkv-inventory-nightly-batch-loop.sh`: `Error calling StartServiceByName
-  for org.freedesktop.Notifications: Timeout was reached`), each call
-  burns real wall-clock time waiting on a timeout instead of failing
-  fast. Not correctness-breaking (the run still completes), just wasted
-  time on every cron fire for any headless account sourcing this engine.
-  Fix: add the same `2>/dev/null || true` guard to every `notify-send`
-  call in the shared engine.
+- **DONE 2026-07-24 (paced cycle):** `lib/sweep-loop-common.sh`'s
+  `notify-send` calls (queued 2026-07-20, no `2>/dev/null || true` guard,
+  unlike aedile's bespoke wrapper) hung on a headless account with no
+  D-Bus/desktop session (confirmed on `svc-vaporwave`: `Error calling
+  StartServiceByName for org.freedesktop.Notifications: Timeout was
+  reached`) instead of failing fast. Guard added to all 3 calls in
+  `lib/sweep-loop-common.sh`, plus 3 more of the same unguarded shape
+  found in `bin/scheduler-dev-cycle.sh` and `bin/overnight-dev.sh` (this
+  repo's own self-hosting cycle scripts, same headless-notify-send risk).
+  Verified: `bash -n` on all three files, plus `env -u
+  DBUS_SESSION_BUS_ADDRESS -u DISPLAY notify-send ... 2>/dev/null || true`
+  returns immediately (exit 0) instead of hanging on the D-Bus timeout.
 
 - **2026-07-20 20:27 (via chat, queued for next nightly cycle):** propagate
   the "no long/multi-line copy-paste commands for the user" preference
@@ -1439,6 +1499,27 @@ now need converging, in this order:
    already-populated data next. If a project's actual policy is unclear or
    contested, leave `AUTONOMY_TIER` unset and flag it as a QUESTIONS.md
    entry rather than guessing.
+
+   **DONE, ahead of the axis-1 migration this bundles into, 2026-07-24
+   (paced cycle):** declared `AUTONOMY_TIER` in 12 of 14 registered
+   projects' `schedule/*.conf` (unused by any code today, declare-only per
+   this item's own scope) — `chezz`/`vkv-inventory`/`crt`="medium",
+   `home-assistant`/`wtul`/`aedile`="low", `scheduler`/`realisateur`/
+   `groc-mangr`/`nine-speakers`/`sequestria`/`vim-arcade`="high" — read
+   straight off the already-decided FOCUS.md "Target UX" mockup (2026-07-20)
+   plus each project's own conf/FOCUS.md push-policy language (e.g.
+   aedile's conf explicitly states "REVIEW-GATED, never auto-push/
+   auto-merge" → low), not invented fresh. `gardien`/`senechal` left
+   UNSET and flagged to `.scheduler/QUESTIONS.md` — their own docs only
+   state a physical-effect *scope* gate (no unattended RAID/home-directory
+   access yet), silent on push/merge autonomy specifically, so guessing
+   `high` off the bare-remote precedent alone would be exactly the kind of
+   unilateral judgment call this item warns against. Verified: `bin/
+   sync-crontab.sh` preview output is byte-identical before/after (new
+   field is a `source`d no-op, confirmed by reading the loop in
+   `bin/sync-crontab.sh` — it only reads `PROJECT`/`SWEEP_*`/`BATCH_*`/
+   `REPO_URL`/`SCHEDULER_SUBDIR` by name), `bash -n` clean on every edited
+   conf.
 
 2. **Sweep pacing** — Tier 1 bug-sweeps (chezz, vkv-inventory) have been
    sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
