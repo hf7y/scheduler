@@ -157,8 +157,21 @@ fi
 
 # Dedicated clone, never the user's real working copy -- reset --hard
 # below would destroy uncommitted work if pointed at a real checkout.
+#
+# The clone result is CHECKED (2026-07-24, dexter bring-up). It used to be
+# unchecked, and with `set -uo pipefail` (no -e) a failed clone did not stop
+# the run: $REPO never got created, the `cd "$REPO/$REPO_SUBDIR"` below
+# silently failed too, and everything after it -- git checkout/fetch/reset
+# --hard AND the `claude -p` call with Write/Edit/Bash -- ran in whatever
+# directory cron happened to start in ($HOME). Found while pinning crt to
+# dexter, where crt's REPO_URL (a bare repo local to mandark) genuinely is
+# unreachable, making this the first host that would actually hit it.
 if [ ! -d "$REPO/.git" ]; then
-  git clone "$REPO_URL" "$REPO" >> "$LOG" 2>&1
+  if ! git clone "$REPO_URL" "$REPO" >> "$LOG" 2>&1; then
+    echo "$(date -Is) FATAL clone failed: '$REPO_URL' -> '$REPO' (git output above) -- aborting before any git or claude work" >> "$LOG"
+    notify-send -u critical "$JOB_NAME" "clone failed for $REPO_URL -- job aborted, see $LOG" 2>/dev/null || true
+    exit 1
+  fi
 fi
 
 if [ -n "$SECRETS_SRC_DIR" ]; then
@@ -194,7 +207,13 @@ fi
 {
   START_TS=$(date +%s)
   echo "=== $(date -Is) ==="
-  cd "$REPO/$REPO_SUBDIR"
+  # Belt-and-braces with the clone check above: never let a failed cd leave
+  # the reset --hard / claude call running against the cron working directory.
+  if ! cd "$REPO/$REPO_SUBDIR"; then
+    echo "FATAL cannot cd '$REPO/$REPO_SUBDIR' -- aborting before any git or claude work"
+    notify-send -u critical "$JOB_NAME" "cannot enter $REPO/$REPO_SUBDIR -- job aborted, see $LOG" 2>/dev/null || true
+    exit 1
+  fi
   # Hard safety check, not just a convention: this clone is meant to be
   # disposable between scheduled cycles, but a human can (and did, in
   # practice) open an interactive session directly in it -- e.g. to poke
