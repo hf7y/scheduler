@@ -142,10 +142,12 @@ usage: scheduler [command] [project]
                          command only edits + flags, never silently).
   paced, -p              open schedule/_paced.conf directly (enable/disable
                          participants, reorder round-robin tie-breaks)
-  pacing [show]          usage-paced-runner.sh's tick interval + max
+  pacing [show] [-h]     usage-paced-runner.sh's tick interval + max
                          dispatches/tick, the live usage-gate.sh verdict, and
                          a drift check between repo bin/*.sh and their
-                         deployed ~/.local/bin copies (defaults to `show`)
+                         deployed ~/.local/bin copies (defaults to `show`).
+                         -h/--human: plain-English translation of the gate
+                         numbers instead of the raw util/burnline/slack line
   pacing tick '<cron>'  set schedule/_runner.conf's RUNNER_CRON (how often
                          the dispatcher ticks), re-sync + apply the real
                          crontab, and commit
@@ -469,7 +471,49 @@ deployable_scripts() {
   done
 }
 
+# pacing_show_human -- translate usage-gate.sh's key=val + summary lines
+# into plain English. Takes the gate's stdout+stderr as $1.
+pacing_show_human() {
+  local out="$1" verdict window
+  verdict="$(printf '%s\n' "$out" | grep -oE 'verdict=[A-Z]+' | cut -d= -f2)"
+  if [ "$verdict" = "RUN" ]; then
+    echo "Jobs are allowed to run right now -- you're using less than your fair"
+    echo "share of quota for this point in the billing window."
+  elif [ "$verdict" = "HOLD" ]; then
+    echo "Jobs are paused right now -- either you're on pace to spend the"
+    echo "window's quota already, or a safety ceiling/rejection kicked in."
+  else
+    echo "Couldn't read live usage (probe failed) -- treated as paused, just in case."
+  fi
+  echo
+  while IFS= read -r window; do
+    [ -n "$window" ] || continue
+    local label util burnline slack resets
+    label="$(printf '%s\n' "$window" | grep -oE '^window=\S+' | cut -d= -f2)"
+    util="$(printf '%s\n' "$window" | grep -oE 'util=[0-9.]+' | cut -d= -f2)"
+    burnline="$(printf '%s\n' "$window" | grep -oE 'burnline=[0-9.]+' | cut -d= -f2)"
+    slack="$(printf '%s\n' "$window" | grep -oE 'slack=[-+0-9.]+' | cut -d= -f2)"
+    resets="$(printf '%s\n' "$window" | grep -oE 'resets_in_min=[0-9]+' | cut -d= -f2)"
+    [ -n "$label" ] || continue
+    local util_pct burnline_pct verb amount
+    util_pct="$(awk -v u="$util" 'BEGIN{printf "%.0f", u*100}')"
+    burnline_pct="$(awk -v b="$burnline" 'BEGIN{printf "%.0f", b*100}')"
+    if awk -v s="$slack" 'BEGIN{exit !(s>=0)}'; then verb="under"; else verb="over"; fi
+    amount="$(awk -v s="$slack" 'BEGIN{v=s; if(v<0)v=-v; printf "%.0f", v*100}')"
+    local win_name="$label window"
+    [ "$label" = "5h" ] && win_name="rolling 5-hour window"
+    [ "$label" = "7d" ] && win_name="rolling 7-day window"
+    echo "  $win_name: ${util_pct}% used, expected ~${burnline_pct}% by now -- ${amount}pts $verb pace"
+    [ -n "$resets" ] && echo "    resets in ${resets} min"
+  done < <(printf '%s\n' "$out" | grep '^window=')
+  local drift
+  drift="$(printf '%s\n' "$out" | grep '^hold_reasons=')"
+  [ -n "$drift" ] && { echo; echo "  ($drift)"; }
+}
+
 cmd_pacing_show() {
+  local human=0
+  case "${1:-}" in -h|--human) human=1 ;; esac
   local cron env max
   cron="$(runner_conf_field RUNNER_CRON)"
   env="$(runner_conf_field RUNNER_ENV)"
@@ -477,12 +521,23 @@ cmd_pacing_show() {
   [ -n "$max" ] || max="8 (default -- not overridden in RUNNER_ENV)"
   echo "scheduler pacing -- usage-paced-runner.sh dispatch cadence"
   echo
-  echo "  tick interval:       ${cron:-<unset -- no _runner.conf tick installed>}"
-  echo "  max dispatches/tick: $max"
+  if [ "$human" = 1 ]; then
+    echo "  Background jobs get checked every ${cron:-<unset -- no tick installed>} for whether"
+    echo "  they're allowed to run, and up to $max can fire per check."
+  else
+    echo "  tick interval:       ${cron:-<unset -- no _runner.conf tick installed>}"
+    echo "  max dispatches/tick: $max"
+  fi
   echo
   echo "live gate (usage-gate.sh, account-wide):"
   if [ -x "$HOME/.local/bin/usage-gate.sh" ]; then
-    "$HOME/.local/bin/usage-gate.sh" 2>&1 | sed 's/^/  /'
+    local gate_out
+    gate_out="$("$HOME/.local/bin/usage-gate.sh" 2>&1)"
+    if [ "$human" = 1 ]; then
+      pacing_show_human "$gate_out" | sed 's/^/  /'
+    else
+      printf '%s\n' "$gate_out" | sed 's/^/  /'
+    fi
   else
     echo "  (no ~/.local/bin/usage-gate.sh -- not deployed)"
   fi
@@ -564,12 +619,13 @@ cmd_pacing_deploy() {
 
 cmd_pacing() {
   case "${1:-}" in
-    ""|show) cmd_pacing_show ;;
+    ""|-h|--human) cmd_pacing_show "${1:-}" ;;
+    show) shift; cmd_pacing_show "${1:-}" ;;
     tick) shift; cmd_pacing_tick "$@" ;;
     max) cmd_pacing_max "${2:-}" ;;
     deploy) cmd_pacing_deploy "${2:-}" ;;
     *)
-      echo "usage: scheduler pacing [show|tick '<cron-expr>'|max <n>|deploy [script]]" >&2
+      echo "usage: scheduler pacing [show|-h|tick '<cron-expr>'|max <n>|deploy [script]]" >&2
       exit 1
       ;;
   esac
