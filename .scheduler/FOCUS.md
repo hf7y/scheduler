@@ -31,34 +31,58 @@ states reconciled 2026-07-24 when `paced/2026-07-24` — a same-day branch
 that had independently built 3 of these 4 items before this milestone text
 was drafted — was merged into `main`.)*
 
-**Push policy (changed 2026-07-18, human-approved):** the nightly job MAY
-push its own commits directly to `origin/main` — no `nightly/<date>` branch,
-no human merge step required. This is *not* a license to skip review after
-the fact: every push MUST be flagged prominently in that night's report
-(what was pushed, why, and how to revert it — e.g. `git revert <sha>`) so
-the human can review it the next morning same as before, just after the
-fact instead of before. See item 6 in Current focus for the sequencing
-requirement (push after other jobs, before morning) and conflict-awareness
-work still to build before leaning on this. Until that safety work lands,
-prefer the old review-gate branch behavior for any change riskier than a
-docs/FOCUS-only edit.
+**Push policy (changed 2026-07-18, human-approved; SUPERSEDED 2026-07-24 —
+see below):** the nightly job MAY push its own commits directly to
+`origin/main` — no `nightly/<date>` branch, no human merge step required.
+Review is *revert-based*, not a pre-push gate: every push MUST be flagged
+prominently in that night's report (what was pushed, why, and how to
+revert it — e.g. `git revert <sha>`) so the human can review it after the
+fact, not before.
 
-**Merge policy (changed 2026-07-19, human-directed):** `bin/scheduler-dev-cycle.sh`
-now merges each finished paced cycle's commits from `paced/<date>` into
-*local* `main` right after the cycle (`git merge --no-ff`), instead of
-leaving them on the branch for a manual merge first. Review still happens —
-just after the fact (`git show <merge-sha>`, revert with
-`git revert -m 1 <merge-sha>`) instead of before. This is a **toggleable
-flag**, not a rewrite of the safety model: `~/.local/share/scheduler-paced-dev/merge_mode`
-holds `merge` (default, new behavior) or `branch` (old behavior, commits
-stay on the branch for manual review/merge). The cycle also self-guards:
-if `main` isn't clean and checked out in the scheduler repo when a cycle
+**2026-07-24 update, human-directed — the "prefer the old review-gate
+branch behavior... until safety work lands" caveat above is RETRACTED,
+not just superseded quietly:** it was read (by this file's own earlier
+`bin/scheduler-dev-cycle.sh` — see Merge policy below) as license to merge
+into local `main` but hold the push back for a once-daily human review.
+That turned out to be a real bug, not extra caution: multi-host self-dev
+(mandark + dexter, see "Multi-machine parallelism" section below) hit a
+live divergence from exactly this — one host's cycle merged locally,
+didn't push, the other host's cycle pulled a stale `origin/main`, merged
+its own work on top of the old base, and now two hosts had different
+unpushed history built on the same stale point. Holding the push back
+bought zero review benefit (review already happens after the fact, via
+revert, same as any other push this repo makes per CLAUDE.md) while
+adding real staleness risk. **Corrected policy: every self-dev cycle
+that merges into local `main` pushes to `origin/main` in the SAME
+cycle, immediately — no accumulate-and-review-once-a-day, single host or
+multi-host, no exception.** File this broadly so it isn't
+re-litigated: also documented in `bin/scheduler-dev-cycle.sh`'s own
+header/comments (the actual enforcement point) and DESIGN-NOTES.md
+2026-07-24 "push-on-cycle, not push-on-morning-review" (full rationale +
+the divergence incident that triggered it).
+
+**Merge policy (changed 2026-07-19, human-directed; push behavior
+corrected 2026-07-24, see immediately above):** `bin/scheduler-dev-cycle.sh`
+merges each finished paced cycle's commits from `paced/<date>` into
+*local* `main` right after the cycle (`git merge --no-ff`), **then pushes
+that merge to `origin/main` in the same cycle** (changed 2026-07-24 —
+this used to stop at the local merge and hold the push for a human;
+that's the retracted behavior above). Review still happens — just after
+the fact (`git show <merge-sha>`, revert with `git revert -m 1
+<merge-sha>`) instead of before. This is a **toggleable flag**, not a
+rewrite of the safety model: `~/.local/share/scheduler-paced-dev/merge_mode`
+holds `merge` (default) or `branch` (manual pause — commits stay on the
+branch, a human merges+pushes by hand; an intentional opt-out for a
+specific risky stretch, not "the safer everyday choice" — don't read its
+existence as still-recommended caution). The cycle also self-guards: if
+`main` isn't clean and checked out in the scheduler repo when a cycle
 finishes (e.g. another session has an in-progress edit, as has happened
-with `crt.conf`), it automatically falls back to leaving commits unmerged
-rather than merging into a dirty tree. **Still separate from and unaffected
-by this: pushing to `origin` stays exactly as cautious as the push policy
-above** — this only changes local-main merge timing, not whether/when
-anything reaches GitHub.
+with `crt.conf`), it automatically falls back to leaving commits
+unmerged rather than merging into a dirty tree; and re-fetches +
+`--ff-only`s onto `origin/main` immediately before merging (best-effort
+freshness, not a guarantee) and retries a rejected push once after
+reconciling, logging CRITICAL + `notify-send -u critical` if it still
+can't push rather than silently leaving local `main` ahead of origin.
 
 ## Architecture: cron, not a daemon (reaffirmed 2026-07-20)
 

@@ -1258,3 +1258,61 @@ crt now runs on exactly one host (dexter), reachable over the restricted
 git-shell-only key, source never leaving the LAN. The interim "runs on
 neither host" gap noted in the previous entry is closed as of this
 commit.
+
+## 2026-07-24 (same session, sixth follow-up): push-on-cycle, not push-on-morning-review — durable policy correction
+
+Directly answers "why not let dexter self-develop scheduler too" (QUESTIONS.md
+item #3) by fixing what actually made it unsafe, rather than adding a
+scheduling mutex on top of an unsafe base. Human-directed, explicit: *"this
+is the key problem and needs to be fixed durably in several places...
+agents should push right away to the shared repo."*
+
+**The bug, stated precisely:** `bin/scheduler-dev-cycle.sh` merged each
+finished cycle's commits into LOCAL `main` but never pushed -- by design,
+documented as "never touching main, never pushing... work builds up for a
+single morning review." That was read straight out of the 2026-07-18/19
+Push/Merge policy notes in FOCUS.md, which said to "prefer the old
+review-gate branch behavior... until safety work lands." The failure mode
+this produces has ALREADY happened for real this session (see the QUESTIONS.md
+entry cleared earlier today, "main/paced-2026-07-24 divergence"): two
+independent local `main`s, each with unpushed work built on the same stale
+base, diverging with zero temporal overlap required -- pure sequencing, not
+a race. A same-host-two-worktrees version of it is what originally
+triggered noticing this; multi-host self-dev (mandark + dexter both
+running this script) is the same shape with a longer, more likely-to-bite
+staleness window (an unpushed local merge sits invisible to the other host
+until SOMEONE pushes, which the old policy deferred up to 24h).
+
+**Why the earlier scheduling-lookahead proposal (check if the other host
+has a job due within N minutes, skip if so) does not fix this on its
+own:** it prevents literal time-overlap, but the actual incidents were
+sequential, not simultaneous. A mutex on timing does nothing about a cycle
+that runs at 10:15, cleanly after a 10:00 cycle elsewhere finished, if the
+10:00 cycle's work was never pushed. Worth having as a cheap secondary
+safeguard against wasted concurrent work, but it was never the load-bearing
+fix -- flagged explicitly during design so it isn't mistaken for one later.
+
+**Fix, applied durably (code, not just documentation):**
+1. `bin/scheduler-dev-cycle.sh` now pushes `origin/main` in the SAME cycle
+   immediately after merging, not on a deferred human schedule. Fetches +
+   `--ff-only`s onto `origin/main` right before merging (shrinks, doesn't
+   eliminate, the staleness window), and on a rejected push does one
+   fetch-and-reconcile retry before giving up loudly (`CRITICAL` log line +
+   `notify-send -u critical`) -- local `main` is never silently left ahead
+   of `origin` with no signal.
+2. Review model restated explicitly, everywhere this policy is written
+   down: **revert-based, not a pre-push gate.** This was already true of
+   every OTHER push this repo makes (CLAUDE.md's general push permission) --
+   the self-dev cycle's own deferred-push behavior was the one place still
+   contradicting it, unnoticed until multi-host self-dev made the gap
+   costly instead of theoretical.
+3. FOCUS.md's Push/Merge policy sections corrected in place (not silently
+   rewritten -- the retracted caveat is left visible with what changed and
+   why), so a future read of that file doesn't reintroduce the same
+   misunderstanding.
+
+**Still open, not built this pass:** the scheduling-lookahead advisory
+(cheap secondary safeguard against literal overlap) -- would need each
+host to publish a small "about to dispatch X" advisory file, since
+rotation isn't literally time-scheduled today. Worth doing as a fast
+follow, not required for QUESTIONS.md item #3 to be considered resolved.

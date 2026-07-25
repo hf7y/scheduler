@@ -2,11 +2,24 @@
 # scheduler-dev-cycle.sh -- ONE review-gated self-development cycle.
 #
 # The usage-paced runner calls this when the scheduler's turn comes up (instead
-# of the old fixed 03:00 nightly). Same conservative, review-gated philosophy as
-# scheduler-nightly-batch-loop.sh, but built to be called REPEATEDLY through the
+# of the old fixed 03:00 nightly). Built to be called REPEATEDLY through the
 # day: all of a day's cycles accumulate on ONE branch  paced/<date>  (each cycle
-# branches from that branch's tip and commits back onto it), so work builds up
-# for a single morning review -- never touching main, never pushing.
+# branches from that branch's tip and commits back onto it).
+#
+# REVIEW IS REVERT-BASED, NOT A PRE-PUSH GATE (2026-07-24, human-directed --
+# see DESIGN-NOTES.md "push-on-cycle, not push-on-morning-review"). Each
+# cycle that produces commits merges $BRANCH into local main AND PUSHES TO
+# ORIGIN IMMEDIATELY, same cycle, no waiting for a human. This file used to
+# say the opposite ("never touching main, never pushing") -- that was the
+# OLD policy and is WRONG now; don't revert to it. The human reviews after
+# the fact (git show/git log -p on the merge, git revert -m 1 <sha> to
+# undo) same as every other push this repo makes (see CLAUDE.md's push
+# permission). This is DURABLE, not a one-off: the trigger was multi-host
+# self-dev (mandark + dexter both running this script need each other's
+# commits within one pull tick, not held back up to 24h for a morning
+# review -- a same-day divergence incident is exactly what a held-back
+# push caused before this fix), but the policy applies unconditionally,
+# single host or not.
 #
 # Exit 0 on a clean run (with or without commits), non-zero only on setup
 # failure. Honours SCHED_DRYRUN=1 (skips the claude call) for plumbing tests.
@@ -48,13 +61,17 @@ DATE="$(date +%F)"
 BRANCH="paced/$DATE"
 REPORT="$REPORTS_DIR/${DATE}-paced.md"
 
-# Merge policy toggle (2026-07-19, human-directed): default is "merge" --
-# each cycle's finished commits get merged into local main right away
-# (never pushed; a human reviews after the fact and can `git revert -m 1
-# <merge-sha>` same as any other merge commit). Set to "branch" to go back
-# to the old review-before-merge behavior (commits sit on $BRANCH only,
-# human merges by hand). Toggle with:
-#   echo branch > ~/.local/share/scheduler-paced-dev/merge_mode   # old way
+# Merge policy toggle (2026-07-19, human-directed; push behavior updated
+# 2026-07-24 -- see file header): default is "merge" -- each cycle's
+# finished commits get merged into local main AND PUSHED to origin/main
+# immediately (a human reviews after the fact and can `git revert -m 1
+# <merge-sha>` same as any other merge commit). Set to "branch" as a manual
+# escape hatch to pause auto-merge/push entirely (commits sit on $BRANCH
+# only, a human merges+pushes by hand) -- a deliberate opt-out for a
+# specific risky stretch, not the recommended default; don't read its
+# presence as "the safer everyday choice," that framing is retired along
+# with the old hold-for-morning-review policy. Toggle with:
+#   echo branch > ~/.local/share/scheduler-paced-dev/merge_mode   # manual pause
 #   echo merge  > ~/.local/share/scheduler-paced-dev/merge_mode   # default
 # or just: rm ~/.local/share/scheduler-paced-dev/merge_mode  (resets to merge)
 MERGE_MODE_FILE="$STATE_DIR/merge_mode"
@@ -132,15 +149,52 @@ Commit each finished change with a clear message. Then append a section for THIS
   fi
 
   MERGED=0
+  PUSHED=0
   if [ "$AFTER_SHA" != "$BEFORE_SHA" ] && [ "$STATUS" = "done" ]; then
     MODE="$(merge_mode)"
     if [ "$MODE" = "merge" ]; then
       if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] && [ -z "$(git status --porcelain)" ]; then
+        # Refresh main immediately before merging -- minimizes (does not
+        # eliminate) the chance of merging this cycle's work onto a base
+        # the OTHER host has already moved past. ff-only: if this fails,
+        # local main already has unpushed history ahead of origin, which
+        # shouldn't happen once every cycle pushes promptly (see below) --
+        # fail loud and proceed rather than silently building on stale main.
+        if ! git fetch origin main --quiet 2>&1; then
+          echo "fetch before merge failed (network?) -- proceeding on possibly-stale main"
+        elif ! git merge --ff-only origin/main --quiet 2>&1; then
+          echo "WARNING: local main has unpushed history ahead of origin (unexpected under push-every-cycle) -- proceeding anyway, investigate after"
+        fi
         if git merge --no-ff --no-edit "$BRANCH"; then
           MERGED=1
           MERGE_SHA="$(git rev-parse HEAD)"
           echo "merged $BRANCH into main -- $MERGE_SHA (revert with: git revert -m 1 $MERGE_SHA)"
-          notify-send "$JOB_NAME" "Auto-merged $BRANCH into main ($MERGE_SHA) -- revert-on-review still open." 2>/dev/null || true
+          # Push immediately -- see DESIGN-NOTES.md 2026-07-24 "push-on-cycle,
+          # not push-on-morning-review". Review is revert-based, not a
+          # pre-push gate: this repo's CLAUDE.md already grants push
+          # permission generally, so holding a self-dev cycle's commits
+          # back from origin was never actually the safety mechanism it
+          # looked like -- it just added staleness risk for no review
+          # benefit. Two attempts: a push rejected because origin moved
+          # between the fetch above and now gets one reconcile-and-retry
+          # before giving up loudly.
+          for attempt in 1 2; do
+            if git push origin main --quiet 2>&1; then
+              PUSHED=1
+              echo "pushed main -- $MERGE_SHA"
+              break
+            fi
+            echo "push attempt $attempt failed -- fetching + reconciling"
+            git fetch origin main --quiet 2>&1
+            git merge --no-ff --no-edit origin/main --quiet 2>&1 \
+              || { echo "reconcile merge failed -- giving up, local main left ahead of origin for a human"; break; }
+          done
+          if [ "$PUSHED" = "1" ]; then
+            notify-send "$JOB_NAME" "Pushed self-dev cycle $MERGE_SHA to origin/main -- review via revert: git revert -m 1 $MERGE_SHA" 2>/dev/null || true
+          else
+            echo "CRITICAL: could not push main after this cycle -- local main is ahead of origin/main, needs a human"
+            notify-send -u critical "$JOB_NAME" "self-dev cycle merged but COULD NOT PUSH -- local main ahead of origin, investigate $LOG" 2>/dev/null || true
+          fi
         else
           echo "merge into main FAILED (conflict?) -- aborting merge, leaving $BRANCH for manual review"
           git merge --abort 2>/dev/null || true
@@ -149,13 +203,15 @@ Commit each finished change with a clear message. Then append a section for THIS
         echo "merge_mode=merge but $SCHED_REPO isn't clean/on-main right now (likely another session's in-progress edit) -- leaving $BRANCH unmerged, safe fallback"
       fi
     else
-      echo "merge_mode=$MODE -- leaving $BRANCH unmerged for manual review (old behavior)"
+      echo "merge_mode=$MODE -- leaving $BRANCH unmerged for manual review (manual pause, not the default)"
     fi
   fi
 
   if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
-    if [ "$MERGED" = "1" ]; then
-      echo "cycle $STATUS: new commits, MERGED to main -- review with: git show $MERGE_SHA / git log -p $BEFORE_SHA..$AFTER_SHA"
+    if [ "$MERGED" = "1" ] && [ "$PUSHED" = "1" ]; then
+      echo "cycle $STATUS: new commits, MERGED and PUSHED to origin/main -- review with: git show $MERGE_SHA / git log -p $BEFORE_SHA..$AFTER_SHA"
+    elif [ "$MERGED" = "1" ]; then
+      echo "cycle $STATUS: new commits, MERGED to local main but NOT PUSHED (see CRITICAL line above) -- needs a human"
     else
       echo "cycle $STATUS: new commits on $BRANCH (unmerged) --"
       git log --oneline "main..$BRANCH" 2>/dev/null | head -20

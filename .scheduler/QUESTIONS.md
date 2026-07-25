@@ -177,3 +177,20 @@ its line once you've actually read and dealt with it.
   key), `crt` flipped to `enabled=1` in `schedule/_paced.dexter.conf`.
   crt now runs on dexter only. Full writeup: DESIGN-NOTES.md 2026-07-24
   "crt live-verified from dexter, enabled."
+
+- **2026-07-24 (same session, follow-up): RESOLVED -- "should dexter
+  self-develop scheduler too?" (item #3 above).** The blocker wasn't
+  cross-host overlap, it was that `scheduler-dev-cycle.sh` merged into
+  local `main` but deliberately never pushed (a once-a-day human-review
+  design) -- staleness could occur with zero time overlap, purely from
+  sequencing, and already had (see the same-day "main/paced-2026-07-24
+  divergence" entry cleared earlier). Fixed durably, human-directed:
+  every cycle now pushes `origin/main` immediately after merging, in the
+  same cycle. Review is revert-based, not a pre-push gate -- restated
+  everywhere this policy is written (FOCUS.md Push/Merge policy sections,
+  `bin/scheduler-dev-cycle.sh`'s own header, DESIGN-NOTES.md 2026-07-24
+  "push-on-cycle, not push-on-morning-review" for the full writeup).
+  `scheduler` is now safe to add to a host's rotation on this specific
+  concern; a cheap secondary safeguard (advisory lookahead to skip if
+  another host has a dispatch due imminently) is still queued as a fast
+  follow, not a blocker.
