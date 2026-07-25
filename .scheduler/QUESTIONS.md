@@ -63,15 +63,21 @@ its line once you've actually read and dealt with it.
   >   Not a new tier value -- write the concrete op list (delete/dedup =
   >   gated, copy/move-with-original-retained = autonomous) into
   >   gardien's own FOCUS.md as its specific instance of the gate.
-  > - **scheduler**: `high` extends to pruning/injecting known project
-  >   files across dexter/mandark, but flag this explicitly as an
-  >   INTERIM policy tied to the no-local-checkout redesign (roadmap
-  >   item 4/5) still being unfinished -- revisit once that lands, don't
-  >   let it quietly become permanent scope.
   > - **senechal**: don't assert `high` from day one -- condition it.
-  >   `medium` until the config files it will own actually have
+  >   `medium` (temp, corrected 2026-07-25 -- this is senechal's work,
+  >   not scheduler's) until the config files it will own actually have
   >   verified version control/redundancy in place, then promote to
-  >   `high` once that's a checkable fact, not a target date.
+  >   `high` once that's a checkable fact, not a target date. This tier
+  >   also covers senechal's eventual pruning/injecting of known project
+  >   files across dexter/mandark environments -- flag that specific
+  >   scope as INTERIM, tied to the no-local-checkout redesign (roadmap
+  >   item 4/5) still being unfinished, and revisit once that lands so it
+  >   doesn't quietly become permanent scope.
+  >
+  > **Correction (2026-07-25):** the dexter/mandark cross-host file
+  > pruning/injection responsibility above was originally misattributed
+  > to scheduler in the first pass of this answer -- it's senechal's,
+  > moved here. scheduler's own tier/scope is unaffected by this entry.
   >
   > Clear enough to act on, no further ideation needed. Translate into
   > `schedule/gardien.conf` / `schedule/senechal.conf` `AUTONOMY_TIER`
