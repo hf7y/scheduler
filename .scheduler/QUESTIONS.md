@@ -170,3 +170,10 @@ its line once you've actually read and dealt with it.
   written into that file's crt comment directly). Until that happens crt
   runs on neither host -- an accepted, visible interim gap, not an
   oversight.
+
+- **2026-07-24 (same session, follow-up): RESOLVED -- crt's bare-repo
+  access (item #1 above).** Live-verified from dexter (`git ls-remote`
+  succeeded, host key fingerprint cross-checked against mandark's real
+  key), `crt` flipped to `enabled=1` in `schedule/_paced.dexter.conf`.
+  crt now runs on dexter only. Full writeup: DESIGN-NOTES.md 2026-07-24
+  "crt live-verified from dexter, enabled."
