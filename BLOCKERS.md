@@ -78,16 +78,17 @@ happened yet for any of them.
   from them. `cad/HANDSET-MEASUREMENTS.md` has an ASCII diagram of where
   to caliper each GUESS value whenever convenient. **Update 2026-07-24**:
   full part printed; only aesthetic work remains on the print — function
-  exists. Still open: need to wire up the 3-pin switch (hard kill audio?
-  software mute on switch close? into Pi GPIO/other?). **Queued for
-  batching, not done live 2026-07-24:** Zach wants a short written report
-  on this specific design question — options + tradeoffs for hard-kill
-  vs. software-mute vs. GPIO-signal, in the same flagged-status-doc style
-  as `RFP-GALLERY.md` (a real "## Status" line, not just a bullet here).
-  `HOOKSWITCH.md` is the closest existing precedent (same on/off-hook
-  switch-state shape, already has debounce logic + a "Future states"
-  section) — worth checking whether this is the same physical switch or
-  a distinct one before writing it up, not assumed either way yet.
+  exists. 3-pin switch design writeup (hard-kill vs. software-mute vs.
+  GPIO) **moved to crt's own `.claude/FOCUS.md` ranked backlog item 7,
+  2026-07-24** — this is `[batch]`-tagged doable-unattended work
+  (a design-options doc, no hardware needed), so it belongs in the file
+  crt's own `/nightly-batch` actually reads, not here. **Process
+  correction, same day:** this item was first filed here only, which was
+  wrong — BLOCKERS.md is human-only blockers, nothing consumes it as a
+  work queue for any project (crt's `/nightly-batch` scope is explicitly
+  `.claude/FOCUS.md`'s batch-tagged items only), so it would have sat
+  here indefinitely. Left this cross-reference so a future BLOCKERS.md
+  read doesn't re-surface it as if still homeless.
 
 ## Recently resolved
 
