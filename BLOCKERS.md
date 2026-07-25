@@ -32,17 +32,6 @@ only ever sees its own section, never another project's.
   needed — worth trimming on rotation even if not urgent today), then
   `echo <new-token> | gh auth login --with-token`.
 
-## wtul
-- **ROADMAP #2 (AcoustID/Discogs metadata fallback) — AcoustID done,
-  Discogs still pending.** AcoustID key obtained and wired 2026-07-20
-  (`lib/metadata_lookup.py`, offered as a suggestion at the `fix <discid>`
-  prompt). Still needs: **a Discogs personal access token** (free,
-  self-serve at discogs.com) for the fallback path, built and tested but
-  a silent no-op without it; and **`fpcalc`** (Chromaprint) actually
-  installed so a real fingerprint match can be live-verified —
-  `sudo apt install -y libchromaprint-tools` needs an interactive sudo
-  prompt no unattended run can supply.
-
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
 are all genuinely hands-on-hardware items an unattended run can never
@@ -58,6 +47,8 @@ happened yet for any of them.
   VBoxSVC restart on dexter needing direct human OK (live VM depends on
   it); not on the critical path, deliberately deprioritized rather than
   actively blocked-and-waiting.
+> parked indefinitely. virtual machine has been retired for several
+  cycles now, btw.
 
 - **Full-body handset dims still ungauged** (overall length,
   earpiece/mouthpiece cup diameters, weight) — not blocking, per Zach's
@@ -66,15 +57,20 @@ happened yet for any of them.
   from them. `cad/HANDSET-MEASUREMENTS.md` has an ASCII diagram of where
   to caliper each GUESS value whenever convenient —
   **Caliper on hand** (https://www.amazon.com/dp/B09R84QZ2P).
+> full part printed; only aesthetic work remains for print; function
+  exists. need to wire up the 3 pin switch (hard kill audio? software
+  mute on switch close? into pi gpio/other?)
 
 - **Benchy calibration print** needs the Ender 3's SD card path verified
   and someone to actually run the print (3DBenchy STL already downloaded
   on mandark). **In progress**: printer's mid-print on a Pi3B case right
   now; Benchy itself still pending.
+> not needed. prints have printed fine.
 
 - **USB phone-interface module** (bare-metal Compute Stick target) is
   blocked on a DAC arriving — nothing to do until it ships. **ETA**: the
   DAC (https://www.amazon.com/dp/B08Y8CZB2S) is arriving Tuesday morning.
+> arrived long ago. already referenced in docs. this is stale.
 
 ### crt deep-vision (PARKING-LOT.md / RFP docs)
 - **Gallery installation** (`RFP-GALLERY.md`): the original "centralized
@@ -84,10 +80,23 @@ happened yet for any of them.
   switcher (cheaper per-unit, authentic feel, single point of failure).
   Full possibilities writeup now in `RFP-GALLERY.md`. **Still open**:
   which of the two to actually build.
-  > see RFP-GALLERY.md for updates and fold them in.
+> see RFP-GALLERY.md for updates and fold them in. 
+> fold them in?
 
 ## Recently resolved
 
+- **wtul ROADMAP #2 (AcoustID/Discogs metadata fallback) — confirmed
+  stale, both blockers already cleared** (2026-07-24) — re-verified live
+  on the wtul-batch machine: `fpcalc version 1.5.1` is installed (the
+  `libchromaprint-tools` sudo-prompt blocker no longer applies), and
+  `DISCOGS_TOKEN` is present in `~/.config/wtul/secrets.env` alongside
+  `ACOUSTID_API_KEY`. Re: the "stale? check for token, plaintext
+  unsecured" reply — confirmed plaintext (not encrypted), but
+  `chmod 600`, owner-only, never committed to git (`.gitignore`d by
+  location) — consistent with "fine for low stakes." Both keys were
+  already wired into `lib/metadata_lookup.py` and live-verified per
+  `.claude/FOCUS.md` item #2's Status note; this entry was just never
+  pruned from BLOCKERS.md after that work landed.
 - **aedile/vkv-inventory svc-vaporwave crontab** (2026-07-24) — a prior
   session's "confirmed working" claim was wrong; no crontab entry had
   ever actually been installed for that account. Fixed: home-dir access
