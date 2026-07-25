@@ -60,6 +60,18 @@ only ever sees its own section, never another project's.
   that text, plus making the expired path loud and visible in `scheduler
   glance`/`sweep`, is queued in this repo's FOCUS.md backlog
   (2026-07-25 10:43 entry) as agent work.
+  - **RESOLVED 2026-07-25 11:00 for `chezz-nightly-batch` and
+    `home-assistant-nightly-batch` only** (human-directed in the same
+    session: "lets knock this out now"). Both `expires_at` files removed
+    after backing up their old values; next dispatch re-stamps `now + 7d`.
+    Witness: the create-if-missing block from
+    `lib/sweep-loop-common.sh:192-196` run in isolation against a temp
+    file returned PROCEED with a 2026-08-01 stamp, and `scheduler status`
+    for both projects no longer prints an EXPIRED line. **Still expired,
+    deliberately not renewed:** `chezz-bug-sweep` (that tier is parked —
+    `SWEEP_JOB_NAME=""` in `schedule/chezz.conf`) and
+    `vkv-inventory-bug-sweep`/`vkv-inventory-nightly-batch` (dispatched
+    under svc-vaporwave's own crontab now, a different account's call).
 - **`~/.local/bin/chezz-nightly-batch-loop.sh`'s `PROMPT` still says
   "Read .claude/FOCUS.md FIRST", which no longer exists** (appended
   2026-07-25, same session; witness: read the wrapper and `ls
@@ -73,6 +85,18 @@ only ever sees its own section, never another project's.
   run `bin/sync-crontab.sh --apply` to flip chezz onto
   `bin/scheduler-run` (the conf's own `BATCH_PROMPT` is being corrected
   as part of the queued FOCUS.md item, so the flip lands the right path).
+  - **RESOLVED 2026-07-25 11:00, human-directed same session** — took the
+    first option: both `.claude/FOCUS.md` references in
+    `~/.local/bin/chezz-nightly-batch-loop.sh` now read
+    `.scheduler/FOCUS.md` (old copy backed up before editing; that file is
+    under no version control, so this note is its history). `BATCH_SCRIPT`
+    stays set and authoritative — nothing was flipped onto
+    `bin/scheduler-run`, that decision is still open. `schedule/chezz.conf`
+    gained `SCHEDULER_SUBDIR=".scheduler"` and the matching `BATCH_PROMPT`
+    path in the same commit, and the two prompts were diffed
+    byte-identical afterward so the mirror invariant holds. Witness:
+    `scheduler status chezz` now reads chezz's real 271-line FOCUS.md and
+    its 5 open questions instead of "no FOCUS.md found".
 
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires

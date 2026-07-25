@@ -966,6 +966,49 @@ to build sooner.
   `git -C ~/.local/share/chezz-nightly-batch/repo fetch && rev-list --count
   origin/main..HEAD` = 0, and `7ee1262` is in `origin/main`'s history.)*
 
+  **UPDATE 2026-07-25 11:00, same session, human-directed ("lets knock this
+  out now") — items 1-3's mechanism work is still OPEN, but the live
+  breakage is fixed by hand. Do not redo these:**
+  - **Item 4 is DONE, don't repeat it.** `schedule/chezz.conf` now sets
+    `SCHEDULER_SUBDIR=".scheduler"` and its `BATCH_PROMPT` says
+    `.scheduler/FOCUS.md`; `focus/chezz.md` and `questions/chezz.md` were
+    re-pointed with the same `ln -sfn` calls `sync-crontab.sh --apply` makes
+    (lines 530/558) and now resolve to the real 271-line/118-line files.
+    `~/.local/bin/chezz-nightly-batch-loop.sh`'s two `.claude/FOCUS.md`
+    references were fixed too (human-authorized this session; that wrapper
+    stays off-limits to a batch). Verified: `scheduler status chezz` reads
+    real focus items + open questions instead of "no FOCUS.md found"; conf
+    `BATCH_PROMPT` and wrapper `PROMPT` diffed **byte-identical** so the
+    `BATCH_SCRIPT`-authoritative invariant still holds. `--apply` was
+    deliberately NOT run: its zach-account output was already byte-identical
+    to the live crontab, and running it would also have written
+    svc-vaporwave's crontab over sudo — a cross-account write with no
+    reason to happen today.
+  - **`chezz-nightly-batch` and `home-assistant-nightly-batch` expiries were
+    renewed by the human** (`rm ~/.local/share/<job>/expires_at`; old values
+    backed up first). Both now re-stamp `now + 7d` on their next dispatch —
+    verified by running `lib/sweep-loop-common.sh`'s create-if-missing +
+    compare block in isolation against a temp file (result: PROCEED,
+    re-stamped 2026-08-01). Still expired ON PURPOSE, left alone:
+    `chezz-bug-sweep` (its tier is parked — `SWEEP_JOB_NAME=""`) and both
+    `vkv-inventory` jobs (now dispatched under svc-vaporwave's own crontab).
+  - **NEW finding 5, from re-checking the two "stranded commit" warnings:
+    `build_status_report` greps the WHOLE `sweep.log`, so
+    `scheduler status` reports warnings from OLD runs under the heading
+    "-- last scheduled run --".** Both cases today were stale by two or more
+    runs: chezz's last `WARNING: local commit made but NOT pushed` is at
+    `sweep.log:282` with run boundaries at `:315`/`:325`/`:339`;
+    home-assistant's is at `:356` with boundaries at `:384`/`:404`/`:419`.
+    Home-assistant's is worse than stale — it reads "could not read
+    origin/main … SSH/auth/network failure", but that repo's only branch is
+    `master` (the wrapper sets `BRANCH="master"`, `ls-remote` works, and the
+    clone is **0 ahead of `origin/master`**), so the surfaced line both
+    predates the fix and names a diagnosis that was never true. Fix: scope
+    the `WARNING:`/`push reason:`/`pushed:` greps to the slice after the
+    second-to-last run marker, so a resolved warning stops being re-reported
+    forever. This one cost real time twice today — it is why chezz looked
+    like it had a stranded commit at the top of this entry.
+
 - **2026-07-25 00:47 (via `scheduler -i`):** look into crt and update your references to the VM which are deprecated
 
 - **2026-07-24 22:33 (via `scheduler -i`):** pinning crt on dexter is not right. that's based on old role of dexter as part of the actual crt build. current crt work can happen on either machine
