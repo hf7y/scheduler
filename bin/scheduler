@@ -972,6 +972,7 @@ cmd_glance() {
           sub(/^- \*\*/, "", line)
           idx=index(line, "**")
           bullet = (idx>0) ? substr(line,1,idx-1) : line
+          rest = (idx>0) ? substr(line, idx+2) : ""
           # Skip raw "YYYY-MM-DD (via `scheduler -i`/realisateur...)"
           # bullets UNLESS they are under a heading confirmed scoped (see
           # in_scoped_backlog above) -- most projects'"'"' FOCUS.md files
@@ -985,7 +986,20 @@ cmd_glance() {
           # reopening that flood for every other project.
           if (!in_scoped_backlog && bullet ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/) next
           total++
-          if (total == 1) keyword = bullet
+          if (total == 1) {
+            keyword = bullet
+            # A scoped bullet in cmd_idea'"'"'s own `scheduler -i` insertion
+            # shape (`- **$ts (via `scheduler -i`):** $text`) bolds ONLY
+            # the timestamp+source tag -- the real content sits unbolded
+            # right after. If the bold span itself is a bare timestamp,
+            # fall back to the first ~28 chars of that unbolded text
+            # instead of showing a useless "2026-07-20 19:59 (via..." NEXT
+            # UP keyword (found 2026-07-24 on home-assistant'"'"'s row).
+            if (keyword ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/) {
+              sub(/^[ \t:]+/, "", rest)
+              keyword = substr(rest, 1, 28)
+            }
+          }
           next
         }
         # Top-level numbered-list backlogs, scoped ONLY to a heading
