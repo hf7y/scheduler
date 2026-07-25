@@ -184,6 +184,8 @@ usage: scheduler [command] [project]
                          where scope + questions live and how a reply
                          round-trips) -- for YOUR understanding, not
                          another design doc for an agent to read.
+  <project>              shorthand for `status <project>` below (works
+                         with a bare registered project name, no verb)
   status <project>, -c  offline (no AI) deep-dive on one project: git
                          health (dirty/ahead/behind/diverged, + dedicated
                          clone divergence), pending %%TAG/`> ` feedback
@@ -1383,19 +1385,34 @@ cmd_sweep() {
   # clone. Read-only, no fetch -- reflects branch state as of each clone's
   # last scheduled run / this repo's current state, not a live network
   # check.
-  local sched_extra
-  sched_extra="$(extra_branches "$SCHED_ROOT")"
+  # Uses extra_branches_detail (built 2026-07-25 for cmd_glance's own
+  # "branches awaiting review" footer) instead of the bare-name
+  # extra_branches here too, so `sweep`'s output carries the same
+  # ahead-count every other surfacing of this signal already shows --
+  # previously this pass printed bare branch names only, forcing a
+  # separate `git rev-list --count` to tell "1 stray commit" from
+  # "23 commits, needs real review."
+  local sched_extra=""
+  local b ahead
+  while IFS=$'\t' read -r b ahead; do
+    [ -n "$b" ] || continue
+    sched_extra="$sched_extra  $b  $ahead commit(s), not merged\n"
+  done < <(extra_branches_detail "$SCHED_ROOT")
   if [ -n "$sched_extra" ]; then
     echo "== scheduler (this repo): branches beyond main =="
-    echo "$sched_extra" | sed 's/^/  /'
+    printf '%b' "$sched_extra"
   fi
   for repo in "$HOME"/.local/share/*/repo; do
     [ -d "$repo/.git" ] || continue
     job="$(basename "$(dirname "$repo")")"
-    extra="$(extra_branches "$repo")"
+    local extra=""
+    while IFS=$'\t' read -r b ahead; do
+      [ -n "$b" ] || continue
+      extra="$extra  $b  $ahead commit(s), not merged\n"
+    done < <(extra_branches_detail "$repo")
     [ -n "$extra" ] || continue
     echo "== [clone] $job: branches beyond main =="
-    echo "$extra" | sed 's/^/  /'
+    printf '%b' "$extra"
   done
 
   # Fourth pass: stale/stranded ~/.local/share/scheduler-registry/*.active
@@ -1801,5 +1818,23 @@ case "${1:-}" in
     cmd_status "$2" "${3:-}"
     ;;
   -h|--help|help) usage ;;
-  *) echo "scheduler: unknown command '$1'" >&2; usage; exit 2 ;;
+  *)
+    # Bare project name shorthand (2026-07-25, FOCUS.md backlog "direct
+    # shorthand" item): `scheduler <project>` == `scheduler status
+    # <project>` -- so a truncated combined view doesn't require
+    # remembering `-f`/`-q`/`-r`/`status` separately. Only takes over when
+    # $1 is an actually-registered project name; anything else still hits
+    # the same "unknown command" error as before.
+    # Capture first (not `projects | grep -qx`) -- under `set -o
+    # pipefail`, grep -q's early exit on a match sends SIGPIPE to
+    # `projects`' still-writing `echo`, and pipefail then reports the
+    # pipeline as failed even though grep matched. Same SIGPIPE-guard
+    # class of bug this repo's build discipline calls out elsewhere.
+    all_projects="$(projects)"
+    if grep -qx -- "$1" <<<"$all_projects"; then
+      cmd_status "$1" "${2:-}"
+    else
+      echo "scheduler: unknown command '$1'" >&2; usage; exit 2
+    fi
+    ;;
 esac

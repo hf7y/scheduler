@@ -784,6 +784,25 @@ to build sooner.
       auto-merged. Still just the read-only surfacing half of item (c) —
       the shell-out-to-`git log`/`diff`-on-demand interaction and (a)/(b)/(d)
       remain open.
+      **Follow-up DONE, same paced cycle:** `cmd_sweep`'s own third pass
+      (`branches beyond main`) still called the old bare-name
+      `extra_branches()`, so `sweep`'s output and `glance`'s footer showed
+      the same signal in two different shapes — `sweep` said "1 stray
+      commit" and "23 commits, needs real review" identically (bare branch
+      name only), forcing a manual `git rev-list --count` to tell them
+      apart, exactly the gap the glance footer fix above just closed for
+      the daily view. Switched `cmd_sweep`'s third pass to
+      `extra_branches_detail` too, so both surfacings are consistent.
+      Verified: `bash -n bin/scheduler` clean; ran `scheduler sweep` live
+      and cross-checked its new ahead-counts against `git rev-list
+      --count` per branch (groc-mangr 6, vim-arcade 1, wtul 1/1/3,
+      vkv-inventory 19/19/19, this repo's own `paced/2026-07-25` 1 —
+      matches `origin/main..paced/2026-07-25`, since the two earlier
+      commits on this branch had already been merged+pushed to
+      `origin/main` mid-cycle by `scheduler-dev-cycle.sh`); also ran under
+      `env -u SSH_AUTH_SOCK GIT_SSH_COMMAND="ssh -o BatchMode=yes"`
+      (simulating cron) — exit 0, output unchanged, no regression in the
+      other five `sweep` passes.
    d. Migrate one project at a time after scheduler's own prototype is
       verified; old `LATEST.md`/`QUESTIONS.md` stay as fallback until each
       project's wrapper is confirmed reading the merged file correctly.
@@ -1110,14 +1129,26 @@ to build sooner.
     `COMP_CWORD` (word-1 prefix `foc` → `focus`; word-2 after `focus` →
     full project list; word-2 after `-q` with prefix `cr` → `crt`);
     `bash -n bin/scheduler-completion.bash` clean.
-  - **`scheduler <project>` direct shorthand** — one truncated view
-    combining that project's focus/questions/blockers with "expand"
-    hints, instead of requiring `-f`/`-q`/`-r`/`status` separately. A
-    smaller, buildable-now slice of item 0's "merged report" vision
-    above — item 0 as designed is bigger (full print-friendly merged
-    file with reply hooks); this would be a thinner read-only first cut
-    reusing today's separate files, same spirit as how item 3's first
-    cut skipped ahead of its own (a) step.
+  - **DONE 2026-07-25 (paced cycle): `scheduler <project>` direct
+    shorthand.** A bare registered project name (no verb) now dispatches
+    to `cmd_status` — `scheduler crt` == `scheduler status crt` — since
+    `build_status_report` already covers focus/questions/blockers/last-run
+    in one screen; the only missing piece was the entry point, not a new
+    truncated view (that fuller "merged report" shape stays item 0's
+    scope, not duplicated here). Anything not a registered project name
+    still hits the existing "unknown command" error. Found and fixed a
+    real bug while verifying: the first implementation piped `projects |
+    grep -qx`, which under this script's `set -o pipefail` reports the
+    whole pipeline as failed whenever `grep -q` exits early on a match
+    (SIGPIPE hits `projects`' still-writing `echo`) — silently took the
+    "unknown command" branch even for real project names. Fixed by
+    capturing `projects`' output into a variable first, then matching
+    against it with a herestring — same SIGPIPE-guard class of bug this
+    file's own build-discipline checklist calls out. Verified: `bash -n
+    bin/scheduler` clean; ran `scheduler crt` and confirmed it printed the
+    real status report; ran `scheduler notaproject` and confirmed the
+    original "unknown command" error still fires. README's `bin/scheduler`
+    row updated to mention the shorthand in the same commit.
   **Priority-adjustment (a `scheduler priority <project> <n>`-style
   command) and bug/feature tagging on backlog items stay vision-level,
   not scoped further here** — Zach's own framing this session was
