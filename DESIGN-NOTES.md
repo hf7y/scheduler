@@ -832,3 +832,53 @@ human-only setup steps still open (dexter's Claude Code login, SSH/deploy
 key parity, WSL2 network reachability to crt's OctoPrint re-verified fresh
 since dexter's environment changed, and the gardien/senechal placement
 call).
+
+## 2026-07-24 — the 40-50pt slack turned into an actual reweight (first live use of `docs/priority-weight.md`)
+
+**Trigger:** same unused-slack signal as the dexter entry above (this
+session, chat), but the lever pulled this time is the one that was
+already sitting there unused rather than a new one: `_paced.conf`'s
+per-project `weight` field and its `enabled` flag. Every active
+participant except `groc-mangr` was still flat at weight 1 despite
+`docs/priority-weight.md` existing since 2026-07-22 — the field was
+documented but nobody had actually turned it since the 2026-07-23
+bootstrap bump/revert (see that entry above).
+
+**What realisateur measured (offline, no AI judgment beyond reading the
+numbers):** `bin/milestone-audit.sh`'s declared/status per project,
+cross-checked against `git log --since="7 days ago"`/`--since="3 days
+ago"` commit counts and raw FOCUS.md backlog size, for all 12 then-enabled
+participants. Findings:
+- `crt` (211 commits/7d, 78/3d, 1415-line FOCUS.md), `scheduler` (181/7d,
+  89/3d, large DESIGN-NOTES/DIGEST), `home-assistant` (36/7d, HTTPS-
+  reachability + soak-test still open), `wtul` (46/7d, 35/3d) all sit at
+  the top of the velocity range AND have an `in-progress` milestone with
+  real remaining criteria — proof they burn extra turns productively, not
+  just proof they're busy.
+- `groc-mangr` (5/7d), `sequestria` (5/7d), `nine-speakers` (12/7d),
+  `vim-arcade` (12/7d) sit at the *bottom* of the velocity range AND have
+  **no declared stability milestone** — still vision-forming (per
+  STABILITY-MILESTONES.md's own vocabulary), not converging on a v1 core.
+- `gardien` (24/7d), `senechal` (31/7d), `chezz` (missing milestone,
+  cooling — 5 of its 23 weekly commits are from the trailing 3 days) sit
+  in the middle and were left alone this pass — real activity, but not
+  the standout case either lever is meant to catch.
+
+**Decided (realisateur, interactive `/ideate`):** `crt` 1→3,
+`scheduler`/`home-assistant`/`wtul` 1→2 (weight lever); `groc-mangr`/
+`sequestria`/`nine-speakers`/`vim-arcade` parked, `enabled`→0 (rotation-
+size lever). Net rotation slots unchanged, 13→13 — the +5 from weight
+bumps is offset by the -5 from parking, so lap length stays flat while
+turns shift toward projects proven to use them. Applied directly to
+`schedule/_paced.conf` (commit `f9fe5f3`), with the full reasoning and a
+revert recipe left inline in that file's own comments — this entry is the
+narrative record, `_paced.conf`'s comment is the operational one.
+Parking is explicitly **not** a verdict on the four ideas' merit — same
+"parked is not debt" framing STABILITY-MILESTONES.md already established
+for in-project backlogs, just applied at the project-selection level.
+
+**Explicitly not a permanent formula.** This pass used a fixed, one-time
+read of the numbers, not a repeatable rule. Raised same session: whether
+a periodic, non-AI version of this same measurement (commit velocity +
+`milestone-audit.sh` status) should run on its own rather than needing an
+interactive `/ideate` pass each time — open question, not decided here.
