@@ -158,14 +158,20 @@ usage: scheduler [command] [project]
                          ~/.local/bin/ counterpart (all drifted scripts if
                          no name given) -- the manual step `pacing show`'s
                          DRIFT lines are telling you to take
-  idea <project> "text", -i
-                         drop a new idea/feature-request for a project
-                         without opening an editor. realisateur gets a new
-                         .idea file (its own real inbox convention); every
-                         other project gets a timestamped line inserted
-                         into its FOCUS.md backlog/feature-request section
-                         (or a new "Ideas" section, created if the project
-                         has no FOCUS.md yet)
+  idea <project> ["text"], -i
+                         drop a new idea/feature-request for a project.
+                         realisateur gets a new .idea file (its own real
+                         inbox convention); every other project gets a
+                         timestamped line inserted into its FOCUS.md
+                         backlog/feature-request section (or a new "Ideas"
+                         section, created if the project has no FOCUS.md
+                         yet). Omit "text" to open $EDITOR instead: a
+                         normal project's FOCUS.md opens with a blank
+                         templated bullet already inserted at that same
+                         spot (existing ideas stay visible for context);
+                         leaving the placeholder line untouched and
+                         quitting cancels instead of committing an empty
+                         entry.
   sweep, -s              reactive backstop for the vim auto-commit hook --
                          scans every registered repo (+ scheduler itself)
                          for uncommitted/unpushed/diverged state the hook
@@ -409,14 +415,124 @@ resolve_focus_path() {
   echo "$repo_path/${subdir:-.claude}/FOCUS.md"
 }
 
+# cmd_idea_editor -- the no-text-argument path (`scheduler -i <project>`
+# with nothing after the project name). Built 2026-07-25, batched from
+# FOCUS.md's 2026-07-20 backlog entry: open $EDITOR instead of failing
+# with a usage message. For a normal project, pre-populates a blank
+# templated bullet AT the real backlog insertion point on a scratch copy
+# of the real FOCUS.md, so existing/older ideas are naturally visible
+# right there while typing (no separate "show parked ideas" feature
+# needed) -- then either saves that edited copy over the real file (real
+# content was typed) or discards it (the placeholder line was left
+# untouched, i.e. cancelled) rather than leaving a stray empty entry.
+# realisateur gets a fresh scratch file with a comment placeholder
+# instead, matching its own bare `.idea`-file convention.
+cmd_idea_editor() {
+  local proj="$1"
+
+  if [ "$proj" = "realisateur" ]; then
+    local repo_path
+    repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
+    if [ -z "$repo_path" ]; then
+      echo "scheduler: realisateur has no PROJECT_REPO_PATH set" >&2
+      exit 1
+    fi
+    local tmp
+    tmp="$(mktemp)"
+    printf '# Idea for realisateur -- type below, then save+quit to submit.\n# Leave this empty (comment lines only) and quit to cancel.\n' > "$tmp"
+    "${EDITOR:-vi}" "$tmp"
+    local content
+    content="$(grep -v '^#' "$tmp" | sed '/^[[:space:]]*$/d')"
+    rm -f "$tmp"
+    if [ -z "$content" ]; then
+      echo "scheduler: idea cancelled (nothing typed)"
+      return 0
+    fi
+    local slug ts file
+    ts="$(date +%Y%m%d-%H%M%S)"
+    slug="$(printf '%s' "$content" | head -1 | tr -c 'a-zA-Z0-9' '-' | tr -s '-' | cut -c1-30 | sed 's/^-*//; s/-*$//')"
+    [ -n "$slug" ] || slug="idea"
+    file="$repo_path/${slug}-${ts}.idea"
+    printf '%s\n' "$content" > "$file"
+    echo "dropped: $file"
+    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle)"
+    cmd_commit_file "$file" "Idea added via \`scheduler -i\` (editor): $(basename "$file")"
+    return 0
+  fi
+
+  local focus_path
+  focus_path="$(resolve_focus_path "$proj")" || exit 1
+  local placeholder="(type your idea here -- leave this line untouched and quit to cancel)"
+  local ts="$(date '+%Y-%m-%d %H:%M')"
+  local line="- **$ts (via \`scheduler -i\`):** $placeholder"
+
+  local tmp
+  tmp="$(mktemp)"
+  if [ -f "$focus_path" ]; then
+    cp "$focus_path" "$tmp"
+    # Same insertion logic as the text-argument path below: into an
+    # existing backlog/feature-request section if one exists, else a new
+    # "Ideas" section appended at the end.
+    if awk -v IGNORECASE=1 '/^#+.*(backlog|feature request)/{f=1} END{exit !f}' "$tmp"; then
+      awk -v IGNORECASE=1 -v line="$line" '
+        { print }
+        !done && /^#+.*(backlog|feature request)/ { print ""; print line; done=1 }
+      ' "$tmp" > "$tmp.ins" && mv "$tmp.ins" "$tmp"
+    else
+      {
+        echo
+        echo "## Ideas (added via \`scheduler -i\`)"
+        echo
+        echo "$line"
+      } >> "$tmp"
+    fi
+  else
+    # New file: the placeholder line goes straight into the same "Ideas"
+    # section the scaffold creates, in one shot -- no separate insertion
+    # pass, so there's no second "## Ideas" heading appended right after
+    # the first one.
+    {
+      echo "<!-- Per-project scope marker -- this file was CREATED by"
+      echo "     \`scheduler -i\` from a dropped idea. It's just that idea,"
+      echo "     not a real scope doc yet -- flesh this out properly, or at"
+      echo "     least confirm it before the next unattended run treats it"
+      echo "     as gospel. -->"
+      echo
+      echo "## Ideas (added via \`scheduler -i\`)"
+      echo
+      echo "$line"
+    } > "$tmp"
+  fi
+
+  "${EDITOR:-vi}" "$tmp"
+
+  if grep -qF "$placeholder" "$tmp"; then
+    rm -f "$tmp"
+    echo "scheduler: idea cancelled (placeholder left untouched)"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$focus_path")"
+  mv "$tmp" "$focus_path"
+  echo "updated: $focus_path"
+  cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\` (editor): $(basename "$focus_path")"
+}
+
 cmd_idea() {
   local proj="${1:-}" text="${2:-}"
-  if [ -z "$proj" ] || [ -z "$text" ]; then
-    echo "usage: scheduler idea <project> \"idea text\""
+  if [ -z "$proj" ]; then
+    echo "usage: scheduler idea <project> [\"idea text\"]"
+    echo
+    echo "  (omit the idea text to open \$EDITOR instead)"
     echo
     echo "available projects:"
     projects | sed 's/^/  /'
     exit 1
+  fi
+
+  if [ -z "$text" ]; then
+    cmd_idea_editor "$proj"
+    return
   fi
 
   if [ "$proj" = "realisateur" ]; then

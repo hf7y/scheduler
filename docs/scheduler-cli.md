@@ -129,7 +129,8 @@ source, not retyped here). The non-obvious ones in brief: `explain`
 narrates how the whole system works; `status <project>` (or a bare
 project name) is the offline per-project deep-dive; `sweep` is the
 read-mostly repo-state backstop; `-i <project> "idea"` drops a
-timestamped idea into that project's backlog; `next` prints the real
+timestamped idea into that project's backlog (omit "idea" to open
+`$EDITOR` on a pre-populated placeholder instead); `next` prints the real
 upcoming rotation order; `pacing` shows the live usage-gate verdict and
 bin-drift check.
 

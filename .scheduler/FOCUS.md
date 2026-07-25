@@ -1416,18 +1416,28 @@ to build sooner.
   The proposed `?`-means-edited-but-unswept marker is NOT built and
   stays the open half of this entry.
 
-- **Batched, not built now 2026-07-20: `scheduler -i <project>` with no
-  text argument should open `$EDITOR`** instead of failing with a usage
-  message — pre-populate a blank templated bullet at the backlog
-  insertion point (so existing/older ideas are naturally visible right
-  there, no separate "show parked ideas" feature needed) for a normal
-  project; for realisateur, open a fresh empty `.idea` file. After the
-  editor closes: if real content was typed, run it through
-  `cmd_commit_file` same as today; if the placeholder was left untouched,
-  clean up rather than leaving a stray empty entry. Deliberately NOT
-  building a richer "surface my parked ideas for me" UX here — that's
-  explicitly realisateur's future abstract-visioning scope (see its own
-  FOCUS.md), not something to guess at from scheduler's side.
+- **DONE 2026-07-25 (paced cycle): `scheduler -i <project>` with no text
+  argument now opens `$EDITOR`** instead of failing with a usage message.
+  For a normal project, a scratch copy of its real FOCUS.md is opened
+  with a blank templated placeholder bullet already inserted at the same
+  backlog/feature-request (or new "Ideas" section) insertion point the
+  text-argument path uses — existing/older ideas stay visible right there
+  for context, no separate "show parked ideas" feature needed. For
+  realisateur, a fresh scratch file opens with a comment-only placeholder,
+  matching its own `.idea`-file convention. After the editor closes: if
+  the placeholder line/comment-only state is gone (real content was
+  typed), the result is saved over the real file and pushed through
+  `cmd_commit_file` same as the text-argument path; if it's untouched,
+  the scratch file is discarded with no commit. Deliberately did NOT build
+  a richer "surface my parked ideas for me" UX here — that's explicitly
+  realisateur's future abstract-visioning scope (see its own FOCUS.md),
+  not something to guess at from scheduler's side. Verified against a
+  disposable scratch `SCHED_ROOT` (never the real one) with a scripted
+  `$EDITOR` standing in for a human: new-file cancel (no file created),
+  new-file real-content (single correct "## Ideas" heading, no
+  duplication), existing-file cancel (byte-identical file, confirmed via
+  `diff`), existing-file real-content, and both the realisateur
+  cancel/real-content branches. `bash -n bin/scheduler` clean.
 - **RESOLVED 2026-07-20: home-assistant's real divergence, found by the
   first-ever `scheduler sweep` run, reconciled with human direction.**
   Worth keeping the root-cause shape on file since it's a real pattern,
