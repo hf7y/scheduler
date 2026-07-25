@@ -1784,13 +1784,52 @@ now need converging, in this order:
    a legacy `*_SCRIPT` line (chezz, vkv-inventory, home-assistant, wtul),
    even though `bin/scheduler-run` + the conf runtime fields have existed
    since 2026-07-18 and MIGRATION.md already documents the exact safe,
-   one-tier-at-a-time move. **Next unattended cycle: execute MIGRATION.md
-   for one project/tier** (read the wrapper, copy its config into the
-   conf's runtime fields, drop the `*_SCRIPT` line, verify `sync-crontab.sh`
-   preview is byte-identical except for the entrypoint line, apply). Pick
-   the lowest-risk project first (home-assistant or wtul — single tier,
-   no web tracker to break) rather than chezz/vkv-inventory's dual-tier
-   setups. One project per cycle, not all four at once.
+   one-tier-at-a-time move.
+
+   **CORRECTED 2026-07-25 (paced cycle) — MIGRATION.md's flip (steps 2-4:
+   drop `*_SCRIPT`, verify `sync-crontab.sh` preview, `--apply`) is a
+   no-op for home-assistant and wtul specifically, and would have looked
+   done without actually moving anything.** Both are now **paced
+   participants**, not fixed-cron ones — confirmed live via
+   `bin/sync-crontab.sh` preview (`note [home-assistant/BATCH]: paced
+   participant -- fixed cron suppressed, dispatched by
+   scheduler-paced-runner`, same for wtul) and by reading
+   `bin/usage-paced-runner.sh`: for a paced participant, dispatch comes
+   entirely from the literal command string in `schedule/_paced*.conf`'s
+   third column (e.g. `home-assistant|1|2|/home/zach/.local/bin/
+   home-assistant-nightly-batch-loop.sh`), executed directly — it never
+   consults `schedule/<project>.conf`'s `BATCH_SCRIPT`/runtime fields or
+   goes through `sync-crontab.sh`'s generated crontab at all (that's
+   exactly why the preview says the fixed cron line is "suppressed" for
+   these two). So dropping `BATCH_SCRIPT` in `home-assistant.conf`/
+   `wtul.conf` would change nothing about what actually runs; the real
+   switch for a paced participant would have to change its `_paced*.conf`
+   command column to invoke `scheduler-run` instead of the wrapper path
+   directly — a materially different, riskier edit (touches the line two
+   hosts' cron ticks read and act on immediately once pulled, with no
+   `--apply`-style gate the way the crontab flip has) than what this item
+   describes. Left as an open judgment call in `QUESTIONS.md` rather than
+   decided here. **Step-1 config-copying is still genuinely done** for
+   both (2026-07-24 paced cycle, see below) — only the flip-the-switch
+   steps are affected by this correction.
+
+   **Checked, not assumed — this actually affects all four projects
+   named in this item, not just home-assistant/wtul.** `sync-crontab.sh`
+   preview also flags `chezz/BATCH` as a paced participant (same
+   suppression note), and `chezz` appears directly in `schedule/
+   _paced.conf`'s command column the identical way (`chezz|1|/home/
+   zach/.local/bin/chezz-nightly-batch-loop.sh`) — so chezz's `BATCH_SCRIPT`
+   flip would be an identical no-op. `vkv-inventory` is disabled
+   (`vkv-inventory|0|...`) in `_paced.conf` — its batch tier isn't
+   dispatched from here at all right now (see that line's own comment:
+   moved to svc-vaporwave's crontab, migration unverified), so
+   MIGRATION.md doesn't apply to it either, for an unrelated reason.
+   **Net: MIGRATION.md's steps 2-4, as written, currently apply to ZERO
+   of the four projects this item names.** Whether/how to extend axis-1
+   to cover paced participants (edit `_paced*.conf`'s command column
+   instead) is the open judgment call filed in `QUESTIONS.md` — don't
+   pick a project and "execute MIGRATION.md" here again until that's
+   answered, it'll just repeat this same no-op.
 
    **1.5. `AUTONOMY_TIER` (see Vision section above) — bundle into the same
    pass.** While a project's conf is already open for the axis-1 migration,
