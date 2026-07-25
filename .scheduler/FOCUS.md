@@ -2041,3 +2041,13 @@ convention for BLOCKERS.md-shaped items (not built yet — nothing to pull
 in today beyond this precedent), `bin/scheduler blockers`/`cmd_glance`
 should read and render THAT rather than scheduler inventing its own
 urgency heuristic — same boundary, applied to a second knob.
+
+## Fable review (2026-07-25)
+
+<!-- Appended by realisateur/fable-like/inject-suggestions.sh. Full context: fable-like/FABLE_REPORT.md. Triage these like any dated entries; delete freely. -->
+
+- **2026-07-25 (fable-review):** build + cron-wire a liveness audit: every enabled/externally-dispatched project must have a report younger than 2 days or the morning glance shouts. The aedile/vkv-inventory 4-day silent orphaning is the class this closes. Example: realisateur/fable-like/projects/scheduler/bin/liveness-audit.sh
+- **2026-07-25 (fable-review):** finish MIGRATION.md — retire the ~20 legacy `*-loop.sh` wrappers still referenced by `_paced.conf` in favor of `scheduler-run`; layer-not-replace is live in the engine's own backyard
+- **2026-07-25 (fable-review):** delete (or regenerate-and-own) `services/` — stale since 2026-07-18, describes the pre-pacing world; healthy-looking stale output is the silent-failure smell
+- **2026-07-25 (fable-review):** investigate the rc=1 dispatch at 2026-07-25 00:19 (scheduler batch); an uninvestigated nonzero exit is a timestamped silent failure. Also fix the `[legacy absolute path]` defect on every ROTATION log line
+- **2026-07-25 (fable-review):** compaction convention for DIGEST.md (256KB) / DESIGN-NOTES.md (88KB): monthly roll-up into docs/history/YYYY-MM.md + one-page index; append-only stays, unbounded single files go
