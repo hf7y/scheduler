@@ -884,6 +884,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-25 00:47 (via `scheduler -i`):** look into crt and update your references to the VM which are deprecated
+
 - **2026-07-24 22:33 (via `scheduler -i`):** pinning crt on dexter is not right. that's based on old role of dexter as part of the actual crt build. current crt work can happen on either machine
 
 - **2026-07-24 21:10 (realisateur session, BLOCKERS.md sweep):** Root
