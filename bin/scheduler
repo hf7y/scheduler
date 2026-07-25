@@ -1391,6 +1391,22 @@ cmd_sweep() {
     echo "no schedule/*.conf claims a MIGRATED-to destination"
   fi
 
+  # Sixth pass: BLOCKERS.md staleness (bin/blockers-freshness-check.sh,
+  # built 2026-07-24 but never wired into any run cadence until now --
+  # see its own header for the wtul Discogs/fpcalc near-miss that
+  # motivated it, and the Backlog entry that named this exact wiring as
+  # the "natural next step"). Same offline-first, zero-`claude`-cost
+  # discipline as the passes above: findings are SIGNALS a human should
+  # look at, never auto-resolved here.
+  if [ -x "$SCHED_ROOT/bin/blockers-freshness-check.sh" ]; then
+    local blockers_check_out
+    blockers_check_out="$("$SCHED_ROOT/bin/blockers-freshness-check.sh" 2>&1)"
+    if [ $? -ne 0 ]; then
+      echo "== [blockers-freshness] stale BLOCKERS.md entries found =="
+      echo "$blockers_check_out" | sed 's/^/  /'
+    fi
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."
