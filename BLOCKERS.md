@@ -14,6 +14,24 @@ that sweep is part of `/ideate`'s own triage, not a side effect of
 anything else running — an entry marked resolved a week ago and never
 moved is a sign that sweep hasn't happened, not a bug.
 
+**Machine-append policy (2026-07-25, human-directed).** This file is
+human-OWNED but no longer human-only-WRITE. An agent may APPEND here
+without waiting for Zach: a new blocker it discovered, a dated
+`RESOLVED`/`RETRACTED`/`SUPERSEDED` note under an existing entry, or a
+correction when it verified a claim and found it stale. The point is
+that an agent which learns a blocker is dead should be able to say so
+here, inline, rather than parking the knowledge in a FOCUS.md nobody
+cross-reads. Append-only means exactly that: an agent does NOT delete
+or rewrite a human's prose, does NOT move entries between sections, and
+does NOT prune — pruning and the active→resolved sweep stay human /
+`/ideate` triage, per the paragraph above. Every agent-written line
+carries a date and the witness that justifies it (the command run, the
+file read), because the failure this policy exists to prevent is a
+claim outliving its verification — see the 2026-07-25 svc-vaporwave
+entry below, where an unverified "no crontab exists there" in
+`schedule/_paced.conf` contradicted this file's own correct record for
+a full day and was believed over it.
+
 Each project's heading must be exactly `## <PROJECT_KEY>` (matches
 `schedule/<project>.conf`'s `PROJECT`/`PROJECT_KEY`) — that's what a
 run's own `collect-feedback.sh --section` call matches against, so it
@@ -128,6 +146,24 @@ happened yet for any of them.
   already wired into `lib/metadata_lookup.py` and live-verified per
   `.claude/FOCUS.md` item #2's Status note; this entry was just never
   pruned from BLOCKERS.md after that work landed.
+- **SUPERSEDED 2026-07-25 (agent, machine-append):** this entry was
+  CORRECT and was then contradicted by a worse record. Verified today
+  with `sudo -u svc-vaporwave crontab -l`: the two lines this entry says
+  were installed are installed, and both ran — vkv-inventory 04:00→04:05
+  pushing `c2f7d9d`, aedile 03:00→03:06 pushing `aedile-nightly/2026-07-25`
+  and PR #3. Meanwhile `schedule/_paced.conf` carried "confirmed
+  2026-07-24: no crontab exists there" on both project lines, which was
+  never verified against the account and is false; it propagated into
+  DESIGN-NOTES and became FABLE_REPORT.md's #1 ranked finding ("silently
+  orphaned, zero dispatch for four days"). `_paced.conf` corrected in
+  `d14a2f2`; DESIGN-NOTES still carries it. Both projects are now adopted
+  into a scheduler-managed block in that account's crontab (`774f55a`,
+  same times, no double dispatch — verified one line each). They stay at
+  weight 0 in `_paced.conf` deliberately: re-enabling locally would
+  double-dispatch against these live jobs. What WAS real: aedile's own
+  `run.log` shows completed cycles on 07-20, 07-21, 07-25 only — a
+  genuine 07-22→24 gap, cause being world-writable `~/.ssh` blocking
+  `git push`, which aedile's own 07-25 run detected and fixed.
 - **aedile/vkv-inventory svc-vaporwave crontab** (2026-07-24) — a prior
   session's "confirmed working" claim was wrong; no crontab entry had
   ever actually been installed for that account. Fixed: home-dir access
