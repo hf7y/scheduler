@@ -1187,3 +1187,59 @@ Symmetric by construction -- same script both hosts run, so this closes
 the gap on dexter too, not just mandark. Deployed to
 `~/.local/bin/usage-paced-runner.sh` same session; `scheduler pacing`'s
 drift check confirms OK.
+
+## 2026-07-24 (same session, fourth follow-up): crt's bare-repo access -- dexter clones mandark over SSH
+
+Resolves QUESTIONS.md item #1 from the dexter self-build (how does dexter
+reach `crt.git`, a bare repo deliberately kept local to mandark so the VM
+password in HANDOFF.md never leaves that machine). Of the four options
+listed there, chose **(b): dexter clones mandark over SSH**, explicitly
+parking (c) "host crt on dexter instead, invert the direction" as the
+eventual direction once dexter's own git hosting is proven out --
+human-directed, not guessed: smaller and reversible now, bigger change
+later once there's more confidence in dexter as a peer.
+
+**Built, mandark side (this session, interactive, on mandark):**
+- `openssh-server` installed and enabled (previously entirely absent --
+  confirmed via `systemctl`/`dpkg` before assuming). Listens on
+  `0.0.0.0:22`/`[::]:22`; mandark has exactly one real network interface
+  (`192.168.0.27`, LAN), so this is LAN-scoped in practice despite the
+  bind address. `sudo apt-get install`/`systemctl enable` needed an
+  interactive password, so the human ran those two commands directly; this
+  session only verified the result (`systemctl is-active`, `ss -tlnp`).
+- A dedicated key pair (`dexter_mandark_deploy`, generated ON dexter, never
+  touched mandark) added to mandark's `~/.ssh/authorized_keys` with
+  `command="git-shell -c \"$SSH_ORIGINAL_COMMAND\"",no-port-forwarding,
+  no-agent-forwarding,no-X11-forwarding,no-pty` -- restricted to git
+  protocol only, same "own key per machine, independently revocable,
+  narrowly scoped" pattern as every other deploy key in this repo
+  ([[scheduler-cron-ssh-auth]]), not a general login key.
+- `schedule/crt.conf`'s `REPO_URL` changed from the bare local path to
+  `ssh://mandark-lan/home/zach/git-remotes/crt.git`. Safe because crt now
+  runs on dexter exclusively (see below) -- mandark reaching itself over
+  SSH here would be dead code, not a real case this needs to support.
+- Merged dexter's prepared `dexter/drop-crt-from-mandark-paced` branch
+  (crt dropped from `schedule/_paced.conf`) -- landed now rather than left
+  pending, since the REPO_URL half of "DO NOT LAND ALONE" is now also
+  done. mandark's own AUTONOMY/rotation is otherwise unaffected.
+
+**Deliberately NOT done yet: `_paced.dexter.conf`'s `crt` line stays
+`enabled=0`.** SSH access is provisioned but not live-verified from
+dexter's actual environment -- same "verified by running it, not assumed"
+standard dexter itself used to find this gap in the first place. Real
+remaining steps, written directly into `_paced.dexter.conf`'s crt comment
+so whoever does this next doesn't have to reconstruct them: dexter needs
+the `mandark-lan` Host alias in its own `~/.ssh/config`, then
+`ssh -T git@mandark-lan` (expected to drop the connection immediately --
+git-shell has no interactive shell, so that's success) and
+`git ls-remote ssh://mandark-lan/home/zach/git-remotes/crt.git` (the real
+test -- should list crt's refs) before flipping `enabled` to `1`.
+
+**Accepted gap in the interim:** crt currently runs on NEITHER host --
+dropped from mandark, not yet enabled on dexter. Chosen deliberately over
+bundling an unverified enable into this same change (which would couple
+"drop from mandark" to a flip nobody could test yet, and crt is the
+highest-weight participant in `_paced.conf`, so getting that coupling
+wrong would be a real throughput cost, not a cosmetic one). Visible and
+traceable to "waiting on live dexter verification" via the comment left
+in place, not a silent gap.

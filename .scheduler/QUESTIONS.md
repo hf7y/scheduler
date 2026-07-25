@@ -154,3 +154,19 @@ its line once you've actually read and dealt with it.
   this closes the gap on dexter too. The item above is left as-is rather
   than edited, per this file's own convention of not silently rewriting
   history.
+
+- **2026-07-24 (same session, follow-up): IN PROGRESS -- "how does dexter
+  reach crt's bare repo?" (item #1 above).** Answer: option (b), dexter
+  clones mandark over SSH; (c) "dexter becomes authoritative instead"
+  explicitly parked for later, human-directed. Mandark side is done this
+  session (openssh-server installed+enabled, a restricted git-shell-only
+  deploy key for dexter, `crt.conf`'s `REPO_URL` updated, dexter's prepared
+  crt-drop branch merged). Full writeup: DESIGN-NOTES.md 2026-07-24 "crt's
+  bare-repo access."
+  **Still open, needs a live session ON dexter:** add the `mandark-lan`
+  SSH alias to dexter's own `~/.ssh/config`, verify with
+  `git ls-remote ssh://mandark-lan/home/zach/git-remotes/crt.git`, then
+  flip `crt` to `enabled=1` in `schedule/_paced.dexter.conf` (steps
+  written into that file's crt comment directly). Until that happens crt
+  runs on neither host -- an accepted, visible interim gap, not an
+  oversight.
