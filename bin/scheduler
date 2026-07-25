@@ -365,6 +365,15 @@ conf_field() {
   grep -E "^${field}=" "$conf" | head -1 | cut -d= -f2- | tr -d '"'
 }
 
+# A literal "$path/.git" directory check is wrong for any PROJECT_REPO_PATH
+# that points at a subdirectory of a repo rather than its root (e.g. aedile,
+# tracked as a subdir of the shared wavebucks monorepo -- its .git lives at
+# the parent, not at aedile/ itself). `git rev-parse` walks up and finds it
+# either way. Found 2026-07-24 via realisateur's /ideate on aedile.
+is_git_repo() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
 resolve_focus_path() {
   local proj="$1"
   local repo_path subdir
@@ -1231,7 +1240,7 @@ cmd_sweep() {
       [ -n "$rp" ] && printf '%s|%s\n' "$proj" "$rp"
     done < <(projects)
   } | while IFS='|' read -r name path; do
-    [ -d "$path/.git" ] || continue
+    is_git_repo "$path" || continue
     repos_seen=$((repos_seen + 1))
 
     # Safe .md files get auto-committed, one file at a time, same tested
@@ -1497,7 +1506,7 @@ build_status_report() {
 
   echo
   echo "-- git health ($repo_path) --"
-  if [ -d "$repo_path/.git" ]; then
+  if is_git_repo "$repo_path"; then
     local dirty divergence
     dirty="$(git -C "$repo_path" status --porcelain 2>/dev/null)"
     if [ -n "$dirty" ]; then
