@@ -7,6 +7,45 @@ come from whoever's working on it directly, human or agent, whenever
 something bigger than a routine edit comes up. Clear an entry by deleting
 its line once you've actually read and dealt with it.
 
+- **2026-07-25 (dexter, verifying commit 0366936): wtul's dexter move
+  needs a deploy key -- HUMAN GitHub-UI step, parked until then.** The
+  named-exception test that moved `wtul` onto dexter's rotation was
+  landed without the credential it needs. Verified from dexter by
+  running it, not assumed:
+
+  ```
+  $ git ls-remote git@github-wtul-deploy:hf7y/wtul.git
+  ssh: Could not resolve hostname github-wtul-deploy: Temporary failure
+       in name resolution
+  fatal: Could not read from remote repository.
+  ```
+
+  Name resolution, not auth: dexter's `~/.ssh/config` has only
+  `github-scheduler-deploy` and `mandark-lan`, and no wtul key exists
+  here. crt got its `dexter_mandark_deploy` key provisioned *before* its
+  enabled=1 flip; wtul's move landed ahead of its credential instead, so
+  the "live-verified from dexter itself" bar that `_paced.dexter.conf`'s
+  own crt block sets as the pattern was never met for wtul.
+
+  **Parked, not abandoned** (2026-07-25): `wtul|0|` in
+  `_paced.dexter.conf`, restored to `wtul|1|2|` in `_paced.conf` in the
+  same change, per the revert instructions both files already carried --
+  so wtul keeps running on mandark instead of running nowhere and
+  burning a failing clone every rotation slot.
+
+  **What's needed from you:** add a Deploy Key with **write** access
+  (wtul's batch job pushes), restricted to `hf7y/wtul` only -- same
+  minimal-scope precedent as crt's key. This can't be automated from
+  dexter: `gh` is not installed there at all (`gh: command not found`),
+  so there's no authenticated path to `gh repo deploy-key add`. Either
+  do it in the GitHub UI, or say the word and the keypair + `~/.ssh/config`
+  block get generated on dexter first so the UI step is one paste. Full
+  step-by-step un-park checklist lives in `schedule/_paced.dexter.conf`'s
+  wtul block. Secondary question worth answering at the same time: is the
+  non-hardware-on-dexter test still wanted at all, or does crt's single
+  data point plus this friction argue for leaving the pin-by-need policy
+  as-is?
+
 - **2026-07-24 (via /ideate): verify svc-vaporwave cron credential
   refresh.** Under the new account model (primary = Max, always logged
   in; svc-vaporwave = nonprofit only, for its batch jobs + nonprofit
