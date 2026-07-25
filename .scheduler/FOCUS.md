@@ -1103,6 +1103,28 @@ to build sooner.
      should check item 0's status first; a quick trace-and-patch is
      still worth doing regardless (a hanging script is a real problem
      even mid-redesign), just don't over-invest in it.
+     **RESOLVED 2026-07-25 (paced cycle) — trace found the hang was
+     ALREADY fixed, plus one residual vector patched.** The hang this
+     entry reports was traced+fixed 2026-07-20 in `a224b41` (the
+     deploy-freshness loop sourced `_paced.conf` as if it were a project
+     conf, executing its pipe-delimited participant lines as shell and
+     invoking a live wrapper — same class as `build-services-view.sh`'s
+     `61f7dbd`); the crt session's two reproductions predate that fix
+     landing. Confirmed today: repeated full runs complete in ~0.4s. The
+     deprecation header's "known unresolved hang bug" line (written
+     hours AFTER the fix, `ab075da`) was stale on arrival — corrected in
+     place. The suspected-but-not-actual cause this entry names (an
+     unreachable `DEPLOY_FRESH_CMD` probe) IS still a real future hang
+     vector though — patched same cycle: probes now run under
+     `timeout` (`DEPLOY_PROBE_TIMEOUT`, default 15s), with a timed-out
+     probe reported as its own distinct "could NOT verify" line rather
+     than mislabeled "deploy pending". Verified with a fabricated
+     4-conf harness (fresh/stale/hanging/conf-var-referencing probes:
+     3.05s total with a `sleep 300` probe present, correct message per
+     state) and a before/after diff of the real repo's output
+     (byte-identical, crt's real pending-deploy line unchanged). Kept
+     deliberately shallow per the direction above — no deeper
+     investment in a deprecated script.
   2. **Standardize a machine-parseable per-project headline field in
      report templates — human-approved ("yes there should be
      standardization of report formats like that").** Concrete ask: every

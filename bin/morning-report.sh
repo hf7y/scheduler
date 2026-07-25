@@ -2,7 +2,12 @@
 # DEPRECATED (2026-07-20) -- superseded by `bin/scheduler` (installed at
 # ~/.local/bin/scheduler), a real interactive CLI covering the same ground
 # (glance view, per-project questions/focus/report drill-down, blockers)
-# more usably, without this script's known unresolved hang bug. Confirmed
+# more usably. (This header originally said "without this script's known
+# unresolved hang bug" -- stale on arrival: the hang WAS traced and fixed
+# earlier the same day, commit a224b41 -- `_paced.conf` sourced as a
+# project conf, executing a live wrapper. The one residual hang vector,
+# a DEPLOY_FRESH_CMD probe against an unreachable network target, got a
+# `timeout` guard 2026-07-25; see the deploy-freshness loop.) Confirmed
 # nothing besides this script itself reads DIGEST.md. Left working and
 # in-repo (not deleted) since it's harmless and low-risk to keep, but
 # `bin/scheduler` is the thing to actually use and build against now --
@@ -101,16 +106,29 @@ if [ -d "$SCHEDULE_DIR" ]; then
     result="$(
       unset PROJECT DEPLOY_FRESH_CMD DEPLOY_CMD LIVE_URL
       # shellcheck disable=SC1090
+      set -a   # export conf vars so the timeout'd probe shell below sees them
       . "$conf" 2>/dev/null || exit 0
+      set +a
       [ -n "${DEPLOY_FRESH_CMD:-}" ] || exit 0
-      # Run the probe in its own subshell so a probe written as a bare
-      # `exit N` can't escape and terminate this capture before the printf.
-      ( eval "$DEPLOY_FRESH_CMD" ) >/dev/null 2>&1 && exit 0   # 0 == fresh, nothing to say
-      printf '%s\t%s\t%s' "${PROJECT:-$(basename "$conf" .conf)}" \
-        "${DEPLOY_CMD:-<set DEPLOY_CMD in this conf>}" "${LIVE_URL:-}"
+      # Probe runs in its own shell under `timeout` -- a probe that touches
+      # an unreachable network target must get cut off, not wedge the whole
+      # report (the deploy-probe half of this script's old hang risk; the
+      # other half, _paced.conf mis-sourcing, was fixed in a224b41). Using
+      # `bash -c` (not a bare eval) keeps the old guarantee that a probe
+      # written as `exit N` can't escape this capture before the printf.
+      probe_rc=0
+      timeout "${DEPLOY_PROBE_TIMEOUT:-15}" bash -c "$DEPLOY_FRESH_CMD" >/dev/null 2>&1 || probe_rc=$?
+      [ "$probe_rc" -eq 0 ] && exit 0   # 0 == fresh, nothing to say
+      dp_state=stale
+      [ "$probe_rc" -eq 124 ] && dp_state=timeout
+      # dp_state before LIVE_URL on purpose: tab is IFS whitespace, so an
+      # EMPTY field followed by another gets collapsed by `read` -- keep the
+      # only possibly-empty field (LIVE_URL) last, where collapse is harmless.
+      printf '%s\t%s\t%s\t%s' "${PROJECT:-$(basename "$conf" .conf)}" \
+        "${DEPLOY_CMD:-<set DEPLOY_CMD in this conf>}" "$dp_state" "${LIVE_URL:-}"
     )"
     [ -n "$result" ] || continue
-    IFS=$'\t' read -r dp_project dp_cmd dp_url <<<"$result"
+    IFS=$'\t' read -r dp_project dp_cmd dp_state dp_url <<<"$result"
     if [ "$any_deploy" -eq 0 ]; then
       echo "════════════════════════════════════════"
       echo "  DEPLOY PENDING"
@@ -118,7 +136,11 @@ if [ -d "$SCHEDULE_DIR" ]; then
       any_deploy=1
     fi
     echo "-- $dp_project --"
-    echo "  live build is BEHIND origin — a deploy is pending."
+    if [ "$dp_state" = "timeout" ]; then
+      echo "  freshness probe TIMED OUT (>${DEPLOY_PROBE_TIMEOUT:-15}s) — could NOT verify the live build; check the probe/network, don't read this as 'deploy pending'."
+    else
+      echo "  live build is BEHIND origin — a deploy is pending."
+    fi
     [ -n "$dp_url" ] && echo "  live: $dp_url"
     echo "  run:  $dp_cmd"
     echo
