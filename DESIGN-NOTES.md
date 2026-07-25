@@ -1064,12 +1064,16 @@ location was always derivable.
 
 **Making it runnable is not the same as running it, and `scheduler` is
 deliberately absent from dexter's rotation.** Two hosts self-developing one
-scheduler git history, each auto-merging to its own local `main`, is
-precisely the divergence that is *already* an open human question in
-QUESTIONS.md — where two worktrees on a *single* host diverged badly enough
-that a paced cycle refused to reconcile them. Adding a second machine before
-that is answered would multiply the problem, not test it. Capability now,
-activation after the human call. Self-development stays single-host.
+scheduler git history, each auto-merging to its own local `main`, is a
+stronger version of the divergence that bit this repo earlier the same day —
+two worktrees on a *single* host drifting far enough apart that a paced cycle
+refused to reconcile them and escalated it to QUESTIONS.md. That entry was
+cleared by `558c1c1` while this session was running, but by **fast-forward**,
+which is available only while one side has not independently advanced. Two
+hosts pushing to one `origin` is exactly the condition that removes it, so the
+resolution does not generalize — it mostly documents what the cheap fix
+depends on. Capability now, activation after the human call. Self-development
+stays single-host.
 
 ### `bin/sync-crontab.sh` is not host-scoped — tick installed by hand
 
@@ -1115,3 +1119,44 @@ for the same reason it can't be merged.
 So the change exists, reviewed and ready, with the enabling condition stated
 in both `_paced.dexter.conf` and the branch's commit message: flip crt to
 `enabled=1` on dexter and land that branch **in the same change**.
+
+### Addendum, same session: first concurrent two-host contact on this history
+
+Flagged in advance as expected-first-contact rather than a bug, and it
+happened exactly as predicted. While this session worked, mandark pushed 5
+commits (`558c1c1`..`28a1617`) to the same `origin/main`. `git fetch` showed
+5 commits on origin against 2 local.
+
+**Resolved by rebasing dexter's two commits onto mandark's, cleanly, with no
+conflicts.** The near-miss is worth recording: the two hosts edited the *same
+three files* — `FOCUS.md`, `QUESTIONS.md`, and `lib/sweep-loop-common.sh` —
+and it only merged cleanly because the edits happened to land in different
+regions (mandark added a push-diagnosis block at the end of the library, this
+session hardened the clone/`cd` near the top). That is luck, not design. It is
+the same collision the `_paced.<host>.conf` split was built to make
+impossible for participant config, still fully live for prose files and code.
+
+Two things the incoming commits changed for the work above, both folded in
+rather than left stale:
+
+1. **`28a1617` decides the transport question** this session had just filed:
+   non-GitHub projects reach dexter via a local bare remote over LAN/SSH.
+   That rules out the GitHub-mirror option for crt and narrows the open
+   QUESTIONS.md item from "which of four approaches" to a concrete setup
+   step. One factual correction fed back: `28a1617` says crt "already uses
+   this exact pattern", but crt's `REPO_URL` is a plain filesystem path that
+   resolves only on mandark — verified from dexter by running it. crt is the
+   policy's first *unbuilt* instance, not evidence of it already working.
+
+2. **`558c1c1` cleared the single-host worktree-divergence question** this
+   session had cited as grounds for keeping self-development single-host. It
+   was resolved by fast-forward — which is available only while one side has
+   not independently advanced, precisely the condition two pushing hosts
+   remove. The citation was reworded rather than dropped: the resolution
+   documents what the cheap fix depends on, and this session's own rebase is
+   the first case where that dependency no longer held.
+
+Neither host was wrong and nothing was lost, but the ordering was pure timing:
+had `28a1617` landed an hour later, this session would have filed a decided
+question as open. Worth knowing that with two hosts writing prose into the
+same files, "read the current state" now has a shelf life measured in minutes.

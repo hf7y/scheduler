@@ -1611,9 +1611,17 @@ reasoning in DESIGN-NOTES.md "dexter registers itself as a second host".
    `schedule/crt.conf` points at `REPO_URL="/home/zach/git-remotes/crt.git"`,
    a bare repo on *mandark's* filesystem (local on purpose — crt's VM
    password must not leave that machine). dexter has no such path and crt has
-   no mirror. Confirmed by running it. Needs a human call on how dexter gets
-   crt's source, with a real security dimension — see QUESTIONS.md. Until
-   then dexter's rotation is empty, which the runner logs explicitly.
+   no mirror. Confirmed by running it. **The transport is now decided** by
+   `28a1617` (realisateur, same evening): non-GitHub projects reach dexter
+   via a local bare remote over LAN/SSH, which rules out the GitHub mirror
+   option. What is left is the concrete setup step — expose mandark's bare
+   repo over SSH, or move crt's bare repo to dexter (arguably better, since
+   crt is hardware-pinned here and that variant keeps dexter independent
+   rather than newly dependent on mandark). See QUESTIONS.md. Note
+   `28a1617` states crt "already uses this exact pattern" — it uses a local
+   bare remote, but a filesystem path, *not* LAN/SSH; crt is the policy's
+   first unbuilt instance, not proof of it working. Until then dexter's
+   rotation is empty, which the runner logs explicitly.
 2. **Dropping `crt` from mandark's `_paced.conf` is prepared but NOT merged**,
    on branch `dexter/drop-crt-from-mandark-paced`. Merging it today would
    create a gap rather than prevent a double-dispatch: crt would stop running
@@ -1622,9 +1630,11 @@ reasoning in DESIGN-NOTES.md "dexter registers itself as a second host".
    resolved.
 3. **Whether dexter should self-develop `scheduler` too.** The wrapper is now
    host-agnostic so it *could*, but two hosts committing to one scheduler git
-   history — each auto-merging to its own local `main` — is the divergence
-   already open as a human question in QUESTIONS.md (from two worktrees on a
-   *single* host). Not enabled pending that answer.
+   history — each auto-merging to its own local `main` — is a stronger version
+   of the divergence that bit this repo earlier the same day. That entry was
+   cleared by `558c1c1` mid-session, but by *fast-forward*, which works only
+   while one side hasn't independently advanced — exactly the condition two
+   pushing hosts remove. Not enabled pending a human call; see QUESTIONS.md.
 4. **`bin/sync-crontab.sh` is not host-scoped.** Previewed on dexter, `--apply`
    would install fixed-cron lines for four mandark-only projects plus a sweep
    tick, and symlink `focus/`/`questions/` into mandark-only paths. The

@@ -60,26 +60,36 @@ its line once you've actually read and dealt with it.
   mirror -- crt.conf notes a deploy key exists "if a private GitHub mirror
   is wanted later", never set up. **That remote is local on purpose**:
   crt.conf's own comment says it is a local bare repo specifically so the
-  VM password in `HANDOFF.md` never leaves the machine. So every option
-  trades that property away or works around it, and picking one is your
-  call, not a mechanical fix:
-  (a) set up the private GitHub mirror the deploy key was made for --
-      simplest, but crt's history (including whatever `HANDOFF.md` holds)
-      then leaves the LAN, which is the exact thing the current setup
-      avoids;
-  (b) give dexter SSH access to mandark and point `REPO_URL` at
-      `ssh://mandark/...` -- keeps everything on the LAN, but makes
-      dexter's unattended jobs depend on mandark being up, which partly
-      defeats "two independent schedulers";
-  (c) host crt's bare repo on dexter instead and have mandark reach it --
-      inverts (b), reasonable if crt is meant to be dexter's project now
-      that it is hardware-pinned there;
-  (d) leave crt on mandark for now, accept that dexter has no runnable
-      participants yet, and let the host-scoped split sit unused until
-      some other project earns a hardware pin.
-  Until this is answered dexter's rotation is empty (logged explicitly
-  each tick, not silent). Note (d) is the current state, so nothing breaks
-  while it waits.
+  VM password in `HANDOFF.md` never leaves the machine.
+
+  **NARROWED, same evening, by realisateur's `/ideate` on mandark
+  (`28a1617`, landed while this session was running):** "non-GitHub
+  projects reach dexter via local bare remote over LAN/SSH" is now
+  DECIDED policy. That rules out a GitHub mirror for crt (which would have
+  been the easy option, and is the one the unused `crt_deploy_key` was
+  made for) and settles the *transport*. What remains is a concrete
+  human/setup step, not a design choice:
+  (a) **expose mandark's `/home/zach/git-remotes/crt.git` over SSH** and
+      point crt's `REPO_URL` at `ssh://mandark/...` -- the decided
+      pattern. Note the tradeoff it carries: dexter's unattended crt job
+      then depends on mandark being up, which softens "two independent
+      schedulers" for that one project;
+  (b) **move crt's bare repo to dexter** and have mandark reach it over
+      the same LAN/SSH pattern -- same transport, opposite direction.
+      Worth considering because crt is now hardware-pinned to dexter, so
+      dexter is arguably its natural home; this is the variant that keeps
+      dexter independent rather than newly dependent on mandark;
+  (c) leave it as-is for now -- dexter simply has no runnable participant
+      yet. This is the CURRENT state, so nothing is broken while it waits.
+
+  **One factual correction to `28a1617` while you're here:** that entry
+  says "no non-GitHub project is pinned to dexter today (only crt is, and
+  it already uses this exact pattern)". crt uses a local bare remote, but
+  **not over LAN/SSH** -- `REPO_URL` is a plain filesystem path that only
+  resolves on mandark. Verified from dexter by running it:
+  `fatal: repository '/home/zach/git-remotes/crt.git' does not exist`. So
+  the policy is settled but its first real instance is unbuilt, and crt is
+  that instance rather than an example of it already working.
 
 - **2026-07-24 (via the dexter self-build): does mandark pull
   `origin/main` automatically? Affects whether this session's fixes have
@@ -105,12 +115,24 @@ its line once you've actually read and dealt with it.
   `scheduler` too?** `bin/scheduler-dev-cycle.sh` no longer hardcodes
   mandark's repo path, so dexter *could* run it -- but it is deliberately
   absent from `_paced.dexter.conf`. Two hosts committing to one scheduler
-  git history, each auto-merging to its own local `main`, is the same
-  divergence already open as a question above (from two worktrees on a
-  *single* host, which a paced cycle refused to reconcile). Adding a second
-  machine before that one is settled would multiply it rather than test it.
-  Your call, and probably answer the two-worktree divergence question
-  first -- it is the same question with fewer machines.
+  git history, each auto-merging to its own local `main`, is a stronger
+  version of the divergence that bit this repo earlier the same day (two
+  worktrees on a *single* host drifting far enough apart that a paced cycle
+  refused to reconcile them and escalated it here).
+
+  That entry was cleared by `558c1c1` while this session ran -- **but note
+  how it was resolved: a fast-forward.** That worked only because one side
+  had not independently advanced. With two hosts pushing to one `origin`,
+  that is precisely the condition that stops holding, so the resolution
+  does not generalize to the two-machine case; if anything it shows what
+  the cheap fix depends on. This session already hit the two-host version
+  in miniature -- mandark pushed 5 commits mid-session and this work had
+  to be rebased onto them (cleanly, this time).
+
+  Your call. Worth noting that a second self-developing host is the one
+  addition that would make this repo's own history the contended resource,
+  as opposed to today's situation where the two hosts contend only over
+  config files that the `_paced.<host>.conf` split now keeps separate.
 
 - **2026-07-24 (restated, still open -- was item 4 of the MVP-setup
   entry): do `gardien`/`senechal` need dexter locality?** Or does their
