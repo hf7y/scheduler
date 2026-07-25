@@ -17,6 +17,16 @@ its line once you've actually read and dealt with it.
   lapse mid-week? If it can lapse, that account needs its own refresh
   ritual. See DESIGN-NOTES.md 2026-07-24 entry.
 
+  > **Answer (2026-07-25):** Not critical if it lapses, but make the
+  > failure LOUD instead of a silent no-op -- same principle the rest of
+  > this file already applies (stale `.active` markers, unverified
+  > migration destinations, push-reason surfacing). Concretely: whatever
+  > checks auth for svc-vaporwave's cron jobs (aedile, vkv-inventory)
+  > should detect "Not logged in" and escalate the same way other hard
+  > failures here do -- CRITICAL log line + `notify-send -u critical` /
+  > a flagged line in that project's report -- instead of the job just
+  > quietly not running. Small paced-cycle item, not urgent.
+
 - **2026-07-24 (via /nightly-batch, paced cycle): gardien/senechal's
   `AUTONOMY_TIER` left UNSET, real judgment call not guessed.** Declaring
   `AUTONOMY_TIER` per project (FOCUS.md axis 1.5) for 12 of 14 registered
@@ -38,6 +48,35 @@ its line once you've actually read and dealt with it.
   instead, independent of the remote-credential question? Once answered,
   the field can be added to `schedule/gardien.conf`/`schedule/senechal.conf`
   in a follow-up cycle.
+
+  > **Answer (2026-07-25):** `high` for both, but tier alone doesn't
+  > cover it -- apply the existing universal irreversibility gate
+  > (Vision section: "one rule sits ABOVE the tier system... always
+  > needs explicit human sign-off, no matter the tier") to each
+  > project's specific write surface, rather than inventing a new
+  > guardrails concept:
+  > - **gardien**: `high`, with RAID writes treated as WORM-shaped --
+  >   copies/additions are revertible (nothing destroyed, run
+  >   autonomously) but deletion and dedup destroy information, so they
+  >   count as "genuinely irreversible actions" under the gate that
+  >   already exists and always need human sign-off regardless of tier.
+  >   Not a new tier value -- write the concrete op list (delete/dedup =
+  >   gated, copy/move-with-original-retained = autonomous) into
+  >   gardien's own FOCUS.md as its specific instance of the gate.
+  > - **scheduler**: `high` extends to pruning/injecting known project
+  >   files across dexter/mandark, but flag this explicitly as an
+  >   INTERIM policy tied to the no-local-checkout redesign (roadmap
+  >   item 4/5) still being unfinished -- revisit once that lands, don't
+  >   let it quietly become permanent scope.
+  > - **senechal**: don't assert `high` from day one -- condition it.
+  >   `medium` until the config files it will own actually have
+  >   verified version control/redundancy in place, then promote to
+  >   `high` once that's a checkable fact, not a target date.
+  >
+  > Clear enough to act on, no further ideation needed. Translate into
+  > `schedule/gardien.conf` / `schedule/senechal.conf` `AUTONOMY_TIER`
+  > fields + each project's own FOCUS.md irreversibility-gate list, next
+  > paced cycle.
 
 - **2026-07-24 (RESOLVED BY THE 2026-07-24 dexter self-build -- items 1
   and 3 of the old MVP-setup entry).** Item 1 (Claude Code installed on
@@ -143,6 +182,15 @@ its line once you've actually read and dealt with it.
   only hardware/network-evidenced projects belong on dexter -- so the
   question is specifically whether either has such evidence, not whether
   it would balance load.
+
+  > **Answer (2026-07-25):** No pinning -- both stay parallel stewards
+  > of their own systems, not much cross-system work implied by
+  > co-locating them. If dexter's WSL2 setup can host a shared
+  > Windows/Linux dev stream elegantly (similar in spirit to how it
+  > already reaches crt's OctoPrint), that's worth exploring
+  > opportunistically, but it's not a requirement driving this decision.
+  > Leave unpinned; revisit only if real hardware/network evidence for
+  > either shows up, per `_paced.dexter.conf`'s stated pinning bar.
 
 - **2026-07-24 (same session, follow-up): RESOLVED -- "does mandark pull
   origin/main automatically?" (the item above this one).** Answer was no,
