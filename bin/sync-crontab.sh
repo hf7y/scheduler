@@ -106,13 +106,18 @@ read_crontab_for() {
 }
 
 APPLY=0
+ADOPT=0
 for arg in "$@"; do
   case "$arg" in
     --apply) APPLY=1 ;;
+    --adopt) ADOPT=1 ;;
     -h|--help)
       echo "Usage: $0 [--apply]"
       echo "  (no args)  preview the crontab this would produce"
       echo "  --apply    back up the current crontab, then actually write it"
+      echo "  --adopt    drop UNMANAGED lines whose command exactly matches a line"
+      echo "             this run manages -- i.e. take ownership of a job that was"
+      echo "             previously hand-installed, instead of duplicating it"
       exit 0
       ;;
     *) echo "unknown arg: $arg (see --help)" >&2; exit 1 ;;
@@ -237,16 +242,41 @@ validate_cron() {
 # the command string on success; sets RESOLVE_ERR and returns 1 otherwise.
 # Precedence: a legacy *_SCRIPT wins (proven, unchanged) -- drop it to switch
 # a tier onto scheduler-run, which reads REPO_URL/<TIER>_PROMPT from the conf.
+# Sets RESOLVE_OUT (the command) and RESOLVE_ERR (the reason on failure).
+# Both are GLOBALS on purpose: this used to echo the command and be called
+# as cmd=$(resolve_cmd ...), which runs it in a subshell, so every
+# RESOLVE_ERR it set was discarded and each failure printed "ERROR
+# [x/BATCH]:  -- skipping" with a blank reason (fixed 2026-07-25, found
+# when aedile/vkv-inventory failed this check for an unrelated reason and
+# said nothing about why).
 RESOLVE_ERR=""
+RESOLVE_OUT=""
 resolve_cmd() {
   local tier="$1" script="$2" prompt="$3" sub="$4"
-  RESOLVE_ERR=""
+  RESOLVE_ERR=""; RESOLVE_OUT=""
   if [ -n "$script" ]; then
-    if [ ! -x "$script" ]; then
-      RESOLVE_ERR="${tier}_SCRIPT=$script does not exist or isn't executable"
+    # Check executability AS THE ACCOUNT THAT WILL RUN IT. Testing as the
+    # invoker is wrong for a foreign-account job: the wrapper lives in that
+    # account's home, so the moment those permissions are tightened to a
+    # sane 0700 (svc-vaporwave's home is 0777 today, which is its own
+    # problem) a perfectly valid job would fail this check for the wrong
+    # reason -- and conversely, invoker-readable says nothing about whether
+    # cron can run it as that user.
+    local acct="${conf_account:-$LOCAL_ACCOUNT}"
+    if [ "$acct" = "$LOCAL_ACCOUNT" ]; then
+      if [ ! -x "$script" ]; then
+        RESOLVE_ERR="${tier}_SCRIPT=$script does not exist or isn't executable"
+        return 1
+      fi
+    elif ! sudo -n -u "$acct" test -x "$script" 2>/dev/null; then
+      if [ -x "$script" ] 2>/dev/null; then
+        RESOLVE_ERR="${tier}_SCRIPT=$script is executable by $LOCAL_ACCOUNT but NOT by $acct, the account that would run it"
+      else
+        RESOLVE_ERR="${tier}_SCRIPT=$script is not executable by $acct (checked: sudo -n -u $acct test -x)"
+      fi
       return 1
     fi
-    printf '%s' "$script"; return 0
+    RESOLVE_OUT="$script"; return 0
   fi
   # New mode: no legacy wrapper -> run via scheduler-run from the conf.
   if [ ! -x "$SCHEDULER_RUN" ]; then
@@ -261,7 +291,7 @@ resolve_cmd() {
     RESOLVE_ERR="no ${tier}_SCRIPT and no ${tier}_PROMPT set -- provide one"
     return 1
   fi
-  printf '%s %s %s' "$SCHEDULER_RUN" "$PROJECT" "$sub"; return 0
+  RESOLVE_OUT="$SCHEDULER_RUN $PROJECT $sub"; return 0
 }
 
 QUESTIONS_DIR="$SCHED_DIR/questions"
@@ -341,7 +371,7 @@ for conf in "${CONF_FILES[@]}"; do
   elif [ -z "$jn" ] || [ -z "$cr" ]; then
     echo "ERROR [$name/SWEEP]: SWEEP_JOB_NAME and SWEEP_CRON must both be set to enable Tier 1 (or leave the whole tier blank) -- skipping this tier" >&2
     ERRORS=$((ERRORS + 1))
-  elif ! cmd=$(resolve_cmd SWEEP "$sc" "${SWEEP_PROMPT:-}" sweep); then
+  elif ! resolve_cmd SWEEP "$sc" "${SWEEP_PROMPT:-}" sweep; then
     echo "ERROR [$name/SWEEP]: $RESOLVE_ERR -- skipping" >&2
     ERRORS=$((ERRORS + 1))
   elif ! validate_cron "$cr"; then
@@ -350,6 +380,7 @@ for conf in "${CONF_FILES[@]}"; do
   elif is_expired "$jn" "$conf_account"; then
     echo "skipping [$name/SWEEP]: job '$jn' expired ($(cat "$(home_of "$conf_account")/.local/share/$jn/expires_at" 2>/dev/null)) -- bump EXPIRY_DAYS and re-run this script to renew" >&2
   else
+    cmd="$RESOLVE_OUT"
     add_managed_line "$conf_account" "$cr $cmd # scheduler:$PROJECT:SWEEP ($jn)"
   fi
 
@@ -367,17 +398,18 @@ for conf in "${CONF_FILES[@]}"; do
   elif [ -z "$jn" ]; then
     echo "ERROR [$name/BATCH]: BATCH_JOB_NAME must be set to enable Tier 2 (or leave the whole tier blank) -- skipping this tier" >&2
     ERRORS=$((ERRORS + 1))
-  elif ! cmd=$(resolve_cmd BATCH "$sc" "${BATCH_PROMPT:-}" batch); then
+  elif ! resolve_cmd BATCH "$sc" "${BATCH_PROMPT:-}" batch; then
     echo "ERROR [$name/BATCH]: $RESOLVE_ERR -- skipping" >&2
     ERRORS=$((ERRORS + 1))
   elif is_expired "$jn" "$conf_account"; then
     echo "skipping [$name/BATCH]: job '$jn' expired ($(cat "$(home_of "$conf_account")/.local/share/$jn/expires_at" 2>/dev/null)) -- bump EXPIRY_DAYS and re-run this script to renew" >&2
   elif [ -z "$cr" ] || [ "$cr" = "auto" ]; then
-    AUTO_BATCH+=("$PROJECT|$jn|$cmd|$conf_account")
+    AUTO_BATCH+=("$PROJECT|$jn|$RESOLVE_OUT|$conf_account")
   elif ! validate_cron "$cr"; then
     echo "ERROR [$name/BATCH]: BATCH_CRON='$cr' isn't a valid 5-field cron expression (or 'auto') -- skipping" >&2
     ERRORS=$((ERRORS + 1))
   else
+    cmd="$RESOLVE_OUT"
     BATCH_CRON_SEEN+=("$cr|$name")
     add_managed_line "$conf_account" "$cr $cmd # scheduler:$PROJECT:BATCH ($jn)"
   fi
@@ -565,11 +597,22 @@ for acct in "${ACCT_ORDER[@]}"; do
   # the human has to pick which one survives.
   while IFS= read -r mline; do
     [ -n "$mline" ] || continue
-    mjob="${mline##*# scheduler:}"; mjob="${mjob%% *}"
-    [ -n "$mjob" ] || continue
-    if grep -qF -- "${mjob%%:*}" <<<"$KEPT" 2>/dev/null; then
-      echo "WARNING [$acct]: an UNMANAGED line already mentions '${mjob%%:*}' -- managing it here as well would run it twice. Remove the raw line (crontab -e) or drop the conf." >&2
-    fi
+    # The command this managed line runs, i.e. the line minus its leading
+    # 5-field cron expression and minus the trailing "# scheduler:..." tag.
+    mcmd="$(awk '{ $1=$2=$3=$4=$5=""; sub(/^ +/,""); sub(/ *# scheduler:.*$/,""); print }' <<<"$mline")"
+    [ -n "$mcmd" ] || continue
+    while IFS= read -r kline; do
+      [ -n "$kline" ] || continue
+      case "$kline" in \#*) continue ;; esac
+      kcmd="$(awk '{ $1=$2=$3=$4=$5=""; sub(/^ +/,""); print }' <<<"$kline")"
+      [ "$kcmd" = "$mcmd" ] || continue
+      if [ "$ADOPT" -eq 1 ]; then
+        echo "adopting [$acct]: '$mcmd' was hand-installed; the managed block takes it over (raw line dropped)"
+        KEPT="$(grep -vxF -- "$kline" <<<"$KEPT")"
+      else
+        echo "WARNING [$acct]: an UNMANAGED line already runs '$mcmd' -- installing the managed block as well would run it TWICE. Re-run with --adopt to take the existing line over, or remove it by hand." >&2
+      fi
+    done <<<"$KEPT"
   done <<<"${ACCT_LINES[$acct]}"
 
   NEW_FILE="/tmp/sync-crontab.$$.$acct.new"
