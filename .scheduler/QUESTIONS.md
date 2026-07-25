@@ -33,15 +33,39 @@ its line once you've actually read and dealt with it.
   so wtul keeps running on mandark instead of running nowhere and
   burning a failing clone every rotation slot.
 
-  **What's needed from you:** add a Deploy Key with **write** access
-  (wtul's batch job pushes), restricted to `hf7y/wtul` only -- same
-  minimal-scope precedent as crt's key. This can't be automated from
-  dexter: `gh` is not installed there at all (`gh: command not found`),
-  so there's no authenticated path to `gh repo deploy-key add`. Either
-  do it in the GitHub UI, or say the word and the keypair + `~/.ssh/config`
-  block get generated on dexter first so the UI step is one paste. Full
-  step-by-step un-park checklist lives in `schedule/_paced.dexter.conf`'s
-  wtul block. Secondary question worth answering at the same time: is the
+  **Dexter's half is DONE (2026-07-25, on request).** A dedicated
+  passphraseless keypair scoped to wtul alone was generated on dexter
+  (`~/.ssh/dexter_wtul_deploy`, same shape/naming as the crt key), and a
+  `Host github-wtul-deploy` block was added to dexter's `~/.ssh/config`.
+  Verified wired rather than assumed -- the failure mode moved from DNS to
+  auth, which is precisely what "our half done, GitHub's half not" looks
+  like:
+
+  ```
+  before: ssh: Could not resolve hostname github-wtul-deploy
+  after:  git@github.com: Permission denied (publickey)
+  ```
+
+  **What's needed from you -- ONE step, GitHub UI.** Add this public key
+  as a Deploy Key on `hf7y/wtul` with **write** access (wtul's batch job
+  pushes), restricted to that one repo -- same minimal-scope precedent as
+  crt's key:
+
+  ```
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMuscF0WDv5aMq0vonqphUyl//kneFEA9HgNLj1ENAEP dexter-wtul-deploy
+  ```
+
+  Fingerprint `SHA256:PF2dUFFdzCvD4lZ/Mhcd2Kkf9m103pt0kWxb9ov/QLA`. It has
+  to be the UI (or another host with an authenticated `gh`): `gh` is not
+  installed on dexter at all (`gh: command not found`), so there is no
+  authenticated path to `gh repo deploy-key add` from there.
+
+  Then `git ls-remote git@github-wtul-deploy:hf7y/wtul.git` from dexter
+  must return refs before the enabled flip -- the key existing on dexter
+  is NOT the same fact as GitHub accepting it. Full checklist with the
+  exact flip in `schedule/_paced.dexter.conf`'s wtul block.
+
+  Secondary question worth answering at the same time: is the
   non-hardware-on-dexter test still wanted at all, or does crt's single
   data point plus this friction argue for leaving the pin-by-need policy
   as-is?
