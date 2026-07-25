@@ -1423,3 +1423,37 @@ mechanism, record and queue" case per `/ideate`'s own contract (see
 realisateur `.claude/FOCUS.md` 2026-07-25 for the cross-referenced entry).
 Immediate cleanup still pending from this test: resolve the stranded
 `paced/2026-07-25` merge conflict in `.scheduler/FOCUS.md` by hand.
+
+## 2026-07-25 — follow-up to pass #3: the orphaning ended the same day it was found
+
+The 07-24 entry above ("`crontab -l` returns 'no crontab for
+svc-vaporwave' — literally empty", zero dispatch for 4 days) was **true
+when written**. What it never got was a closing line: the crontab was
+installed later that same day, and BLOCKERS.md's own entry recorded that
+("Fixed: home-dir access granted, both nightly-batch loops installed and
+confirmed via `crontab -l`"). Verified again today with
+`sudo -u svc-vaporwave crontab -l`: both lines present, and both ran —
+vkv-inventory 04:00→04:05 pushing `c2f7d9d`, aedile 03:00→03:06 pushing
+`aedile-nightly/2026-07-25` and PR #3. `scheduler glance` had been showing
+them 5–6h fresh all along.
+
+The cost was in the copy that didn't get the closing line.
+`schedule/_paced.conf` carried "confirmed 2026-07-24: no crontab exists
+there" on both project lines as a statement of *current* state; a
+2026-07-25 ecosystem audit read it, believed it over the live glance, and
+ranked "silently orphaned, zero dispatch for four days" as its **#1
+finding** — recommending a remedy (a human installing a crontab) that
+would have been a no-op. Corrected in `d14a2f2`; both projects are now
+adopted into a scheduler-managed block (`774f55a`) and stay at weight 0
+deliberately, because re-enabling locally would double-dispatch.
+
+The durable lesson, now doctrine in realisateur's BUILD-DISCIPLINE.md as
+pattern 7 ("a claim outlives its verification"): a dated journal entry is
+safe because it is *stamped* — it says when it was true. A bare comment in
+a live config file is not, because it reads as present tense forever.
+State that changes belongs in something that *derives* it (the queued
+`scheduler dispatchers` command), not in prose that has to be maintained
+in four places. What was real underneath: aedile's `run.log` shows
+completed cycles on 07-20, 07-21 and 07-25 only, a genuine 07-22→24 gap
+whose likely cause was world-writable `~/.ssh` blocking `git push` —
+which aedile's own 07-25 run detected and fixed.
