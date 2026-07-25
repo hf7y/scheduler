@@ -882,3 +882,36 @@ read of the numbers, not a repeatable rule. Raised same session: whether
 a periodic, non-AI version of this same measurement (commit velocity +
 `milestone-audit.sh` status) should run on its own rather than needing an
 interactive `/ideate` pass each time — open question, not decided here.
+
+## 2026-07-24 (same session, immediate follow-up): sprint-scope reversed -- realisateur self-build, not the small MVP
+
+Immediately after the multi-machine decisions above landed, asked
+directly whether to actually proceed with the small MVP (crt-only,
+static config, watch for the quota-race risk) or go straight to letting
+realisateur self-build dexter's registration/rotation. **Answer: go
+straight to realisateur self-build**, explicitly reversing item 4 above
+(sprint scope) minutes after it was decided. Recorded here rather than
+silently overwritten so a future session sees both the original reasoning
+AND that it was deliberately overridden, not forgotten.
+
+**What does NOT change:** items 1-3 above (dexter as a full local peer,
+hardware-evidenced pinning only, two independent schedulers with the
+named-and-accepted usage-gate race) still hold -- this reversal is scope
+only (how much gets built before pausing to observe), not the
+architecture. The quota-race risk named in item 3 is now MORE live, not
+less: realisateur self-building dexter's own rotation means a second,
+independently-probing scheduler goes live faster and with less manual
+sequencing than the MVP's one-pinned-project plan -- worth watching
+`run.log` on both boxes closely once dexter's own paced runner starts
+ticking, same signal as before, just arriving sooner and less
+controlled.
+
+**What actually happens next:** the human sets up dexter's Claude Code
+login (interactive OAuth, can't be done remotely) and clones this repo,
+then hands dexter's own agent (realisateur or an equivalent bootstrap
+session run ON dexter) the job of registering itself as a second host --
+writing its own `schedule/_paced.conf` subset, installing its own
+crontab tick, and deciding its own project pins -- rather than a human
+hand-writing dexter's config per the MVP steps queued in FOCUS.md. Those
+FOCUS.md MVP steps are now the STARTING POINT for that self-build, not a
+human checklist to execute directly.

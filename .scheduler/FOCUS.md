@@ -1516,27 +1516,42 @@ simpler than a shared rotation, at the cost of a real accepted risk:
 independent probers can both see slack and both dispatch, overshooting
 between probes (the single-flock model today prevents this by
 construction; two hosts reintroduce it). Not solved this pass -- watched
-empirically once the MVP is live. Sprint scope is the small MVP, not the
-full design.
+empirically once dexter is live.
 
-**MVP steps (not built yet):**
-1. Dexter: clone this repo, install Claude Code, log into the SAME
-   primary Max account as mandark (the shared-quota premise depends on
-   it -- see QUESTIONS.md).
-2. Dexter: install its own crontab entry running `usage-paced-runner.sh`
-   against a `_paced.conf` containing only `crt` to start.
-3. mandark: drop `crt` from `schedule/_paced.conf` so it isn't
-   double-dispatched from both hosts.
-4. Watch `run.log` on both boxes for a stretch; specifically watch
-   whether the account-wide ceiling gets hit harder / more often than
-   single-host operation hits it today (the accepted-risk race above).
-5. Re-verify crt's OctoPrint reachability from dexter's WSL2 networking
-   specifically -- the earlier 2026-07-20 confirmation was against a
-   full VM, and WSL2's NAT networking is not guaranteed to behave the
-   same way; don't assume it still holds.
+**REVERSED, same session, minutes later (see DESIGN-NOTES.md follow-up
+entry): sprint scope is realisateur self-build, not the small MVP.**
+Asked directly whether to actually proceed with the small MVP below or
+let realisateur build dexter's own registration/rotation once login is
+set up -- answer was self-build. The steps below are now the STARTING
+POINT handed to that self-build session, not a human checklist. The
+accepted quota-race risk above is now MORE live, not less, since it
+arrives sooner and less manually sequenced -- watch `run.log` on both
+boxes closely once dexter's own paced runner starts.
 
-Blocked on human-only setup steps in QUESTIONS.md before any of the above
-can be picked up by an unattended run.
+**Starting point for dexter's self-build (human still does login --
+interactive OAuth can't run unattended):**
+1. Human, on dexter: install Claude Code, log into the SAME primary Max
+   account as mandark (the shared-quota premise depends on it -- see
+   QUESTIONS.md), clone this repo.
+2. Realisateur (or an equivalent bootstrap session run ON dexter) takes
+   it from there: register dexter as a second host, writing its own
+   `_paced.conf` subset (hardware-evidenced pins only -- `crt` is the one
+   confirmed case, see decision above; don't invent others), installing
+   its own crontab tick against `usage-paced-runner.sh`, and dropping
+   whatever it pins from mandark's `_paced.conf` so nothing double-
+   dispatches from both hosts.
+3. Re-verify crt's OctoPrint reachability from dexter's WSL2 networking
+   specifically as part of that self-build -- the earlier 2026-07-20
+   confirmation was against a full VM, and WSL2's NAT networking is not
+   guaranteed to behave the same way; don't assume it still holds.
+4. Watch `run.log` on both boxes once dexter's tick goes live; watch
+   specifically whether the account-wide ceiling gets hit harder / more
+   often than single-host operation hits it today (the accepted-risk race
+   above) -- this is the one thing the original MVP existed to observe,
+   still worth watching even though the sequencing changed.
+
+Blocked on the human login/clone step in QUESTIONS.md before any of the
+above can be picked up by an unattended run.
 
 ## Consolidation roadmap (2026-07-20, human-directed session)
 
