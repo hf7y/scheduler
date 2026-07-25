@@ -64,49 +64,42 @@ same day — `PARKING-LOT.md`, `PERSONA-CHANNEL.md`, `RFP-GALLERY.md`,
 `.claude/FOCUS.md`'s MIDI section — see those for the full writeups);
 still listed here because the actual hands-on-hardware step hasn't
 happened yet for any of them.
-- **MIDI controller pass-through** — **PARKED 2026-07-20** into crt's own
-  `PARKING-LOT.md` (full status/next-step there). Still stuck on a
-  VBoxSVC restart on dexter needing direct human OK (live VM depends on
-  it); not on the critical path, deliberately deprioritized rather than
-  actively blocked-and-waiting.
-> parked indefinitely. virtual machine has been retired for several
-  cycles now, btw.
-
 - **Full-body handset dims still ungauged** (overall length,
   earpiece/mouthpiece cup diameters, weight) — not blocking, per Zach's
   steer: educated-guess values (handset "feels standard") are in
   `cad/params.scad`, clearly marked GUESS, and `wall_hook.scad` derives
   from them. `cad/HANDSET-MEASUREMENTS.md` has an ASCII diagram of where
-  to caliper each GUESS value whenever convenient —
-  **Caliper on hand** (https://www.amazon.com/dp/B09R84QZ2P).
-> full part printed; only aesthetic work remains for print; function
-  exists. need to wire up the 3 pin switch (hard kill audio? software
-  mute on switch close? into pi gpio/other?)
-
-- **Benchy calibration print** needs the Ender 3's SD card path verified
-  and someone to actually run the print (3DBenchy STL already downloaded
-  on mandark). **In progress**: printer's mid-print on a Pi3B case right
-  now; Benchy itself still pending.
-> not needed. prints have printed fine.
-
-- **USB phone-interface module** (bare-metal Compute Stick target) is
-  blocked on a DAC arriving — nothing to do until it ships. **ETA**: the
-  DAC (https://www.amazon.com/dp/B08Y8CZB2S) is arriving Tuesday morning.
-> arrived long ago. already referenced in docs. this is stale.
-
-### crt deep-vision (PARKING-LOT.md / RFP docs)
-- **Gallery installation** (`RFP-GALLERY.md`): the original "centralized
-  vs. independent" framing is superseded — **direction given 2026-07-20**:
-  explore autonomous networked Pis (per-unit personality + failure
-  isolation + emergent message-passing) vs. real POTS wiring through a
-  switcher (cheaper per-unit, authentic feel, single point of failure).
-  Full possibilities writeup now in `RFP-GALLERY.md`. **Still open**:
-  which of the two to actually build.
-> see RFP-GALLERY.md for updates and fold them in. 
-> fold them in?
+  to caliper each GUESS value whenever convenient. **Update 2026-07-24**:
+  full part printed; only aesthetic work remains on the print — function
+  exists. Still open: need to wire up the 3-pin switch (hard kill audio?
+  software mute on switch close? into Pi GPIO/other?).
 
 ## Recently resolved
 
+- **crt Gallery installation architecture** (`RFP-GALLERY.md`) (2026-07-24)
+  — decided: **A2 (per-unit Pi, autonomous/networked)**, not B (POTS +
+  switcher) — per-unit character, failure isolation, and emergent
+  message-propagation outweigh B's lower per-unit cost. B stays
+  documented as a fallback, referenceable later ("B would do this more
+  cleanly, B would need x/y/z") rather than deleted. `RFP-GALLERY.md`'s
+  other three open questions are also answered there as of this pass:
+  pure human-to-human audio (no AI-generated replies, light AI cleanup/
+  filtering only), consent handled via recording-disclaimer signage +
+  auto-delete bound to the show's run, and handset sourcing developed as
+  parallel cheap/reproduction + aspirational-real-vintage tracks rather
+  than picking one now. No build started; still no venue/budget attached
+  — this closes the architecture decision, not the whole brief.
+- **crt MIDI controller pass-through** (2026-07-24) — parked indefinitely,
+  not just deprioritized: the VBoxSVC VM this depended on has been
+  retired for several cycles now, so the old "waiting on a restart"
+  framing no longer applies. See `PARKING-LOT.md`; revisit only if a
+  replacement VM/host is ever stood up.
+- **crt Benchy calibration print** (2026-07-24) — not needed; prints have
+  printed fine without it. No calibration print required, closing out.
+- **crt USB phone-interface module DAC** (2026-07-24) — stale entry; the
+  DAC (https://www.amazon.com/dp/B08Y8CZB2S) arrived long ago and is
+  already referenced elsewhere in the project's docs. No longer blocked
+  on sourcing.
 - **wtul ROADMAP #2 (AcoustID/Discogs metadata fallback) — confirmed
   stale, both blockers already cleared** (2026-07-24) — re-verified live
   on the wtul-batch machine: `fpcalc version 1.5.1` is installed (the

@@ -786,6 +786,42 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-24 21:10 (realisateur session, BLOCKERS.md sweep):** Root
+  cause found for tonight's stale-BLOCKERS.md entries (wtul Discogs/
+  fpcalc, crt MIDI/Benchy/DAC, crt Gallery architecture — all folded in
+  or resolved this session): the header's own sweep contract ("moving a
+  resolved entry to Recently resolved is `/ideate`'s job") is real but
+  has no trigger — it only fires when a human notices or an `/ideate`
+  pass happens to touch that exact project, so entries rot silently
+  otherwise (wtul's fpcalc/token work landed and was marked done in its
+  own `.claude/FOCUS.md` days before BLOCKERS.md caught up). **Cheap win
+  shipped tonight:** `bin/blockers-freshness-check.sh` (zero-AI-cost,
+  same offline-first-checks.md discipline as `collect-feedback.sh`) —
+  flags any active BLOCKERS.md bullet whose newest mentioned date is
+  >`STALE_DAYS` (default 14) old, AND cross-checks each flagged
+  project's own FOCUS.md git-commit date against that bullet's newest
+  date (catches exactly the wtul shape: FOCUS.md moved on, BLOCKERS.md
+  didn't). Findings are signals, not verdicts — same convention as
+  milestone-audit.sh/hygiene-lint.sh/ecosystem-survey.sh. **Not done,
+  queued for a real pass:** (1) it isn't wired into any run cadence yet
+  — just a standalone script; the natural next step is calling it from
+  `morning-report.sh` (surface a WARN line the same way the "stranded
+  local commits" hint already works) and/or as a pre-flight `/ideate`
+  step alongside `milestone-audit.sh`, not built tonight since that's a
+  real integration decision (which surface, how noisy) rather than a
+  mechanical add. (2) A genuine semantic cross-file consistency check
+  (does this BLOCKERS.md bullet's *claim* still match reality, not just
+  "did a date pass") needs real judgment, not grep — that's the existing
+  "`BLOCKERS.md`-as-computed-view redesign" backlog item above, this
+  script is a cheap partial step toward it, not a replacement for it.
+  (3) A real, separate, currently-open blocker surfaced by this same
+  sweep: wtul's `.claude/QUESTIONS.md`/`FOCUS.md` are harness-gated as
+  "sensitive files," refusing writes from 3 consecutive unattended
+  `/wtul-batch` runs (2026-07-24) — needs a human call (grant a
+  permission rule for those two files, or move them out of `.claude/`)
+  before `/wtul-batch` can file its own backlog again; see BLOCKERS.md's
+  `## wtul` section for the full writeup, not resolved by this pass.
+
 - **2026-07-24 20:22 (via `scheduler -i`):** Heads up from realisateur's /ideate (2026-07-24): schedule/aedile.conf and schedule/vkv-inventory.conf both set PROJECT_REPO_PATH to a zach@mandark local working copy (/home/zach/Documents/vkv/wavebucks/aedile, /home/zach/Documents/vkv/inv/inventory-app) that Zach says is scheduled to be sunset/closed. Once that happens, sync-crontab.sh's focus/<project>.md and questions/<project>.md symlinks (and 'scheduler status aedile'/'vkv-inventory') will point at a dead path. Both projects' actual dispatch already runs under svc-vaporwave's own fresh-clone checkout, independent of this path -- it's only used for the FOCUS.md/QUESTIONS.md symlink convention. Realisateur has separately decided (see its own FOCUS.md) to stop direct-cross-writing these two once mandark closes and route via this same -i front door instead. Suggest: when the mandark copies actually close, either point PROJECT_REPO_PATH at nothing (accepting no symlink for these two) or at a small dedicated clone -- scheduler's call, not decided here.
 
 - **2026-07-24 12:52 (via `scheduler -i`):** develop integration with google keep, crt, phomemo printer, home assistant, to manage zach's domestic tasks, blockers, etc. google keep maintains a list of curated todos of registered programs and other, phomemo prints out todo list, has omr scanner hooks, omr scanner reads printed form and checks off items.
