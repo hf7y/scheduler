@@ -903,6 +903,28 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-25 17:06 (human-directed session):** Make the usage-gate
+  **ceiling settable from a config file**, not only env. Today the 0.85
+  cap lives solely in `bin/usage-gate.sh:41`
+  (`CEILING="${USAGE_CEILING:-0.85}"`); the only persistent override path
+  is editing `RUNNER_ENV` in `schedule/_runner.conf` and re-running
+  `bin/sync-crontab.sh --apply` — two steps, and the value ends up
+  retyped on a crontab line instead of read from one source (build
+  discipline violation). Wanted: a single conf the gate itself sources
+  (e.g. `schedule/_usage.conf` with `USAGE_CEILING=` / `USAGE_MIN_SLACK=`),
+  explicit env still winning over the file so one-off
+  `USAGE_CEILING=x bin/usage-gate.sh` tests keep working. Scoping notes
+  from today: (a) the deployed gate at `~/.local/bin/usage-gate.sh` is a
+  **copy, not a symlink**, so the conf lookup can't assume a repo-relative
+  path — either resolve via a `SCHEDULER_*` env the runner already
+  forwards, or use a fixed per-user path; (b) `schedule/_paced.dexter.conf`
+  establishes the host-scoped-conf convention, and DESIGN-NOTES.md:807
+  already anticipates wanting **per-host** ceilings once two hosts share
+  one account budget — support `_usage.<host>.conf` overriding the base
+  file from day one; (c) whatever ships must name what it retires: update
+  the `RUNNER_ENV` guidance in `_runner.conf`/docs so the ceiling isn't
+  settable in two competing places.
+
 - **2026-07-25 11:51 (via `scheduler -i`):** Investigate 'a door': remote idea-intake for 'scheduler -i' so drops don't require originating on mandark, raised via realisateur's 2026-07-25 nightly-batch pass (senechal session origin). PARKED against current milestone (zero-silent-failure unattended dispatch) -- this is a new intake surface, not required to reach it. Scoping done, not built: intake options are (a) SSH-only -- push a signed .idea/text file to a dedicated bare repo over the same SSH path dexter already uses for crt (git-shell-only key, no shell access), a post-receive hook calls cmd_idea/writes FOCUS.md, no new network service; (b) a tiny authenticated HTTP endpoint (webhook-style) that shells out to the same insertion logic -- more reachable from a phone but is a genuinely new internet-facing surface needing its own hardening; (c) email/SMS relay -- adds a third-party dependency and parsing surface for little benefit over (a). Recommend (a) as the only option that reuses the existing SSH-key/git-shell pattern with no new listening service; senechal's own secret-guarding charter makes an internet-reachable file-editing endpoint (b) the one to threat-model hardest if ever chosen. Revisit once scheduler's current milestone is reached.
 
 - **2026-07-25 10:43 (realisateur session, routed from `scheduler status
