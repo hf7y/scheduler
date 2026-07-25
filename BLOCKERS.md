@@ -33,26 +33,27 @@ only ever sees its own section, never another project's.
   `echo <new-token> | gh auth login --with-token`.
 
 ## wtul
-- **`.claude/QUESTIONS.md` and `.claude/FOCUS.md` are gated as "sensitive
-  files" needing interactive approval — unwritable from three
-  consecutive unattended `/wtul-batch` runs now (2026-07-24, runs 9, 10,
-  and this one).** Every attempted write (Edit tool, and a plain shell
-  `>>` append tried this round to rule out the tool as the cause) gets
-  refused with "Claude requested permissions to edit
-  .../.claude/QUESTIONS.md which is a sensitive file" — no prompt a
-  human can answer in an unattended context, so the run can never get
-  past it on its own. Neither file has a repo-local
-  `.claude/settings.json`/`settings.local.json` deny rule (checked,
-  empty) — this looks like a harness-level protection on `.claude/*.md`
-  specifically (plausibly deliberate: stops an agent from silently
-  rewriting its own config/instructions), not a misconfiguration in this
-  repo. Needs a human decision: either grant this session/schedule an
-  explicit permission rule for these two files, or move
-  QUESTIONS.md/FOCUS.md out of `.claude/` if they're meant to stay
-  unattended-writable (they're this project's live backlog + user
-  inbox, not config). Until resolved, `/wtul-batch` runs keep drafting
-  QUESTIONS.md entries in the report instead of actually filing them —
-  see `~/reports/wtul/2026-07-24.md` (runs 10 and 11) for what's queued.
+- **`.claude/QUESTIONS.md` and `.claude/FOCUS.md` sensitive-file write
+  block — DECIDED 2026-07-24: grant a permission rule, don't relocate
+  the files.** Zach's call: these are wtul's own live backlog/inbox
+  docs, not secrets, no reason to move them out of `.claude/`.
+  **Attempted fix, same session:** added explicit
+  `Edit(.claude/QUESTIONS.md)` / `Edit(.claude/FOCUS.md)` /
+  `Write(.claude/QUESTIONS.md)` / `Write(.claude/FOCUS.md)` allow rules
+  to `wtul/.claude/settings.local.json` (gitignored, machine-local —
+  correct scope since `/wtul-batch` runs on this same host per
+  `schedule/wtul.conf`'s `PROJECT_REPO_PATH`). **Not yet verified live:**
+  the original block also fired on a plain shell `>>` append, not just
+  the Edit tool, which is why this is flagged unverified rather than
+  closed — if the sensitive-file gate is enforced beneath the normal
+  per-tool `Edit`/`Write`/`Bash` permission-rule layer (a path-based
+  check that doesn't key off which tool touched the path), an allow rule
+  scoped to `Edit`/`Write` alone may not clear a raw shell write. Confirm
+  on the next `/wtul-batch` run (12th) — if it still refuses, the
+  fallback (move `QUESTIONS.md`/`FOCUS.md` out of `.claude/`) is the
+  only remaining lever. Queued backlog drafted in
+  `~/reports/wtul/2026-07-24.md` (runs 10 and 11) still needs manual
+  filing into `QUESTIONS.md` if this run also fails.
 
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
