@@ -814,14 +814,19 @@ to build sooner.
   project's own FOCUS.md git-commit date against that bullet's newest
   date (catches exactly the wtul shape: FOCUS.md moved on, BLOCKERS.md
   didn't). Findings are signals, not verdicts — same convention as
-  milestone-audit.sh/hygiene-lint.sh/ecosystem-survey.sh. **Not done,
-  queued for a real pass:** (1) it isn't wired into any run cadence yet
-  — just a standalone script; the natural next step is calling it from
-  `morning-report.sh` (surface a WARN line the same way the "stranded
-  local commits" hint already works) and/or as a pre-flight `/ideate`
-  step alongside `milestone-audit.sh`, not built tonight since that's a
-  real integration decision (which surface, how noisy) rather than a
-  mechanical add. (2) A genuine semantic cross-file consistency check
+  milestone-audit.sh/hygiene-lint.sh/ecosystem-survey.sh. **(1) DONE
+  2026-07-24 (paced cycle): wired into `cmd_sweep` in `bin/scheduler`**
+  (not `morning-report.sh`, which is deprecated in favor of `scheduler` —
+  see its own header) as a sixth pass, same "print a WARN block only when
+  something's actually flagged" shape as the fifth (migration-check) pass
+  right above it: runs `bin/blockers-freshness-check.sh`, and on nonzero
+  exit prints its full output under an `== [blockers-freshness] ... ==`
+  heading; silent on a clean sweep. Verified: `bash -n bin/scheduler`
+  clean; ran the check script directly (`0/3` flagged today, real
+  BLOCKERS.md is current); forced the failure path with
+  `STALE_DAYS=-1 bash bin/scheduler sweep` and confirmed the WARN block
+  renders correctly (crt/wtul both correctly flagged at 0 days old with
+  a negative threshold). **(2) A genuine semantic cross-file consistency check
   (does this BLOCKERS.md bullet's *claim* still match reality, not just
   "did a date pass") needs real judgment, not grep — that's the existing
   "`BLOCKERS.md`-as-computed-view redesign" backlog item above, this
