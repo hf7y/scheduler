@@ -669,6 +669,27 @@ to build sooner.
    (commented) so nothing flips until a human drops it and runs `--apply`.
    Verify with `bin/sync-crontab.sh` (preview, NO `--apply`): output must
    stay byte-identical while `*_SCRIPT` is still set. One commit per project.
+   - **DONE 2026-07-24 paced cycle: `home-assistant` and `wtul` step-1
+     fields copied.** `schedule/home-assistant.conf` gained `REPO_URL`,
+     `REPO_SUBDIR`, `SECRETS_SRC_DIR` (reproduces the wrapper's pre-clone
+     `.session-handoff/` copy-in — `lib/sweep-loop-common.sh` already
+     supports this generically, so nothing wrapper-specific is lost),
+     `BATCH_MAX_TURNS`, `BATCH_EXPIRY_DAYS`, `BATCH_ALLOWED_TOOLS`, and
+     `BATCH_PROMPT`. `schedule/wtul.conf` gained `REPO_URL`, `REPO_SUBDIR`,
+     `BATCH_MAX_TURNS`, `BATCH_EXPIRY_DAYS`, and `BATCH_PROMPT`. Both keep
+     `BATCH_SCRIPT` set (still authoritative — no dispatch behavior
+     changed). Verified: sourced each conf directly and diffed the loaded
+     fields against the wrapper's own variables (byte-for-byte match,
+     including the multi-line prompts); `bin/sync-crontab.sh` preview
+     output diffed before/after (via `git stash`) and confirmed
+     byte-identical. `chezz` was already done (2026-07-19); `vkv-inventory`
+     deliberately skipped — its batch tier now runs entirely outside this
+     scheduler under svc-vaporwave's own crontab (see its conf's own
+     `MIGRATED to` comment), so migrating dead/inert fields here isn't
+     verifiable against a real dispatch path and would just be unused
+     scaffolding. Remaining: apply the same step-1 copy to `vkv-inventory`
+     only if/when it's ever pulled back under this scheduler's control;
+     until then this backlog item is otherwise clear.
 
 2. **SUPERSEDED 2026-07-20 — see "Consolidation roadmap" → axis 3 below.**
    The target path changed: `SCHEDULER_SUBDIR=".scheduler"` (top-level,
