@@ -43,65 +43,6 @@ run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
 ## scheduler
-- **5 of 14 jobs' `EXPIRY_DAYS` dead-man switches have fired — renewing
-  them is your call, not an unattended run's** (appended 2026-07-25 by a
-  realisateur session; witness: scanned `~/.local/share/*/expires_at`
-  against `date -Is`, and each job's own `sweep.log`). Expired:
-  `chezz-nightly-batch` (2026-07-25T01:00), `chezz-bug-sweep`
-  (2026-07-23T22:44), `home-assistant-nightly-batch` (2026-07-25T01:30),
-  `vkv-inventory-bug-sweep` (2026-07-24T13:30),
-  `vkv-inventory-nightly-batch` (2026-07-25T02:32). An expired job clones
-  its repo and then `exit 0`s without running claude, so `chezz` and
-  `home-assistant` have been quietly no-opping every paced tick today
-  (`chezz` at 01:21 and 08:55, `home-assistant` at 08:55). This is here
-  rather than in FOCUS.md because the switch exists so that unattended
-  work can't run indefinitely unsupervised — an agent renewing its own
-  expiry defeats the mechanism. **The renewal actually is `rm
-  ~/.local/share/<job>/expires_at`** (the next run re-stamps `now +
-  EXPIRY_DAYS`); the "bump `EXPIRY_DAYS` and re-run
-  `bin/sync-crontab.sh`" text printed by `scheduler status` is wrong —
-  nothing in `bin/`/`lib/` ever writes that file except a
-  create-if-missing at `lib/sweep-loop-common.sh:192-194`. Correcting
-  that text, plus making the expired path loud and visible in `scheduler
-  glance`/`sweep`, is queued in this repo's FOCUS.md backlog
-  (2026-07-25 10:43 entry) as agent work.
-  - **RESOLVED 2026-07-25 11:00 for `chezz-nightly-batch` and
-    `home-assistant-nightly-batch` only** (human-directed in the same
-    session: "lets knock this out now"). Both `expires_at` files removed
-    after backing up their old values; next dispatch re-stamps `now + 7d`.
-    Witness: the create-if-missing block from
-    `lib/sweep-loop-common.sh:192-196` run in isolation against a temp
-    file returned PROCEED with a 2026-08-01 stamp, and `scheduler status`
-    for both projects no longer prints an EXPIRED line. **Still expired,
-    deliberately not renewed:** `chezz-bug-sweep` (that tier is parked —
-    `SWEEP_JOB_NAME=""` in `schedule/chezz.conf`) and
-    `vkv-inventory-bug-sweep`/`vkv-inventory-nightly-batch` (dispatched
-    under svc-vaporwave's own crontab now, a different account's call).
-- **`~/.local/bin/chezz-nightly-batch-loop.sh`'s `PROMPT` still says
-  "Read .claude/FOCUS.md FIRST", which no longer exists** (appended
-  2026-07-25, same session; witness: read the wrapper and `ls
-  chezz/.claude chezz/.scheduler`). chezz moved its scope file to
-  `.scheduler/FOCUS.md` on 2026-07-24; that wrapper is still
-  authoritative (`BATCH_SCRIPT` is set in `schedule/chezz.conf`), so
-  chezz's nightly batch would run **unscoped** once its expiry above is
-  renewed. Needs a human because editing `~/.local/bin` wrappers is
-  explicitly outside a batch's scope (roadmap item 1). Two ways: edit the
-  one path in the wrapper, or drop `BATCH_SCRIPT` from `chezz.conf` and
-  run `bin/sync-crontab.sh --apply` to flip chezz onto
-  `bin/scheduler-run` (the conf's own `BATCH_PROMPT` is being corrected
-  as part of the queued FOCUS.md item, so the flip lands the right path).
-  - **RESOLVED 2026-07-25 11:00, human-directed same session** — took the
-    first option: both `.claude/FOCUS.md` references in
-    `~/.local/bin/chezz-nightly-batch-loop.sh` now read
-    `.scheduler/FOCUS.md` (old copy backed up before editing; that file is
-    under no version control, so this note is its history). `BATCH_SCRIPT`
-    stays set and authoritative — nothing was flipped onto
-    `bin/scheduler-run`, that decision is still open. `schedule/chezz.conf`
-    gained `SCHEDULER_SUBDIR=".scheduler"` and the matching `BATCH_PROMPT`
-    path in the same commit, and the two prompts were diffed
-    byte-identical afterward so the mirror invariant holds. Witness:
-    `scheduler status chezz` now reads chezz's real 271-line FOCUS.md and
-    its 5 open questions instead of "no FOCUS.md found".
 
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
@@ -117,18 +58,10 @@ only ever sees its own section, never another project's.
   `echo <new-token> | gh auth login --with-token`.
 
 ## wtul
-- **`.claude/QUESTIONS.md` and `.claude/FOCUS.md` sensitive-file write
-  block — DECISION REVISED 2026-07-24, same session.** First call was a
-  permission rule (see settings.local.json allow entries added there,
-  now superseded — safe to leave, harmless, or strip on the migration
-  below). **Revised call:** migrate wtul onto the `.scheduler/` subdir
-  layout instead (same convention `scheduler` and `aedile` already use)
-  — sidesteps the `.claude/*.md` sensitive-file gate entirely rather
-  than special-casing around it, and gets wtul onto the same design as
-  every other project long-term, per Zach's explicit preference.
-  **Not done — filed for an async pass, not completed live** (a partial
-  `git mv` was started and reverted clean this session rather than leave
-  it half-migrated). Real scope, scouted but not executed: `git mv
+- **Migrate wtul onto the `.scheduler/` subdir layout — NOT DONE, filed
+  for an async pass, not completed live** (decided 2026-07-24; a partial
+  `git mv` was started and reverted clean that session rather than left
+  half-migrated). Real scope, scouted but not executed: `git mv
   .claude/{FOCUS,QUESTIONS}.md .scheduler/`; `schedule/wtul.conf` needs
   `SCHEDULER_SUBDIR=".scheduler"` (same as `aedile.conf`); re-run
   `bin/sync-crontab.sh --apply` to regenerate the `focus/wtul.md` /
@@ -138,12 +71,18 @@ only ever sees its own section, never another project's.
   `.scheduler/...` or the batch run's own instructions break; `lib/
   spinitron.py`, `ROADMAP.md`, and `LIVE-TEST-DEBRIEF-2026-07-24.md`
   also reference the old path in comments/docs, lower-priority but worth
-  sweeping in the same pass; once migrated, the settings.local.json
-  allow rules and this whole entry can move to Recently resolved.
-  Queued backlog drafted in `~/reports/wtul/2026-07-24.md` (runs 10 and
-  11) still needs manual filing into `QUESTIONS.md`/`.scheduler/
-  QUESTIONS.md` in the meantime if a run hits this before the migration
-  lands.
+  sweeping in the same pass. In the meantime, queued backlog drafted in
+  `~/reports/wtul/2026-07-24.md` (runs 10 and 11) still needs manual
+  filing into `QUESTIONS.md`/`.scheduler/QUESTIONS.md` if a run hits
+  this before the migration lands. Superseded decision (revised same
+  session, 2026-07-24): the first call was a sensitive-file permission
+  rule — the settings.local.json allow entries added then are now moot;
+  safe to leave, or strip on migration. The migration sidesteps the
+  `.claude/*.md` sensitive-file gate entirely rather than special-casing
+  around it, and gets wtul onto the same design as every other project
+  (the convention `scheduler` and `aedile` already use), per Zach's
+  explicit preference. Once migrated, the allow rules and this whole
+  entry move to Recently resolved.
 
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
@@ -156,23 +95,20 @@ same day — `PARKING-LOT.md`, `PERSONA-CHANNEL.md`, `RFP-GALLERY.md`,
 still listed here because the actual hands-on-hardware step hasn't
 happened yet for any of them.
 - **Full-body handset dims still ungauged** (overall length,
-  earpiece/mouthpiece cup diameters, weight) — not blocking, per Zach's
-  steer: educated-guess values (handset "feels standard") are in
-  `cad/params.scad`, clearly marked GUESS, and `wall_hook.scad` derives
-  from them. `cad/HANDSET-MEASUREMENTS.md` has an ASCII diagram of where
-  to caliper each GUESS value whenever convenient. **Update 2026-07-24**:
-  full part printed; only aesthetic work remains on the print — function
-  exists. 3-pin switch design writeup (hard-kill vs. software-mute vs.
-  GPIO) **moved to crt's own `.claude/FOCUS.md` ranked backlog item 7,
-  2026-07-24** — this is `[batch]`-tagged doable-unattended work
-  (a design-options doc, no hardware needed), so it belongs in the file
-  crt's own `/nightly-batch` actually reads, not here. **Process
-  correction, same day:** this item was first filed here only, which was
-  wrong — BLOCKERS.md is human-only blockers, nothing consumes it as a
-  work queue for any project (crt's `/nightly-batch` scope is explicitly
-  `.claude/FOCUS.md`'s batch-tagged items only), so it would have sat
-  here indefinitely. Left this cross-reference so a future BLOCKERS.md
-  read doesn't re-surface it as if still homeless.
+  earpiece/mouthpiece cup diameters, weight) — the hands-on caliper pass
+  hasn't happened; `cad/HANDSET-MEASUREMENTS.md` has an ASCII diagram of
+  where to caliper each GUESS value whenever convenient. Not blocking,
+  per Zach's steer: educated-guess values (handset "feels standard") are
+  in `cad/params.scad`, clearly marked GUESS, and `wall_hook.scad`
+  derives from them — and per the 2026-07-24 update the full part
+  printed with function intact, only aesthetic work remaining, so
+  urgency is low. Trailing note (2026-07-24): the 3-pin switch design
+  writeup (hard-kill vs. software-mute vs. GPIO) moved to crt's own
+  `.claude/FOCUS.md` ranked backlog item 7 — `[batch]`-tagged
+  doable-unattended work that was first wrongly filed only here, where
+  nothing consumes it as a work queue (crt's `/nightly-batch` scope is
+  `.claude/FOCUS.md`'s batch-tagged items only); this cross-reference
+  stays so a future read doesn't re-surface it as if still homeless.
 
 ## vkv-inventory
 
@@ -194,6 +130,39 @@ happened yet for any of them.
 
 ## Recently resolved
 
+- **scheduler `EXPIRY_DAYS` dead-man switches: all 5 fired jobs
+  dispositioned** (resolved 2026-07-25 11:00, human-directed in-session:
+  "lets knock this out now"). `chezz-nightly-batch` and
+  `home-assistant-nightly-batch` renewed by removing
+  `~/.local/share/<job>/expires_at` (old values backed up; next dispatch
+  re-stamps `now + 7d`) — witness: the create-if-missing block from
+  `lib/sweep-loop-common.sh:192-196` run in isolation returned PROCEED
+  with a 2026-08-01 stamp, and `scheduler status` for both no longer
+  prints an EXPIRED line. Deliberately NOT renewed: `chezz-bug-sweep`
+  (that tier is parked — `SWEEP_JOB_NAME=""` in `schedule/chezz.conf`)
+  and `vkv-inventory-bug-sweep`/`vkv-inventory-nightly-batch`
+  (dispatched under svc-vaporwave's own crontab now, a different
+  account's call). Kept from the original 2026-07-25 entry: the real
+  renewal is `rm ~/.local/share/<job>/expires_at`; the "bump
+  `EXPIRY_DAYS` and re-run `bin/sync-crontab.sh`" text printed by
+  `scheduler status` is wrong, and correcting it plus making the expired
+  path loud in `scheduler glance`/`sweep` is queued as agent work in
+  this repo's FOCUS.md backlog (2026-07-25 10:43 entry).
+- **chezz nightly-batch wrapper still pointed at retired
+  `.claude/FOCUS.md` — would have run unscoped once its expiry was
+  renewed** (resolved 2026-07-25 11:00, human-directed same session).
+  Both references in `~/.local/bin/chezz-nightly-batch-loop.sh` now read
+  `.scheduler/FOCUS.md` (old copy backed up before editing; that file is
+  under no version control, so this note is its history);
+  `schedule/chezz.conf` gained `SCHEDULER_SUBDIR=".scheduler"` and the
+  matching `BATCH_PROMPT` path in the same commit, and the two prompts
+  were diffed byte-identical afterward so the mirror invariant holds.
+  Witness: `scheduler status chezz` now reads chezz's real 271-line
+  FOCUS.md and its 5 open questions instead of "no FOCUS.md found".
+  Still open (a decision, not a blocker): `BATCH_SCRIPT` stays set and
+  authoritative — whether to drop it and flip chezz onto
+  `bin/scheduler-run` via `bin/sync-crontab.sh --apply` was left
+  undecided.
 - **crt Gallery installation architecture** (`RFP-GALLERY.md`) (2026-07-24)
   — decided: **A2 (per-unit Pi, autonomous/networked)**, not B (POTS +
   switcher) — per-unit character, failure isolation, and emergent
@@ -230,24 +199,6 @@ happened yet for any of them.
   already wired into `lib/metadata_lookup.py` and live-verified per
   `.claude/FOCUS.md` item #2's Status note; this entry was just never
   pruned from BLOCKERS.md after that work landed.
-- **SUPERSEDED 2026-07-25 (agent, machine-append):** this entry was
-  CORRECT and was then contradicted by a worse record. Verified today
-  with `sudo -u svc-vaporwave crontab -l`: the two lines this entry says
-  were installed are installed, and both ran — vkv-inventory 04:00→04:05
-  pushing `c2f7d9d`, aedile 03:00→03:06 pushing `aedile-nightly/2026-07-25`
-  and PR #3. Meanwhile `schedule/_paced.conf` carried "confirmed
-  2026-07-24: no crontab exists there" on both project lines, which was
-  never verified against the account and is false; it propagated into
-  DESIGN-NOTES and became FABLE_REPORT.md's #1 ranked finding ("silently
-  orphaned, zero dispatch for four days"). `_paced.conf` corrected in
-  `d14a2f2`; DESIGN-NOTES still carries it. Both projects are now adopted
-  into a scheduler-managed block in that account's crontab (`774f55a`,
-  same times, no double dispatch — verified one line each). They stay at
-  weight 0 in `_paced.conf` deliberately: re-enabling locally would
-  double-dispatch against these live jobs. What WAS real: aedile's own
-  `run.log` shows completed cycles on 07-20, 07-21, 07-25 only — a
-  genuine 07-22→24 gap, cause being world-writable `~/.ssh` blocking
-  `git push`, which aedile's own 07-25 run detected and fixed.
 - **aedile/vkv-inventory svc-vaporwave crontab** (2026-07-24) — a prior
   session's "confirmed working" claim was wrong; no crontab entry had
   ever actually been installed for that account. Fixed: home-dir access
@@ -255,6 +206,27 @@ happened yet for any of them.
   `crontab -l`. Full writeup: DESIGN-NOTES.md 2026-07-24
   "silently-orphaned finding"; handoff note at aedile's own
   `.claude/NEXT-STEPS.md` (local-only, gitignored there).
+  - **Re-confirmed 2026-07-25 (agent, machine-append; note filed as a
+    stray sibling bullet, attached to this entry in the 2026-07-25
+    human-directed sweep):** this entry was CORRECT and was then
+    contradicted by a worse record. Verified today with `sudo -u
+    svc-vaporwave crontab -l`: the two lines this entry says were
+    installed are installed, and both ran — vkv-inventory 04:00→04:05
+    pushing `c2f7d9d`, aedile 03:00→03:06 pushing
+    `aedile-nightly/2026-07-25` and PR #3. Meanwhile
+    `schedule/_paced.conf` carried "confirmed 2026-07-24: no crontab
+    exists there" on both project lines, which was never verified
+    against the account and is false; it propagated into DESIGN-NOTES
+    and became FABLE_REPORT.md's #1 ranked finding ("silently orphaned,
+    zero dispatch for four days"). `_paced.conf` corrected in `d14a2f2`;
+    DESIGN-NOTES still carries it. Both projects are now adopted into a
+    scheduler-managed block in that account's crontab (`774f55a`, same
+    times, no double dispatch — verified one line each). They stay at
+    weight 0 in `_paced.conf` deliberately: re-enabling locally would
+    double-dispatch against these live jobs. What WAS real: aedile's own
+    `run.log` shows completed cycles on 07-20, 07-21, 07-25 only — a
+    genuine 07-22→24 gap, cause being world-writable `~/.ssh` blocking
+    `git push`, which aedile's own 07-25 run detected and fixed.
 - **chezz + wtul: no deploy key needed, both already exist and work**
   (2026-07-24) — the "credential gap" diagnosis was wrong; both repos'
   `origin` already point at real, working deploy-key SSH aliases
