@@ -30,7 +30,12 @@ file read), because the failure this policy exists to prevent is a
 claim outliving its verification — see the 2026-07-25 svc-vaporwave
 entry below, where an unverified "no crontab exists there" in
 `schedule/_paced.conf` contradicted this file's own correct record for
-a full day and was believed over it.
+a full day and was believed over it. (`scheduler -b --claude`, added
+2026-07-25, is the mechanized form of the human sweep: Zach invokes it
+interactively and a one-shot claude pass condenses resolution notes and
+moves fully-resolved entries down to Recently resolved — human-directed
+each time, so it sits on the human-triage side of the line above, not
+an exception to it. Unattended runs still may not move or prune.)
 
 Each project's heading must be exactly `## <PROJECT_KEY>` (matches
 `schedule/<project>.conf`'s `PROJECT`/`PROJECT_KEY`) — that's what a

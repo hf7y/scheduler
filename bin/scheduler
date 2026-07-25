@@ -113,7 +113,13 @@ usage: scheduler [command] [project]
                          backlog" estimate -- real history, not a promise.
   blockers [project] [n], -b
                          open BLOCKERS.md; with a project + number, jump vim
-                         straight to that project's Nth open blocker bullet
+                         straight to that project's Nth open blocker bullet.
+                         --claude: first run a one-shot claude tidy pass
+                         (edits scoped to BLOCKERS.md only) that reconciles
+                         each entry's dated RESOLVED/RETRACTED/SUPERSEDED
+                         sub-notes, moves fully-resolved entries down to
+                         Recently resolved, and prints a "needs you now"
+                         digest -- then opens the tidied file as usual
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
   questions [project] [n], -q
                          open a project's QUESTIONS.md (list if omitted);
@@ -201,7 +207,7 @@ usage: scheduler [command] [project]
                          a live `claude` session in the project's repo
                          preloaded with it as starting context.
 
-Examples: scheduler -b   |   scheduler focus crt   |   scheduler report wtul
+Examples: scheduler -b   |   scheduler -b --claude   |   scheduler focus crt
           scheduler -i realisateur "a browser extension that ..."
           scheduler -i wtul "add a --dry-run flag to wtul-rip"
           scheduler -s
@@ -1798,6 +1804,69 @@ Use this as your starting context for looking into $proj -- feel free to dig int
   esac
 }
 
+cmd_blockers_tidy() {
+  # `scheduler -b --claude` -- a one-shot claude pass that tidies
+  # BLOCKERS.md in place BEFORE it opens, so the file you land in shows at
+  # a glance what actually still needs you. BLOCKERS.md's own header
+  # reserves the active->resolved sweep for "human / /ideate triage" --
+  # this command is that human triage: Zach invoking it interactively is
+  # the human doing the sweep, with claude as the editor. The
+  # machine-append restrictions still bind UNATTENDED runs; nothing here
+  # is wired into any cron/paced path, and must not be.
+  #
+  # Same layering as cmd_status --claude: the AI step is opt-in per
+  # invocation, never the default (`scheduler -b` alone stays a zero-token
+  # plain `exec $EDITOR`). Edit permission is scoped to this ONE file via
+  # the permission rule pattern -- an attempted edit anywhere else hits a
+  # permission prompt, which `-p` (non-interactive) auto-denies.
+  local bfile="$SCHED_ROOT/BLOCKERS.md"
+  [ -f "$bfile" ] || { echo "scheduler: no BLOCKERS.md yet" >&2; exit 1; }
+  echo "scheduler blockers --claude: tidying BLOCKERS.md (one-shot, edits scoped to this one file)..."
+  echo
+  if ! (cd "$SCHED_ROOT" && claude -p "$(cat <<'EOF'
+Tidy exactly one file, in place: BLOCKERS.md at this repo's root. Read it
+fully first.
+
+Context: Zach just ran `scheduler blockers --claude` by hand. This pass is
+the human-invoked active->resolved triage sweep the file's own header
+describes and reserves for humans / `/ideate` -- you are the editor for a
+human-directed sweep, so condensing and moving entries IS authorized here
+(the machine-append policy's move/prune restrictions bind unattended
+agents, not this command). You have Edit permission for BLOCKERS.md only.
+
+Do, in place:
+1. Any entry in an active `## <project>` section whose own dated sub-notes
+   mark the WHOLE entry RESOLVED / RETRACTED / SUPERSEDED: condense it to
+   a short dated bullet (keep the resolution date and its witness) and
+   move it under `## Recently resolved`.
+2. Any partially-resolved entry: rewrite it so the still-open remainder
+   leads, with the already-resolved parts collapsed into one short
+   trailing note. Nothing still open may be dropped or softened.
+3. Where a later dated note corrects an earlier claim inside an entry,
+   keep the corrected version plus one line naming what it superseded.
+4. Preserve the file's structural conventions exactly: project headings
+   stay literal `## <PROJECT_KEY>` (other tooling matches on them),
+   entries stay `- **...` bullets, resolved items live only under
+   `## Recently resolved`. Don't rewrite the header prose, don't reorder
+   the project sections, don't delete dates/witnesses/links, and never
+   invent or infer a resolution that isn't already recorded in the file --
+   this pass verifies nothing externally.
+
+Then, as your final message, print a digest titled "needs you now": one
+line per genuinely-open item -- project, what's needed from Zach, and the
+concrete next action. Skip projects with nothing open. Keep it under ~12
+lines: it's shown in the terminal right before the file opens, not a
+report.
+EOF
+)" --allowedTools "Read,Grep,Glob,Edit(BLOCKERS.md)" --max-turns 30); then
+    echo
+    echo "WARNING: tidy pass failed (claude exited nonzero -- not logged in, or out of quota?)."
+    echo "Opening BLOCKERS.md untouched instead."
+    return 1
+  fi
+  cmd_commit_file "$bfile" "BLOCKERS.md: reconcile/tidy via \`scheduler -b --claude\`"
+}
+
 mark_blockers_seen() {
   # Snapshots every project's own section hash at open-time (see the
   # per-project freshness fix in cmd_glance) so `*` only reappears for a
@@ -1816,6 +1885,17 @@ mark_blockers_seen() {
 case "${1:-}" in
   ""|glance) cmd_glance ;;
   blockers|-b)
+    if [ "${2:-}" = "--claude" ]; then
+      # Tidy first, THEN snapshot seen-hashes -- so `*` freshness in the
+      # glance reflects the tidied sections you're about to read, not the
+      # pre-tidy ones. A failed tidy falls through to opening the file
+      # as-is (never let a claude hiccup stand between you and your file).
+      cmd_blockers_tidy || true
+      mark_blockers_seen
+      echo
+      read -rp "press Enter to open BLOCKERS.md (Ctrl-C to stop at the digest) " _ 2>/dev/null || true
+      open_file "$SCHED_ROOT/BLOCKERS.md"
+    fi
     mark_blockers_seen
     if [ -n "${2:-}" ] && [ -n "${3:-}" ]; then
       cmd_blockers_jump "$2" "$3"
