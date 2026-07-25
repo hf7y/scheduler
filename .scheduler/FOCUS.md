@@ -888,6 +888,23 @@ to build sooner.
 - **2026-07-24 12:52 (via `scheduler -i`):** develop integration with google keep, crt, phomemo printer, home assistant, to manage zach's domestic tasks, blockers, etc. google keep maintains a list of curated todos of registered programs and other, phomemo prints out todo list, has omr scanner hooks, omr scanner reads printed form and checks off items.
 
 - **2026-07-24 03:40 (via `scheduler -i`):** Two real bugs found 2026-07-24 while setting up realisateur's milestone convention, both stemming from the same wrong assumption: aedile has NO git repo, treated as migrated/defunct. That was wrong -- verified directly (should have done this before writing it down, per tonight's earlier credential-gap lesson): aedile IS a real, actively-committed project (5 recent commits, e.g. 'aedile: DM-tier bump/triage tuning'), just tracked as a subdirectory of the wavebucks monorepo at /home/zach/Documents/vkv/wavebucks (its own .git lives at the parent, not at aedile/ itself). Bug 1: bin/scheduler's git-health check (~line 622) uses [ -d "$repo_path/.git" ], a literal directory check that fails for any PROJECT_REPO_PATH pointing at a subdirectory of a repo rather than a repo root -- same failure mode would hit any future monorepo-subdirectory project, not just aedile. Fix: use 'git -C "$repo_path" rev-parse --is-inside-work-tree' (or similar) instead of the literal .git-dir check. Bug 2: aedile already uses the .scheduler/ subdirectory layout in practice (aedile/.scheduler/FOCUS.md is real, git-tracked, actively updated) but schedule/aedile.conf never declares SCHEDULER_SUBDIR=".scheduler" -- so any tool reading that field (realisateur's milestone-audit.sh, sync-crontab.sh's own symlink logic) misses it. Fix: add SCHEDULER_SUBDIR=".scheduler" to schedule/aedile.conf to match its real layout. Routing both here per realisateur's ideate.md step 5 front door (engine detection logic + registration conf) rather than hand-editing scheduler's own files from realisateur.
+  **Both DONE.** Bug 2 was already fixed by a prior pass (`schedule/aedile.conf`
+  already carries `SCHEDULER_SUBDIR=".scheduler"`, confirmed by reading it).
+  Bug 1 fixed this paced cycle (2026-07-24): added a shared `is_git_repo()`
+  helper to `bin/scheduler` (`git -C "$path" rev-parse --is-inside-work-tree`)
+  and swapped it in at the two call sites that matter -- `cmd_sweep`'s
+  first pass over every registered project's `PROJECT_REPO_PATH`, and
+  `build_status_report`'s git-health check (used by `scheduler status
+  <project>`). The two dedicated-clone globs (`~/.local/share/*/repo`)
+  were left on the old `[ -d "$path/.git" ]` check on purpose -- those are
+  always scheduler-managed fresh clones at a repo root, never a
+  subdirectory, so the bug can't occur there. Verified live against the
+  real aedile path: the old check silently returned false (skipped aedile
+  entirely, the exact bug reported), the new `is_git_repo` correctly
+  returns true; `scheduler status aedile` now shows real git-health output
+  ("clean, up to date with origin") instead of the old false "not a git
+  repo" line; `scheduler sweep` ran clean end to end, read-only, no state
+  changed. `bash -n bin/scheduler` clean.
 
 - **2026-07-24 01:33 (via `scheduler -i`):** Root cause found 2026-07-24 for the 'stranded local commit' pattern seen on chezz and wtul nightly-batch runs (previously misdiagnosed by realisateur's /ideate as a dedicated-clone-vs-working-checkout push race): it's a credential gap, not a race. The dispatch environment can push to local bare remotes (crt, realisateur, gardien, senechal) fine, but has no SSH credentials for GitHub-hosted remotes (chezz + wtul both use git@github.com:hf7y/...). Their nightly-batch runs commit successfully but the push step silently fails/is skipped, leaving commits local-only until a human or interactive Claude Code session (which does have working credentials) pushes them by hand -- confirmed tonight by manually pushing wtul's 51e2545 and chezz's 0189195, both landed cleanly. Proposal: either (a) give the dispatch environment's SSH agent/keys access to the github.com host (deploy keys or agent forwarding, scoped read+write to just these two repos), or (b) if that's intentionally not wanted (e.g. credential-scope hygiene), make the failure LOUD in scheduler status / sweep.log instead of the current silent 'pushed: no' with no reason given, so it reads as 'needs a human push' rather than looking like a generic failed run. Either is scheduler's call -- routing here per realisateur's ideate.md step 5 front door rather than hand-fixing dispatch config from realisateur.
   **Partial progress, option (b), 2026-07-24 paced cycle:** (a) is human-only
