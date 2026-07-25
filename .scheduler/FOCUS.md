@@ -819,6 +819,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-24 22:33 (via `scheduler -i`):** pinning crt on dexter is not right. that's based on old role of dexter as part of the actual crt build. current crt work can happen on either machine
+
 - **2026-07-24 21:10 (realisateur session, BLOCKERS.md sweep):** Root
   cause found for tonight's stale-BLOCKERS.md entries (wtul Discogs/
   fpcalc, crt MIDI/Benchy/DAC, crt Gallery architecture — all folded in
