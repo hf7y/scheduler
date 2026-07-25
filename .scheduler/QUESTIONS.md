@@ -143,3 +143,14 @@ its line once you've actually read and dealt with it.
   only hardware/network-evidenced projects belong on dexter -- so the
   question is specifically whether either has such evidence, not whether
   it would balance load.
+
+- **2026-07-24 (same session, follow-up): RESOLVED -- "does mandark pull
+  origin/main automatically?" (the item above this one).** Answer was no,
+  confirmed live, then fixed the same session: `usage-paced-runner.sh` now
+  pulls (fetch + `--ff-only`) at the start of every tick, inside the flock,
+  fail-loud-not-block on a dirty tree/failed fetch/genuine divergence. Full
+  writeup: DESIGN-NOTES.md 2026-07-24 "auto-pull wired into
+  usage-paced-runner.sh". Symmetric across both hosts (same script), so
+  this closes the gap on dexter too. The item above is left as-is rather
+  than edited, per this file's own convention of not silently rewriting
+  history.

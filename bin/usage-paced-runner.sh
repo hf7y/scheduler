@@ -52,6 +52,64 @@ LOG="$STATE_DIR/run.log"
 LOCK="$STATE_DIR/run.lock"
 PTR="$STATE_DIR/rotation.idx"
 
+USAGE_GATE="${USAGE_GATE:-$HOME/.local/bin/usage-gate.sh}"
+[ -x "$USAGE_GATE" ] || USAGE_GATE="$SELF_DIR/usage-gate.sh"
+NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+
+# mandark reaches `claude` through nvm; dexter has a native binary in
+# ~/.local/bin and no nvm at all. Prepend the node dir only when it exists,
+# and always APPEND ~/.local/bin (cron's default PATH omits it) -- appending
+# can add a resolution but can never shadow one that already worked.
+[ -d "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
+export PATH="$PATH:$HOME/.local/bin"
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+
+mkdir -p "$STATE_DIR"
+
+exec 200>"$LOCK"
+if ! flock -n 200; then
+  # a cycle is already in progress -- serialize, don't stack
+  exit 0
+fi
+[ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
+
+log() { echo "$(date -Is) $*" >> "$LOG"; }
+
+# --- pull before dispatch (2026-07-24) ---------------------------------------
+# This repo is shared RUNNING CODE across two hosts now, not just shared
+# config -- mandark and dexter each execute this script and lib/*.sh straight
+# out of their own checkout on a */5 cron tick, with no human in the loop.
+# A commit pushed from one host has zero effect on the other's behavior until
+# that checkout is updated. Runs inside the flock (one pull per host per tick,
+# never overlapping with a dispatch already in flight) and BEFORE the
+# participants-file resolution below, so a freshly pulled host-scoped conf
+# (e.g. a brand new schedule/_paced.<host>.conf) takes effect the same tick
+# it lands, not one tick later.
+#
+# Fail-loud-not-block, same philosophy as the usage gate's ERROR->HOLD: a
+# pull that can't happen cleanly (dirty tree, diverged history, no network)
+# is logged loudly and the tick proceeds on whatever is already checked
+# out -- one stale tick beats a dispatcher that stops ticking entirely
+# because of a merge conflict only a human can resolve. --ff-only refuses to
+# fabricate a merge commit unattended; a real divergence (this host has local
+# commits origin doesn't) is left exactly as found, for a human/session pull
+# to sort out, same as the mandark/dexter divergence QUESTIONS.md already
+# flagged the same day this was built.
+if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
+    log "PULL skip -- $REPO_ROOT has uncommitted changes"
+  elif ! timeout 20 git -C "$REPO_ROOT" fetch --quiet origin main 2>>"$LOG"; then
+    log "PULL skip -- fetch failed or timed out (network/auth?)"
+  elif git -C "$REPO_ROOT" merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+    : # already up to date (or ahead) -- nothing to log every 5 minutes
+  elif git -C "$REPO_ROOT" merge --ff-only origin/main --quiet 2>>"$LOG"; then
+    log "PULL fast-forwarded to $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  else
+    log "PULL WARNING -- $REPO_ROOT diverged from origin/main, code here may be stale (needs a human/session merge, not auto-resolved)"
+  fi
+fi
+
 # --- which participants file? (host-scoped, 2026-07-24) ---------------------
 # Two hosts now run this dispatcher out of ONE git-tracked repo (mandark and
 # dexter -- see DESIGN-NOTES.md "multi-machine parallelism"). A single shared
@@ -84,30 +142,6 @@ else
   PACED_CONF="$LEGACY_PACED_CONF"
   PACED_CONF_SRC="legacy absolute path (repo not found from $SELF_DIR)"
 fi
-
-USAGE_GATE="${USAGE_GATE:-$HOME/.local/bin/usage-gate.sh}"
-[ -x "$USAGE_GATE" ] || USAGE_GATE="$SELF_DIR/usage-gate.sh"
-NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
-
-# mandark reaches `claude` through nvm; dexter has a native binary in
-# ~/.local/bin and no nvm at all. Prepend the node dir only when it exists,
-# and always APPEND ~/.local/bin (cron's default PATH omits it) -- appending
-# can add a resolution but can never shadow one that already worked.
-[ -d "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
-export PATH="$PATH:$HOME/.local/bin"
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-
-mkdir -p "$STATE_DIR"
-
-exec 200>"$LOCK"
-if ! flock -n 200; then
-  # a cycle is already in progress -- serialize, don't stack
-  exit 0
-fi
-[ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
-
-log() { echo "$(date -Is) $*" >> "$LOG"; }
 
 # --- load enabled participants -------------------------------------------------
 # Format: name|enabled|command, with an OPTIONAL weight inserted as a third

@@ -1160,3 +1160,30 @@ Neither host was wrong and nothing was lost, but the ordering was pure timing:
 had `28a1617` landed an hour later, this session would have filed a decided
 question as open. Worth knowing that with two hosts writing prose into the
 same files, "read the current state" now has a shelf life measured in minutes.
+
+## 2026-07-24 (same session, third follow-up): auto-pull wired into usage-paced-runner.sh
+
+Answers QUESTIONS.md item #2 from the dexter self-build: no, nothing pulled
+`origin/main` on mandark before this -- confirmed live (a human had to
+`git pull`/merge by hand to bring dexter's pushed commits into mandark's
+checkout). Since this repo is shared **running code**, not just shared
+config (both hosts execute `usage-paced-runner.sh`/`lib/*.sh` straight out
+of their own checkout on a cron tick), that gap meant a push from either
+host had zero effect on the other until a human intervened -- silently.
+
+**Fix:** `usage-paced-runner.sh` now pulls at the start of every tick,
+inside the flock (so it can't race a dispatch already in flight), before
+resolving which participants file to read (so a freshly-landed host-scoped
+conf takes effect the same tick, not one tick later). `git fetch` +
+`merge --ff-only`, matching the fail-loud-not-block philosophy already used
+elsewhere (`usage-gate.sh`'s ERROR -> HOLD, `SCHEDULER_CONF_VERSION`'s soft
+validation): a dirty tree, failed fetch, or genuine history divergence all
+log loudly and let the tick proceed on whatever's already checked out,
+rather than fabricating a merge commit unattended or halting the
+dispatcher entirely over something only a human can resolve. `timeout 20`
+on the fetch so a dead network can't hang a tick indefinitely.
+
+Symmetric by construction -- same script both hosts run, so this closes
+the gap on dexter too, not just mandark. Deployed to
+`~/.local/bin/usage-paced-runner.sh` same session; `scheduler pacing`'s
+drift check confirms OK.
