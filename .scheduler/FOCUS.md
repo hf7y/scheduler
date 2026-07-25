@@ -1323,6 +1323,29 @@ to build sooner.
   real look at whether any OTHER registered project also blanket-
   `.gitignore`s `.claude/` and has the same latent bug, not just
   wavebucks/aedile.
+  **SURVEYED 2026-07-25 (paced cycle) — read-only, confirms the bug is
+  real and still live for aedile specifically, nobody else.** Checked
+  every registered project's repo-root `.gitignore` for a `.claude/`
+  pattern: `crt` and `wtul` only ignore specific per-developer state
+  files (`settings.local.json`, a lock file) — narrow, intentional,
+  not the bug this entry describes. Only `wavebucks` (aedile's parent
+  monorepo) blanket-ignores the whole `.claude/` directory
+  (`/home/zach/Documents/vkv/wavebucks/.gitignore:10`). Confirmed live
+  with `git ls-files aedile/.claude` (empty — zero tracked files) and
+  `git status --ignored` (`!! aedile/.claude/`, the entire tree
+  ignored). This is NOT just the historical FOCUS.md/QUESTIONS.md case
+  already fixed by moving to `.scheduler/` — **aedile currently has two
+  real, undated-in-git files sitting only in this ignored directory**
+  (`aedile/.claude/QUESTIONS.md`, `aedile/.claude/NEXT-STEPS.md`, both
+  with real content as of this survey) that would silently vanish on
+  any re-clone or worktree reset, with no git history to recover them
+  from — the exact live risk this entry warned about, not a closed
+  case. Scheduler can't edit aedile's repo or `.gitignore` (outside
+  this repo); routing to realisateur's intake per this file's usual
+  cross-project pattern: either move those two files' real content into
+  aedile's already-adopted `.scheduler/` convention, or narrow
+  wavebucks' `.gitignore` the way crt/wtul already do. No other
+  registered project needs this fix.
 
 - **2026-07-20 22:20 (via chat): full revisit of the svc-vaporwave split
   needed — bigger than the observability-only fix queued just above.**
