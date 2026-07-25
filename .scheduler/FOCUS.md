@@ -1491,6 +1491,53 @@ to build sooner.
   one project at a time, each project's own repo/PR (not edited from here
   directly, per the usual cross-project boundary).
 
+## Multi-machine parallelism -- dexter comes up as a peer (2026-07-24, /ideate, human-directed)
+
+Full decision + rationale + accepted risk in DESIGN-NOTES.md 2026-07-24
+"multi-machine parallelism" -- this section is the short pointer + queued
+MVP steps, not the reasoning. Trigger: dexter (previously known here only
+as crt's OctoPrint-reachable VM, BLOCKERS.md 2026-07-20) now has its own
+WSL/Ubuntu -- first second real machine capable of running Claude Code.
+Today's dispatcher is strictly single-host (`usage-paced-runner.sh`'s
+global flock, see "Architecture: cron, not a daemon" above); this is
+that section's own named revisit trigger showing up, as a second
+laptop-class peer rather than a server.
+
+**Decided (all four asked directly):** dexter runs Claude Code locally as
+a full peer (not a jump box) -- real parallelism, not remote triggering.
+Projects pin to a machine only where hardware/network need is actually
+evidenced (`crt` -> dexter, confirmed reachable at `192.168.0.43`;
+`gardien`/`senechal` NOT pinned -- their gate is permission-scope, not
+network-locality, real open question, see QUESTIONS.md); everything else
+stays on mandark for the MVP. Topology is two independent schedulers (own
+`_paced.conf` subset + rotation pointer each, no distributed lock) --
+simpler than a shared rotation, at the cost of a real accepted risk:
+`usage-gate.sh` is a point-in-time probe of account-wide headers, and two
+independent probers can both see slack and both dispatch, overshooting
+between probes (the single-flock model today prevents this by
+construction; two hosts reintroduce it). Not solved this pass -- watched
+empirically once the MVP is live. Sprint scope is the small MVP, not the
+full design.
+
+**MVP steps (not built yet):**
+1. Dexter: clone this repo, install Claude Code, log into the SAME
+   primary Max account as mandark (the shared-quota premise depends on
+   it -- see QUESTIONS.md).
+2. Dexter: install its own crontab entry running `usage-paced-runner.sh`
+   against a `_paced.conf` containing only `crt` to start.
+3. mandark: drop `crt` from `schedule/_paced.conf` so it isn't
+   double-dispatched from both hosts.
+4. Watch `run.log` on both boxes for a stretch; specifically watch
+   whether the account-wide ceiling gets hit harder / more often than
+   single-host operation hits it today (the accepted-risk race above).
+5. Re-verify crt's OctoPrint reachability from dexter's WSL2 networking
+   specifically -- the earlier 2026-07-20 confirmation was against a
+   full VM, and WSL2's NAT networking is not guaranteed to behave the
+   same way; don't assume it still holds.
+
+Blocked on human-only setup steps in QUESTIONS.md before any of the above
+can be picked up by an unattended run.
+
 ## Consolidation roadmap (2026-07-20, human-directed session)
 
 **RE-SEQUENCED AGAIN (2026-07-20, later still): item 0 is now PARKED (see

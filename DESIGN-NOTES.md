@@ -746,3 +746,89 @@ the visibility work already queued there (surface a stale/incomplete
 push in `scheduler status`/`sweep.log`), not new credentials. Flagging
 back to realisateur so its own memory of this incident gets corrected
 too, not just scheduler's.
+
+## 2026-07-24: multi-machine parallelism (dexter comes up as a peer) — /ideate, human-directed
+
+**Trigger:** dexter (a box previously only known to this repo as crt's
+OctoPrint-reachable VM, see BLOCKERS.md 2026-07-20) is now up with its own
+WSL/Ubuntu environment — the first time a second real machine capable of
+running Claude Code has existed alongside mandark. Today's dispatcher is
+strictly single-host: one global `flock` in `usage-paced-runner.sh` means
+exactly one participant job runs at a time, and round-robin fairness across
+~14 weighted participants (not quota) is the actual backlog bottleneck (see
+same-session chat: 47-50pt of unused 7-day quota slack going unspent
+because nothing asks the gate to run two things at once). This is the
+architecture note in FOCUS.md's "cron, not a daemon" section finally
+meeting its own named revisit trigger — "scheduler running on an
+always-on server instead of the laptop" — except arriving as a second
+*laptop-class* peer, not a server.
+
+**Decisions (all four asked directly, none guessed):**
+
+1. **Execution model: dexter is a full peer, not a jump box.** It runs its
+   own Claude Code processes and its own paced dispatch loop locally on
+   WSL/Ubuntu — real parallelism (both boxes independently spend from the
+   same account-wide quota), not just remote triggering of jobs that still
+   run on mandark.
+
+2. **Project segregation: pin by hardware/network reachability, not an
+   arbitrary split.** `crt` is the clear, already-evidenced case —
+   BLOCKERS.md 2026-07-20 already confirms dexter's VM network reaches
+   crt's OctoPrint at `192.168.0.43`, and `schedule/crt.conf`'s
+   `DEPLOY_CMD`/`DEPLOY_FRESH_CMD` sync to a VM-resident report path,
+   which is presumably dexter itself. `gardien`/`senechal` are NOT
+   evidenced the same way — their confs and FOCUS.md language describe a
+   *permission scope* gate (no unattended RAID/home-directory access yet),
+   not a network-locality requirement, so pinning them to dexter would be
+   guessing. Left open, see QUESTIONS.md. Everything else (no hardware
+   dependency) stays where it runs today (mandark) for the MVP rather than
+   floating freely — "pin by need" implies "don't move what doesn't need
+   moving," not a full re-shuffle.
+
+3. **Scheduler topology: two independent schedulers, not one shared
+   rotation.** Each box gets its own `_paced.conf` subset and its own
+   rotation pointer; no distributed lock, no cross-host coordination
+   mechanism. Explicitly the simpler/cheaper option, chosen over a shared
+   rotation with a real distributed lock (SSH/NFS/coordination service) —
+   that was named as more infra than an MVP should absorb before proving
+   the concurrency-safety premise below.
+
+   **Named risk, accepted deliberately, must be watched:** the single
+   global flock today prevents quota overshoot by construction — only one
+   thing spends at a time, so a re-probe of `usage-gate.sh` right after is
+   always accurate. Two independent schedulers on two hosts reintroduces a
+   genuine race: both can probe the account-wide headers, both see slack,
+   both dispatch, and the account can overshoot between the two probes
+   (headers only reflect usage AFTER a request round-trips). Nothing in
+   this decision solves that race — it accepts it as a real gap for the
+   MVP, to be observed empirically (does it actually overshoot in
+   practice, and by how much) rather than solved preemptively. If it
+   proves to matter, the fix is more likely tightening `USAGE_MIN_SLACK`/
+   `USAGE_CEILING` per-host (leave more headroom since two probers now
+   share one budget) than building real distributed coordination — but
+   that's a follow-up call, not decided here.
+
+4. **Sprint scope: small MVP, not the full design.** Prove concurrent
+   dispatch across two hosts doesn't blow the account-wide ceiling in
+   practice before building anything more elaborate (shared rotation,
+   engine-enforced hardware pinning, etc.). Real coordination work, if
+   still needed after observing the MVP, is deliberately a later pass.
+
+**MVP shape (queued to FOCUS.md, not built this pass):** dexter gets its
+own clone of this repo, its own crontab entry running
+`usage-paced-runner.sh` against its own `_paced.conf` containing only
+`crt` (the one hardware-evidenced pin) to start, logged into the SAME
+primary Max account as mandark (the shared-quota premise depends on it —
+a different account would silently defeat the whole point, no shared
+usage-gate to race against). mandark's `_paced.conf` drops `crt` to avoid
+double-dispatching the same project from two hosts. Watch `run.log` on
+both boxes for a stretch to see whether the account-wide ceiling ever
+actually gets hit harder than single-host operation hits it today.
+
+**What this is NOT yet:** engine-enforced `AUTONOMY_TIER`-aware pinning,
+a shared rotation, or a resolution of the probe race above — all
+explicitly deferred past the MVP. See QUESTIONS.md for the concrete
+human-only setup steps still open (dexter's Claude Code login, SSH/deploy
+key parity, WSL2 network reachability to crt's OctoPrint re-verified fresh
+since dexter's environment changed, and the gardien/senechal placement
+call).

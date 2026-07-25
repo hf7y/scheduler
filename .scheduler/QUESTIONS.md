@@ -61,3 +61,31 @@ its line once you've actually read and dealt with it.
   instead, independent of the remote-credential question? Once answered,
   the field can be added to `schedule/gardien.conf`/`schedule/senechal.conf`
   in a follow-up cycle.
+
+- **2026-07-24 (via /ideate, human-directed): dexter multi-machine MVP --
+  human-only setup steps, nothing here can be picked up unattended yet.**
+  Full decision in DESIGN-NOTES.md / FOCUS.md "Multi-machine parallelism"
+  same date. Needed before any run can build the MVP:
+  1. Confirm dexter's WSL/Ubuntu has Claude Code CLI installed and logged
+     into the SAME primary Max account mandark uses -- the whole
+     shared-quota premise (two independent schedulers racing against one
+     account-wide `usage-gate.sh` reading) silently breaks if dexter ends
+     up on a different account instead.
+  2. Confirm dexter has working git push access for whatever repos its
+     pinned participants need (crt's deploy setup today is
+     `REPO_URL="/home/zach/git-remotes/crt.git"`, a local bare remote --
+     confirm dexter can actually reach that path, or whatever the
+     equivalent is from dexter's filesystem).
+  3. Re-confirm crt's OctoPrint (`192.168.0.43`) is reachable from
+     dexter's NEW WSL2 environment specifically -- the 2026-07-20
+     confirmation was against a full VM's networking, which WSL2's NAT
+     does not necessarily replicate. Needs a live check, not an assumed
+     carry-over.
+  4. Your call: do `gardien`/`senechal` also need dexter locality (real
+     hardware/network reason), or does their existing permission-scope
+     gate (no unattended RAID/home-directory access yet) mean they're
+     irrelevant to this machine question entirely and should just stay
+     wherever they are? Left unpinned/undecided in FOCUS.md rather than
+     guessed.
+  Once 1-3 are confirmed, the MVP steps in FOCUS.md's "Multi-machine
+  parallelism" section are unattended-buildable.
