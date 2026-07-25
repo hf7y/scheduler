@@ -104,7 +104,17 @@ set -uo pipefail
 : "${MODEL:=}"
 : "${ALLOWED_TOOLS:=Bash,Read,Write,Edit,Glob,Grep}"
 : "${NODE_BIN_DIR:=/home/zach/.nvm/versions/node/v25.2.1/bin}"
-: "${BRANCH:=main}"
+# Empty = resolve from origin's own default HEAD after the clone (below),
+# NOT the literal string "main". Hardcoding "main" silently half-broke
+# every home-assistant run for weeks: baudin's only branch is master, so
+# `git checkout main` and `git reset --hard origin/main` both failed --
+# unchecked -- the reset-to-origin guarantee quietly did not apply, the
+# push check misread the missing ref as an SSH/auth failure, and one run
+# summarized itself as "committed, pushed, and in sync" with a commit
+# still sitting unpushed. A wrapper may still set BRANCH explicitly
+# (aedile's dated aedile-nightly/<date>, scheduler's nightly/<date>);
+# this only changes what happens when it says nothing.
+: "${BRANCH:=}"
 : "${SECRETS_SRC_DIR:=}"
 : "${SECRETS_DEST_SUBDIR:=.session-handoff}"
 : "${PRECHECK_CMD:=}"
@@ -226,9 +236,44 @@ fi
     echo "uncommitted changes found before reset --hard -- stashing instead of discarding (git stash list to recover)"
     git stash push -u -m "sweep-loop-common.sh auto-stash before reset $(date -Is)"
   fi
-  git checkout "$BRANCH"
-  git fetch origin --quiet
-  git reset --hard "origin/$BRANCH"
+  # Resolve BRANCH from the remote's own default HEAD when the wrapper
+  # didn't name one. Local read (the clone already recorded it), no
+  # network; ls-remote is the fallback, and only then the old "main"
+  # guess -- now announced in the log rather than assumed.
+  if [ -z "$BRANCH" ]; then
+    BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
+    if [ -z "$BRANCH" ]; then
+      BRANCH="$(git ls-remote --symref origin HEAD 2>/dev/null | awk '$1=="ref:"{sub("refs/heads/","",$2); print $2; exit}')"
+    fi
+    if [ -z "$BRANCH" ]; then
+      BRANCH="main"
+      echo "WARNING: could not resolve origin's default branch -- falling back to '$BRANCH'"
+    else
+      echo "BRANCH unset by the wrapper -- resolved from origin's default HEAD: $BRANCH"
+    fi
+  fi
+  # CHECKED, all three (2026-07-25). These were unchecked and `set -uo
+  # pipefail` has no -e, so a bad branch name or an unreachable origin
+  # let the run continue against whatever the clone happened to have
+  # checked out -- i.e. the disposable-clone-reset-to-origin guarantee
+  # every other part of this design assumes was silently void. Aborting
+  # is correct: the next scheduled cycle retries, whereas a run on an
+  # unknown base can commit and push real work onto the wrong thing.
+  if ! git checkout "$BRANCH"; then
+    echo "FATAL cannot checkout '$BRANCH' in $REPO -- aborting before any claude work (does that branch exist on origin?)"
+    notify-send -u critical "$JOB_NAME" "checkout $BRANCH failed -- job aborted, see $LOG" 2>/dev/null || true
+    exit 1
+  fi
+  if ! git fetch origin --quiet; then
+    echo "FATAL git fetch origin failed -- aborting rather than running against a stale base"
+    notify-send -u critical "$JOB_NAME" "fetch failed -- job aborted, see $LOG" 2>/dev/null || true
+    exit 1
+  fi
+  if ! git reset --hard "origin/$BRANCH"; then
+    echo "FATAL git reset --hard origin/$BRANCH failed -- aborting; the clone is NOT at origin's state"
+    notify-send -u critical "$JOB_NAME" "reset to origin/$BRANCH failed -- job aborted, see $LOG" 2>/dev/null || true
+    exit 1
+  fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"
 
@@ -309,6 +354,13 @@ $PROMPT"
     echo "pushed: yes -- $BEFORE_SHA -> $AFTER_SHA"
     git log --oneline "$BEFORE_SHA..$AFTER_SHA"
   else
+    # Nonzero, not just a log line (2026-07-25). This branch is the exact
+    # state home-assistant sat in for weeks while `usage-paced-runner.sh`
+    # recorded `rc=0` and the run's own summary claimed it had pushed. The
+    # runner logs whatever rc it gets and neither retries nor escalates, so
+    # returning 1 here costs nothing and is the difference between a
+    # failure that is visible in run.log and one that isn't.
+    RUN_RC=1
     echo "WARNING: local commit made but NOT pushed to origin (local=$AFTER_SHA remote=$REMOTE_SHA)"
     # WHY, not just THAT -- distinguish the recurring causes instead of
     # leaving every unpushed commit looking like the same generic no-op
@@ -335,6 +387,15 @@ $PROMPT"
   echo "=== $STATUS $(date -Is) (${ELAPSED}s) ==="
 
   if [ "$STATUS" = "FAILED" ]; then
+    RUN_RC=1
     notify-send -u critical "$JOB_NAME FAILED" "See log: $LOG" 2>/dev/null || true
   fi
 } >> "$LOG" 2>&1
+
+# The job's exit status is the runner's ONLY machine-readable verdict --
+# it is what lands in usage-paced-runner.sh's `DONE <name> rc=N` line.
+# Before 2026-07-25 that was whatever the last command in the block
+# happened to return (usually notify-send, i.e. 0), so a FAILED claude
+# run and an unpushed commit both reported success. The brace group above
+# is a group, not a subshell, so RUN_RC set inside it is visible here.
+exit "${RUN_RC:-0}"
