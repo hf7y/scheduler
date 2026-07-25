@@ -1566,30 +1566,88 @@ accepted quota-race risk above is now MORE live, not less, since it
 arrives sooner and less manually sequenced -- watch `run.log` on both
 boxes closely once dexter's own paced runner starts.
 
-**Starting point for dexter's self-build (human still does login --
-interactive OAuth can't run unattended):**
-1. Human, on dexter: install Claude Code, log into the SAME primary Max
-   account as mandark (the shared-quota premise depends on it -- see
-   QUESTIONS.md), clone this repo.
-2. Realisateur (or an equivalent bootstrap session run ON dexter) takes
-   it from there: register dexter as a second host, writing its own
-   `_paced.conf` subset (hardware-evidenced pins only -- `crt` is the one
-   confirmed case, see decision above; don't invent others), installing
-   its own crontab tick against `usage-paced-runner.sh`, and dropping
-   whatever it pins from mandark's `_paced.conf` so nothing double-
-   dispatches from both hosts.
-3. Re-verify crt's OctoPrint reachability from dexter's WSL2 networking
-   specifically as part of that self-build -- the earlier 2026-07-20
-   confirmation was against a full VM, and WSL2's NAT networking is not
-   guaranteed to behave the same way; don't assume it still holds.
-4. Watch `run.log` on both boxes once dexter's tick goes live; watch
-   specifically whether the account-wide ceiling gets hit harder / more
-   often than single-host operation hits it today (the accepted-risk race
-   above) -- this is the one thing the original MVP existed to observe,
-   still worth watching even though the sequencing changed.
+**SELF-BUILD EXECUTED 2026-07-24, on dexter.** The steps below were the
+starting point; here is what actually landed vs. what is still open. Full
+reasoning in DESIGN-NOTES.md "dexter registers itself as a second host".
 
-Blocked on the human login/clone step in QUESTIONS.md before any of the
-above can be picked up by an unattended run.
+**BUILT (all verified on dexter, not just written):**
+- **Host-scoped participant config.** `schedule/_paced.<short-hostname>.conf`,
+  auto-selected by hostname, falling back to the shared `_paced.conf` for
+  any host without its own file. Chose separate files over a HOST column in
+  the shared file because `_paced.conf` already has an *automated* writer
+  (`weight-audit.sh` commits reweights), so a shared file would mean two
+  machines — one editing on a timer — competing for the same lines. Each
+  host writes only its own path, so the conflict is impossible rather than
+  merely rare. `bin/usage-paced-runner.sh` now resolves its repo root
+  through `readlink -f` (the old `dirname` broke when invoked via the
+  `~/.local/bin` symlink), logs a `ROTATION` line whenever the resolved
+  rotation changes, and exits non-zero with `FATAL` on a missing conf.
+  **No-op on mandark by construction** — no `_paced.mandark.conf` exists, so
+  mandark still reads `_paced.conf`; tested in both symlink and copied-install
+  shapes.
+- **`schedule/_paced.dexter.conf` created, `crt` pinned to it** — with
+  `enabled=0`, see still-open item 1 below.
+- **Crontab tick installed and confirmed firing** — `*/5`, derived from
+  `schedule/_runner.conf` rather than retyped. Verified end to end: cron is
+  `active`/`enabled` in this WSL2 container, and the tick fired on schedule
+  and logged the expected host-scoped-conf line.
+- **crt's OctoPrint re-verified from WSL2** (was step 3) — `192.168.0.43`
+  answers with 0% ICMP loss, TCP 80 open, and an OctoPrint-identifying HTTP
+  302 (`x-clacks-overhead` header), so it is the real service and not just an
+  open port. The 2026-07-20 full-VM confirmation does carry over to WSL2.
+- **`bin/scheduler-dev-cycle.sh` made host-agnostic** rather than cloned into
+  a dexter-specific wrapper — it no longer hardcodes mandark's repo path.
+  `scheduler` is deliberately NOT in dexter's rotation: see still-open item 3.
+- **Bug found and fixed en route:** `lib/sweep-loop-common.sh` ran `git clone`
+  and the following `cd` unchecked, so an unreachable `REPO_URL` fell through
+  to `git reset --hard` and a `claude -p` call with write tools in cron's
+  working directory — then exited **0**. Reproduced against the pre-fix code
+  with a tripwire, not merely reasoned about. Both steps now abort loudly.
+  Latent since the library was written; dexter is just the first host with a
+  genuinely unreachable `REPO_URL`.
+
+**STILL OPEN:**
+1. **crt cannot actually run on dexter — repo access, not network.**
+   `schedule/crt.conf` points at `REPO_URL="/home/zach/git-remotes/crt.git"`,
+   a bare repo on *mandark's* filesystem (local on purpose — crt's VM
+   password must not leave that machine). dexter has no such path and crt has
+   no mirror. Confirmed by running it. Needs a human call on how dexter gets
+   crt's source, with a real security dimension — see QUESTIONS.md. Until
+   then dexter's rotation is empty, which the runner logs explicitly.
+2. **Dropping `crt` from mandark's `_paced.conf` is prepared but NOT merged**,
+   on branch `dexter/drop-crt-from-mandark-paced`. Merging it today would
+   create a gap rather than prevent a double-dispatch: crt would stop running
+   *anywhere*, and it is the highest-weight participant (weight 3). Land it in
+   the SAME change that flips crt to `enabled=1` on dexter, once item 1 is
+   resolved.
+3. **Whether dexter should self-develop `scheduler` too.** The wrapper is now
+   host-agnostic so it *could*, but two hosts committing to one scheduler git
+   history — each auto-merging to its own local `main` — is the divergence
+   already open as a human question in QUESTIONS.md (from two worktrees on a
+   *single* host). Not enabled pending that answer.
+4. **`bin/sync-crontab.sh` is not host-scoped.** Previewed on dexter, `--apply`
+   would install fixed-cron lines for four mandark-only projects plus a sweep
+   tick, and symlink `focus/`/`questions/` into mandark-only paths. The
+   `_paced.<host>.conf` split covers participant *rotation*; project
+   *registration* is the larger unsolved half. dexter's tick was hand-installed
+   meanwhile (documented in its crontab block so nobody "fixes" it by running
+   `--apply` here). Natural next item, deliberately not bundled into this pass.
+5. **Does mandark pull?** dexter pushes to the same `origin/main` mandark runs
+   from, and mandark executes `usage-paced-runner.sh` / `sweep-loop-common.sh`
+   out of a checkout of this history — so commits here are shared *running
+   code*, not just shared config. Nothing found in this repo pulls
+   `origin/main` on mandark automatically, which means (a) the fixes above may
+   not have reached it yet and (b) the crt-drop in item 2 will not take effect
+   there until it does. See QUESTIONS.md.
+6. **Watch `run.log` on both boxes** (was step 4) — still the live question:
+   does the account-wide ceiling get hit harder than single-host operation
+   hits it today (the accepted probe race)? **Not yet observable**: dexter's
+   rotation is empty, so its tick currently costs nothing at all — it exits
+   before probing the gate. Real data starts only once item 1 unblocks.
+
+Step 1 of the original list (human login + clone) is DONE — this session ran
+on dexter, `usage-gate.sh` works here against the shared account (7d window
+read live), and push access to `origin` is confirmed.
 
 **2026-07-24 (realisateur, via `/ideate`): vision promoted from "parked
 dream" to "dexter-as-primary-host, partial" — asked directly, not

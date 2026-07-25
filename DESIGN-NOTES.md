@@ -915,3 +915,203 @@ crontab tick, and deciding its own project pins -- rather than a human
 hand-writing dexter's config per the MVP steps queued in FOCUS.md. Those
 FOCUS.md MVP steps are now the STARTING POINT for that self-build, not a
 human checklist to execute directly.
+
+## 2026-07-24 (later, ON dexter): dexter registers itself as a second host
+
+First session ever run **on dexter** rather than about it. Executes the
+self-build handed over by the sprint-scope reversal above. Everything here
+was decided and built from dexter's own WSL2 environment; the architecture
+decisions (full local peer, hardware-evidenced pinning only, two
+independent schedulers with the accepted usage-gate race) were already
+settled and are **not** revisited.
+
+### The governing constraint nobody had written down yet
+
+This repo is not just shared configuration — it is **shared running code**.
+mandark executes `bin/usage-paced-runner.sh` and `lib/sweep-loop-common.sh`
+out of a checkout of this same git history, on a `*/5` tick. So any commit
+here can change mandark's live behavior on its next tick, without a human
+in the loop and without dexter being able to observe the result.
+
+That made "don't break the other host" a hard build constraint rather than
+good manners, and it shaped every change below: **every edit to a tracked
+script that mandark executes was required to be a provable no-op on
+mandark**, with the new behavior reachable only on a host that opts in by
+having its own config file. Each one was tested in both shapes (invoked
+through a `~/.local/bin` symlink, and as a copied install) before commit.
+Worth stating plainly for future sessions on either box: the blast radius
+of a commit here is both machines, immediately.
+
+### Decision: per-host conf FILES, not a HOST column in the shared file
+
+The prompt left the mechanism open (a per-host conf, a HOST-filtered
+rotation, or something else). Chose **`schedule/_paced.<short-hostname>.conf`,
+selected automatically by hostname, falling back to the existing
+`schedule/_paced.conf` when a host has no file of its own.**
+
+Rejected the alternative — one shared `_paced.conf` with a HOST column
+filtered at dispatch — for a concrete reason rather than taste: that file
+**already has an automated writer**. `weight-audit.sh` recomputes weights
+from commit velocity and commits the result (commit `53b3f6f`, earlier the
+same day). A HOST column would put two machines, one of them editing
+mechanically on a timer, on the same lines of the same file. The conflicts
+would be automated-vs-automated, arriving as merge conflicts in a cron job
+rather than in front of a person. Separate files make that collision
+impossible by construction: each host writes only its own path, so there
+are no competing edits to reconcile — not fewer, none.
+
+Secondary reasons: the host set is enumerable (`ls schedule/_paced.*.conf`)
+rather than inferred by reading every line of a shared file; and a host
+reading the wrong file is visible as a path in `run.log` instead of a
+silently-empty filter result.
+
+**The fallback is what makes it a no-op on mandark.** mandark has no
+`_paced.mandark.conf`, so it resolves to `_paced.conf` exactly as before.
+Deliberately did NOT rename `_paced.conf` to `_paced.mandark.conf`, even
+though the symmetry would be tidier: mandark picks up new code from this
+history on its next tick but there is no evidence it pulls new *commits*
+automatically (see QUESTIONS.md), so a rename could point the live host at
+a file its checkout doesn't have. The unscoped file stays the default.
+
+Supporting fix in the same script: the repo root is now found by resolving
+`readlink -f` on `$BASH_SOURCE` **before** `dirname`. The old code took
+`dirname` directly, which yields `~/.local/bin` when invoked through the
+installed symlink — fine while the conf path was hardcoded, useless once it
+needs to be repo-relative. The original hardcoded absolute path survives as
+a last-resort fallback for a copied-not-symlinked install, and a missing
+conf now logs `FATAL` and exits non-zero instead of being ambiguous.
+
+### Found while building: a silent exit-0 that would have burned quota
+
+Pinning crt to dexter meant asking what actually happens when a conf's
+`REPO_URL` is unreachable — which on dexter it genuinely is (below). The
+answer was worse than "it fails":
+
+`lib/sweep-loop-common.sh` ran `git clone "$REPO_URL" "$REPO"` **unchecked**,
+under `set -uo pipefail` with no `-e`. A failed clone did not stop the run.
+`$REPO` was never created, so the following `cd "$REPO/$REPO_SUBDIR"` failed
+too — also unchecked — and every subsequent step ran in whatever directory
+cron started in (`$HOME`): `git checkout`, `git fetch`, `git reset --hard`,
+and then `claude -p` with `Write,Edit,Bash` enabled. The run then reported
+`=== done ===` and exited **0**.
+
+Reproduced against the pre-fix code before fixing it, rather than reasoned
+about: with a stub `claude` on `PATH` as a tripwire, the old code invoked it
+outside any repo and still exited 0. Post-fix, the same invocation aborts at
+the clone with `FATAL` and rc=1, tripwire untouched.
+
+Two consequences worth keeping separate. The mild one is wasted quota — a
+full nightly-batch allocation spent in the wrong directory. The sharp one is
+that `git reset --hard` and an agent with write tools were pointed at the
+cron working directory; `$HOME` is not a git repo on dexter so the git steps
+merely failed, but nothing in the code *depended* on that. This is exactly
+the "fails loud? no exit-0 no-ops" line in BUILD-DISCIPLINE.md, and it had
+been latent since the library was written — dexter is simply the first host
+where an unreachable `REPO_URL` was reachable-in-practice enough to hit it.
+Both steps are now checked, `notify-send` on failure, no-ops on the success
+path so mandark is unaffected.
+
+### crt: pin confirmed, dispatch blocked, enabled=0
+
+**Re-verified, not carried over.** The 2026-07-20 confirmation was against
+the old full VM's networking, and WSL2's NAT does not automatically
+replicate it. Checked live from this environment: ICMP to `192.168.0.43` at
+0% loss, TCP 80 open, and an HTTP 302 to `/login/?...&permissions=STATUS,SETTINGS_READ`
+carrying `x-clacks-overhead: GNU Terry Pratchett` — i.e. **identified as
+OctoPrint**, not merely a port that happened to answer. The hardware
+evidence for pinning crt to dexter holds.
+
+**But crt cannot actually run here yet, and the reason is repo access, not
+network.** `schedule/crt.conf` sets `REPO_URL="/home/zach/git-remotes/crt.git"` —
+a bare repo on *mandark's* filesystem, deliberately local so crt's VM
+password never leaves that machine (crt.conf's own comment). dexter has no
+such path and crt has no mirror; the deploy key crt.conf mentions "if a
+private GitHub mirror is wanted later" was never set up. Confirmed by
+running it: `bin/scheduler-run crt batch` → `fatal: repository
+'/home/zach/git-remotes/crt.git' does not exist`.
+
+So `schedule/_paced.dexter.conf` records the pin with `enabled=0` and the
+unblock condition inline. Getting crt's source to dexter is a human call
+with a real security dimension (that bare repo is local *on purpose*) — filed
+to QUESTIONS.md rather than guessed at. dexter's rotation is therefore
+empty, which the runner now logs explicitly on every rotation change:
+an idle-because-blocked host and a misconfigured one must not look alike.
+
+Also corrected in passing: dexter's crt line calls
+`bin/scheduler-run crt batch`, not mandark's
+`~/.local/bin/crt-nightly-batch-loop.sh`. crt.conf sets `BATCH_PROMPT` and no
+`BATCH_SCRIPT`, so the generic entrypoint is the correct caller and **no
+per-host wrapper needs to exist on dexter at all** — the wrapper in
+mandark's line is legacy that `MIGRATION.md` is already retiring.
+
+### `bin/scheduler-dev-cycle.sh`: made host-agnostic, deliberately not enabled
+
+Asked directly whether dexter needs its own wrapper or whether the script
+should stop hardcoding `SCHED_REPO="/home/zach/Documents/Project Archive/scheduler"`.
+**Chose host-agnostic**, same resolution ladder as the runner (env override →
+the repo the script itself lives in, symlinks resolved → mandark's original
+path as fallback), identified by `.git` *plus* `bin/usage-paced-runner.sh` so
+an unrelated parent git repo can't be mistaken for the scheduler checkout.
+
+Reasoning: a dexter-specific wrapper would duplicate ~130 lines of worktree,
+branch, lock and merge-policy logic whose whole point is being subtle and
+correct, and it would drift the moment either copy changed. That is the same
+per-host-wrapper sprawl `MIGRATION.md` and `bin/scheduler-run` exist to
+retire — reintroducing it at the host level while retiring it at the project
+level would be incoherent. The hardcoded path was also just a latent
+portability bug: the script lives *inside* the repo it operates on, so the
+location was always derivable.
+
+**Making it runnable is not the same as running it, and `scheduler` is
+deliberately absent from dexter's rotation.** Two hosts self-developing one
+scheduler git history, each auto-merging to its own local `main`, is
+precisely the divergence that is *already* an open human question in
+QUESTIONS.md — where two worktrees on a *single* host diverged badly enough
+that a paced cycle refused to reconcile them. Adding a second machine before
+that is answered would multiply the problem, not test it. Capability now,
+activation after the human call. Self-development stays single-host.
+
+### `bin/sync-crontab.sh` is not host-scoped — tick installed by hand
+
+Did **not** use `sync-crontab.sh --apply` to install dexter's tick, and this
+was checked rather than assumed: previewing it here shows it would install
+fixed-cron `BATCH` lines for `groc-mangr`, `nine-speakers`, `sequestria` and
+`vim-arcade` (parked in `_paced.conf`, so not suppressed) plus a sweep tick,
+all for projects with no repo on this host, and would create `focus/` and
+`questions/` symlinks pointing into mandark-only paths. It derives the whole
+crontab from `schedule/*.conf`, and that directory describes *mandark's*
+project set.
+
+Host-scoping `sync-crontab.sh` properly is the natural follow-up — the
+`_paced.<host>.conf` split solves participant *rotation* but not project
+*registration*, which is the larger half — but it is a substantially bigger
+change to the component that writes the live crontab on the box currently
+doing all the work, and doing it in the same pass as everything above would
+have put the riskiest change next to the least-tested one. Deferred to
+FOCUS.md as its own item.
+
+dexter's tick was installed directly instead, with the schedule **derived
+from `schedule/_runner.conf` rather than retyped** (`RUNNER_CRON`,
+`RUNNER_ENV`, `RUNNER_CMD` sourced and interpolated), so the one-source rule
+still holds even though the installer doesn't. Both the crontab block and
+this note record why it was hand-installed, so the next session doesn't
+"fix" it by running `--apply` here.
+
+Verified rather than assumed: `cron` is installed, `active (running)` and
+`enabled` in this WSL2 container — a crontab in a box where nothing reads it
+would have been the same class of not-actually-wired failure as everything
+else on this list.
+
+### Dropping crt from mandark's `_paced.conf`: opened, not merged
+
+Prepared on branch `dexter/drop-crt-from-mandark-paced` rather than committed
+to `main`. **Merging it now would create a gap, not prevent a double-dispatch.**
+The change is only correct once dexter can actually dispatch crt; today it
+can't (repo access, above), so landing it would stop crt running *anywhere* —
+and crt is the highest-weight participant in the rotation (weight 3, ~211
+commits/7d). The double-dispatch it guards against is currently impossible
+for the same reason it can't be merged.
+
+So the change exists, reviewed and ready, with the enabling condition stated
+in both `_paced.dexter.conf` and the branch's commit message: flip crt to
+`enabled=1` on dexter and land that branch **in the same change**.

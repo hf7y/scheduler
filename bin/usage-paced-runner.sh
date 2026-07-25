@@ -19,12 +19,14 @@
 # (re-probed each iteration, not assumed) still owns the real stop condition --
 # this only removes the artificial one-per-tick ceiling, not the safety logic.
 #
-# Participants come from schedule/_paced.conf (name|enabled|command). Each
-# participant command is a self-contained wrapper with its own lock + logging.
+# Participants come from a participants conf (name|enabled|command), chosen
+# PER HOST -- see "which participants file" below. Each participant command is
+# a self-contained wrapper with its own lock + logging.
 #
 # Env knobs (forwarded to usage-gate.sh): USAGE_CEILING, USAGE_MIN_SLACK,
 # USAGE_PROBE_MODEL. Plus:
-#   PACED_CONF        (schedule/_paced.conf beside this script's repo)
+#   PACED_CONF        (explicit participants file; otherwise host-resolved)
+#   PACED_HOST        (short hostname; overrides which host-scoped conf is picked)
 #   USAGE_GATE        (~/.local/bin/usage-gate.sh)
 #   PACED_FORCE       (0)  1 = skip the gate and run the next participant now (testing)
 #   PACED_MAX_PER_TICK (8) hard cap on dispatches in one tick, so a single cron
@@ -34,18 +36,65 @@
 set -uo pipefail
 
 JOB_NAME="scheduler-paced-runner"
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve symlinks BEFORE taking dirname: this script is normally invoked as
+# ~/.local/bin/usage-paced-runner.sh, a symlink into the repo. Plain
+# `dirname "${BASH_SOURCE[0]}"` would yield ~/.local/bin and never find the
+# repo's schedule/ directory.
+SELF_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)"
+[ -n "$SELF_REAL" ] || SELF_REAL="${BASH_SOURCE[0]}"
+SELF_DIR="$(cd "$(dirname "$SELF_REAL")" && pwd)"
+REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
+: "${REPO_ROOT:=}"   # empty is fine -- the checks below just fall through
+
 STATE_DIR="$HOME/.local/share/$JOB_NAME"
 LOG="$STATE_DIR/run.log"
 LOCK="$STATE_DIR/run.lock"
 PTR="$STATE_DIR/rotation.idx"
 
-PACED_CONF="${PACED_CONF:-/home/zach/Documents/Project Archive/scheduler/schedule/_paced.conf}"
+# --- which participants file? (host-scoped, 2026-07-24) ---------------------
+# Two hosts now run this dispatcher out of ONE git-tracked repo (mandark and
+# dexter -- see DESIGN-NOTES.md "multi-machine parallelism"). A single shared
+# schedule/_paced.conf can't express that: the hosts pin different projects,
+# and that file already has an AUTOMATED writer (weight-audit.sh rewrites
+# weights and commits them), so aiming both hosts at one file means two
+# machines rewriting the same lines. So each host MAY own its own file:
+#
+#   schedule/_paced.<short-hostname>.conf   this host's rotation, if present
+#   schedule/_paced.conf                    shared/default, used otherwise
+#
+# A host only ever writes its OWN file, so two hosts cannot fight over one set
+# of lines by construction -- they're different paths, not different edits to
+# one path. A host with no host-scoped file reads _paced.conf exactly as
+# before, which is what mandark still does today: this change is a no-op there
+# until someone adds a _paced.mandark.conf.
+#   List registered hosts:  ls schedule/_paced.*.conf
+LEGACY_PACED_CONF="/home/zach/Documents/Project Archive/scheduler/schedule/_paced.conf"
+PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
+if [ -n "${PACED_CONF:-}" ]; then
+  PACED_CONF_SRC="explicit PACED_CONF"
+elif [ -f "$REPO_ROOT/schedule/_paced.$PACED_HOST.conf" ]; then
+  PACED_CONF="$REPO_ROOT/schedule/_paced.$PACED_HOST.conf"
+  PACED_CONF_SRC="host-scoped for $PACED_HOST"
+elif [ -f "$REPO_ROOT/schedule/_paced.conf" ]; then
+  PACED_CONF="$REPO_ROOT/schedule/_paced.conf"
+  PACED_CONF_SRC="shared (no _paced.$PACED_HOST.conf)"
+else
+  # Last resort: a copied-not-symlinked install whose repo we can't locate.
+  PACED_CONF="$LEGACY_PACED_CONF"
+  PACED_CONF_SRC="legacy absolute path (repo not found from $SELF_DIR)"
+fi
+
 USAGE_GATE="${USAGE_GATE:-$HOME/.local/bin/usage-gate.sh}"
 [ -x "$USAGE_GATE" ] || USAGE_GATE="$SELF_DIR/usage-gate.sh"
 NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
 
-export PATH="$NODE_BIN_DIR:$PATH"
+# mandark reaches `claude` through nvm; dexter has a native binary in
+# ~/.local/bin and no nvm at all. Prepend the node dir only when it exists,
+# and always APPEND ~/.local/bin (cron's default PATH omits it) -- appending
+# can add a resolution but can never shadow one that already worked.
+[ -d "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
+export PATH="$PATH:$HOME/.local/bin"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
@@ -69,7 +118,10 @@ log() { echo "$(date -Is) $*" >> "$LOG"; }
 # participant gets (implemented by literally repeating it N times in the
 # rotation pool below), so ties still resolve by plain round-robin order.
 names=(); cmds=()
-if [ ! -f "$PACED_CONF" ]; then log "no participants conf at $PACED_CONF"; exit 1; fi
+if [ ! -f "$PACED_CONF" ]; then
+  log "FATAL no participants conf at $PACED_CONF [$PACED_CONF_SRC] host=$PACED_HOST"
+  exit 1
+fi
 while IFS='|' read -r name enabled rest; do
   case "$name" in ''|\#*) continue ;; esac          # skip blank / comment lines
   [ "${enabled// /}" = "1" ] || continue
@@ -93,7 +145,24 @@ while IFS='|' read -r name enabled rest; do
 done < "$PACED_CONF"
 
 n="${#names[@]}"
-if [ "$n" -eq 0 ]; then log "no enabled participants -- nothing to dispatch"; exit 0; fi
+if [ "$n" -eq 0 ]; then
+  # Loud on purpose: on a freshly-registered host this is the difference
+  # between "correctly idle" and "silently pointed at the wrong file".
+  log "no enabled participants in $PACED_CONF [$PACED_CONF_SRC] host=$PACED_HOST -- nothing to dispatch"
+  exit 0
+fi
+
+# Log the resolved rotation only when it CHANGES, not every tick (a tick fires
+# every 5 min; the RUN/HOLD line is already per-tick). A host silently moving
+# between participants files -- e.g. its host-scoped conf being added, renamed
+# or deleted underneath it -- is exactly the drift that would otherwise be
+# invisible, so make the transition itself the log event.
+ROTATION_SIG="$STATE_DIR/rotation.sig"
+sig="host=$PACED_HOST conf=$PACED_CONF [$PACED_CONF_SRC] slots=$n :: ${names[*]}"
+if [ "$sig" != "$(cat "$ROTATION_SIG" 2>/dev/null || true)" ]; then
+  log "ROTATION $sig"
+  printf '%s' "$sig" > "$ROTATION_SIG"
+fi
 
 MAX_PER_TICK="${PACED_MAX_PER_TICK:-8}"
 
@@ -132,7 +201,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
     continue
   fi
 
-  log "DISPATCH [$idx/$n] $name -> $cmd"
+  log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF)"
   start=$(date +%s)
   # shellcheck disable=SC2086
   if $cmd; then rc=0; else rc=$?; fi

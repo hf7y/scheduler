@@ -13,7 +13,32 @@
 set -uo pipefail
 
 JOB_NAME="scheduler-paced-dev"
-SCHED_REPO="/home/zach/Documents/Project Archive/scheduler"
+
+# SCHED_REPO used to be hardcoded to mandark's checkout
+# ("/home/zach/Documents/Project Archive/scheduler"), which is the only thing
+# that tied this script to one machine -- and it lives INSIDE the repo it
+# operates on, so the location is derivable instead. Made host-agnostic
+# 2026-07-24 during dexter's bring-up (see DESIGN-NOTES.md for why this
+# became host-agnostic rather than dexter getting a second near-identical
+# wrapper). Resolution order, first match wins:
+#   1. $SCHED_REPO from the environment (explicit override)
+#   2. the repo this script actually lives in (symlinks resolved, so an
+#      installed ~/.local/bin/scheduler-dev-cycle.sh still finds it)
+#   3. mandark's original absolute path, for a copied-not-symlinked install
+# Identified as a repo by .git PLUS a file only this repo has, so a stray
+# parent git repo can never be mistaken for the scheduler checkout.
+SELF_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)"
+[ -n "$SELF_REAL" ] || SELF_REAL="${BASH_SOURCE[0]}"
+SELF_REPO="$(cd "$(dirname "$SELF_REAL")/.." 2>/dev/null && pwd)"
+: "${SELF_REPO:=}"
+if [ -z "${SCHED_REPO:-}" ]; then
+  if [ -n "$SELF_REPO" ] && [ -e "$SELF_REPO/.git" ] && [ -f "$SELF_REPO/bin/usage-paced-runner.sh" ]; then
+    SCHED_REPO="$SELF_REPO"
+  else
+    SCHED_REPO="/home/zach/Documents/Project Archive/scheduler"
+  fi
+fi
+
 STATE_DIR="$HOME/.local/share/$JOB_NAME"
 LOG="$STATE_DIR/run.log"
 LOCK="$STATE_DIR/run.lock"
