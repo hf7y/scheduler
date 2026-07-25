@@ -169,6 +169,24 @@ happened yet for any of them.
   here indefinitely. Left this cross-reference so a future BLOCKERS.md
   read doesn't re-surface it as if still homeless.
 
+## vkv-inventory
+
+- **Zach's-home testing instance: needs an interactive Google login**
+  (2026-07-25) — plan is to fork vkv-inventory's *deployment* (not its
+  codebase) onto Zach's own home inventory, so the app gets a live,
+  low-stakes user ahead of the next real Mardi Gras season instead of
+  only synthetic-fixture exercise (see `inventory-app/.claude/FOCUS.md`'s
+  `scheduler -i` entry filed the same day for the buildable half — a
+  `home/` sibling `.clasp.json`/`deploy-home.sh` deploy target sharing
+  the existing `src/`/`html/` tree). The one step that can't run
+  unattended: `clasp login` under Zach's own personal Google account
+  (not `kreweofvaporwave@`/`scribasenatus@`), then `clasp create` a new
+  Sheet-bound Apps Script project. Once Zach's done that, hand the new
+  scriptId back so `home/deploy-home.sh` can push to it. Counterpart
+  delegation entry filed the same day in `senechal/.claude/FOCUS.md`
+  (senechal owns "what Zach has at home" at the top level, delegates the
+  actual serving of it to this instance).
+
 ## Recently resolved
 
 - **crt Gallery installation architecture** (`RFP-GALLERY.md`) (2026-07-24)
