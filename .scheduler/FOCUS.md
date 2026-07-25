@@ -764,6 +764,26 @@ to build sooner.
       from inside this command; that stays a human action (or the separate,
       already-toggleable `scheduler-dev-cycle.sh` merge policy for this
       project's own self-dev branch specifically).
+      **The "N commits on <branch> awaiting review" half DONE 2026-07-25
+      (paced cycle):** `cmd_glance`'s footer now surfaces this directly
+      (new `extra_branches_detail` helper in `bin/scheduler`, reusing
+      `extra_branches` — the bare-name list `cmd_sweep`'s third pass
+      already built), same "don't make me run `sweep` separately"
+      treatment already given to the stranded-local-commits footer line.
+      Verified live against real state on this machine: correctly listed
+      groc-mangr/vim-arcade/vkv-inventory/wtul's real unmerged branches
+      with accurate ahead-counts, and correctly EXCLUDED chezz's
+      `readable-html`/`chezz-classic` (confirmed via direct `git
+      rev-list --count` — both are 0 commits ahead of `main`, i.e.
+      already merged, so correctly not "awaiting" anything) — an early
+      draft using the bare stripped branch name to compute the ahead
+      count silently mis-scored any origin-only branch (no local
+      tracking ref) as 0 regardless of its real state; fixed by
+      resolving against the local ref if one exists, else `origin/<name>`,
+      before re-verifying. No shell-out beyond read-only `git`; nothing
+      auto-merged. Still just the read-only surfacing half of item (c) —
+      the shell-out-to-`git log`/`diff`-on-demand interaction and (a)/(b)/(d)
+      remain open.
    d. Migrate one project at a time after scheduler's own prototype is
       verified; old `LATEST.md`/`QUESTIONS.md` stay as fallback until each
       project's wrapper is confirmed reading the merged file correctly.
