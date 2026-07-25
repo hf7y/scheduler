@@ -6,8 +6,13 @@ session. Edit this file directly (vim mappings from `~/.vimrc` work here
 too: `<leader>a/b/q/n/y/r`). A `%%TAG` line left under a project's `##`
 heading is picked up by THAT project's next scheduled run and then
 removed automatically (see `docs/feedback-tags.md`) — the blocker
-description itself stays until you delete it by hand once it's actually
-resolved.
+description itself is a different mechanism entirely: nothing scans for
+a RESOLVED/RETRACTED marker and prunes it automatically, so it stays in
+its project's active section until a human (or an `/ideate` pass)
+actually moves it down into `## Recently resolved` or deletes it. Doing
+that sweep is part of `/ideate`'s own triage, not a side effect of
+anything else running — an entry marked resolved a week ago and never
+moved is a sign that sweep hasn't happened, not a bug.
 
 Each project's heading must be exactly `## <PROJECT_KEY>` (matches
 `schedule/<project>.conf`'s `PROJECT`/`PROJECT_KEY`) — that's what a
@@ -15,22 +20,6 @@ run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
 ## aedile
-- **RESOLVED 2026-07-24: svc-vaporwave crontab installed for both
-  aedile and vkv-inventory.** Root cause was real (see DESIGN-NOTES.md
-  2026-07-24 "silently-orphaned finding" for the full writeup) — a prior
-  session's "confirmed working" claim was wrong, and no crontab entry
-  had ever actually been installed for this account (`/var/log/syslog*`
-  full retention back to 2026-06-14 showed zero REPLACE/EDIT events for
-  svc-vaporwave's crontab, only LIST). Fixed this session: home-dir
-  access granted, then `0 3 * * * .../aedile-nightly-batch-loop.sh` and
-  `0 4 * * * .../vkv-inventory-nightly-batch-loop.sh` installed and
-  confirmed via `crontab -l`. Realisateur judged the right call was
-  finish-the-migration (not pull back to zach's own rotation) — this
-  closes that out. aedile's rewrite (dedicated clone, always-push +
-  `gh pr create`) was already drafted; worth confirming its first real
-  cron-driven cycle (not just today's manual check) in a day or two.
-  Full handoff note: `~/Documents/vkv/wavebucks/aedile/.claude/
-  NEXT-STEPS.md` (local-only, gitignored in that repo).
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
   `aedile-nightly/<date>` to `github-wavebucks` — nothing else in the
@@ -43,24 +32,7 @@ only ever sees its own section, never another project's.
   needed — worth trimming on rotation even if not urgent today), then
   `echo <new-token> | gh auth login --with-token`.
 
-## chezz
-- **RETRACTED 2026-07-24: no deploy key needed — it already exists and
-  works.** The "credential gap" diagnosis this pass was wrong. Verified
-  directly: `~/.local/share/chezz-nightly-batch/repo`'s `origin` is
-  already `git@github-chezz-deploy:hf7y/chezz.git`, a real deploy-key
-  alias in `~/.ssh/config` (`IdentityFile ~/.ssh/chezz_deploy_key`) —
-  `ssh -T` authenticates and a real test push (throwaway branch, pushed
-  then deleted) succeeded with write access. See DESIGN-NOTES.md
-  2026-07-24 for the correction and what actually explains stranded
-  commits instead (most likely the already-documented account-wide
-  spend-limit-cutoff pattern from 2026-07-20, not a credential issue).
-
 ## wtul
-- **RETRACTED 2026-07-24 — same correction as chezz's entry above.**
-  `~/.local/share/wtul-batch/repo`'s `origin` is already
-  `git@github-wtul-deploy:hf7y/wtul.git`; test push verified working
-  with write access. No deploy key needed.
-
 - **ROADMAP #2 (AcoustID/Discogs metadata fallback) — AcoustID done,
   Discogs still pending.** AcoustID key obtained and wired 2026-07-20
   (`lib/metadata_lookup.py`, offered as a suggestion at the `fix <discid>`
@@ -87,25 +59,13 @@ happened yet for any of them.
   it); not on the critical path, deliberately deprioritized rather than
   actively blocked-and-waiting.
 
-- **UPDATED 2026-07-24: stale — barrel diameter and switch dims were
-  already real-calipered 2026-07-20** (see `cad/CAD-BACKLOG.md`); this
-  note just never got marked resolved. What genuinely remained ungauged
-  (full-body handset: overall length, earpiece/mouthpiece cup diameters,
-  weight) is now unblocked too, per Zach's steer not to let it block —
-  educated-guess values (handset "feels standard") sized off a typical
-  corded handset are in `cad/params.scad`, clearly marked GUESS, and
-  `wall_hook.scad` now derives from them instead of standalone magic
-  numbers. Reused the already-downloaded
-  `~/Downloads/Phone handset hook cradle - 3928257/.../
-  Phone_Handset_Cradle_3.stl` as the "similar existing handset STL" for
-  dev rather than sourcing a new one. New `cad/HANDSET-MEASUREMENTS.md`
-  has an ASCII diagram of exactly where to caliper each GUESS value —
-  **Caliper on hand** (https://www.amazon.com/dp/B09R84QZ2P), whenever
-  convenient, not blocking anything in the meantime.
-
-- **OctoPrint** — **RESOLVED 2026-07-20**: confirmed reachable at
-  `192.168.0.43` (HTTP 302, alive) during a live crt session with real
-  dexter/VM network access. No longer blocked on hands, it's already up.
+- **Full-body handset dims still ungauged** (overall length,
+  earpiece/mouthpiece cup diameters, weight) — not blocking, per Zach's
+  steer: educated-guess values (handset "feels standard") are in
+  `cad/params.scad`, clearly marked GUESS, and `wall_hook.scad` derives
+  from them. `cad/HANDSET-MEASUREMENTS.md` has an ASCII diagram of where
+  to caliper each GUESS value whenever convenient —
+  **Caliper on hand** (https://www.amazon.com/dp/B09R84QZ2P).
 
 - **Benchy calibration print** needs the Ender 3's SD card path verified
   and someone to actually run the print (3DBenchy STL already downloaded
@@ -115,14 +75,6 @@ happened yet for any of them.
 - **USB phone-interface module** (bare-metal Compute Stick target) is
   blocked on a DAC arriving — nothing to do until it ships. **ETA**: the
   DAC (https://www.amazon.com/dp/B08Y8CZB2S) is arriving Tuesday morning.
-
-- **VM-resident hardware-check job** — **RESOLVED 2026-07-20**: installed
-  and verified live (real offline test suite passed against real
-  ALSA/tmux on crt-vm, earcons/TTS/sideband all exit 0). Also reworked
-  from an unattended `claude -p` call to a plain script
-  (`bin/crt-vm-hardware-check.sh`) since every check it runs is
-  mechanical — no LLM needed. Timer active, first scheduled run 06:38
-  next morning.
 
 ### crt deep-vision (PARKING-LOT.md / RFP docs)
 - **Gallery installation** (`RFP-GALLERY.md`): the original "centralized
@@ -136,6 +88,28 @@ happened yet for any of them.
 
 ## Recently resolved
 
+- **aedile/vkv-inventory svc-vaporwave crontab** (2026-07-24) — a prior
+  session's "confirmed working" claim was wrong; no crontab entry had
+  ever actually been installed for that account. Fixed: home-dir access
+  granted, both nightly-batch loops installed and confirmed via
+  `crontab -l`. Full writeup: DESIGN-NOTES.md 2026-07-24
+  "silently-orphaned finding"; handoff note at aedile's own
+  `.claude/NEXT-STEPS.md` (local-only, gitignored there).
+- **chezz + wtul: no deploy key needed, both already exist and work**
+  (2026-07-24) — the "credential gap" diagnosis was wrong; both repos'
+  `origin` already point at real, working deploy-key SSH aliases
+  (verified with live test pushes). See DESIGN-NOTES.md 2026-07-24 for
+  the correction and what actually explains stranded commits instead
+  (account-wide spend-limit cutoff, not credentials).
+- **crt OctoPrint reachability** (2026-07-20) — confirmed reachable at
+  `192.168.0.43` during a live session with real dexter/VM network
+  access.
+- **crt VM-resident hardware-check job** (2026-07-20) — installed and
+  verified live against real ALSA/tmux on crt-vm; reworked to a plain
+  script (`bin/crt-vm-hardware-check.sh`, no LLM needed). Timer active.
+- **crt barrel diameter + switch dims** (2026-07-20, marked resolved
+  2026-07-24) — real-calipered; this note just never got marked
+  resolved at the time. See `cad/CAD-BACKLOG.md`.
 - **vkv-inventory tracker 403** (2026-07-20) — the org-owned Apps Script
   deployment couldn't be redeployed from the personal `dangerpine@gmail.com`
   account (Workspace policy); redeploying from
