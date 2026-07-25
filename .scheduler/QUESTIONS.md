@@ -39,30 +39,107 @@ its line once you've actually read and dealt with it.
   the field can be added to `schedule/gardien.conf`/`schedule/senechal.conf`
   in a follow-up cycle.
 
-- **2026-07-24 (via /ideate, human-directed): dexter multi-machine MVP --
-  human-only setup steps, nothing here can be picked up unattended yet.**
-  Full decision in DESIGN-NOTES.md / FOCUS.md "Multi-machine parallelism"
-  same date. Needed before any run can build the MVP:
-  1. Confirm dexter's WSL/Ubuntu has Claude Code CLI installed and logged
-     into the SAME primary Max account mandark uses -- the whole
-     shared-quota premise (two independent schedulers racing against one
-     account-wide `usage-gate.sh` reading) silently breaks if dexter ends
-     up on a different account instead.
-  2. Confirm dexter has working git push access for whatever repos its
-     pinned participants need (crt's deploy setup today is
-     `REPO_URL="/home/zach/git-remotes/crt.git"`, a local bare remote --
-     confirm dexter can actually reach that path, or whatever the
-     equivalent is from dexter's filesystem).
-  3. Re-confirm crt's OctoPrint (`192.168.0.43`) is reachable from
-     dexter's NEW WSL2 environment specifically -- the 2026-07-20
-     confirmation was against a full VM's networking, which WSL2's NAT
-     does not necessarily replicate. Needs a live check, not an assumed
-     carry-over.
-  4. Your call: do `gardien`/`senechal` also need dexter locality (real
-     hardware/network reason), or does their existing permission-scope
-     gate (no unattended RAID/home-directory access yet) mean they're
-     irrelevant to this machine question entirely and should just stay
-     wherever they are? Left unpinned/undecided in FOCUS.md rather than
-     guessed.
-  Once 1-3 are confirmed, the MVP steps in FOCUS.md's "Multi-machine
-  parallelism" section are unattended-buildable.
+- **2026-07-24 (RESOLVED BY THE 2026-07-24 dexter self-build -- items 1
+  and 3 of the old MVP-setup entry).** Item 1 (Claude Code installed on
+  dexter, logged into the same primary Max account): confirmed --
+  `usage-gate.sh` runs on dexter and reads the shared account's live 5h/7d
+  windows, and push access to `origin` works. Item 3 (crt's OctoPrint
+  reachable from WSL2 specifically): confirmed -- `192.168.0.43` answers
+  with 0% ICMP loss, TCP 80 open, and an OctoPrint-identifying HTTP 302
+  (`x-clacks-overhead` header), so it is the real service, not just an
+  open port. Items 2 and 4 are still open and restated below.
+
+- **2026-07-24 (via the dexter self-build): how should dexter get crt's
+  source? This is the one thing blocking crt from actually running on
+  dexter, and it has a security dimension I would not decide alone.**
+  crt's OctoPrint pin is confirmed and `crt` is pinned in
+  `schedule/_paced.dexter.conf` -- but with `enabled=0`, because
+  `schedule/crt.conf` sets `REPO_URL="/home/zach/git-remotes/crt.git"`, a
+  bare repo on *mandark's* filesystem. dexter cannot reach it (verified by
+  running it: `fatal: repository ... does not exist`), and crt has no
+  mirror -- crt.conf notes a deploy key exists "if a private GitHub mirror
+  is wanted later", never set up. **That remote is local on purpose**:
+  crt.conf's own comment says it is a local bare repo specifically so the
+  VM password in `HANDOFF.md` never leaves the machine.
+
+  **NARROWED, same evening, by realisateur's `/ideate` on mandark
+  (`28a1617`, landed while this session was running):** "non-GitHub
+  projects reach dexter via local bare remote over LAN/SSH" is now
+  DECIDED policy. That rules out a GitHub mirror for crt (which would have
+  been the easy option, and is the one the unused `crt_deploy_key` was
+  made for) and settles the *transport*. What remains is a concrete
+  human/setup step, not a design choice:
+  (a) **expose mandark's `/home/zach/git-remotes/crt.git` over SSH** and
+      point crt's `REPO_URL` at `ssh://mandark/...` -- the decided
+      pattern. Note the tradeoff it carries: dexter's unattended crt job
+      then depends on mandark being up, which softens "two independent
+      schedulers" for that one project;
+  (b) **move crt's bare repo to dexter** and have mandark reach it over
+      the same LAN/SSH pattern -- same transport, opposite direction.
+      Worth considering because crt is now hardware-pinned to dexter, so
+      dexter is arguably its natural home; this is the variant that keeps
+      dexter independent rather than newly dependent on mandark;
+  (c) leave it as-is for now -- dexter simply has no runnable participant
+      yet. This is the CURRENT state, so nothing is broken while it waits.
+
+  **One factual correction to `28a1617` while you're here:** that entry
+  says "no non-GitHub project is pinned to dexter today (only crt is, and
+  it already uses this exact pattern)". crt uses a local bare remote, but
+  **not over LAN/SSH** -- `REPO_URL` is a plain filesystem path that only
+  resolves on mandark. Verified from dexter by running it:
+  `fatal: repository '/home/zach/git-remotes/crt.git' does not exist`. So
+  the policy is settled but its first real instance is unbuilt, and crt is
+  that instance rather than an example of it already working.
+
+- **2026-07-24 (via the dexter self-build): does mandark pull
+  `origin/main` automatically? Affects whether this session's fixes have
+  actually reached it.** This matters more than it sounds. mandark
+  *executes* `bin/usage-paced-runner.sh` and `lib/sweep-loop-common.sh`
+  out of a checkout of this history on a `*/5` tick, so this repo is
+  shared **running code**, not just shared config -- a commit here can
+  change the other machine's live behavior with no human in the loop.
+  Nothing in this repo appears to pull `origin/main` on mandark (the only
+  `git fetch` found is inside a job's own disposable clone). If mandark
+  does not pull: (a) the `sweep-loop-common.sh` clone/`cd` hardening
+  committed today -- which stops a failed clone from running `claude` with
+  write tools in cron's working directory and still exiting 0 -- is NOT
+  live there yet, and (b) the prepared crt-drop
+  (`dexter/drop-crt-from-mandark-paced`) will have no effect there when
+  it lands. Everything built today was written to be a no-op on mandark
+  precisely because this was unknown, so nothing is broken either way --
+  but if the answer is "no", someone has to pull on mandark by hand, and
+  the two-host design probably needs a deliberate answer for how code
+  reaches the other box at all.
+
+- **2026-07-24 (via the dexter self-build): should dexter self-develop
+  `scheduler` too?** `bin/scheduler-dev-cycle.sh` no longer hardcodes
+  mandark's repo path, so dexter *could* run it -- but it is deliberately
+  absent from `_paced.dexter.conf`. Two hosts committing to one scheduler
+  git history, each auto-merging to its own local `main`, is a stronger
+  version of the divergence that bit this repo earlier the same day (two
+  worktrees on a *single* host drifting far enough apart that a paced cycle
+  refused to reconcile them and escalated it here).
+
+  That entry was cleared by `558c1c1` while this session ran -- **but note
+  how it was resolved: a fast-forward.** That worked only because one side
+  had not independently advanced. With two hosts pushing to one `origin`,
+  that is precisely the condition that stops holding, so the resolution
+  does not generalize to the two-machine case; if anything it shows what
+  the cheap fix depends on. This session already hit the two-host version
+  in miniature -- mandark pushed 5 commits mid-session and this work had
+  to be rebased onto them (cleanly, this time).
+
+  Your call. Worth noting that a second self-developing host is the one
+  addition that would make this repo's own history the contended resource,
+  as opposed to today's situation where the two hosts contend only over
+  config files that the `_paced.<host>.conf` split now keeps separate.
+
+- **2026-07-24 (restated, still open -- was item 4 of the MVP-setup
+  entry): do `gardien`/`senechal` need dexter locality?** Or does their
+  existing permission-scope gate (no unattended RAID/home-directory access
+  yet) mean they are irrelevant to the machine question entirely and
+  should stay where they are? Left unpinned rather than guessed. Note the
+  pinning policy now has a written home -- `_paced.dexter.conf`'s header:
+  only hardware/network-evidenced projects belong on dexter -- so the
+  question is specifically whether either has such evidence, not whether
+  it would balance load.
