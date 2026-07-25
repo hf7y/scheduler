@@ -957,6 +957,31 @@ report_divergence() {
   fi
 }
 
+# extra_branches <repo> -- print $repo's branches (local or on origin)
+# beyond its default (main/master), one per line, nothing if there are
+# none or it isn't a git repo. Ported from an early morning-report.sh
+# draft (paced/2026-07-20, merged into `scheduler sweep` here instead --
+# morning-report.sh itself is deprecated in favor of this CLI) so stray
+# work like a `paced/<date>` branch that finished its review-gated cycle
+# but was never merged doesn't just sit there unnoticed.
+extra_branches() {
+  local repo="$1"
+  # .git is a FILE (not a directory) inside a git worktree -- use -e, not
+  # -d, so this also covers this repo's own paced/<date> worktree.
+  [ -e "$repo/.git" ] || return 0
+  local default
+  default="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
+  default="${default#origin/}"
+  [ -n "$default" ] || default="main"
+  # refs/remotes/origin/HEAD's short name is bare "origin" (not
+  # "origin/HEAD"), so it needs its own exclusion alongside "HEAD" for a
+  # plain branch ref.
+  git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin 2>/dev/null \
+    | sed 's#^origin/##' \
+    | sort -u \
+    | grep -vx -e "$default" -e "HEAD" -e "origin" -e "main" -e "master" || true
+}
+
 cmd_sweep() {
   echo "scheduler sweep -- $(date '+%Y-%m-%d %H:%M')"
   echo "(reactive backstop: catches uncommitted/unpushed/diverged state the vim"
@@ -1040,6 +1065,28 @@ cmd_sweep() {
     if [ "${ahead:-0}" -gt 0 ] 2>/dev/null; then
       echo "== [clone] $job: $ahead commit(s) ahead of origin/$branch, sitting UNPUSHED in the dedicated clone -- likely a run that got cut off after committing but before pushing (see the stranded-commit backlog item) =="
     fi
+  done
+
+  # Third pass: branches beyond main -- this repo's own paced/<date>
+  # self-dev branches are the ones most likely to pile up unmerged (they
+  # only merge when a live cycle finishes cleanly; a stale deploy or a
+  # conflict leaves one stranded), then the same check on every dedicated
+  # clone. Read-only, no fetch -- reflects branch state as of each clone's
+  # last scheduled run / this repo's current state, not a live network
+  # check.
+  local sched_extra
+  sched_extra="$(extra_branches "$SCHED_ROOT")"
+  if [ -n "$sched_extra" ]; then
+    echo "== scheduler (this repo): branches beyond main =="
+    echo "$sched_extra" | sed 's/^/  /'
+  fi
+  for repo in "$HOME"/.local/share/*/repo; do
+    [ -d "$repo/.git" ] || continue
+    job="$(basename "$(dirname "$repo")")"
+    extra="$(extra_branches "$repo")"
+    [ -n "$extra" ] || continue
+    echo "== [clone] $job: branches beyond main =="
+    echo "$extra" | sed 's/^/  /'
   done
 
   echo
