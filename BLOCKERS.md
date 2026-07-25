@@ -71,10 +71,25 @@ only ever sees its own section, never another project's.
   `.scheduler/...` or the batch run's own instructions break; `lib/
   spinitron.py`, `ROADMAP.md`, and `LIVE-TEST-DEBRIEF-2026-07-24.md`
   also reference the old path in comments/docs, lower-priority but worth
-  sweeping in the same pass. In the meantime, queued backlog drafted in
-  `~/reports/wtul/2026-07-24.md` (runs 10 and 11) still needs manual
-  filing into `QUESTIONS.md`/`.scheduler/QUESTIONS.md` if a run hits
-  this before the migration lands. Superseded decision (revised same
+  sweeping in the same pass. Re-scouted 2026-07-25 (interactive session,
+  migration deliberately NOT executed — "do what's necessary now, file
+  the rest"): scope above re-confirmed accurate, plus three additions
+  for the same pass: (a) FOCUS.md/QUESTIONS.md contain self-references
+  to their own old paths (QUESTIONS.md lines ~17/36/198, FOCUS.md
+  ~238/305 — but FOCUS.md ~368 refers to CRT's `.claude/FOCUS.md`, a
+  different repo, leave it); (b) `schedule/wtul.conf`'s BATCH_PROMPT is
+  stale — says "Read ROADMAP.md FIRST … there is no separate tracker or
+  FOCUS.md for this project," false since ROADMAP.md became a stub
+  pointing at FOCUS.md — repoint it to `.scheduler/FOCUS.md` while
+  adding SCHEDULER_SUBDIR (its `.claude/commands/wtul-batch.md`
+  reference stays correct, commands don't move); (c) after the mv,
+  verify `focus/wtul.md`/`questions/wtul.md` resolve and `pytest -q`
+  (the conf's BATCH_TEST_CMD) stays green. In-the-meantime clause DONE
+  2026-07-25: runs 10/11's drafted backlog is now filed into wtul's
+  `QUESTIONS.md` (commit `81d25a2`, pushed) — spin-live-watch built but
+  unmerged, detection-failure-earcon since merged to main — so nothing
+  is lost if a run hits this before the migration lands. Superseded
+  decision (revised same
   session, 2026-07-24): the first call was a sensitive-file permission
   rule — the settings.local.json allow entries added then are now moot;
   safe to leave, or strip on migration. The migration sidesteps the
