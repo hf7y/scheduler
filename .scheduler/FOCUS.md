@@ -903,6 +903,18 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-25 (paced cycle, routing note):** the `**Headline:**` report
+  convention (see "Current focus" item 3's cross-project note above) now
+  has a source-of-truth template (`examples/nightly-batch.md.template`)
+  but hasn't been propagated to any already-running project's real
+  `.claude/commands/nightly-batch.md` — scheduler can't edit outside this
+  repo. Routing to realisateur's intake, same pattern used for every
+  other cross-project fix filed in this backlog: propagate to chezz,
+  wtul, home-assistant, vkv-inventory (and any other registered project
+  with its own nightly-batch command) one at a time, verifying each
+  project's `LATEST.md` actually starts with the new line before moving
+  to the next.
+
 - **2026-07-24 22:33 (via `scheduler -i`):** pinning crt on dexter is not right. that's based on old role of dexter as part of the actual crt build. current crt work can happen on either machine
 
 - **2026-07-24 21:10 (realisateur session, BLOCKERS.md sweep):** Root
@@ -1102,6 +1114,21 @@ to build sooner.
      that open with prose instead of a title). Cross-project change —
      touches the shared report template every project's nightly-batch
      writes into, not just scheduler's own files.
+     **Source-of-truth half DONE 2026-07-25 (paced cycle):**
+     `examples/nightly-batch.md.template` step 6 now requires the
+     report's first line to be exactly `**Headline:** <one sentence>`,
+     matching `bug-sweep.md.template`'s existing `## Summary` convention
+     in spirit. Tried to also update this project's own
+     `.claude/commands/nightly-batch.md` to dogfood it — confirmed live
+     that `.claude/**` writes are still hard-refused in this unattended
+     run (the same permission-gate finding item 2/3 above already
+     documents), so that specific file needs a human or interactive
+     session to touch. **Not yet propagated to any other already-running
+     project's real `.claude/commands/nightly-batch.md`** (chezz, wtul,
+     home-assistant, vkv-inventory, …) — same "scheduler can't edit
+     outside this repo" boundary used everywhere else in this file;
+     routing to realisateur's `-i` front door is the right next step for
+     that half, not something to hand-fix from here.
 
 - **2026-07-22 15:19 (via `scheduler -i`):** should the idea intake in scheduler actually file things to realisateur first so it can triage/prioritize? or actually file in both locations. should realisateur properly run before other jobs within a certain window? or should those ideas await implementation until realisateur analyses them? wondering how ideas intake should evolve based on the evolving scheduler/realisateur split. drop questions to me about this if appropriate but also pick off low hanging fruit if an obvious principled first step or steps is available right now
 
