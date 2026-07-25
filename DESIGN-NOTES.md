@@ -1316,3 +1316,110 @@ fix -- flagged explicitly during design so it isn't mistaken for one later.
 host to publish a small "about to dispatch X" advisory file, since
 rotation isn't literally time-scheduled today. Worth doing as a fast
 follow, not required for QUESTIONS.md item #3 to be considered resolved.
+
+## 2026-07-25 — manual concurrent burst test, groundwork for a future "mega burn near quota deadline" mode
+
+Zach asked directly to fire a burst of concurrent agents across projects,
+bypassing `usage-paced-runner.sh`'s global flock on purpose, reasoning that
+unclaimed quota in the current window is quota that just goes unused (the
+already-documented 40-50pt/week slack finding, 2026-07-24). This is a real
+test of a mechanism that does not exist yet -- there is no automated "burn
+down remaining slack before the window rolls" mode today, only the steady
+one-at-a-time paced rotation. This entry records what the manual version
+found, as groundwork for whether/how to build that mode for real.
+
+**What ran, on mandark, by hand:** each project's own wrapper script invoked
+directly and concurrently (`chezz-nightly-batch-loop.sh`,
+`gardien-nightly-batch-loop.sh`, `senechal-nightly-batch-loop.sh`,
+`scheduler-dev-cycle.sh`), i.e. the same commands `_paced.conf` would run,
+just not serialized through the rotation's flock or gated by a fresh
+`usage-gate.sh` probe first.
+
+**Deliberately excluded, before running anything:**
+- `home-assistant` -- controls a live physical instance; unattended +
+  concurrent + no human review is exactly the risk its own
+  `AUTONOMY_TIER=low` and batch-prompt physical-side-effect warning exist
+  for. Any real mega-burn mode should hard-exclude physical-effect projects
+  by default, not opt them in unless explicitly told to.
+- `realisateur` -- its own nightly-batch writes this same repo's inbox/
+  FOCUS.md; running it concurrently with the live interactive session doing
+  the excluding would have been a self-inflicted version of the exact
+  dirty-tree-during-a-live-session hazard this ecosystem already treats as a
+  hard stop. A mega-burn mode triggered FROM an interactive realisateur
+  session should always self-exclude for the same reason.
+- `crt`/`wtul` (dexter-pinned) -- not reachable from a mandark shell at all.
+  A real cross-host mega-burn needs its own per-host trigger, or a
+  mechanism that can reach both; this test only exercised mandark.
+
+**Results:**
+- `senechal`, `gardien` -- clean concurrent runs, real fixes shipped and
+  pushed (senechal: a GPG-private-key-header redaction gap + a nested-
+  special-file silent-drop bug, 73/73 tests; gardien: fail-loud on an
+  unreadable `gardien.json` instead of a raw traceback, 66/66 tests).
+  **No cross-repo interference of any kind** -- different repos, different
+  working trees, nothing to contend over.
+- `chezz` -- silent no-op. Its own engine considers the job `expired`
+  (staleness logic keyed to its normal cadence/crontab presence) and
+  declined to do real work. **This is the first real footgun for a
+  mega-burn mode**: per-project wrappers built around "runs on its own
+  normal schedule" assumptions can silently skip an out-of-band burst
+  trigger and look identical to a real run in the exit code (0) --  only
+  visible by actually reading the log, not by trusting "it ran." A real
+  mega-burn mode needs either a `--force`/bypass-staleness flag threaded
+  through `sweep-loop-common.sh`, or to explicitly surface "skipped as
+  expired" as a distinct, loud outcome rather than folding it into a
+  normal exit.
+- `scheduler` -- the one real collision, and the useful finding. Its dev
+  cycle hit a genuine merge conflict in `.scheduler/FOCUS.md` while
+  merging `paced/2026-07-25` into `main`, racing a concurrent edit to the
+  same file from the dexter-side interactive session (diagnosing the wtul
+  deploy-key gap, same evening -- see `_paced.dexter.conf`'s and
+  `.scheduler/QUESTIONS.md`'s wtul entries). Handled correctly: the merge
+  aborted automatically rather than forcing a resolution, leaving the work
+  stranded but intact on `paced/2026-07-25` (`0bc4ea3`, still unmerged as
+  of this writing) for a human to resolve. **Nothing corrupted, nothing
+  force-pushed, nothing silently lost** -- but it is live, not theoretical,
+  confirmation of the exact risk `_paced.dexter.conf`'s own header already
+  named as the reason `scheduler` is deliberately absent from dexter's
+  rotation ("two hosts independently committing to one scheduler git
+  history... a stronger version of the divergence that bit this repo
+  earlier the same day").
+
+**Groundwork conclusions for a real mega-burn mode, not built this pass:**
+1. **Cross-repo concurrency is safe as tested** -- N different projects'
+   wrappers can run fully concurrently with zero coordination beyond what
+   already exists (each wrapper's own flock/logging), because they touch
+   disjoint repos. A mega-burn mode does not need a new locking primitive
+   for the common case.
+2. **Same-repo concurrent writers are the actual danger**, not "many
+   projects at once" in general. The rule a real mega-burn mode needs: never
+   dispatch two writers against the same repo concurrently, whether that's
+   two participants pointed at the same project (shouldn't happen given
+   today's config) or -- the case that actually bit this test -- one host's
+   automated cycle and a second host's interactive session both live on the
+   same repo at the same time. `scheduler` is the one project this
+   ecosystem already self-develops from two independent surfaces (mandark's
+   paced cycle, any interactive session on either host); anything else that
+   grows a second interactive/dev surface inherits the same risk.
+3. **This test did not exercise the actual quota-overshoot risk.** It ran a
+   fixed, hand-picked set of 4 wrappers directly, never consulting
+   `usage-gate.sh` at all -- so it proves concurrent *execution* is safe,
+   not that N-way concurrent dispatch stays inside the account's real 5h/7d
+   ceiling. A real mega-burn mode needs its own gating step: read remaining
+   slack once, estimate a per-job cost budget, and burst only as many
+   participants as plausibly fit -- not "fire everything and hope."
+4. **Staleness/expiry logic needs a bypass path** (see `chezz` above) or a
+   mega-burn mode will silently under-deliver against projects that look
+   included but quietly no-op.
+5. **Exclusion list needs to be a first-class input, not ad hoc.**
+   Physical-effect projects (`home-assistant`, and by the same logic
+   anything gardien eventually does with real deletes) and the
+   triggering session's own project (`realisateur` here) should be
+   excluded by default, overridable only with an explicit ask -- this test
+   got that right by hand, a real mode should encode it structurally.
+
+Not built this pass, deliberately -- this is exactly the "genuinely new
+mechanism, record and queue" case per `/ideate`'s own contract (see
+realisateur `.claude/FOCUS.md` 2026-07-25 for the cross-referenced entry).
+Immediate cleanup still pending from this test: resolve the stranded
+`paced/2026-07-25` merge conflict in `.scheduler/FOCUS.md` by hand.
