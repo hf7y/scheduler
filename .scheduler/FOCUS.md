@@ -1591,6 +1591,43 @@ interactive OAuth can't run unattended):**
 Blocked on the human login/clone step in QUESTIONS.md before any of the
 above can be picked up by an unattended run.
 
+**2026-07-24 (realisateur, via `/ideate`): vision promoted from "parked
+dream" to "dexter-as-primary-host, partial" — asked directly, not
+guessed.** The dexter self-build session above is now live (running on
+dexter itself, per Zach). Zach was asked directly whether gardien's
+2026-07-24 QUESTIONS.md item ("dexter becomes the always-on server for
+the whole ecosystem, mandark stops running overnight jobs") should stay
+parked, promote fully, or land as a partial commitment. **Decided:
+partial.** "Dexter becomes the primary host where unattended jobs run"
+is now a real, active direction — not a dream — but "cloud VMs / remote
+GitHub-agent triggers / retiring mandark entirely" stays a separate,
+genuinely undecided later phase, not bundled into tonight's scope.
+Concretely this means: the dexter self-build in progress (crt-pinned
+MVP, two independent schedulers) is validated groundwork for a real
+target, not just an experiment to observe and possibly discard. It does
+NOT mean committing yet to cloud VMs, GitHub Actions/remote-agent
+triggers, or a hard mandark-sunset date — those remain open.
+
+**Explicitly declined, same session: naming "many parallel jobs on
+dexter via VMs/WSL" as the next milestone-after-next.** Asked directly;
+Zach's call was "too far ahead" — don't design the multi-VM/parallel-job
+layer until the current single-peer MVP (crt pin, one dexter scheduler,
+the accepted quota-race risk) is actually proven stable. Not recorded as
+a queued milestone; if it comes up again, treat it as still fully open,
+not something already scoped.
+
+**No-GitHub-remote projects' path to dexter: DECIDED — local bare
+remote over LAN/SSH, same pattern as existing local-only projects.** No
+new credential mechanism; a project without a GitHub repo gets (or
+already has) a bare git remote reachable over the LAN/SSH, and dexter's
+scheduler clones/pushes to that exactly like crt's
+`REPO_URL="/home/zach/git-remotes/crt.git"` today. This generalizes the
+existing "prefer local bare remote unless GitHub is clearly right" rule
+to the multi-host case rather than inventing a new transport. Nothing to
+build yet — no non-GitHub project is pinned to dexter today (only crt
+is, and it already uses this exact pattern) — but the policy is settled
+for whenever one is.
+
 ## Consolidation roadmap (2026-07-20, human-directed session)
 
 **RE-SEQUENCED AGAIN (2026-07-20, later still): item 0 is now PARKED (see
