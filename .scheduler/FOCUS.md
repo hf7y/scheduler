@@ -2197,3 +2197,47 @@ urgency heuristic — same boundary, applied to a second knob.
 - **[batch] bidirectional liveness** — the proposed `liveness-audit.sh` shouts when an enabled project has no recent report. Add the inverse: shout when a project registered as parked/weight-0 is producing FRESH reports. That second signal was sitting unread in `scheduler glance` (aedile 6h, vkv-inventory 5h) the entire time both were believed dead for four days.
 - **[batch] one resolver for per-project path + ref** — `SCHEDULER_SUBDIR`, `BRANCH`, and the FOCUS.md path all come from the conf through a single shared helper that any tool can call. Today three separate things hardcoded a project's FOCUS path or branch and each broke independently: chezz's pre-commit allowlist (missed the `.claude`→`.scheduler` move), realisateur's `inject-suggestions.sh` (same), and wtul's injection landing on a feature branch its wrapper never reads. Config-from-one-source, applied to paths and refs rather than ports.
 - **[batch] hygiene-lint row: stamped-checklist drift** — BUILD-DISCIPLINE.md's checklist gained three rows on 2026-07-25 (`3be6629`); the copies already stamped into each project's CLAUDE.md now lag the baseline and nothing detects that.
+
+## AUTONOMY_TIER engine enforcement built (2026-07-25, human-directed: "replace me as the valve")
+
+`lib/autonomy-merge.sh` now enforces `AUTONOMY_TIER="high"` for real (test-gated
+auto-merge+push, modeled on `scheduler-dev-cycle.sh`'s `merge_mode()`), wired
+into `lib/sweep-loop-common.sh` (runs at the end of every sweep/batch cycle,
+conf-based or legacy-wrapper) and a new one-off `scheduler autonomy-sweep
+[project]` subcommand. groc-mangr/vim-arcade (already `high`) got
+`BATCH_TEST_CMD`; wtul raised `low`→`high` gated on pytest; vkv-inventory
+raised `medium`→`high` ungated (no test suite; safe only because its clone is
+a dev copy, not the live media-arts-collective site — see the comment on
+`AUTONOMY_TIER` in `schedule/vkv-inventory.conf`). Ran once against the
+existing backlog: vkv-inventory (5/5), groc-mangr (1/1), vim-arcade (1/1)
+cleared; wtul 2/8 (6 hit real merge conflicts, correctly left for manual
+review — see `bin/wtul-rip`/`tests/test_wiring.py` across
+discid-rerip-cache/ocr-metadata-extraction/rip-rehearsal-harness/
+rip-speed-monitoring/spin-live-watch/web-photo-capture).
+
+- **[batch] fix stale "not built yet" claims** — `bin/scheduler`'s
+  `cmd_explain` (was lines ~217, 300-302) and this file's own "not yet
+  built"/"real design work for a future session" language (was lines
+  ~189-192, 2087-2090) both now describe an unenforced field; update to
+  reflect the above, per BUILD-DISCIPLINE's "claims re-probed, not quoted."
+- **[batch] monthly autonomy-tier policy-revisit watcher** — a `CronCreate`
+  job (proposed: 1st of the month) that greps `[autonomy-tier:high, ...]`
+  merge-commit tags across the high-tier projects' dedicated clones since
+  the last review, summarizes auto-merge vs. gate-failure vs. conflict-abort
+  counts, and appends a dated entry here asking whether the tier/gate policy
+  needs to change. A check-in, not an auto-adjuster — surfaces data, doesn't
+  act on it.
+- **needs a human look (found during the backlog sweep, not acted on):**
+  the DISABLED `vkv-inventory-bug-sweep` dedicated clone
+  (`~/.local/share/vkv-inventory-bug-sweep/repo`, `SWEEP_JOB_NAME=""` since
+  2026-07-19) still shows stale branch counts in `scheduler sweep` after a
+  fetch — `drilldown-browse-redesign` reads 11 commits ahead of origin/main
+  there vs. the 1 commit the active `vkv-inventory-nightly-batch` clone saw
+  and merged. Two clones of the same origin apparently hold genuinely
+  different local history under the same branch name, not just a stale
+  cache — deliberately not force-merged. Also: `scheduler sweep` flagged
+  zach's own personal wtul working copy (`PROJECT_REPO_PATH`, not the
+  dedicated batch clone) as diverged from `origin/label-printer-integration`
+  — 4 local-only vs. 8 remote-only commits — pre-existing, unrelated to
+  today's automerge (which only ever touched the dedicated clone), but
+  unresolved.

@@ -60,7 +60,7 @@ REPO_SUBDIR="${REPO_SUBDIR:-.}"
 
 # Optional per-tier knobs -- only keep them set when the conf actually gave
 # a value, so the engine's own defaults apply otherwise.
-for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH; do
+for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH TEST_CMD; do
   val="$(field "$knob")"
   if [ -n "$val" ]; then
     printf -v "$knob" '%s' "$val"
@@ -69,7 +69,16 @@ for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH; do
   fi
 done
 
-export JOB_NAME PROJECT_KEY TIER REPO_URL REPO_SUBDIR PROMPT
+# AUTONOMY_TIER (see lib/autonomy-merge.sh) is project-level, not per-tier
+# like the knobs above -- it comes straight from the conf's own unprefixed
+# field, already in scope from `source "$CONF"`. PREFIX is exported too so
+# sweep-loop-common.sh doesn't have to re-derive it from TIER's free-form
+# label -- only the legacy-wrapper path (which never sources the conf, and
+# so never has PREFIX) needs that fallback.
+: "${AUTONOMY_TIER:=}"
+
+export JOB_NAME PROJECT_KEY TIER PREFIX REPO_URL REPO_SUBDIR PROMPT AUTONOMY_TIER
+[ -n "${TEST_CMD:-}" ] && export TEST_CMD
 
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/sweep-loop-common.sh"

@@ -118,6 +118,39 @@ set -uo pipefail
 : "${SECRETS_SRC_DIR:=}"
 : "${SECRETS_DEST_SUBDIR:=.session-handoff}"
 : "${PRECHECK_CMD:=}"
+#   AUTONOMY_TIER  default unset. "high" turns on lib/autonomy-merge.sh's
+#                  test-gated auto-merge at the end of this run (see that
+#                  file). Anything else (including unset) leaves branches
+#                  for manual review, today's existing behavior, unchanged.
+#                  bin/scheduler-run exports this from the conf directly.
+#                  A legacy *_SCRIPT wrapper never sources the conf, so it
+#                  won't be set here -- this file falls back to reading
+#                  schedule/<PROJECT_KEY>.conf itself, below, rather than
+#                  requiring every wrapper to be edited to pass it through.
+#   TEST_CMD       default unset (ungated merge). Optional shell command,
+#                  eval'd on each candidate branch before autonomy-merge
+#                  will touch it; non-zero exit leaves that branch alone.
+: "${AUTONOMY_TIER:=}"
+: "${TEST_CMD:=}"
+LIB_DIR_EARLY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$LIB_DIR_EARLY/autonomy-merge.sh"
+if [ -z "$AUTONOMY_TIER" ] && [ -n "${PROJECT_KEY:-}" ]; then
+  LEGACY_CONF="$LIB_DIR_EARLY/../schedule/$PROJECT_KEY.conf"
+  if [ -f "$LEGACY_CONF" ]; then
+    AUTONOMY_TIER="$(grep -E '^AUTONOMY_TIER=' "$LEGACY_CONF" | tail -1 | sed -E 's/^AUTONOMY_TIER=//; s/^"(.*)"$/\1/')"
+    : "${PREFIX:=}"
+    if [ -z "$PREFIX" ]; then
+      case "$TIER" in
+        nightly-batch|batch) PREFIX="BATCH" ;;
+        bug-sweep|sweep) PREFIX="SWEEP" ;;
+      esac
+    fi
+    if [ -n "$PREFIX" ]; then
+      TEST_CMD="$(grep -E "^${PREFIX}_TEST_CMD=" "$LEGACY_CONF" | tail -1 | sed -E "s/^${PREFIX}_TEST_CMD=//; s/^\"(.*)\"\$/\1/")"
+    fi
+  fi
+fi
 
 STATE_DIR="$HOME/.local/share/${JOB_NAME}"
 REPO="$STATE_DIR/repo"
@@ -383,6 +416,12 @@ $PROMPT"
       echo "push reason: origin/$BRANCH has commit(s) local doesn't (diverged) -- would need a merge/rebase before push, not a credential issue"
     fi
   fi
+
+  # AUTONOMY_TIER="high" gate (lib/autonomy-merge.sh) -- runs regardless of
+  # whether THIS run's own subagent created a branch, so it also catches
+  # anything left over from an earlier run/turn-limit cutoff. No-op for
+  # any other tier value; see that file for the merge/push/fallback logic.
+  autonomy_sweep_repo "$REPO" "$BRANCH" "$AUTONOMY_TIER" "$TEST_CMD" "$JOB_NAME"
 
   echo "=== $STATUS $(date -Is) (${ELAPSED}s) ==="
 
