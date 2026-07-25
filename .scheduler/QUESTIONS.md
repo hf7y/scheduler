@@ -227,3 +227,27 @@ its line once you've actually read and dealt with it.
   `scheduler-run` under the hood -- there may be no real value being left
   on the table by never doing (a). Full finding written up in FOCUS.md's
   "Consolidation roadmap" item 1, same date.
+
+- **2026-07-25 (via /nightly-batch, paced cycle): `.claude/commands/nightly-batch.md`'s
+  own report-filename bug (line 68, `$(date +%Y-%m-%d).md`) can't be fixed
+  from inside an unattended cycle -- the harness refuses the write outright.**
+  FOCUS.md's confirmed-real "report filenames are date-only" finding
+  (2026-07-20) says the fix (`$(date +%Y-%m-%dT%H%M)`) already landed in
+  every in-repo template (`examples/nightly-batch-loop.sh`,
+  `examples/nightly-batch.md.template`, `examples/schedule-entry.conf.template`)
+  and only the *installed* `~/.local/bin/*-loop.sh` wrappers were left
+  pending human go-ahead (they're live, outside this repo). But this
+  repo's own `/nightly-batch` command definition -- `.claude/commands/
+  nightly-batch.md`, tracked in git, not a live wrapper -- still has the
+  same stale line, and was missed by that pass. Tried to fix it directly
+  this cycle (`Edit` tool): the harness returned "Claude requested
+  permissions to write to .../.claude/commands/nightly-batch.md, but you
+  haven't granted it yet" -- consistent with the ".claude/** writes get
+  hard-refused in unattended runs" gate this repo's own
+  `SCHEDULER_SUBDIR` design already worked around for FOCUS/QUESTIONS
+  (moved to `.scheduler/` for exactly this reason), but slash-command
+  definitions have no equivalent escape hatch -- `.claude/commands/` is
+  where Claude Code itself requires them to live. Needs a human touch (a
+  one-line edit, `date +%Y-%m-%d` -> `date +%Y-%m-%dT%H%M` at line 68) or
+  an explicit permission grant for that one path if unattended cycles
+  should be able to fix their own command files going forward.

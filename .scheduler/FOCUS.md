@@ -784,6 +784,25 @@ to build sooner.
       auto-merged. Still just the read-only surfacing half of item (c) —
       the shell-out-to-`git log`/`diff`-on-demand interaction and (a)/(b)/(d)
       remain open.
+      **Follow-up DONE, same paced cycle:** `cmd_sweep`'s own third pass
+      (`branches beyond main`) still called the old bare-name
+      `extra_branches()`, so `sweep`'s output and `glance`'s footer showed
+      the same signal in two different shapes — `sweep` said "1 stray
+      commit" and "23 commits, needs real review" identically (bare branch
+      name only), forcing a manual `git rev-list --count` to tell them
+      apart, exactly the gap the glance footer fix above just closed for
+      the daily view. Switched `cmd_sweep`'s third pass to
+      `extra_branches_detail` too, so both surfacings are consistent.
+      Verified: `bash -n bin/scheduler` clean; ran `scheduler sweep` live
+      and cross-checked its new ahead-counts against `git rev-list
+      --count` per branch (groc-mangr 6, vim-arcade 1, wtul 1/1/3,
+      vkv-inventory 19/19/19, this repo's own `paced/2026-07-25` 1 —
+      matches `origin/main..paced/2026-07-25`, since the two earlier
+      commits on this branch had already been merged+pushed to
+      `origin/main` mid-cycle by `scheduler-dev-cycle.sh`); also ran under
+      `env -u SSH_AUTH_SOCK GIT_SSH_COMMAND="ssh -o BatchMode=yes"`
+      (simulating cron) — exit 0, output unchanged, no regression in the
+      other five `sweep` passes.
    d. Migrate one project at a time after scheduler's own prototype is
       verified; old `LATEST.md`/`QUESTIONS.md` stay as fallback until each
       project's wrapper is confirmed reading the merged file correctly.

@@ -1385,19 +1385,34 @@ cmd_sweep() {
   # clone. Read-only, no fetch -- reflects branch state as of each clone's
   # last scheduled run / this repo's current state, not a live network
   # check.
-  local sched_extra
-  sched_extra="$(extra_branches "$SCHED_ROOT")"
+  # Uses extra_branches_detail (built 2026-07-25 for cmd_glance's own
+  # "branches awaiting review" footer) instead of the bare-name
+  # extra_branches here too, so `sweep`'s output carries the same
+  # ahead-count every other surfacing of this signal already shows --
+  # previously this pass printed bare branch names only, forcing a
+  # separate `git rev-list --count` to tell "1 stray commit" from
+  # "23 commits, needs real review."
+  local sched_extra=""
+  local b ahead
+  while IFS=$'\t' read -r b ahead; do
+    [ -n "$b" ] || continue
+    sched_extra="$sched_extra  $b  $ahead commit(s), not merged\n"
+  done < <(extra_branches_detail "$SCHED_ROOT")
   if [ -n "$sched_extra" ]; then
     echo "== scheduler (this repo): branches beyond main =="
-    echo "$sched_extra" | sed 's/^/  /'
+    printf '%b' "$sched_extra"
   fi
   for repo in "$HOME"/.local/share/*/repo; do
     [ -d "$repo/.git" ] || continue
     job="$(basename "$(dirname "$repo")")"
-    extra="$(extra_branches "$repo")"
+    local extra=""
+    while IFS=$'\t' read -r b ahead; do
+      [ -n "$b" ] || continue
+      extra="$extra  $b  $ahead commit(s), not merged\n"
+    done < <(extra_branches_detail "$repo")
     [ -n "$extra" ] || continue
     echo "== [clone] $job: branches beyond main =="
-    echo "$extra" | sed 's/^/  /'
+    printf '%b' "$extra"
   done
 
   # Fourth pass: stale/stranded ~/.local/share/scheduler-registry/*.active
