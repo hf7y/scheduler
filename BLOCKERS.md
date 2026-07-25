@@ -109,6 +109,9 @@ happened yet for any of them.
   nothing consumes it as a work queue (crt's `/nightly-batch` scope is
   `.claude/FOCUS.md`'s batch-tagged items only); this cross-reference
   stays so a future read doesn't re-surface it as if still homeless.
+> The scap/stl steps are resolved for now. I have a printed prototype
+  that fits the handset. What does need to happen is solving the 3-pin.
+  Zach has not yet looked at the 3-pin design write-up.
 
 ## vkv-inventory
 
