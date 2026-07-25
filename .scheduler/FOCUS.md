@@ -2227,17 +2227,42 @@ rip-speed-monitoring/spin-live-watch/web-photo-capture).
   counts, and appends a dated entry here asking whether the tier/gate policy
   needs to change. A check-in, not an auto-adjuster — surfaces data, doesn't
   act on it.
-- **needs a human look (found during the backlog sweep, not acted on):**
-  the DISABLED `vkv-inventory-bug-sweep` dedicated clone
-  (`~/.local/share/vkv-inventory-bug-sweep/repo`, `SWEEP_JOB_NAME=""` since
-  2026-07-19) still shows stale branch counts in `scheduler sweep` after a
-  fetch — `drilldown-browse-redesign` reads 11 commits ahead of origin/main
-  there vs. the 1 commit the active `vkv-inventory-nightly-batch` clone saw
-  and merged. Two clones of the same origin apparently hold genuinely
-  different local history under the same branch name, not just a stale
-  cache — deliberately not force-merged. Also: `scheduler sweep` flagged
-  zach's own personal wtul working copy (`PROJECT_REPO_PATH`, not the
-  dedicated batch clone) as diverged from `origin/label-printer-integration`
-  — 4 local-only vs. 8 remote-only commits — pre-existing, unrelated to
-  today's automerge (which only ever touched the dedicated clone), but
-  unresolved.
+- **RESOLVED 2026-07-25, both items above, human-confirmed.**
+  `drilldown-browse-redesign` was real, independent 11-commit work (browse/
+  drilldown UI + style-default sync tests) that had been evolving on the
+  DISABLED `vkv-inventory-bug-sweep` clone since before it was disabled,
+  unreconciled with `main` the whole time (true 11-ahead/11-behind
+  divergence from a shared ancestor, not a stale-cache artifact). Merged
+  clean (no conflicts), its own two `tools/test_*.mjs` suites re-run first
+  (13/13 passing), pushed to origin/main (`5caf704..7817158`). wtul's
+  personal-working-copy divergence turned out to be nothing: diffed content
+  (not just messages) on all 4 "local-only" commits — 3 were byte-identical
+  patches already on `main` under different SHAs (replayed independently by
+  the automation clone), the 4th (a raw fable-review note) was already
+  present on `main` in triaged/resolved form. Stale local branch deleted;
+  nothing was lost.
+  - **Root cause, not "bad git discipline":** a clone nobody fetches
+    silently diverges, whether it's an automation clone for a disabled
+    tier or a human's own personal working copy — same mechanism the
+    2026-07-25 propagation pass already queued a fix for below
+    ("behind-origin / unpushed audit"), just caught here in two more
+    places (a *disabled* tier's clone, and a personal checkout, neither of
+    which that item's current wording calls out explicitly).
+  - **[batch] extend the behind-origin audit to cover clones the current
+    wording misses:** (a) dedicated clones for DISABLED tiers
+    (`SWEEP_JOB_NAME=""` etc.) — today's audit item only mentions "human-
+    facing" working copies and active dispatch clones, so a disabled
+    clone like vkv-inventory-bug-sweep's is invisible to it and can drift
+    for weeks unnoticed; (b) personal working copies whose branch names
+    collide with a dedicated automation clone's branch names for the same
+    project (wtul's `label-printer-integration` existed independently in
+    both zach's checkout and the batch clone) — flag the collision, not
+    just the ahead/behind count, since "diverged" reads as alarming when
+    the content is actually identical and reads as safe-to-drop when it
+    isn't.
+  - **Method note worth keeping, not just fixing in tooling:** before
+    trusting an "N commits ahead/behind" count enough to act on it (merge,
+    discard, or panic), fetch fresh and diff actual patch content, not
+    commit messages or counts — same message + different SHA can mean
+    "identical, already safe" (wtul, here) or "genuinely diverged, use it"
+    (vkv-inventory, here) and the count alone doesn't distinguish them.
