@@ -903,6 +903,69 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-25 10:43 (realisateur session, routed from `scheduler status
+  chezz`):** The `EXPIRY_DAYS` dead-man switch is a **silent kill switch
+  with a remedy that does not work.** Four findings, all verified today by
+  reading the code and the live state — these belong to the stability
+  milestone above ("a run that … has its assumed external dependency
+  quietly stop being true is always flagged loudly"), not to the parked
+  reservoir:
+  1. **The documented renewal is a no-op.** Three user-facing messages say
+     "bump `EXPIRY_DAYS` and re-run `bin/sync-crontab.sh` to renew"
+     (`bin/scheduler:1689`, `bin/sync-crontab.sh:381` and `:405`, plus
+     `lib/sweep-loop-common.sh:199`). Nothing in `bin/` or `lib/` ever
+     writes `expires_at` — verified with `grep -rn expires_at bin/ lib/`:
+     `sync-crontab.sh:224-229` only *reads* it, and
+     `lib/sweep-loop-common.sh:192-194` writes it **only when the file is
+     missing**. So bumping `EXPIRY_DAYS` on an already-expired job changes
+     nothing; the real renewal is `rm ~/.local/share/<job>/expires_at`
+     (next run re-stamps `now + EXPIRY_DAYS`). Fix: either correct all four
+     messages to name the action that actually renews, or make
+     `sync-crontab.sh --apply` genuinely re-stamp `expires_at` when a job's
+     `EXPIRY_DAYS` changed. Same failure class as the 2026-07-25
+     svc-vaporwave incident — a written remedy nobody re-ran against the
+     code.
+  2. **Expiry is a clean `exit 0`, so the paced dispatcher can't see it.**
+     `lib/sweep-loop-common.sh:198-204` clones the repo, then `exit 0` with
+     only a `notify-send` and a log line. `bin/usage-paced-runner.sh` has
+     no `expires_at` awareness at all (`grep` finds none), so an expired
+     project still consumes a paced slot and records as a normal dispatch.
+     Live witness: `chezz-nightly-batch` no-op'd at 2026-07-25T01:21:51 and
+     T08:55:02, `home-assistant-nightly-batch` at T08:55:04 — both in their
+     own `sweep.log`, nowhere else. Fix: exit non-zero (or a distinct
+     status the runner logs as skipped-expired), and teach the paced runner
+     to skip an expired job before it burns a slot and a clone.
+  3. **Expiry is invisible outside per-project `scheduler status
+     <project>`.** It is not in `scheduler` glance and not in `scheduler
+     sweep`. **5 of 14 jobs are expired right now** — found only by
+     hand-scanning `~/.local/share/*/expires_at`:
+     `chezz-nightly-batch` (2026-07-25T01:00), `chezz-bug-sweep`
+     (2026-07-23T22:44), `home-assistant-nightly-batch` (2026-07-25T01:30),
+     `vkv-inventory-bug-sweep` (2026-07-24T13:30),
+     `vkv-inventory-nightly-batch` (2026-07-25T02:32). Surface EXPIRED per
+     project in both views; this is the same signal-sitting-unread shape as
+     the "bidirectional liveness" item queued below.
+  4. **`schedule/chezz.conf` still needs `SCHEDULER_SUBDIR=".scheduler"`** —
+     the cross-repo follow-up chezz's own 2026-07-24 batch correctly refused
+     to make from its side (see chezz's `.scheduler/FOCUS.md`). Today
+     `focus/chezz.md` and `questions/chezz.md` are **dangling symlinks** into
+     `chezz/.claude/`, which is why `scheduler status chezz` reports "no
+     FOCUS.md found" while `chezz/.scheduler/FOCUS.md` is a real 271-line
+     file. Also fix `chezz.conf`'s `BATCH_PROMPT`, which still says "Read
+     .claude/FOCUS.md FIRST". NOTE the live wrapper
+     `~/.local/bin/chezz-nightly-batch-loop.sh` says the same thing and is
+     still authoritative (`BATCH_SCRIPT` set) — so chezz's batch has been
+     pointed at a nonexistent scope file since 2026-07-24 and would run
+     unscoped. Editing that wrapper is out of scope for a batch (see
+     roadmap item 1's "editing it is not"), so it is filed as a human step
+     in `BLOCKERS.md` → `## scheduler` instead. The general fix is the
+     already-queued "one resolver for per-project path + ref" item — do
+     chezz's one-line conf fix now regardless, don't wait for it.
+  *(Not routed as a stranded-commit report: the "local commit NOT pushed
+  local=7ee1262" warning in chezz's last-run log is STALE — re-probed today,
+  `git -C ~/.local/share/chezz-nightly-batch/repo fetch && rev-list --count
+  origin/main..HEAD` = 0, and `7ee1262` is in `origin/main`'s history.)*
+
 - **2026-07-25 00:47 (via `scheduler -i`):** look into crt and update your references to the VM which are deprecated
 
 - **2026-07-24 22:33 (via `scheduler -i`):** pinning crt on dexter is not right. that's based on old role of dexter as part of the actual crt build. current crt work can happen on either machine

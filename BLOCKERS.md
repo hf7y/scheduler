@@ -37,6 +37,43 @@ Each project's heading must be exactly `## <PROJECT_KEY>` (matches
 run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
+## scheduler
+- **5 of 14 jobs' `EXPIRY_DAYS` dead-man switches have fired — renewing
+  them is your call, not an unattended run's** (appended 2026-07-25 by a
+  realisateur session; witness: scanned `~/.local/share/*/expires_at`
+  against `date -Is`, and each job's own `sweep.log`). Expired:
+  `chezz-nightly-batch` (2026-07-25T01:00), `chezz-bug-sweep`
+  (2026-07-23T22:44), `home-assistant-nightly-batch` (2026-07-25T01:30),
+  `vkv-inventory-bug-sweep` (2026-07-24T13:30),
+  `vkv-inventory-nightly-batch` (2026-07-25T02:32). An expired job clones
+  its repo and then `exit 0`s without running claude, so `chezz` and
+  `home-assistant` have been quietly no-opping every paced tick today
+  (`chezz` at 01:21 and 08:55, `home-assistant` at 08:55). This is here
+  rather than in FOCUS.md because the switch exists so that unattended
+  work can't run indefinitely unsupervised — an agent renewing its own
+  expiry defeats the mechanism. **The renewal actually is `rm
+  ~/.local/share/<job>/expires_at`** (the next run re-stamps `now +
+  EXPIRY_DAYS`); the "bump `EXPIRY_DAYS` and re-run
+  `bin/sync-crontab.sh`" text printed by `scheduler status` is wrong —
+  nothing in `bin/`/`lib/` ever writes that file except a
+  create-if-missing at `lib/sweep-loop-common.sh:192-194`. Correcting
+  that text, plus making the expired path loud and visible in `scheduler
+  glance`/`sweep`, is queued in this repo's FOCUS.md backlog
+  (2026-07-25 10:43 entry) as agent work.
+- **`~/.local/bin/chezz-nightly-batch-loop.sh`'s `PROMPT` still says
+  "Read .claude/FOCUS.md FIRST", which no longer exists** (appended
+  2026-07-25, same session; witness: read the wrapper and `ls
+  chezz/.claude chezz/.scheduler`). chezz moved its scope file to
+  `.scheduler/FOCUS.md` on 2026-07-24; that wrapper is still
+  authoritative (`BATCH_SCRIPT` is set in `schedule/chezz.conf`), so
+  chezz's nightly batch would run **unscoped** once its expiry above is
+  renewed. Needs a human because editing `~/.local/bin` wrappers is
+  explicitly outside a batch's scope (roadmap item 1). Two ways: edit the
+  one path in the wrapper, or drop `BATCH_SCRIPT` from `chezz.conf` and
+  run `bin/sync-crontab.sh --apply` to flip chezz onto
+  `bin/scheduler-run` (the conf's own `BATCH_PROMPT` is being corrected
+  as part of the queued FOCUS.md item, so the flip lands the right path).
+
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
