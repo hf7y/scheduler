@@ -34,26 +34,32 @@ only ever sees its own section, never another project's.
 
 ## wtul
 - **`.claude/QUESTIONS.md` and `.claude/FOCUS.md` sensitive-file write
-  block — DECIDED 2026-07-24: grant a permission rule, don't relocate
-  the files.** Zach's call: these are wtul's own live backlog/inbox
-  docs, not secrets, no reason to move them out of `.claude/`.
-  **Attempted fix, same session:** added explicit
-  `Edit(.claude/QUESTIONS.md)` / `Edit(.claude/FOCUS.md)` /
-  `Write(.claude/QUESTIONS.md)` / `Write(.claude/FOCUS.md)` allow rules
-  to `wtul/.claude/settings.local.json` (gitignored, machine-local —
-  correct scope since `/wtul-batch` runs on this same host per
-  `schedule/wtul.conf`'s `PROJECT_REPO_PATH`). **Not yet verified live:**
-  the original block also fired on a plain shell `>>` append, not just
-  the Edit tool, which is why this is flagged unverified rather than
-  closed — if the sensitive-file gate is enforced beneath the normal
-  per-tool `Edit`/`Write`/`Bash` permission-rule layer (a path-based
-  check that doesn't key off which tool touched the path), an allow rule
-  scoped to `Edit`/`Write` alone may not clear a raw shell write. Confirm
-  on the next `/wtul-batch` run (12th) — if it still refuses, the
-  fallback (move `QUESTIONS.md`/`FOCUS.md` out of `.claude/`) is the
-  only remaining lever. Queued backlog drafted in
-  `~/reports/wtul/2026-07-24.md` (runs 10 and 11) still needs manual
-  filing into `QUESTIONS.md` if this run also fails.
+  block — DECISION REVISED 2026-07-24, same session.** First call was a
+  permission rule (see settings.local.json allow entries added there,
+  now superseded — safe to leave, harmless, or strip on the migration
+  below). **Revised call:** migrate wtul onto the `.scheduler/` subdir
+  layout instead (same convention `scheduler` and `aedile` already use)
+  — sidesteps the `.claude/*.md` sensitive-file gate entirely rather
+  than special-casing around it, and gets wtul onto the same design as
+  every other project long-term, per Zach's explicit preference.
+  **Not done — filed for an async pass, not completed live** (a partial
+  `git mv` was started and reverted clean this session rather than leave
+  it half-migrated). Real scope, scouted but not executed: `git mv
+  .claude/{FOCUS,QUESTIONS}.md .scheduler/`; `schedule/wtul.conf` needs
+  `SCHEDULER_SUBDIR=".scheduler"` (same as `aedile.conf`); re-run
+  `bin/sync-crontab.sh --apply` to regenerate the `focus/wtul.md` /
+  `questions/wtul.md` symlinks at their new target; `.claude/commands/
+  wtul-batch.md` hardcodes `.claude/QUESTIONS.md`/`.claude/FOCUS.md` in
+  at least 8 places (steps 0a, 1, 3, 5, 6) and must be updated to
+  `.scheduler/...` or the batch run's own instructions break; `lib/
+  spinitron.py`, `ROADMAP.md`, and `LIVE-TEST-DEBRIEF-2026-07-24.md`
+  also reference the old path in comments/docs, lower-priority but worth
+  sweeping in the same pass; once migrated, the settings.local.json
+  allow rules and this whole entry can move to Recently resolved.
+  Queued backlog drafted in `~/reports/wtul/2026-07-24.md` (runs 10 and
+  11) still needs manual filing into `QUESTIONS.md`/`.scheduler/
+  QUESTIONS.md` in the meantime if a run hits this before the migration
+  lands.
 
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
