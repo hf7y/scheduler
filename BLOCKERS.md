@@ -79,7 +79,15 @@ happened yet for any of them.
   to caliper each GUESS value whenever convenient. **Update 2026-07-24**:
   full part printed; only aesthetic work remains on the print — function
   exists. Still open: need to wire up the 3-pin switch (hard kill audio?
-  software mute on switch close? into Pi GPIO/other?).
+  software mute on switch close? into Pi GPIO/other?). **Queued for
+  batching, not done live 2026-07-24:** Zach wants a short written report
+  on this specific design question — options + tradeoffs for hard-kill
+  vs. software-mute vs. GPIO-signal, in the same flagged-status-doc style
+  as `RFP-GALLERY.md` (a real "## Status" line, not just a bullet here).
+  `HOOKSWITCH.md` is the closest existing precedent (same on/off-hook
+  switch-state shape, already has debounce logic + a "Future states"
+  section) — worth checking whether this is the same physical switch or
+  a distinct one before writing it up, not assumed either way yet.
 
 ## Recently resolved
 
