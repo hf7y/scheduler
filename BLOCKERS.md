@@ -27,6 +27,13 @@ actually moves it down into `## chezz
   (archbishop pricing, pawn supply, spawn gating) on its own judgment
   with regression pins? A yes turns four perma-deferred reports into
   ordinary queue work.
+  - 2026-07-26 (chezz nightly, machine-append; witness: tracker fetch
+    `&type=feature&status=open` -> 8 open, was 27): the AI move-quality
+    cluster named above is RESOLVED -- 10 reports closed via chezz
+    `f83a709` (full-capture quiescence; each reported position re-probed,
+    two regression-pinned). The four design forks + balance-delegation
+    question are now the ONLY things holding queued work, unchanged,
+    still waiting on you.
 - **Gemini sprite pipeline needs your explicit sign-off -- no unattended
   run may add it on its own** (filed 2026-07-25 ~21:00, chezz nightly,
   machine-append; witness: tracker report 2026-07-17T07:25:16.315Z +
@@ -47,6 +54,15 @@ actually moves it down into `## chezz
   (staleness-check exit-nonzero, from fable-review 2026-07-25) was
   routed via `scheduler -i scheduler` tonight instead of being
   re-declined.
+  - 2026-07-26 correction (chezz nightly, machine-append; witness:
+    chezz reflog + `sweep.log` 2026-07-25 20:10 run): the witness commit
+    `0880f3d` above did NOT exist on origin until today -- that run hit
+    the monthly spend limit, died before pushing, and the next cycle's
+    bootstrap `reset --hard origin/main` erased all three of its commits
+    (this entry's own work included). Recovered from the reflog, verified
+    (83/83 then 85/85), and pushed 2026-07-26. The engine gap (unpushed
+    commits have no rescue path) is filed in scheduler's own FOCUS.md
+    backlog, 2026-07-26 09:32 `scheduler -i` entry.
 
 ## Recently resolved` or deletes it. Doing
 that sweep is part of `/ideate`'s own triage, not a side effect of
