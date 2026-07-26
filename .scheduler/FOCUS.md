@@ -903,6 +903,8 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-25 19:28 (via `scheduler -i`):** check Chezz's questions.md. Add the scheduler_subdir to be .scheduler for chezz's repo
+
 - **2026-07-25 17:11 (human-directed session):** `scheduler -b --claude`'s
   "press Enter to open BLOCKERS.md" pause is **invisible** — bash's
   `read -p` writes its prompt to **stderr**, and `bin/scheduler:1896`
