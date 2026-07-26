@@ -9,7 +9,46 @@ removed automatically (see `docs/feedback-tags.md`) — the blocker
 description itself is a different mechanism entirely: nothing scans for
 a RESOLVED/RETRACTED marker and prunes it automatically, so it stays in
 its project's active section until a human (or an `/ideate` pass)
-actually moves it down into `## Recently resolved` or deletes it. Doing
+actually moves it down into `## chezz
+
+- **Four design forks are the only thing holding otherwise-ready backlog
+  work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
+  machine-append; witness: `questions/chezz.md` read this run + tracker
+  fetch `&status=open&type=feature&limit=500` -> 27 open, ~10 of them
+  tracing to these forks). Each has a full entry and `> ` answer slot in
+  `questions/chezz.md`: (1) King->Queen -- 1:1 replacement vs. two-piece
+  escort (priority-queue item 6 is build-ready once picked); (2)
+  pawn-hang-on-spawn -- override the intentional design or keep it (>=4
+  recurring reports); (3) White best-move hint -- wanted at all;
+  always-on vs. toggle; (4) Chezz Classic parts 2/3 -- hf7y.com
+  deployability + what "own production stream" means. (1) and (2)
+  unblock the most queued work. Also new tonight, same file: a
+  standing-policy question -- may nightly tune balance numbers
+  (archbishop pricing, pawn supply, spawn gating) on its own judgment
+  with regression pins? A yes turns four perma-deferred reports into
+  ordinary queue work.
+- **Gemini sprite pipeline needs your explicit sign-off -- no unattended
+  run may add it on its own** (filed 2026-07-25 ~21:00, chezz nightly,
+  machine-append; witness: tracker report 2026-07-17T07:25:16.315Z +
+  DESIGN-NOTES.md's standing new-external-dependency gate). It's a new
+  external API dependency (credentials, cost, attack surface). A yes/no
+  -- or "take the custom fairy-piece font track instead, which has no
+  such gate" -- is all that's needed; until then the report stays open
+  by design, not by neglect.
+- **2026-07-22 15:09 `scheduler -i` (general-scaffold convergence):
+  RESOLVED in-repo 2026-07-25 -- nothing needed your scope-widening
+  after all** (chezz nightly, machine-append; witness: chezz commit
+  `0880f3d` -- stability milestone declared, 12-row checklist, ideate/
+  nightly-batch workflow updates -- and `milestone-audit.sh`'s
+  chezz-missing-milestone finding now cleared). Recorded here because
+  the previous two runs quietly declined this idea as out-of-scope; that
+  was wrong, and a never-quietly-decline rule is now codified in chezz's
+  own nightly-batch.md. The one genuinely cross-repo piece
+  (staleness-check exit-nonzero, from fable-review 2026-07-25) was
+  routed via `scheduler -i scheduler` tonight instead of being
+  re-declined.
+
+## Recently resolved` or deletes it. Doing
 that sweep is part of `/ideate`'s own triage, not a side effect of
 anything else running — an entry marked resolved a week ago and never
 moved is a sign that sweep hasn't happened, not a bug.
