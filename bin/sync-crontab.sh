@@ -378,7 +378,7 @@ for conf in "${CONF_FILES[@]}"; do
     echo "ERROR [$name/SWEEP]: SWEEP_CRON='$cr' isn't a valid 5-field cron expression -- skipping" >&2
     ERRORS=$((ERRORS + 1))
   elif is_expired "$jn" "$conf_account"; then
-    echo "skipping [$name/SWEEP]: job '$jn' expired ($(cat "$(home_of "$conf_account")/.local/share/$jn/expires_at" 2>/dev/null)) -- bump EXPIRY_DAYS and re-run this script to renew" >&2
+    echo "skipping [$name/SWEEP]: job '$jn' expired ($(cat "$(home_of "$conf_account")/.local/share/$jn/expires_at" 2>/dev/null)) -- renew: rm $(home_of "$conf_account")/.local/share/$jn/expires_at (next run re-stamps now+EXPIRY_DAYS; bumping EXPIRY_DAYS alone does not renew)" >&2
   else
     cmd="$RESOLVE_OUT"
     add_managed_line "$conf_account" "$cr $cmd # scheduler:$PROJECT:SWEEP ($jn)"
@@ -402,7 +402,7 @@ for conf in "${CONF_FILES[@]}"; do
     echo "ERROR [$name/BATCH]: $RESOLVE_ERR -- skipping" >&2
     ERRORS=$((ERRORS + 1))
   elif is_expired "$jn" "$conf_account"; then
-    echo "skipping [$name/BATCH]: job '$jn' expired ($(cat "$(home_of "$conf_account")/.local/share/$jn/expires_at" 2>/dev/null)) -- bump EXPIRY_DAYS and re-run this script to renew" >&2
+    echo "skipping [$name/BATCH]: job '$jn' expired ($(cat "$(home_of "$conf_account")/.local/share/$jn/expires_at" 2>/dev/null)) -- renew: rm $(home_of "$conf_account")/.local/share/$jn/expires_at (next run re-stamps now+EXPIRY_DAYS; bumping EXPIRY_DAYS alone does not renew)" >&2
   elif [ -z "$cr" ] || [ "$cr" = "auto" ]; then
     AUTO_BATCH+=("$PROJECT|$jn|$RESOLVE_OUT|$conf_account")
   elif ! validate_cron "$cr"; then

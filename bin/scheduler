@@ -319,6 +319,11 @@ EOF
 
 projects() {
   for conf in "$SCHED_ROOT"/schedule/*.conf; do
+    # Unmatched glob passes through literally -- without this guard an
+    # empty schedule/ dir yields a bogus project named "*" (found
+    # 2026-07-26 by the expiry-visibility test fixture, but real for any
+    # fresh install too).
+    [ -f "$conf" ] || continue
     b="$(basename "$conf" .conf)"
     [[ "$b" == _* ]] && continue
     echo "$b"
@@ -1017,9 +1022,13 @@ cmd_glance() {
     # the top item, partially land it, or reprioritize entirely. Skips
     # HTML-comment blocks (resolved-decision notes, not live scope) so
     # already-settled discussion doesn't inflate the count.
-    local next="-" ffile="$SCHED_ROOT/focus/$proj.md"
+    # f_total/f_keyword reset EVERY iteration, not declared inside the
+    # [ -f "$ffile" ] branch below (fixed 2026-07-26): locals persist
+    # across loop iterations, so a project with no focus/<proj>.md either
+    # crashed the whole glance under set -u (if it came first) or silently
+    # inherited the PREVIOUS project's backlog count for its own ETA.
+    local next="-" ffile="$SCHED_ROOT/focus/$proj.md" f_total="" f_keyword=""
     if [ -f "$ffile" ]; then
-      local f_total f_keyword
       IFS=$'\t' read -r f_total f_keyword <<<"$(awk -F'\t' '
         /<!--/ { incomment=1 }
         /-->/ { incomment=0; next }
@@ -1183,6 +1192,26 @@ cmd_glance() {
   if [ "$any_unpushed" = "1" ]; then
     echo "-> stranded local commits in a dedicated clone (push likely failed silently): ${unpushed_list%, }"
     echo "   run 'scheduler sweep' for detail, or push by hand from that clone"
+  fi
+  # Tripped dead-man switches, surfaced in the view actually opened daily
+  # (same reasoning as the stranded-commits block above -- `sweep` finds
+  # these too now, but only if you remember to run it). Job-level, not
+  # per-project-row: a project can have several jobs (bug-sweep + batch)
+  # and the state dirs are keyed by JOB_NAME, so a footer list keyed the
+  # same way stays truthful without guessing a job->project mapping.
+  local any_expired=0 expired_list=""
+  local stamp eat
+  for stamp in "$HOME"/.local/share/*/expires_at; do
+    [ -f "$stamp" ] || continue
+    eat="$(cat "$stamp" 2>/dev/null)"
+    if [ -n "$eat" ] && [[ "$(date -Is)" > "$eat" ]]; then
+      any_expired=1
+      expired_list="$expired_list$(basename "$(dirname "$stamp")") (since ${eat%%T*}), "
+    fi
+  done
+  if [ "$any_expired" = "1" ]; then
+    echo "-> expired jobs (dead-man switch tripped -- these no-op until renewed): ${expired_list%, }"
+    echo "   renew: rm ~/.local/share/<job>/expires_at (next run re-stamps); 'scheduler sweep' for detail"
   fi
   # Branches beyond main sitting on a dedicated clone (e.g. a finished
   # nightly/<date> or paced/<date> cycle that never got merged) -- the
@@ -1557,6 +1586,31 @@ cmd_sweep() {
     fi
   fi
 
+  # Seventh pass: tripped dead-man switches (expires_at stamps). FOCUS.md
+  # EXPIRY_DAYS finding 3 (2026-07-25): 5 of 14 jobs sat expired,
+  # discoverable only by hand-scanning ~/.local/share/*/expires_at or by
+  # opening each project's own `scheduler status` one at a time -- neither
+  # view a human opens daily showed it. Glob-based like the dedicated-clone
+  # pass above (scans what exists, doesn't reconstruct job names from
+  # confs), so it also reports jobs expired ON PURPOSE (a parked tier, a
+  # project migrated off this scheduler) -- one calm line each is the
+  # honest output: the switch genuinely is tripped, and whether that's
+  # intended is the human's call, never silently guessed here.
+  local expired_found=0
+  for stamp in "$HOME"/.local/share/*/expires_at; do
+    [ -f "$stamp" ] || continue
+    local ejob eat
+    ejob="$(basename "$(dirname "$stamp")")"
+    eat="$(cat "$stamp" 2>/dev/null)"
+    if [ -n "$eat" ] && [[ "$(date -Is)" > "$eat" ]]; then
+      echo "== [expiry] $ejob: EXPIRED $eat -- dead-man switch tripped, job no-ops until renewed. Renew: rm $stamp (next run re-stamps now+EXPIRY_DAYS; bumping EXPIRY_DAYS alone does not renew) =="
+      expired_found=1
+    fi
+  done
+  if [ "$expired_found" = "0" ]; then
+    echo "no tripped dead-man switches (expires_at stamps) found"
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."
@@ -1739,7 +1793,7 @@ build_status_report() {
     if [ -f "$HOME/.local/share/$job_name/expires_at" ]; then
       expires="$(cat "$HOME/.local/share/$job_name/expires_at")"
       if [[ "$(date -Is)" > "$expires" ]]; then
-        echo "EXPIRED $expires -- auto-disabled, needs EXPIRY_DAYS bump + bin/sync-crontab.sh to renew"
+        echo "EXPIRED $expires -- dead-man switch tripped; renew: rm ~/.local/share/$job_name/expires_at (next run re-stamps now+EXPIRY_DAYS; bumping EXPIRY_DAYS alone does not renew)"
       else
         echo "expires: $expires"
       fi
