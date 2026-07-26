@@ -1739,7 +1739,7 @@ build_status_report() {
     if [ -f "$HOME/.local/share/$job_name/expires_at" ]; then
       expires="$(cat "$HOME/.local/share/$job_name/expires_at")"
       if [[ "$(date -Is)" > "$expires" ]]; then
-        echo "EXPIRED $expires -- auto-disabled, needs EXPIRY_DAYS bump + bin/sync-crontab.sh to renew"
+        echo "EXPIRED $expires -- dead-man switch tripped; renew: rm ~/.local/share/$job_name/expires_at (next run re-stamps now+EXPIRY_DAYS; bumping EXPIRY_DAYS alone does not renew)"
       else
         echo "expires: $expires"
       fi

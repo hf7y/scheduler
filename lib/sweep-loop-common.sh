@@ -229,7 +229,7 @@ EXPIRES_AT=$(cat "$EXPIRES_AT_FILE")
 NOW_IS=$(date -Is)
 
 if [[ "$NOW_IS" > "$EXPIRES_AT" ]]; then
-  MSG="Auto-disabled after ${EXPIRY_DAYS} days. Bump EXPIRY_DAYS (or re-run setup) and re-run bin/sync-crontab.sh to renew."
+  MSG="Auto-disabled: dead-man switch tripped ($EXPIRES_AT). Renew: rm $EXPIRES_AT_FILE -- next run re-stamps now+${EXPIRY_DAYS}d. Bumping EXPIRY_DAYS alone does NOT renew (the stamp is only written when the file is missing)."
   notify-send "$JOB_NAME" "$MSG" 2>/dev/null || true
   echo "$NOW_IS expired -- no-op this run; ../bin/sync-crontab.sh prunes this job's crontab line on its next run, this script does not touch crontab itself" >> "$LOG"
   exit 0
