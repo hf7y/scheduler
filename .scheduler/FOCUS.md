@@ -1075,8 +1075,35 @@ to build sooner.
     `sweep.log`, where the old whole-log grep was actively lying: it showed
     `pushed: yes` from a previous run directly above the last run's
     `WARNING: ... NOT pushed` — two contradictory lines from different runs
-    rendered as one story. Items 1–3 of this entry (EXPIRY_DAYS renewal
-    no-op, silent exit-0 expiry, expiry invisibility) remain OPEN.
+    rendered as one story.
+    **Items 1–3 are DONE (2026-07-26 paced cycle, three commits on
+    `paced/2026-07-26`).** Item 1: all four "bump EXPIRY_DAYS and re-run
+    sync-crontab" messages now name the action that actually renews
+    (`rm ~/.local/share/<job>/expires_at` — next run re-stamps
+    now+EXPIRY_DAYS) and say explicitly that bumping EXPIRY_DAYS alone
+    does not renew; the alternative (make `--apply` genuinely re-stamp on
+    an EXPIRY_DAYS change) needs an `--apply` run to verify, so it's
+    filed as a proposal in the 2026-07-26 report, not built blind. Item
+    2: `lib/sweep-loop-common.sh` checks expiry BEFORE the clone/secrets
+    work, writes a real `===`-delimited run record ending in
+    `=== skipped (expired <ts>)` (a completion status
+    `build_status_report` already recognizes, so expiry now SHOWS as the
+    last run), and exits 3 (distinct from success/fatal; nothing keyed on
+    the old exit 0); `bin/usage-paced-runner.sh` skips an expired
+    participant pre-dispatch with a SKIP-EXPIRED log line naming the
+    renewal (state dir derived from the `<job>-loop.sh` wrapper naming
+    convention; non-matching commands fail open and dispatch as before).
+    Item 3: `cmd_sweep` gained a seventh pass flagging every tripped
+    `*/expires_at` stamp (with an explicit all-clear line when none are),
+    and `cmd_glance` a matching footer block, keyed by JOB_NAME since
+    state dirs are per-job. Verified with isolated-HOME harnesses (fake
+    claude/notify-send shims, throwaway bare repo, SCHED_ROOT sed'd to a
+    tmp root — 27 checks total across expired/fresh/clean-run/runner-skip
+    /both-views scenarios). Two latent glance bugs found by the fixture
+    and fixed in the same pass: `projects()` emitted a bogus `*` project
+    on an unmatched glob, and a project with no `focus/<proj>.md` either
+    crashed glance under `set -u` or silently inherited the previous
+    project's backlog count for its ETA.
 
 - **2026-07-25 00:47 (via `scheduler -i`):** look into crt and update your references to the VM which are deprecated
 
