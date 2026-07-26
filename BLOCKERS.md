@@ -64,6 +64,19 @@ actually moves it down into `## chezz
     commits have no rescue path) is filed in scheduler's own FOCUS.md
     backlog, 2026-07-26 09:32 `scheduler -i` entry.
 
+- **2026-07-26 (realisateur): OBLIGATION — the `.claude/`→`.scheduler/`
+  migration pass needs a human-present session; unattended runs
+  structurally cannot do it (the sensitive-file gate blocks the very
+  `git mv`/command-file edits the migration consists of).** Scope: 10
+  projects still on `.claude/` (wtul first — scouted scope in the
+  `## wtul` entry above — then crt, gardien, senechal, home-assistant,
+  groc-mangr, nine-speakers, sequestria, vim-arcade, vkv-inventory), one
+  or a few per interactive session. To dispatch: in any interactive
+  realisateur session say "run the .scheduler migration pass" — worklist
+  and per-project recipe live in realisateur `.scheduler/FOCUS.md`
+  (2026-07-26 migration entry). realisateur itself is already done
+  (`fa222cb` + `1284b58`).
+
 ## Recently resolved` or deletes it. Doing
 that sweep is part of `/ideate`'s own triage, not a side effect of
 anything else running — an entry marked resolved a week ago and never
@@ -153,6 +166,18 @@ only ever sees its own section, never another project's.
   (the convention `scheduler` and `aedile` already use), per Zach's
   explicit preference. Once migrated, the allow rules and this whole
   entry move to Recently resolved.
+
+- **2026-07-26 (realisateur append — the entry above stays, this is its
+  status):** the migration above is now absorbed into a queued
+  ecosystem-wide `.claude/`→`.scheduler/` pass (worklist + sequencing in
+  realisateur `.scheduler/FOCUS.md`, 2026-07-26 migration entry) — wtul
+  goes FIRST, using the scouted scope above verbatim. realisateur itself
+  migrated today (realisateur `fa222cb`, scheduler `1284b58`) as the
+  pass's template. Root-cause note, so this doesn't recur: this entry
+  sat unexecuted for 2 days because it was filed here — and BLOCKERS.md
+  is by standing rule not a work queue, so nothing ever dispatched it.
+  Recorded as BUILD-DISCIPLINE failure pattern 13 ("a decision without
+  a dispatch path") in realisateur.
 
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
