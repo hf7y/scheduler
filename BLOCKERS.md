@@ -283,6 +283,15 @@ happened yet for any of them.
      decisions into ordinary queue work. (vkv-inventory stays `0`
      regardless: svc-vaporwave crontab owns its dispatch.)
      >
+  - 2026-07-26 (realisateur nightly-batch, machine-append; witness: this
+    run's own dispatch prompt + scheduler `git diff` of the collector's
+    `--consume` rewrite): tonight's run was handed five EMPTY replies to
+    the five calls above — a collector bug consumed the bare `>` answer
+    slots as if they were answers and deleted them from this file. The
+    slots are restored, nothing was treated as approved, and all five
+    calls still await you. Bug fixed in `bin/collect-feedback.sh`
+    (scheduler `bb5c762`): a bare `>` line is now kept as an un-answered
+    slot, same as the `(answer inline here)` placeholder.
 
 ## Recently resolved
 
