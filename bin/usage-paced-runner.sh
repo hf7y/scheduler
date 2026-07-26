@@ -235,6 +235,31 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
     continue
   fi
 
+  # Dead-man-switch awareness (2026-07-26, FOCUS.md EXPIRY_DAYS finding 2):
+  # an expired participant used to consume a full dispatch slot and record
+  # as a normal DISPATCH/DONE pair -- this runner had no expires_at
+  # awareness at all, so expired jobs no-op'd visibly only in their own
+  # sweep.log. The job's state dir is derived from the wrapper filename by
+  # the same <job>-loop.sh convention the wrappers themselves use
+  # (chezz-nightly-batch-loop.sh -> ~/.local/share/chezz-nightly-batch);
+  # a command that doesn't match the convention (scheduler-dev-cycle.sh)
+  # has no expires_at at the derived path and dispatches exactly as
+  # before -- fail-open, never fail-blocked. Belt-and-braces with
+  # lib/sweep-loop-common.sh's own pre-clone check (which exits 3): this
+  # skip saves the dispatch slot, that one saves the clone if a job
+  # expires between here and its own check, or arrives via cron instead.
+  # Counts toward MAX_PER_TICK like the not-runnable SKIP above, so an
+  # all-expired rotation still terminates the tick loop.
+  job_state="$HOME/.local/share/$(basename "$prog" | sed 's/-loop\.sh$//')"
+  if [ -f "$job_state/expires_at" ]; then
+    expires_at="$(cat "$job_state/expires_at" 2>/dev/null)"
+    if [ -n "$expires_at" ] && [[ "$(date -Is)" > "$expires_at" ]]; then
+      log "SKIP $name -- EXPIRED $expires_at (dead-man switch; renew: rm $job_state/expires_at, next run re-stamps now+EXPIRY_DAYS)"
+      dispatched=$((dispatched + 1))
+      continue
+    fi
+  fi
+
   log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF)"
   start=$(date +%s)
   # shellcheck disable=SC2086

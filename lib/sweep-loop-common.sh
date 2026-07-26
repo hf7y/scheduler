@@ -198,6 +198,39 @@ if [ -f "$LOG" ]; then
   mv "$LOG.tmp" "$LOG"
 fi
 
+# Expiry (dead-man switch) is checked BEFORE the clone/secrets work, not
+# after (moved 2026-07-26): an expired job used to clone the repo and copy
+# secrets in first, then no-op -- burning network/disk for a run that was
+# never going to do anything. The check needs nothing but the stamp file.
+if [ ! -f "$EXPIRES_AT_FILE" ]; then
+  date -d "+${EXPIRY_DAYS} days" -Is > "$EXPIRES_AT_FILE"
+fi
+EXPIRES_AT=$(cat "$EXPIRES_AT_FILE")
+NOW_IS=$(date -Is)
+
+if [[ "$NOW_IS" > "$EXPIRES_AT" ]]; then
+  MSG="Auto-disabled: dead-man switch tripped ($EXPIRES_AT). Renew: rm $EXPIRES_AT_FILE -- next run re-stamps now+${EXPIRY_DAYS}d. Bumping EXPIRY_DAYS alone does NOT renew (the stamp is only written when the file is missing)."
+  notify-send "$JOB_NAME" "$MSG" 2>/dev/null || true
+  # A real ===-delimited run record, not one bare prose line (changed
+  # 2026-07-26, FOCUS.md EXPIRY_DAYS finding 2: expiry used to be a clean
+  # exit 0 with a log line nothing surfaced -- invisible everywhere but
+  # this file). The start/completion pair is what `scheduler status`
+  # slices a "last run" from, and "skipped" is a completion status it
+  # already recognizes -- so an expired job now SHOWS expiry as its last
+  # run instead of the view re-reporting the previous real run as current.
+  {
+    echo "=== $NOW_IS ==="
+    echo "expired -- dead-man switch tripped; no work attempted (no clone, no claude). $MSG"
+    echo "note: bin/sync-crontab.sh prunes this job's crontab line on its next --apply run; this script never touches crontab itself"
+    echo "=== skipped (expired $EXPIRES_AT) $NOW_IS (0s) ==="
+  } >> "$LOG"
+  # Exit 3, not 0: distinct from success and from a fatal error (1), so a
+  # dispatcher (usage-paced-runner.sh logs rc= per dispatch) can tell
+  # "expired" from "worked" without parsing this log. Nothing keys on the
+  # old exit 0 -- cron ignores exit codes and the paced runner only logs rc.
+  exit 3
+fi
+
 # Dedicated clone, never the user's real working copy -- reset --hard
 # below would destroy uncommitted work if pointed at a real checkout.
 #
@@ -220,19 +253,6 @@ fi
 if [ -n "$SECRETS_SRC_DIR" ]; then
   mkdir -p "$REPO/$SECRETS_DEST_SUBDIR"
   cp -f "$SECRETS_SRC_DIR"/* "$REPO/$SECRETS_DEST_SUBDIR/" 2>/dev/null || true
-fi
-
-if [ ! -f "$EXPIRES_AT_FILE" ]; then
-  date -d "+${EXPIRY_DAYS} days" -Is > "$EXPIRES_AT_FILE"
-fi
-EXPIRES_AT=$(cat "$EXPIRES_AT_FILE")
-NOW_IS=$(date -Is)
-
-if [[ "$NOW_IS" > "$EXPIRES_AT" ]]; then
-  MSG="Auto-disabled: dead-man switch tripped ($EXPIRES_AT). Renew: rm $EXPIRES_AT_FILE -- next run re-stamps now+${EXPIRY_DAYS}d. Bumping EXPIRY_DAYS alone does NOT renew (the stamp is only written when the file is missing)."
-  notify-send "$JOB_NAME" "$MSG" 2>/dev/null || true
-  echo "$NOW_IS expired -- no-op this run; ../bin/sync-crontab.sh prunes this job's crontab line on its next run, this script does not touch crontab itself" >> "$LOG"
-  exit 0
 fi
 
 NOW_EPOCH=$(date +%s)
