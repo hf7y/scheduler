@@ -1055,6 +1055,21 @@ to build sooner.
     second-to-last run marker, so a resolved warning stops being re-reported
     forever. This one cost real time twice today — it is why chezz looked
     like it had a stranded commit at the top of this entry.
+    **Finding 5 is DONE (2026-07-26 paced cycle).** `build_status_report`
+    now extracts the LAST run's slice (everything from the final
+    `=== <timestamp> ===` start marker onward) and scopes ALL five per-run
+    greps to it — status line, `pushed:`, `WARNING:`, `push reason:`, and
+    the FAILED-gated `CRITICAL:` auth line. A slice with a start marker but
+    no completion line (still running, or cut off before its EXIT trap
+    fired) is named explicitly ("no completion line yet ... see scheduler
+    sweep") instead of silently falling back to an older run's lines.
+    Verified against fabricated multi-run logs (stale-warning suppression,
+    in-flight naming, current-auth-failure full display) AND the real chezz
+    `sweep.log`, where the old whole-log grep was actively lying: it showed
+    `pushed: yes` from a previous run directly above the last run's
+    `WARNING: ... NOT pushed` — two contradictory lines from different runs
+    rendered as one story. Items 1–3 of this entry (EXPIRY_DAYS renewal
+    no-op, silent exit-0 expiry, expiry invisibility) remain OPEN.
 
 - **2026-07-25 00:47 (via `scheduler -i`):** look into crt and update your references to the VM which are deprecated
 

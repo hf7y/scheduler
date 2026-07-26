@@ -1744,15 +1744,31 @@ build_status_report() {
         echo "expires: $expires"
       fi
     fi
-    grep -E '^=== (done|FAILED|skipped)' "$log" | tail -1
-    grep '^pushed:' "$log" | tail -1
-    grep '^WARNING: local commit made but NOT pushed' "$log" | tail -1
-    grep '^push reason:' "$log" | tail -1
+    # $log accumulates every run. Scope ALL per-run greps to the LAST run's
+    # slice -- from the final "=== <timestamp> ===" start marker onward --
+    # so a WARNING/push-reason from an old, since-resolved run is never
+    # re-reported as current (that stale re-report cost real diagnosis time
+    # twice on 2026-07-25), and so the lines shown always come from the
+    # same run instead of a mix of runs. If no start marker exists (never
+    # true for logs sweep-loop-common.sh wrote), the slice is the whole log.
+    local last_run
+    last_run="$(awk '/^=== [0-9]{4}-[0-9]{2}-[0-9]{2}T/{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$log")"
+    if ! printf '%s' "$last_run" | grep -qE '^=== (done|FAILED|skipped)'; then
+      # Start marker but no completion line: still running, or cut off
+      # before its EXIT trap could write one (scheduler sweep's stranded-run
+      # pass tells those apart). Say so rather than silently showing an
+      # older run's lines as if they were current.
+      echo "last run started $(printf '%s' "$last_run" | head -1 | sed 's/^=== //; s/ ===$//') -- no completion line yet (still running, or cut off; see scheduler sweep)"
+    fi
+    printf '%s' "$last_run" | grep -E '^=== (done|FAILED|skipped)' | tail -1
+    printf '%s' "$last_run" | grep '^pushed:' | tail -1
+    printf '%s' "$last_run" | grep '^WARNING: local commit made but NOT pushed' | tail -1
+    printf '%s' "$last_run" | grep '^push reason:' | tail -1
     # Only meaningful for the CURRENT state of the job, so gate it on the
-    # last === status line also being FAILED -- $log accumulates runs, and
-    # a CRITICAL auth line from a long-fixed lapse shouldn't keep showing.
-    if grep -E '^=== (done|FAILED|skipped)' "$log" | tail -1 | grep -q '^=== FAILED'; then
-      grep '^CRITICAL: claude authentication failure' "$log" | tail -1
+    # last run's status line also being FAILED -- a CRITICAL auth line from
+    # a long-fixed lapse shouldn't keep showing.
+    if printf '%s' "$last_run" | grep -E '^=== (done|FAILED|skipped)' | tail -1 | grep -q '^=== FAILED'; then
+      printf '%s' "$last_run" | grep '^CRITICAL: claude authentication failure' | tail -1
     fi
   else
     echo "no log yet at $log"
