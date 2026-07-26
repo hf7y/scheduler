@@ -70,15 +70,35 @@ its line once you've actually read and dealt with it.
   data point plus this friction argue for leaving the pin-by-need policy
   as-is?
 
-- **2026-07-24 (via /ideate): verify svc-vaporwave cron credential
-  refresh.** Under the new account model (primary = Max, always logged
-  in; svc-vaporwave = nonprofit only, for its batch jobs + nonprofit
-  interactive), primary's CLI creds stay fresh so personal jobs stop
-  hitting "Not logged in." Confirm the same holds for svc-vaporwave:
-  does your nonprofit *interactive* use actually refresh the SAME creds
-  its cron jobs (aedile, vkv-inventory) read, or can that account still
-  lapse mid-week? If it can lapse, that account needs its own refresh
-  ritual. See DESIGN-NOTES.md 2026-07-24 entry.
+- **2026-07-26 (via /nightly-batch, paced cycle): loud "Not logged in"
+  detection is BUILT at source, but delivery to svc-vaporwave's own
+  wrapper copies can't be done or verified from here -- one small human
+  step remains.** Acting on your 2026-07-25 answer ("make the failure
+  LOUD"): `lib/sweep-loop-common.sh` now captures claude's own output
+  per-run and, on a failed run whose output matches auth-lapse markers
+  ("Not logged in", "please run /login", expired OAuth, invalid API
+  key), emits a distinct `CRITICAL: claude authentication failure` log
+  line naming the fix (run any interactive session as that OS user), a
+  dedicated `notify-send -u critical`, a specific `push reason:` when a
+  commit was stranded, and a `=== FAILED (auth: not logged in)` status
+  line that `scheduler status` surfaces (only while the LAST run is
+  still FAILED). Verified against fake `claude`/`notify-send` shims:
+  auth-fail, generic-fail, success, and commit-then-auth-fail paths all
+  behave. **The gap:** every job sourcing this lib gets it once merged
+  (chezz, wtul, home-assistant, vkv-inventory's mandark wrapper source
+  the lib from the real checkout) -- but aedile's wrapper is BESPOKE
+  (its header opts out of the shared engine; it calls `claude -p`
+  directly with no auth-failure branch), and svc-vaporwave's installed
+  copies live in its home directory, which this account cannot read
+  (permission denied), let alone edit -- and installed wrappers are
+  outside an unattended cycle's write scope anyway. Needed from you (or
+  a session as svc-vaporwave): (1) confirm whether svc-vaporwave's
+  aedile/vkv-inventory wrappers source their own lib copy or a path
+  into /home/zach; (2) for the bespoke aedile wrapper, add the same
+  pattern after its `claude -p` failure branch -- capture output, grep
+  the auth markers, CRITICAL log line + flagged line in the report
+  (notify-send is a no-op for a headless account, the LOG line is the
+  loud channel there).
 
 
 - **2026-07-24 (RESOLVED BY THE 2026-07-24 dexter self-build -- items 1

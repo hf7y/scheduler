@@ -1748,6 +1748,12 @@ build_status_report() {
     grep '^pushed:' "$log" | tail -1
     grep '^WARNING: local commit made but NOT pushed' "$log" | tail -1
     grep '^push reason:' "$log" | tail -1
+    # Only meaningful for the CURRENT state of the job, so gate it on the
+    # last === status line also being FAILED -- $log accumulates runs, and
+    # a CRITICAL auth line from a long-fixed lapse shouldn't keep showing.
+    if grep -E '^=== (done|FAILED|skipped)' "$log" | tail -1 | grep -q '^=== FAILED'; then
+      grep '^CRITICAL: claude authentication failure' "$log" | tail -1
+    fi
   else
     echo "no log yet at $log"
   fi
