@@ -360,13 +360,37 @@ $PROMPT"
     fi
   fi
 
+  # claude's own output is tee'd to a per-run capture file (as well as
+  # flowing into $LOG via the enclosing block redirect) so that a FAILED
+  # run can be diagnosed against exactly THIS run's output -- $LOG
+  # accumulates across runs, so grepping it would match stale text from
+  # an earlier failure. pipefail is set above, so the pipeline's status
+  # is still claude's own exit code.
+  CLAUDE_OUT="$STATE_DIR/claude-last-run.out"
+  STATUS_DETAIL=""
   if [ -n "$PRECHECK_CMD" ] && [ -z "${FEEDBACK_BLOCK:-}" ] && ! eval "$PRECHECK_CMD"; then
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
-  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"}; then
+  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
     STATUS="done"
   else
     STATUS="FAILED"
+    # Say WHY claude itself failed when the cause is recognizable, instead
+    # of every non-zero exit reading as the same generic FAILED. The one
+    # cause worth naming today is a lapsed/absent CLI login ("Not logged
+    # in") -- a recurring unattended failure mode (see
+    # .scheduler/QUESTIONS.md answer 2026-07-25: make it LOUD, same
+    # principle as stale .active markers and push-reason surfacing). It
+    # is NOT a quota/turn cutoff and has a specific human fix: run any
+    # interactive claude session as this OS user to refresh credentials.
+    # STATUS itself stays the exact string "FAILED" -- the push-reason and
+    # exit-code blocks below compare it with = -- the detail rides in
+    # STATUS_DETAIL and is appended to the final === line.
+    if grep -qiE 'not logged in|please run /login|invalid api key|oauth token.*(expired|revoked)|authentication[_ ]?error' "$CLAUDE_OUT" 2>/dev/null; then
+      STATUS_DETAIL=" (auth: not logged in)"
+      echo "CRITICAL: claude authentication failure -- this account's CLI credentials have lapsed (\"Not logged in\"), NOT a quota/turn cutoff. Fix: run any interactive claude session as OS user $(id -un) to refresh the login, then this job recovers on its own next scheduled run."
+      notify-send -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG" 2>/dev/null || true
+    fi
   fi
 
   # Objective, tool-verified facts about what actually happened -- not
@@ -401,7 +425,9 @@ $PROMPT"
     # item). All read-only: --dry-run never mutates the remote, so it's
     # safe to run here even though the same `claude -p` invocation above
     # may have already attempted and failed its own push.
-    if [ "$STATUS" = "FAILED" ]; then
+    if [ "$STATUS" = "FAILED" ] && [ -n "${STATUS_DETAIL:-}" ]; then
+      echo "push reason: claude -p failed with a recognized cause -- ${STATUS_DETAIL# } (see the CRITICAL line above), not a push failure per se"
+    elif [ "$STATUS" = "FAILED" ]; then
       echo "push reason: claude -p itself exited non-zero (see above) -- most likely cut off (turn/spend limit) before it reached a push step, not a push failure per se"
     elif [ -z "$REMOTE_SHA" ]; then
       echo "push reason: could not read origin/$BRANCH at all (git ls-remote returned nothing) -- looks like an SSH/auth/network failure reaching origin, not a push rejection"
@@ -423,7 +449,7 @@ $PROMPT"
   # any other tier value; see that file for the merge/push/fallback logic.
   autonomy_sweep_repo "$REPO" "$BRANCH" "$AUTONOMY_TIER" "$TEST_CMD" "$JOB_NAME"
 
-  echo "=== $STATUS $(date -Is) (${ELAPSED}s) ==="
+  echo "=== $STATUS${STATUS_DETAIL:-} $(date -Is) (${ELAPSED}s) ==="
 
   if [ "$STATUS" = "FAILED" ]; then
     RUN_RC=1
