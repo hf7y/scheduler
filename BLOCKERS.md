@@ -219,6 +219,46 @@ happened yet for any of them.
   to Recently resolved once senechal's FOCUS.md carries the condition +
   interim flag.)*
 
+## realisateur
+
+- **Five yes/no calls from the 2026-07-26 strategy audit — each is one
+  `> ` reply, none blocks the others** (filed 2026-07-26, realisateur
+  interactive strategy session, machine-append; witness:
+  `realisateur/PLAYBOOK.md` @ `436f774` + the three-agent audit it
+  records). Full rationale lives in PLAYBOOK.md; these are only the
+  parts that need YOU:
+  1. **Bless `PLAYBOOK.md` as standing doctrine** (or reply with edits)
+     — it now governs build-vs-import-vs-retire allocation the way
+     UNIVERSE.md governs laws.
+     >
+  2. **Commit-message PreToolUse hook: install at user level**
+     (`~/.claude/settings.json`, covers every project) rather than
+     per-repo? The build itself you already approved 2026-07-25
+     (narrow deny-with-message form); this is only the
+     where-it-lives call the design notes said to confirm.
+     >
+  3. **Import swaps — approve any subset:** (a) symlinks replace
+     `scheduler pacing deploy`/drift-detection (also fixes the LIVE
+     drift found in `usage-paced-runner.sh`, the script cron runs every
+     5 min); (b) `ccusage` replaces `token-usage.sh`'s parsing core;
+     (c) `gitleaks` replaces hygiene-lint's hand regexes (harness
+     stays); (d) restic/rsnapshot under `gardien.py`'s storage layer
+     when it unparks.
+     >
+  4. **Catabolic worklist — approve retiring ~1,000 already-labeled-
+     superseded lines** (morning-report ×2, build-services-view +
+     `services/`, `incubation-audit.sh`, overnight-dev ×2, the two
+     162-line loop-script forks, sync-crontab's dead auto-stagger), one
+     retirement per pass, each commit naming what retires it.
+     >
+  5. **Standing re-admission policy:** as each parked making-project
+     declares its stability milestone (jobs queued 2026-07-26 in
+     groc-mangr/nine-speakers/sequestria/vim-arcade), re-enable it at
+     weight 1–2 with no further per-project ask — yes turns four future
+     decisions into ordinary queue work. (vkv-inventory stays `0`
+     regardless: svc-vaporwave crontab owns its dispatch.)
+     >
+
 ## Recently resolved
 
 - **scheduler `EXPIRY_DAYS` dead-man switches: all 5 fired jobs
