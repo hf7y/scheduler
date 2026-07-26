@@ -925,6 +925,13 @@ to build sooner.
   redirect was there for while making the pause visible. Witness: next
   interactive `scheduler -b --claude` run visibly shows the pause prompt
   after the digest.
+  **DONE (2026-07-26 paced cycle):** exactly the prescribed fix —
+  `printf` the prompt to stdout, then a plain `read -r _ 2>/dev/null ||
+  true` keeping the non-tty guard on the read alone. Verified with
+  stdout captured + stderr dropped + non-tty stdin: prompt renders,
+  read falls through cleanly at EOF. The human witness (a live
+  interactive `-b --claude` run) is still worth a glance next time one
+  happens, but the mechanism is confirmed.
 
 - **2026-07-25 17:06 (human-directed session):** Make the usage-gate
   **ceiling settable from a config file**, not only env. Today the 0.85

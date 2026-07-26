@@ -1915,7 +1915,12 @@ case "${1:-}" in
       cmd_blockers_tidy || true
       mark_blockers_seen
       echo
-      read -rp "press Enter to open BLOCKERS.md (Ctrl-C to stop at the digest) " _ 2>/dev/null || true
+      # Prompt on STDOUT explicitly: `read -p` writes its prompt to stderr,
+      # and the 2>/dev/null non-tty guard below was swallowing it -- the
+      # script sat on an invisible pause that looked like a silent exit
+      # (diagnosed live 2026-07-25). The redirect stays, on the read alone.
+      printf 'press Enter to open BLOCKERS.md (Ctrl-C to stop at the digest) '
+      read -r _ 2>/dev/null || true
       open_file "$SCHED_ROOT/BLOCKERS.md"
     fi
     mark_blockers_seen
