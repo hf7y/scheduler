@@ -18,7 +18,11 @@
 # been read by anything. Consecutive `> ` lines are merged into ONE
 # "### REPLY" block (not one per physical line) so a wrapped paragraph
 # reads as a single reply. A bare `> (answer inline here)` placeholder
-# (the un-answered template slot) is never treated as a reply.
+# (the un-answered template slot) is never treated as a reply, and
+# neither is an empty `>` line that isn't continuing one (2026-07-26:
+# five such bare slots under BLOCKERS.md "## realisateur" were consumed
+# as five empty REPLY blocks -- the slots were silently deleted and the
+# run was handed answerless feedback).
 #
 # Exit 0 with output on stdout if any tags were found; exit 1 with no
 # output if the file has none, doesn't exist, or (with --section) has none
@@ -129,6 +133,12 @@ OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v co
     sub(/^[ \t]*>[ \t]?/, "", content)
     if (content == "(answer inline here)" || content ~ /^\(answer inline here\)/) {
       flush_reply()
+      if (consume) print $0 > keep_file
+      next
+    }
+    if (content ~ /^[ \t]*$/ && !in_reply) {
+      # A bare ">" not continuing a reply is an un-answered slot, same as
+      # the "(answer inline here)" placeholder: keep it, collect nothing.
       if (consume) print $0 > keep_file
       next
     }
