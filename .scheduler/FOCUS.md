@@ -1057,6 +1057,28 @@ to build sooner.
 
 - *(subsumed by [iface: sweep-attribution] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **2026-07-26 21:56 (via `scheduler -i`):** ITEM 3 of the sweep-attribution regulator, JOB-SIDE HALF (realisateur built its half 2026-07-26, see below). Zach's framing: "just as likely I am interactively working with scheduler while its batch fires... a way to lock the repo while interacting seems prudent, a default way that requires no human discipline is the way to build." CORRECTION to how item 3 was originally filed: the ecosystem-wide per-project lock ALREADY EXISTS and needs no new infrastructure -- lib/sweep-loop-common.sh keys REGISTRY_LOCK by PROJECT_KEY (not JOB_NAME) in ~/.local/share/scheduler-registry/, and its own comment states that is precisely what makes every tier/job for one project contend for one slot. Every registered project's every job already takes it automatically through that one shared library. So the gap is NOT "build a lock"; it is that the lock is JOB-VS-JOB ONLY and nothing in the system represents a HUMAN. DONE ALREADY (realisateur side, no scheduler change needed): (a) bin/check-project-busy.sh promoted to probe the canonical registry lock first -- it previously scanned only per-job dirs and explicitly EXCLUDED scheduler-registry, re-deriving by directory-name guessing what the registry states canonically; the per-job scan is now a fallback for pre-registry jobs and is skipped when the registry already answered. (b) bin/session-marker.sh + global ~/.claude/settings.json SessionStart/SessionEnd hooks now write ~/.local/share/scheduler-registry/<PROJECT_KEY>.interactive whenever a Claude session starts anywhere under a registered PROJECT_REPO_PATH -- one config, every project, zero per-project scaffolding, zero human discipline, silent no-op for unrelated work on this machine. It lands in the SAME directory as the .active job marker so one place answers "is anything writing to this project right now". CRITICAL DESIGN CONSTRAINT, verified against the hooks reference and by test: SessionEnd is NOT guaranteed to fire on crash or SIGKILL, so the marker must NEVER be an flock held by a detached process -- that would orphan and wedge a project's batch permanently and silently, a silent-failure path introduced to fix a race. Liveness is therefore a PID probe (kill -0), release is only the fast path, and a crashed session's marker reads FREE by construction; negative-tested with a dead pid. WHAT SCHEDULER NEEDS TO BUILD: in lib/sweep-loop-common.sh, after the existing two flocks, probe <PROJECT_KEY>.interactive the same way (kill -0 on the pid field, NOT file existence) and if a live human session holds it, log and exit 0 -- deferring to the next tick. Because that library is the shared entrypoint for every registered project's every job, this is one edit that all projects inherit, matching the same one-place property the REGISTRY_LOCK already has. Deferral is cheap: the paced runner is a rotation, it comes back. MUST INCLUDE A STARVATION CAP: "defer whenever a human is present" means a long interactive session silently starves that project's batch forever, so after N consecutive deferrals proceed anyway and log LOUDLY (warn-then-continue is failure pattern 8, but silent indefinite deferral is pattern 1, which is worse -- the cap is the lesser evil and must be visible either way). ALSO STILL WANTED, and independent of the lock: item 2's mtime quiescence guard, because a lock only protects writers who take it and vim, a raw shell, and `scheduler sweep` itself never will -- lock for cooperative writers, mtime for everyone else, both not either. Live witness the same session: `check-project-busy.sh senechal` correctly reported BUSY from the registry lock while senechal-nightly-batch was mid-run (pid 96695, started 21:55:03), and realisateur DEFERRED a cross-write it was about to make into senechal's FOCUS.md as a result -- the guard working end to end, against a real job, before this was even finished.
 
+  - **ADDED 2026-07-26 (interactive, human question: "is there something
+    that locks a project while I have QUESTIONS.md open?"): the marker is
+    keyed by SESSION CWD, so editing a project's questions THROUGH the
+    scheduler's aggregation symlinks marks the wrong project.**
+    `questions/<p>.md` and `focus/<p>.md` are symlinks into each project's
+    own checkout; vim resolves them and the autocommit hook correctly
+    commits into THAT project's repo — but a session (or plain vim) rooted
+    in the scheduler repo writes `scheduler.interactive`, never
+    `<p>.interactive`. So the one workflow the aggregation folders exist
+    to enable — sit in scheduler, answer three projects' questions — is
+    exactly the one the human-presence marker cannot see, and each of
+    those three projects reads FREE while you are typing into it. Two
+    candidate fixes, not yet chosen: resolve the marker from the FILE
+    being written (the vim hook already resolves symlink→project for its
+    commit; same lookup could stamp `<p>.interactive`), or accept it and
+    lean on item 2's mtime quiescence guard, which is symlink-agnostic
+    because it only looks at the real file. Prefer the second if only one
+    gets built — it needs no writer cooperation at all. Verified
+    2026-07-26 by reading both scripts plus an end-to-end
+    acquire/probe/release against a live pid (the mechanism itself works;
+    this is a keying gap, not a bug in it).
+
 - **[batch] 2026-07-26 (human-directed log review) — `usage-gate.sh`
   swallows curl failures and never retries.** Observed, not hypothetical:
   **25 consecutive `HOLD (gate rc=2) verdict=ERROR reason=curl_failed`
