@@ -1013,6 +1013,30 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **[DONE 2026-07-27, paced cycle 3 — both asks built and verified]**
+  `bin/blockers-freshness-check.sh` now (1) matches the `## Recently
+  resolved` stop heading and every `## <project>` heading as a WHOLE LINE
+  and only outside fenced code blocks, and (2) exits **3** with a loud
+  `PARSE FAILURE ... reports UNKNOWN` message when it finds zero project
+  sections in a non-trivial file, instead of printing `0/0 ... flagged`
+  and exiting 0. `bin/scheduler`'s sixth sweep pass distinguishes exit 3
+  (`CANNOT READ BLOCKERS.md -- check is BLIND`) from a staleness finding,
+  so the blind case can never be read as a statement about the blockers.
+  `SCHED_ROOT` became env-overridable so the parse paths are testable
+  offline. **Verified by reproducing the exact ec89b84 corruption shape in
+  a fixture** — a line reading ``## Recently resolved` or deletes it.``
+  ahead of the real heading: pre-fix code prints `== summary: 0/0 active
+  project section(s) flagged ==` and exits 0, post-fix finds both sections
+  and exits 1. Plus: a genuine early full-line stop heading → exit 3
+  UNKNOWN; headings inside a fenced block correctly ignored; the real
+  BLOCKERS.md still reports 3/9 flagged; `bash -n` on both files and a
+  full `scheduler sweep` run end to end. (shellcheck is not installed on
+  this host — `bash -n` only.) **What it retires:** the prefix-matching
+  heading rules (both of them) and the silent zero-sections success path.
+  Proposals 1 and 2 of the sibling entry below (the writer-side watcher
+  refusal and machine-append anchoring) are still OPEN — this is only the
+  reader-side guard.
+
 - **2026-07-27 01:49 (via `scheduler -i`):** (from realisateur /ideate 2026-07-27, follow-up to the two guards filed earlier tonight) THIRD proposal, and this one is the reason the other two matter: bin/blockers-freshness-check.sh was silently blinded for two days and reported a clean summary the entire time.
 
 WHAT HAPPENED. ec89b84 (chezz's machine-append, 2026-07-25) inserted its "## chezz" section at the first "## " it found in BLOCKERS.md. That occurrence was inside the header's own explanatory sentence -- the one that tells the reader where resolved entries go, and does so by naming the heading: "...actually moves it down into `## Recently resolved` or deletes it."

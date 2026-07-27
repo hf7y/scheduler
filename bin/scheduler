@@ -1745,9 +1745,17 @@ cmd_sweep() {
   # discipline as the passes above: findings are SIGNALS a human should
   # look at, never auto-resolved here.
   if [ -x "$SCHED_ROOT/bin/blockers-freshness-check.sh" ]; then
-    local blockers_check_out
+    local blockers_check_out blockers_check_rc
     blockers_check_out="$("$SCHED_ROOT/bin/blockers-freshness-check.sh" 2>&1)"
-    if [ $? -ne 0 ]; then
+    blockers_check_rc=$?
+    if [ "$blockers_check_rc" -eq 3 ]; then
+      # Exit 3 is the parse-failure/UNKNOWN case, not a staleness finding --
+      # label it as such rather than under the "stale entries" header, since
+      # the whole point of that exit code is that the check could NOT see the
+      # file's sections and must not be read as any statement about them.
+      echo "== [blockers-freshness] CANNOT READ BLOCKERS.md -- check is BLIND =="
+      echo "$blockers_check_out" | sed 's/^/  /'
+    elif [ "$blockers_check_rc" -ne 0 ]; then
       echo "== [blockers-freshness] stale BLOCKERS.md entries found =="
       echo "$blockers_check_out" | sed 's/^/  /'
     fi
