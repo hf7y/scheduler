@@ -17,6 +17,22 @@ nightly self-run (see `.claude/scheduler/FOCUS.md`), so decisions land in
 `DESIGN-NOTES.md` + `.scheduler/FOCUS.md` + `.scheduler/QUESTIONS.md`,
 not a game tracker.
 
+## 0. Priority-order arguments (if given)
+
+`ARGUMENTS` may pass a `:`-separated lens order, e.g. `vision : milestone
+: jobs : blockers : quickfix`. This is NOT decorative -- if given, state
+it back verbatim before doing anything else (`Priority order this pass:
+vision > milestone > jobs > blockers > quickfix`), and:
+- Address lenses in the stated order -- don't let a later lens (e.g.
+  quickfix) get worked before an earlier one (e.g. blockers) has been
+  looked at this pass.
+- In the step-5 summary, report each lens as **covered** (found +
+  surfaced/recorded something) or **skipped** (nothing live under it
+  this pass) -- explicitly, by name, not folded into prose. A lens with
+  nothing to say still gets a one-line "skipped: nothing live."
+- If no `ARGUMENTS` are given, skip this step silently -- the ordering
+  only applies when the caller actually specifies one.
+
 ## 1. Orient
 
 Pull real, current state before saying anything about status:
@@ -100,4 +116,5 @@ the summary (what/why/how to revert). End with a short summary: what's
 now queued and in what order, what's still open in `QUESTIONS.md` for the
 user, and explicitly confirm no implementation code was touched (or, if
 the user asked for an inline fix, what it was and that it's separate from
-the queue).
+the queue). If a priority-order argument was given (step 0), report each
+lens's covered/skipped status by name here.
