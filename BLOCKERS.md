@@ -77,6 +77,33 @@ only ever sees its own section, never another project's.
   by design, not by neglect.
   testing precisely this. Lift creds from vkv-inventory if possible
   pending the creation of chezz specific ones
+  - 2026-07-27 (chezz nightly, machine-append; witness: chezz commit
+    `f7a2458` pushed to origin/main, 108/108 `npm run check`): ANSWERED
+    and ACTED ON -- thank you. Pipeline built: `tools/generate-pieces.mjs`
+    (gemini-2.5-flash-image, all 18 pieces, plain `fetch`),
+    `tools/sprite-postprocess.js` (chroma-key, crop, fit, snap to the
+    game's monochrome ramp -- so monochrome is enforced by the pipeline,
+    not by whether the model obeyed the prompt), `tools/wire-pieces.mjs`
+    (bakes PNGs into index1.html as data URIs, keeping it one
+    self-contained file), and `pieceGlyphHtml` now renders a sprite when
+    one exists and the Unicode glyph when it doesn't, per piece. Zero new
+    dependencies: Playwright's canvas does what vkv used Pillow+numpy for,
+    and `fetch` replaces the google-genai SDK. 11 new tests.
+  - **STILL BLOCKED ON YOU, smaller ask than before: one API key.** No
+    sprite has actually been generated. "Lift creds from vkv-inventory"
+    is not possible -- verified 2026-07-27, witness: read of
+    `vkv-inventory/tools/generate_sprite.py` (documents `export
+    GEMINI_API_KEY=...` as an interactive human step), its README, its
+    `schedule/vkv-inventory.conf`, and the run environment: **vkv stores
+    no key anywhere**, so there is nothing to lift. Chezz-specific creds
+    were the other half of your reply and are now the whole of it. Once
+    `GEMINI_API_KEY` is reachable from this machine, `npm run
+    pieces:generate` produces all 18 and bakes them in; the generator
+    exits non-zero with instructions until then. Network to
+    `generativelanguage.googleapis.com` is confirmed reachable from the
+    sandbox (403 without a key, not a timeout), so the key really is the
+    only remaining step. Tracker report 2026-07-17T07:25:16.315Z stays
+    open for exactly this and says so.
 
 - **2026-07-22 15:09 `scheduler -i` (general-scaffold convergence):
   RESOLVED in-repo 2026-07-25 -- nothing needed your scope-widening
@@ -112,6 +139,25 @@ only ever sees its own section, never another project's.
   and per-project recipe live in realisateur `.scheduler/FOCUS.md`
   (2026-07-26 migration entry). realisateur itself is already done
   (`fa222cb` + `1284b58`).
+  - 2026-07-27 (chezz nightly, machine-append), replying to your "This has
+    been handled. Report noisy if it hasn't": **for chezz it has, and I
+    re-probed rather than taking either of our words for it.** Witness,
+    this run: `.scheduler/FOCUS.md` and `.scheduler/QUESTIONS.md` are real
+    files in the chezz repo; `.claude/FOCUS.md` and `.claude/QUESTIONS.md`
+    are symlinks into them (the 2026-07-25 stale-path bridge, still
+    intact); `schedule/chezz.conf:33` has `SCHEDULER_SUBDIR=".scheduler"`;
+    and `focus/chezz.md`/`questions/chezz.md` both resolve to
+    `Project Archive/chezz/.scheduler/*`. That was the cross-project
+    follow-up chezz's own FOCUS.md had been flagging since 2026-07-24, so
+    it is now closed from this side.
+    Noisy where it's due, per your instruction: this note speaks ONLY for
+    chezz. The entry above is scoped to 10 OTHER projects (wtul, crt,
+    gardien, senechal, home-assistant, groc-mangr, nine-speakers,
+    sequestria, vim-arcade, vkv-inventory), which are realisateur's to
+    dispatch and which an unattended chezz run has no business probing or
+    editing. If "handled" was meant to cover all ten, nothing in chezz's
+    reach confirms or refutes that -- worth a look before this entry gets
+    moved to `## Recently resolved`.
 
 ## scheduler
 
