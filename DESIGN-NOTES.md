@@ -806,7 +806,10 @@ always-on server instead of the laptop" — except arriving as a second
    proves to matter, the fix is more likely tightening `USAGE_MIN_SLACK`/
    `USAGE_CEILING` per-host (leave more headroom since two probers now
    share one budget) than building real distributed coordination — but
-   that's a follow-up call, not decided here.
+   that's a follow-up call, not decided here. *(2026-07-26: the mechanism
+   that makes that per-host tightening a one-line edit now exists —
+   `schedule/_usage.<host>.conf`, see the dated section at the end of this
+   file. The decision above is unchanged; only the cost of acting on it is.)*
 
 4. **Sprint scope: small MVP, not the full design.** Prove concurrent
    dispatch across two hosts doesn't blow the account-wide ceiling in
@@ -1457,3 +1460,62 @@ in four places. What was real underneath: aedile's `run.log` shows
 completed cycles on 07-20, 07-21 and 07-25 only, a genuine 07-22→24 gap
 whose likely cause was world-writable `~/.ssh` blocking `git push` —
 which aedile's own 07-25 run detected and fixed.
+
+## 2026-07-26 — the usage-gate ceiling reads from a conf, not just env
+
+Queued as a FOCUS.md backlog item 2026-07-25 (human-directed) and built
+this paced cycle. The pacing knob that decides whether *any* background
+job runs — `USAGE_CEILING` — lived in exactly one place before today:
+`bin/usage-gate.sh`'s own `CEILING="${USAGE_CEILING:-0.85}"`. Changing it
+durably meant editing `RUNNER_ENV` in `schedule/_runner.conf` and running
+`bin/sync-crontab.sh --apply`, which ends with the value **retyped onto a
+generated crontab line** — a build-discipline violation ("config read from
+one source, not retyped per file") on the single most consequential dial in
+the system.
+
+Now: `schedule/_usage.conf` (base) and `schedule/_usage.<host>.conf`
+(per-host) are read directly by the gate, resolved **per field**, with
+explicit env still winning. Edit the conf, the next 5-minute tick uses it —
+no `--apply`, no crontab edit, no redeploy.
+
+Three details worth recording, because each was a decision:
+
+1. **Parsed, not sourced.** Every other conf in `schedule/` is sourced.
+   This one is scanned for `KEY=value` lines instead: the gate holds a live
+   OAuth token and its own `CEILING`/`QUIET` variables at that moment, and
+   sourcing would let a stray line in a config file clobber them. Scalar
+   knobs don't need shell semantics, so nothing is lost.
+2. **A bad value is a loud ERROR, not a silent fallback.** An unparseable
+   or out-of-range knob exits 2 (which every caller already treats as
+   HOLD) naming the file, the key, and the value. Deliberately chosen over
+   warn-and-use-the-default: pacing against a typo'd ceiling is the failure
+   mode you cannot see, and stopping dispatch is the recoverable direction.
+   `USAGE_CEILING=85` (percent instead of fraction — the likely typo) is
+   caught by the range check, not accepted as "way above any utilisation."
+3. **Provenance is in the output.** The verdict line gained one field:
+   `knobs=ceiling:_usage.mandark.conf,min_slack:default,rush_min:default`.
+   Without it, "is my edit live?" is unanswerable except by reasoning about
+   precedence — and the ambient-env case below is exactly why that matters.
+   No new output *lines*, per the accretion freeze on scheduler's views;
+   `bin/scheduler pacing` prints the gate's line verbatim and was verified
+   to still parse it.
+
+**Retired, named explicitly:** setting `USAGE_CEILING` via `RUNNER_ENV`.
+It still physically works (it is plain env, so it lands at precedence 1),
+but `_runner.conf` now says not to — because env outranking the conf means
+a forgotten value on the crontab line would silently beat the file someone
+just edited. Live evidence this is not hypothetical: today's cycles ran
+with a **hand-set `USAGE_CEILING=0.99` in the dispatcher's environment**
+while `_runner.conf` says only `PACED_MAX_PER_TICK=16` and the crontab
+preview matches the repo — noted by an earlier cycle today as supporting
+evidence for this very item, and confirmed again here (the gate's live
+verdict at the built-in 0.85 default is HOLD; at the hand-set 0.99 it is
+what has actually been dispatching). This change does not disturb that: env
+still wins, so live pacing behavior is byte-identical until a human either
+uncomments a value in `_usage.conf` or drops the ambient override.
+
+**Fixed in passing, same file:** `USAGE_RUSH_BEFORE_RESET_MIN` was read
+inside the python decision core via `os.environ`, but the gate never passed
+it there — so it only ever took effect when a *caller* had exported it, and
+a shell-var (or, now, conf) value would have been silently ignored. It is
+now passed explicitly alongside `CEILING`/`MIN_SLACK`.

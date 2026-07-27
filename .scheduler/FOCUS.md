@@ -1023,6 +1023,52 @@ to build sooner.
   file from day one; (c) whatever ships must name what it retires: update
   the `RUNNER_ENV` guidance in `_runner.conf`/docs so the ceiling isn't
   settable in two competing places.
+  **DONE (2026-07-26 paced cycle)** — all three scoping notes honoured.
+  `bin/usage-gate.sh` now resolves `USAGE_CEILING`, `USAGE_MIN_SLACK`,
+  `USAGE_RUSH_BEFORE_RESET_MIN` and `USAGE_PROBE_MODEL` **per field** from:
+  explicit env → `schedule/_usage.<host>.conf` → `schedule/_usage.conf` →
+  its own built-in defaults. (a) the conf dir is resolved the way
+  `usage-paced-runner.sh` already does it (`readlink -f` on `$0`, then the
+  same legacy absolute-path fallback constant) so the copy-not-symlink
+  install at `~/.local/bin/usage-gate.sh` still finds the repo's
+  `schedule/`; `USAGE_CONF_DIR` overrides it for tests. (b) host-scoped
+  `_usage.<host>.conf` supported from day one, same convention as
+  `_paced.<host>.conf`. (c) `schedule/_runner.conf` now says in-file that
+  the gate's pacing knobs do NOT belong in `RUNNER_ENV` and why (env wins,
+  so a stale crontab-line value would silently outrank the conf a human
+  just edited) — the retired path named at the enforcement point, not only
+  in docs. Shipped `_usage.conf` has every knob **commented out** on
+  purpose: the script stays the single definition of each default (a
+  repo-less copy install has to fall back to them regardless), and the file
+  is purely the override layer — so this landed with **zero** change to
+  live pacing. Parsed rather than sourced (the gate holds a live OAuth token
+  and its own `CEILING`/`QUIET` vars at that point); an unparseable or
+  out-of-range value is a loud `ERROR` exit 2 — which every caller already
+  treats as HOLD — naming file+key+value, chosen over warn-and-default
+  because pacing against a typo is the failure you can't see. The verdict
+  line gained one field, `knobs=ceiling:<src>,min_slack:<src>,rush_min:<src>`,
+  so "is my edit live?" is answerable; no new output lines, per the
+  accretion freeze. Fixed in passing: `USAGE_RUSH_BEFORE_RESET_MIN` was read
+  from `os.environ` inside the python core but never passed there, so a
+  conf/shell-var value would have been silently ignored — now passed
+  explicitly. Verified offline with a fake-`curl` harness feeding fabricated
+  rate-limit headers: defaults-when-no-conf, base conf, host conf overriding
+  the base **for that field only** while the base still supplies the others,
+  host conf correctly ignored for a different host, env beating both, a conf
+  ceiling actually flipping the verdict to HOLD (0.20 vs 0.30 util), exit
+  codes 0/1/2, `USAGE_GATE_QUIET=1` still one word, comment-only conf → not
+  an error, an invalid value in the host conf naming the host file, and a
+  bad base value repaired by a valid host override. Plus a real live probe
+  (correct verdict against real headers), a copy-install run from a dir with
+  no sibling `schedule/` (confirmed it takes the legacy absolute path and
+  falls through to defaults cleanly), and both downstream consumers re-run
+  against the new line: `bin/scheduler`'s `pacing_show_human` and
+  `usage-paced-runner.sh`'s log-summary grep. Live evidence the retired path
+  was a real hazard: this cycle's own environment carries a hand-set
+  `USAGE_CEILING=0.99` that appears in no conf at all (`_runner.conf` sets
+  only `PACED_MAX_PER_TICK=16`) — env still wins, so that stays in force
+  until a human drops it or uncomments a value; see DESIGN-NOTES.md
+  2026-07-26 for the full writeup.
 
 - **2026-07-25 11:51 (via `scheduler -i`):** Investigate 'a door': remote idea-intake for 'scheduler -i' so drops don't require originating on mandark, raised via realisateur's 2026-07-25 nightly-batch pass (senechal session origin). PARKED against current milestone (zero-silent-failure unattended dispatch) -- this is a new intake surface, not required to reach it. Scoping done, not built: intake options are (a) SSH-only -- push a signed .idea/text file to a dedicated bare repo over the same SSH path dexter already uses for crt (git-shell-only key, no shell access), a post-receive hook calls cmd_idea/writes FOCUS.md, no new network service; (b) a tiny authenticated HTTP endpoint (webhook-style) that shells out to the same insertion logic -- more reachable from a phone but is a genuinely new internet-facing surface needing its own hardening; (c) email/SMS relay -- adds a third-party dependency and parsing surface for little benefit over (a). Recommend (a) as the only option that reuses the existing SSH-key/git-shell pattern with no new listening service; senechal's own secret-guarding charter makes an internet-reachable file-editing endpoint (b) the one to threat-model hardest if ever chosen. Revisit once scheduler's current milestone is reached.
 
