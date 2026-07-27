@@ -236,7 +236,6 @@ happened yet for any of them.
 
 ## senechal
 
-%%ACTION Write your AUTONOMY_TIER promotion condition + interim-scope flag into this repo's own FOCUS.md (human decision, scheduler QUESTIONS.md 2026-07-25, translated to schedule/senechal.conf AUTONOMY_TIER="medium" 2026-07-26): tier is "medium" TEMPORARILY -- promote to "high" only once the config files senechal owns have verified version control/redundancy in place (a checkable fact, not a target date; when true, ask scheduler to flip the conf field). Also flag the eventual cross-host dexter/mandark pruning/injection of known project files as INTERIM scope, tied to scheduler's no-local-checkout redesign (roadmap item 4/5) being unfinished -- revisit when that lands so it doesn't quietly become permanent scope.
 
 - *(Machine-append, scheduler paced cycle 2026-07-26: the tag line above
   is consumed by senechal's next scheduled run; this section can be moved
