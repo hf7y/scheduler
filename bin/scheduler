@@ -1623,6 +1623,27 @@ cmd_sweep() {
     echo "no tripped dead-man switches (expires_at stamps) found"
   fi
 
+  # Eighth pass: installed-vs-git drift (bin/deploy-drift-check.sh). Found
+  # live 2026-07-26: ~/.local/bin/usage-paced-runner.sh -- the file cron
+  # actually runs every 5 minutes -- is a hand-made COPY, one commit behind
+  # the repo, and being a copy ALSO silently disabled its own auto-pull
+  # (that block derives the repo from its own path, which under a copy
+  # install is ~/.local, not a checkout: 0 PULL lines in its whole run.log).
+  # So "the improvement we committed is live" was an assumed external
+  # dependency that had quietly stopped being true -- the milestone's own
+  # failure class, and BUILD-DISCIPLINE's "deploy verified against a git
+  # ref; drift fails loud." Read-only like every pass above: it reports,
+  # a human runs the `ln -sfn` (installed wrappers stay outside this
+  # repo's write scope).
+  if [ -x "$SCHED_ROOT/bin/deploy-drift-check.sh" ]; then
+    local deploy_check_out
+    deploy_check_out="$("$SCHED_ROOT/bin/deploy-drift-check.sh" 2>&1)"
+    if [ $? -ne 0 ]; then
+      echo "== [deploy-drift] installed scripts do not match git =="
+      echo "$deploy_check_out" | sed 's/^/  /'
+    fi
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."

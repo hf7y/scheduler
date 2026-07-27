@@ -101,6 +101,42 @@ its line once you've actually read and dealt with it.
   loud channel there).
 
 
+- **2026-07-26 (via /nightly-batch, paced cycle): should the three
+  installed COPIES under `~/.local/bin` become symlinks into the checkout?
+  Detection is built; the fix is one `ln -sfn` each and I won't run it --
+  installed wrappers are outside an unattended cycle's write scope, and
+  the choice is a real policy call, not a typo.** Verified live this
+  cycle: `~/.local/bin/usage-paced-runner.sh` (what cron runs every 5
+  minutes) is a copy matching `d431e8b` (2026-07-24), one commit behind
+  `origin/main`; `scheduler-dev-cycle.sh` and `usage-gate.sh` are copies
+  that match today; only `scheduler` is a symlink. The sharper half is
+  that a copy install doesn't just go stale, it **changes behavior**: the
+  runner's auto-pull (built 2026-07-24 so a commit on one host reaches
+  the other) resolves its repo from its own path, gets `~/.local` under a
+  copy install, finds no git dir, and skips the pull entirely -- 0 `PULL`
+  lines in 1633 lines of its `run.log`, and 11 `[legacy absolute path]`
+  fallbacks for the same reason. The two answers I can see:
+  (a) **symlink all three** (`ln -sfn "<checkout>/bin/<name>"
+  ~/.local/bin/<name>`) -- every merged commit is live immediately, the
+  auto-pull and the repo-relative `_paced.conf` resolution both start
+  working, and drift becomes impossible rather than merely detected;
+  (b) **keep them copies on purpose**, as a manual deploy gate so a bad
+  commit doesn't reach a 5-minute cron tick unreviewed -- in which case
+  the runner needs an explicit repo path (e.g. a `SCHEDULER_REPO_ROOT`
+  in `_runner.conf`'s `RUNNER_ENV`) instead of path-derived resolution,
+  because today it silently gets neither behavior.
+  I've built the detector either way: `bin/deploy-drift-check.sh`, wired
+  into `scheduler sweep`, which now prints all three findings with the
+  exact `ln -sfn` line -- so under (b) the sweep will keep flagging the
+  copies, and that noise is itself a reason to answer rather than leave
+  it. Related, seen the same pass and *not* drift: today's paced cycles
+  ran with a hand-set `USAGE_CEILING` (0.95, then 0.99) while
+  `sync-crontab.sh`'s preview still emits only `PACED_MAX_PER_TICK=16` --
+  the crontab is consistent with the repo; the ceiling was overridden
+  per-invocation, which is exactly the ephemeral-override pain the
+  "make the usage-gate ceiling settable from a config file" backlog item
+  (2026-07-25 17:06) is about.
+
 - **2026-07-24 (RESOLVED BY THE 2026-07-24 dexter self-build -- items 1
   and 3 of the old MVP-setup entry).** Item 1 (Claude Code installed on
   dexter, logged into the same primary Max account): confirmed --

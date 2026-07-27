@@ -903,6 +903,41 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-26 22:30 (via `/nightly-batch`, paced cycle): the live
+  dispatcher runs a hand-copied, one-commit-stale script, and being a copy
+  silently disabled its own auto-pull. Detection BUILT this cycle; the
+  one-line fix is human (see `.scheduler/QUESTIONS.md`, same date).**
+  Found while looking for the next milestone item, verified live, not
+  hypothetical: `~/.local/bin/usage-paced-runner.sh` — the file cron
+  executes every 5 minutes — is a **copy**, not a symlink into the
+  checkout, and matches `d431e8b` (2026-07-24) rather than `origin/main`.
+  Two consequences, both silent until now: (1) commits to
+  `bin/usage-paced-runner.sh` never go live (today's expiry-skip work
+  included); (2) the auto-pull built 2026-07-24 — the mechanism that was
+  supposed to make a commit on one host reach the other — derives its repo
+  from `readlink -f "$0"/..`, which under a copy install is `~/.local`,
+  not a git checkout, so the entire pull block is skipped. Witness: **0
+  `PULL` lines in all 1633 lines** of that job's `run.log`, and 11
+  `legacy absolute path` lines (the runner falling back to a hardcoded
+  `_paced.conf` path because it can't find a repo — the same defect the
+  2026-07-25 fable-review item names). `scheduler-dev-cycle.sh` and
+  `usage-gate.sh` are copies too; they happen to match `origin/main`
+  today and will rot the same way with nothing watching.
+  **BUILT (2026-07-26 paced cycle):** `bin/deploy-drift-check.sh` —
+  offline, read-only, zero-AI, same signals-not-verdicts convention as
+  `blockers-freshness-check.sh` — compares every `~/.local/bin/<name>`
+  against `bin/<name>` at a git ref (`DEPLOY_REF`, default `origin/main`
+  → `main` → `HEAD`), reporting DRIFT (naming the commit the copy *does*
+  match and how many later commits never went live), COPY (matches today,
+  nothing keeps it in sync), or BROKEN (dangling symlink); symlinks pass
+  by construction. Wired into `cmd_sweep` as an eighth pass, so it runs on
+  sweep's own independent cron tick. Worktree-aware: `fix:` lines point at
+  the main checkout, never at the throwaway paced worktree the cycle runs
+  from. It never writes under `~/.local/bin` — converting the three copies
+  to symlinks is a human step, and whether that's even wanted (auto-deploy
+  on commit vs. a deliberate manual deploy gate) is the open question
+  filed in QUESTIONS.md.
+
 - **2026-07-26 13:14 (via `scheduler -i`): DONE (2026-07-26 paced cycle).** Templates still teach the gated .claude/ layout -- update examples/ to .scheduler/ (realisateur, 2026-07-26). `examples/FOCUS.md.template`, `QUESTIONS.md.template`, `CLAUDE.md.template`, `nightly-batch.md.template`, `bug-sweep.md.template`, `nightly-batch-loop.sh` (legacy reference), `schedule-entry.conf.template`, and `README.md` all instructed new projects to put FOCUS.md/QUESTIONS.md in `.claude/`, where the harness sensitive-file gate makes them unwritable by the very nightly runs they scope. Every FOCUS.md/QUESTIONS.md reference in those files now points at `.scheduler/` (each carrying a one-line rationale comment on why, not just the path swap); `.claude/commands/*.md` self-references were left alone since slash commands are required to live there by the harness. `schedule-entry.conf.template` gained an explicit `SCHEDULER_SUBDIR=".scheduler"` field (previously only real per-project confs like chezz/realisateur had it — the template itself still defaulted silently to `.claude`) with a comment naming the sensitive-file gate as the reason and pointing at a real example. Verified: `grep -rn '\.claude/FOCUS\|\.claude/QUESTIONS' examples/ README.md` now only matches the deliberate "NOT .claude/..." explanatory sentences, none are instructions to use it; `bash -n examples/nightly-batch-loop.sh` clean. Context: realisateur migrated its own files 2026-07-26 (fa222cb + scheduler 1284b58); ecosystem pass for the remaining `.claude/` projects stays queued in realisateur's own `.scheduler/FOCUS.md`, unaffected by this — this item was scoped to the templates only.
 
 - **2026-07-26 11:08 (via `scheduler -i`):** FOCUS-file autocommit watcher: two fixes queued from realisateur's 2026-07-26 write-race incident (see realisateur .claude/FOCUS.md same date, race entry). At ~10:30 the watcher committed a LIVE interactive session's uncommitted .claude/FOCUS.md edits as 'Human edit via scheduler' — under Zach's own name in realisateur (93ad456, published, cannot be reattributed) and as hf7y on crt's stale checkout — and its push moved origin under the session's feet. Proposed: (a) honest attribution — an adopted working-tree edit is 'autocommit-watcher', never 'Human edit'/a human's name; or refuse to adopt .claude/-gated files entirely; (b) before committing/pushing from a working tree it does not own, probe for a live interactive session (flock probe, same shape as realisateur's bin/check-project-busy.sh, pointed the other direction) and skip that tick if one is live. Second live exhibit of UNIVERSE.md's multi-writer FOCUS-file gap; realisateur is building its own half (atomic focus-commit.sh helper) separately.
