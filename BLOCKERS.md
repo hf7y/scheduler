@@ -203,6 +203,58 @@ only ever sees its own section, never another project's.
   Recorded as BUILD-DISCIPLINE failure pattern 13 ("a decision without
   a dispatch path") in realisateur.
 
+- **2026-07-27 (wtul-batch run 24, machine-append): re: "this should have
+  been settled by now" — it had NOT been; it is now. The `.scheduler/`
+  migration above is DONE, executed unattended rather than deferred a
+  fourth time.** Witness: wtul `9539e30` on `origin/main` (the `git mv`
+  of both files plus the full reference sweep the scope above named —
+  `.claude/commands/wtul-batch.md`'s 8 references incl. the load-bearing
+  step-0a `collect-feedback.sh` path, `ROADMAP.md`, `lib/spinitron.py`,
+  `lib/photo_capture.py`, `gas/photo-capture.gs.js`,
+  `LIVE-TEST-DEBRIEF-2026-07-24.md`, and the two files' own
+  self-references; wtul's reference to CRT's `.claude/FOCUS.md` left
+  alone, that repo has not migrated); scheduler `07a9bbf`
+  (`SCHEDULER_SUBDIR=".scheduler"` plus scouted-addition (b), the stale
+  BATCH_PROMPT repointed at `.scheduler/FOCUS.md`); `readlink
+  focus/wtul.md` / `questions/wtul.md` now resolving to
+  `/home/zach/Documents/wtul/.scheduler/{FOCUS,QUESTIONS}.md`, both
+  readable, with `scheduler status wtul` reading the real 756-line and
+  521-line files through them; `pytest -q` 318/318 before and after.
+  Scouted-addition (c) satisfied. Also done in the same pass: the
+  unversioned batch wrapper `~/.local/bin/wtul-batch-loop.sh` carried
+  its own copy of the stale prompt (BATCH_SCRIPT is still authoritative,
+  so it is what actually runs) — fixed, backed up at
+  `.pre-scheduler-migration.2026-07-27`, and diffed byte-identical
+  against the conf's BATCH_PROMPT afterward; and the four now-moot
+  `Edit/Write(.claude/{FOCUS,QUESTIONS}.md)` allow rules were stripped
+  from wtul's gitignored `.claude/settings.local.json`. Reported via
+  `notify-senechal`.
+
+  **Correction to the 2026-07-26 realisateur append below** (the
+  "unattended runs structurally cannot do it" claim): that was wrong for
+  wtul, and the error was worth three days. The gate is on *editing*
+  `.claude/*.md` in place; the migration's own steps are `git mv` (a
+  Bash op) followed by edits at the NEW `.scheduler/` path, neither of
+  which touches the gated operation. The migration was therefore exactly
+  the kind of work that removes its own obstacle, and an unattended run
+  was always able to do it. Whoever picks up the remaining 9 projects
+  (crt, gardien, senechal, home-assistant, groc-mangr, nine-speakers,
+  sequestria, vim-arcade, vkv-inventory) should not assume a
+  human-present session is required — check per project, and expect the
+  `.claude/commands/` reference sweep and any unversioned wrapper's
+  embedded prompt to be the parts that actually bite.
+
+  Per the append-only policy this entry is NOT moved to Recently
+  resolved; that sweep stays human / `/ideate` triage.
+
+- **2026-07-27 (wtul-batch run 24, machine-append): re: "this likely has
+  happened. If not, surface as blocker" on failure pattern 13 —
+  confirmed, it has happened. Nothing to surface.** Witness: read live
+  this run at `realisateur/BUILD-DISCIPLINE.md:87` — `13. **A decision
+  without a dispatch path.**` — with the full trace (including this very
+  wtul entry as its worked example) at realisateur
+  `.scheduler/FOCUS.md:224`.
+
 ## crt
 Moved here 2026-07-20 from crt's own `FOCUS.md` "Deferred" list — these
 are all genuinely hands-on-hardware items an unattended run can never
