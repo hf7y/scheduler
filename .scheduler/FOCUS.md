@@ -1322,7 +1322,16 @@ Both are small. Both have already been paid for once.
       there, this is job-vs-human, in the one shared library every
       registered project's every job inherits (the same one-place property
       REGISTRY_LOCK has). A live holder makes the run stand down before
-      any clone or claude spend. **Starvation cap: `INTERACTIVE_DEFER_MAX`
+      any clone or claude spend. *(SUPERSEDED 2026-07-27 — the cap
+      described below counted dispatch ATTEMPTS, which measured nothing a
+      human does: four attempts inside ten seconds exhausted it, and it
+      could not tell an actively-edited repo from an editor left open in
+      the background. Replaced by an activity probe on the marker's own
+      `cwd` — defer while the repo has been touched within
+      `REGISTRY_ACTIVE_GRACE_MIN` (default 60), proceed quietly once it
+      goes quiet, with a time-based `REGISTRY_MAX_DEFER_HOURS` (default
+      24) backstop as the only loud path. See `lib/registry-lock.sh`.)*
+      **Starvation cap: `INTERACTIVE_DEFER_MAX`
       (default 3, settable per job via RUNNER_ENV or `schedule/<key>.conf`)
       consecutive deferrals, then it runs anyway and says so LOUDLY** —
       log WARNING plus a critical `notify-send`, because silent indefinite

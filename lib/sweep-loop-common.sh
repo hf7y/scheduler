@@ -214,8 +214,11 @@ fi
 # schedule/<key>.conf; 3 consecutive misses is roughly "you have been editing
 # across three of this project's turns."
 INTERACTIVE_MARKER="$REGISTRY_DIR/${PROJECT_KEY}.interactive"
-DEFER_COUNT_FILE="$STATE_DIR/interactive_deferrals"
-INTERACTIVE_DEFER_MAX="${INTERACTIVE_DEFER_MAX:-3}"
+# Records WHEN the current deferral streak began, not how many times we asked.
+# (Retires interactive_deferrals, a counter of dispatch attempts -- see
+# registry_should_defer's header for why attempts measured nothing.)
+DEFER_STREAK_FILE="$STATE_DIR/interactive_defer_since"
+[ -f "$STATE_DIR/interactive_deferrals" ] && rm -f "$STATE_DIR/interactive_deferrals"
 
 # The probe/cap policy itself now lives in lib/registry-lock.sh so the
 # scheduler's own dev cycle obeys the same rule (2026-07-27) -- it had no
@@ -226,10 +229,9 @@ INTERACTIVE_DEFER_MAX="${INTERACTIVE_DEFER_MAX:-3}"
 # shellcheck source=lib/registry-lock.sh
 . "$(dirname "${BASH_SOURCE[0]}")/registry-lock.sh"
 
-if registry_should_defer "$PROJECT_KEY" "$DEFER_COUNT_FILE" "$INTERACTIVE_DEFER_MAX"; then
+if registry_should_defer "$PROJECT_KEY" "$DEFER_STREAK_FILE" "${PROJECT_REPO_PATH:-}"; then
   HUMAN_PID="$REGISTRY_DEFER_PID"
   HUMAN_SINCE="$REGISTRY_DEFER_SINCE"
-  DEFERRALS="$REGISTRY_DEFER_COUNT"
   NOW_IS="$(date -Is)"
   # A real ===-delimited run record, same reasoning as the expiry block
   # below: a bare prose line is invisible to `scheduler status`, which
@@ -237,9 +239,9 @@ if registry_should_defer "$PROJECT_KEY" "$DEFER_COUNT_FILE" "$INTERACTIVE_DEFER_
   # and hide the fact that it has been standing down.
   {
     echo "=== $NOW_IS ==="
-    echo "deferred -- a human is editing '$PROJECT_KEY' right now (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}); no work attempted (no clone, no claude)."
-    echo "deferral $DEFERRALS of $INTERACTIVE_DEFER_MAX; the next dispatch runs anyway and says so loudly. Marker: $INTERACTIVE_MARKER"
-    echo "=== skipped (human editing, deferral $DEFERRALS/$INTERACTIVE_DEFER_MAX) $NOW_IS (0s) ==="
+    echo "deferred -- '$PROJECT_KEY' is being worked in right now (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}); no work attempted (no clone, no claude)."
+    echo "reason: $REGISTRY_DEFER_REASON (watching ${REGISTRY_DEFER_DIR:-?}). Standing down for as long as that stays true; backstop at ${REGISTRY_DEFER_MAX_HOURS}h continuous, currently ${REGISTRY_DEFER_STREAK_MIN}m. Marker: $INTERACTIVE_MARKER"
+    echo "=== skipped (repo active, ${REGISTRY_DEFER_STREAK_MIN}m into a deferral streak) $NOW_IS (0s) ==="
   } >> "$LOG"
   # Exit 4: distinct from success (0), fatal (1) and expired (3), so
   # usage-paced-runner.sh's `rc=` line tells deferred from worked without
@@ -251,12 +253,11 @@ fi
 # when the starvation cap fired -- REGISTRY_DEFER_CAPPED distinguishes them,
 # and the capped case must never be quiet.
 if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
-  HUMAN_PID="$REGISTRY_DEFER_PID"
-  HUMAN_SINCE="$REGISTRY_DEFER_SINCE"
-  DEFERRALS="$REGISTRY_DEFER_COUNT"
-  echo "$(date -Is) WARNING: proceeding despite a live interactive session on '$PROJECT_KEY' (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}) -- $DEFERRALS consecutive deferrals reached INTERACTIVE_DEFER_MAX=$INTERACTIVE_DEFER_MAX. This run may write files you have open; your editor's next save reconciles via the vimrc 3-way merge." >> "$LOG"
-  notify-send -u critical "$JOB_NAME: running while you edit" "$PROJECT_KEY deferred $DEFERRALS times and is now running anyway (INTERACTIVE_DEFER_MAX=$INTERACTIVE_DEFER_MAX). Close the editor or expect a merge on save." 2>/dev/null || true
-  rm -f "$DEFER_COUNT_FILE"
+  # Only the BACKSTOP is loud. Proceeding because the repo went quiet is the
+  # ordinary path and says nothing -- notifying on it is what trains a person
+  # to ignore the notification that matters.
+  echo "$(date -Is) WARNING: proceeding despite an ACTIVE repo on '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}) -- $REGISTRY_DEFER_REASON. This run may write files you have open; your editor's next save reconciles via the vimrc 3-way merge." >> "$LOG"
+  notify-send -u critical "$JOB_NAME: running while you work" "$PROJECT_KEY has deferred continuously for ${REGISTRY_DEFER_STREAK_MIN}m (backstop ${REGISTRY_DEFER_MAX_HOURS}h) and is now running anyway. Close the editor or expect a merge on save." 2>/dev/null || true
 fi
 
 echo "{\"job\":\"$JOB_NAME\",\"tier\":\"$TIER\",\"started_at\":\"$(date -Is)\",\"pid\":$$}" > "$REGISTRY_MARKER"

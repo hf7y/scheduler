@@ -221,23 +221,22 @@ fi
 . "$SCHED_REPO/lib/registry-lock.sh"
 
 PROJECT_KEY="scheduler"
-DEFER_COUNT_FILE="$STATE_DIR/interactive_deferrals"
-INTERACTIVE_DEFER_MAX="${INTERACTIVE_DEFER_MAX:-3}"
+DEFER_STREAK_FILE="$STATE_DIR/interactive_defer_since"
+[ -f "$STATE_DIR/interactive_deferrals" ] && rm -f "$STATE_DIR/interactive_deferrals"
 
 if ! registry_claim "$PROJECT_KEY" "$JOB_NAME" "paced-dev"; then
   echo "$(date -Is) project '$PROJECT_KEY' already has an active job (${REGISTRY_HOLDER:-unknown}) -- skipping to avoid a concurrent-push conflict" >> "$LOG"
   exit 0
 fi
 
-if registry_should_defer "$PROJECT_KEY" "$DEFER_COUNT_FILE" "$INTERACTIVE_DEFER_MAX"; then
-  echo "$(date -Is) deferred -- a human is working in '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}); deferral $REGISTRY_DEFER_COUNT of $REGISTRY_DEFER_MAX, then this runs anyway and says so. Nothing is stranded by deferring: reconcile_prior_cycles() picks up any unmerged branch next cycle." >> "$LOG"
+if registry_should_defer "$PROJECT_KEY" "$DEFER_STREAK_FILE" "$SCHED_REPO"; then
+  echo "$(date -Is) deferred -- '$PROJECT_KEY' is being worked in (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}): $REGISTRY_DEFER_REASON. Standing down while that holds; backstop at ${REGISTRY_DEFER_MAX_HOURS}h continuous, currently ${REGISTRY_DEFER_STREAK_MIN}m. Nothing is stranded by deferring -- reconcile_prior_cycles() picks up any unmerged branch next cycle." >> "$LOG"
   registry_release
   exit 4
 fi
 if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
-  echo "$(date -Is) WARNING: proceeding despite a live interactive session on '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}) -- $REGISTRY_DEFER_COUNT consecutive deferrals hit INTERACTIVE_DEFER_MAX=$REGISTRY_DEFER_MAX. This cycle may write files you have open." >> "$LOG"
-  notify-send -u critical "$JOB_NAME: running while you edit" "scheduler self-dev deferred $REGISTRY_DEFER_COUNT times and is now running anyway." 2>/dev/null || true
-  rm -f "$DEFER_COUNT_FILE"
+  echo "$(date -Is) WARNING: proceeding despite an ACTIVE repo on '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}) -- $REGISTRY_DEFER_REASON. This cycle may write files you have open." >> "$LOG"
+  notify-send -u critical "$JOB_NAME: running while you work" "scheduler self-dev has deferred continuously for ${REGISTRY_DEFER_STREAK_MIN}m (backstop ${REGISTRY_DEFER_MAX_HOURS}h) and is now running anyway." 2>/dev/null || true
 fi
 [ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
