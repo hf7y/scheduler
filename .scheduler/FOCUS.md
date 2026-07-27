@@ -903,6 +903,57 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **[batch] 2026-07-26 (human-directed log review) — `usage-gate.sh`
+  swallows curl failures and never retries.** Observed, not hypothetical:
+  **25 consecutive `HOLD (gate rc=2) verdict=ERROR reason=curl_failed`
+  ticks on 2026-07-26, 18:05 → 19:40 — ~95 minutes of zero dispatch** —
+  then it recovered on its own with no intervention. (33 such HOLDs
+  lifetime; the rest are 1-3/day singles.) Two defects, both at
+  `bin/usage-gate.sh:56-63`:
+  (1) **The reason is thrown away.** `curl ... 2>/dev/null || emit_error
+  curl_failed` collapses every possible curl exit code into one opaque
+  token and discards stderr, so after the fact you cannot tell DNS from
+  TLS from a 30s `--max-time` timeout from a dropped route. Wanted:
+  capture curl's exit status and stderr, and log both (`reason=curl_failed
+  rc=6 detail=<first line of stderr>`). This is the "fails loud" item in
+  CLAUDE.md's build discipline — right now it fails *quietly and
+  identically* for four different causes.
+  (2) **No retry.** A single transient blip costs a whole 5-minute tick,
+  and the ERROR→HOLD fail-safe (correct in itself) turns a network flap
+  into a compounding dispatch stall. Wanted: retry the probe 2-3× with
+  short backoff *inside one tick* before emitting ERROR. The probe is
+  ~23 tokens, so retrying is nearly free; a 95-minute stall is not.
+  Keep ERROR→HOLD as the terminal behaviour — this only stops one packet
+  loss from being indistinguishable from "the API is down."
+
+- **[batch] 2026-07-26 (human-directed log review) — a batch that dies
+  mid-turn leaves its worktree dirty, and the next run silently discards
+  the work.** Today's three failures were all transient API drops, not
+  project bugs: gardien 19:56 (`API Error: Unable to connect to API
+  (ENOTIMP)`, 807s of work lost), wtul 21:10 (`Connection closed
+  mid-response`, 161s), gardien 21:47 (same, 416s). Lifetime failure rate
+  is low (~8/240, ~3%) and the older half is all spend/session-limit
+  cutoffs from before the Max move — so **this item is about the crash
+  *aftermath*, not about preventing the drops.** What the aftermath looks
+  like right now, verified by hand:
+  `~/.local/share/gardien-nightly-batch/repo` is sitting dirty — 7
+  modified files (`gardien.py`, `test_gardien.py`, `.claude/QUESTIONS.md`,
+  `README.md`, `gardien.json.example`, `systemd/install.sh`,
+  `systemd/uninstall.sh`) plus 2 untracked new unit files
+  (`systemd/gardien-check-stale.{service,timer}`) — none committed. The
+  next dispatch's `reset --hard` will destroy all of it with no record
+  that it existed, and the autonomy sweep already refused to run over it:
+  `working tree not clean on main -- skipping this run`. So one dropped
+  connection costs the work twice: once when the turn dies, again when the
+  next run wipes it. Wanted: on `STATUS=FAILED` in
+  `lib/sweep-loop-common.sh`, before anything resets, commit-or-stash the
+  dirty tree onto a `crashed/<project>/<date>` ref (untracked files
+  included — the two new unit files above are exactly what a plain `git
+  stash` would miss) and name it in the report, so a killed run is
+  recoverable instead of merely logged. Pairs with the existing `push
+  reason:` diagnostic, which already explains *why* nothing was pushed but
+  does nothing to save what was written.
+
 - **2026-07-26 21:22 (via `scheduler -i`):** REGULATOR for the sweep-attribution interface (4 items, one cause). Root cause traced 2026-07-26 by realisateur: `scheduler sweep` (crontab */15) walks every registered repo's PRIMARY WORKING TREE, finds any dirty *.md, and calls cmd_commit_file with NO message arg -- so it falls through to the default "Human edit via scheduler: <file>". Its assumption (dirty .md == a human left an edit in vim) was true when vim was the only writer of these files and is false now that agent sessions edit the same tree. Fourth occurrence 2026-07-26 21:00 (prior: 13:15 same day, and two earlier): it adopted a live interactive session's in-flight PRECIPITATION.md/UNIVERSE.md/ideate.md -- a 192-line file that had not existed 20 minutes before -- and signed Zach's name and email to all three. NOTE the scope is wider than FOCUS files: ANY dirty *.md in ANY registered repo is fair game on a 15-minute clock, including half-written drafts. Batch isolation is NOT the gap and needs no change -- scheduled jobs already run against dedicated clones that reset hard to origin (cmd_commit_file's own comment says so, and sweep already has a second pass over them). Nor is "interactive sessions branch" a fix: sweep would commit the branch under Zach's name just the same, treating divergence while leaving false authorship intact. (1) HONEST ATTRIBUTION, one-line change at the single place the default msg is set (~line 706), do this first and unconditionally: sweep has NO provenance -- unlike -i and the vim hook, where a human demonstrably acted, it merely found a dirty file. It should say what is true ("sweep: auto-commit uncommitted <file>") and commit under a distinct identity the way the nightly already does with hf7y. This alone ends the provenance laundering without needing to detect sessions at all. (2) QUIESCENCE GUARD: a file modified 40 seconds ago is work in flight; one modified 3 hours ago is an abandoned edit. Skip commit unless mtime is older than N minutes (find -mmin +N). Needs no knowledge of Claude or vim and would have prevented the 21:00 case outright. (3) HONOR THE EXISTING LOCK, the real end state: realisateur/bin/check-project-busy.sh already probes flock on job dirs and its header explicitly chose locks over "guessing from mtimes". An interactive session should take that same lock and sweep should skip locked projects -- reusing the one regulator rather than inventing a second. (4) AGENT-AUTHOR VARIANT FOR -i (Zach's call, 2026-07-26): cmd_idea writes one fixed marker, "(via scheduler -i)", identical whether Zach typed it or an agent filed it -- so intake provenance is lost at the source, not just at sweep time. Proposal: an explicit agent variant (e.g. "scheduler -i --agent <name> <project> TEXT") writing a distinguishable marker and committing under an agent identity. This is not cosmetic: realisateur/bin/precipitation-scan.sh classifies entries INBOX/HUMAN/LOG by parsing exactly that string to decide what counts as a promotion signal, and PRECIPITATION.md ranks re-arrival of a HUMAN-origin idea as the strongest signal in the ecosystem. With no agent variant, an agent-filed idea is indistinguishable from a human-filed one, so the system can manufacture its own promotion evidence and boost its own suggestions -- a closed feedback loop in the one place the doctrine is most load-bearing. The variant makes that classification exact instead of inferred. Filed via the front door per /ideate 5 (engine change, realisateur does not hand-edit scheduler). Full trace + the ranked-signal doctrine: realisateur/PRECIPITATION.md and UNIVERSE.md (Law 3 / the Ashby reading -- this is the multi-writer FOCUS-file interface, still the ecosystem's least-regulated).
 
 - **[batch] [recurring theme — for realisateur] 2026-07-26 (human-directed
