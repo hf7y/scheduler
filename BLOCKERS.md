@@ -450,14 +450,12 @@ happened yet for any of them.
   1. **Bless `PLAYBOOK.md` as standing doctrine** (or reply with edits)
      — it now governs build-vs-import-vs-retire allocation the way
      UNIVERSE.md governs laws.
-  > Blessed be.
   2. **Commit-message PreToolUse hook: install at user level**
      (`~/.claude/settings.json`, covers every project) rather than
      per-repo? The build itself you already approved 2026-07-25
      (narrow deny-with-message form); this is only the
      where-it-lives call the design notes said to confirm.
        to copy if you get gated.
-  > Confirm. Wire it at user level. Drop an easy file and 1-liner to copy if you get gated.
   3. **Import swaps — approve any subset:** (a) symlinks replace
      `scheduler pacing deploy`/drift-detection (also fixes the LIVE
      drift found in `usage-paced-runner.sh`, the script cron runs every
@@ -465,20 +463,17 @@ happened yet for any of them.
      (c) `gitleaks` replaces hygiene-lint's hand regexes (harness
      stays); (d) restic/rsnapshot under `gardien.py`'s storage layer
      when it unparks.
-  > Approved (a), (b), (c) — 2026-07-26, interactive /ideate in the scheduler repo, Zach via AskUserQuestion. (d) restic/rsnapshot stays deferred until gardien actually unparks. Note: (a) is also the sequencing prerequisite for the axis-1 decision (paced runner dispatching from a committed conf) — see scheduler DESIGN-NOTES.md 2026-07-26 /ideate entry. Queued as a [batch] item in scheduler's FOCUS.md Backlog same pass.
   4. **Catabolic worklist — approve retiring ~1,000 already-labeled-
      superseded lines** (morning-report ×2, build-services-view +
      `services/`, `incubation-audit.sh`, overnight-dev ×2, the two
      162-line loop-script forks, sync-crontab's dead auto-stagger), one
      retirement per pass, each commit naming what retires it.
-  > Approved — 2026-07-26, interactive /ideate in the scheduler repo, Zach via AskUserQuestion. One retirement per pass, each commit naming what it retires, exactly as filed. The scheduler loop-fork retirement is gated behind the axis-1 (a) `scheduler-run` flip (see scheduler FOCUS.md axis 1, decided same pass). Queued as a [batch] item in scheduler's FOCUS.md Backlog same pass.
   5. **Standing re-admission policy:** as each parked making-project
      declares its stability milestone (jobs queued 2026-07-26 in
      groc-mangr/nine-speakers/sequestria/vim-arcade), re-enable it at
      weight 1–2 with no further per-project ask — yes turns four future
      decisions into ordinary queue work. (vkv-inventory stays `0`
      regardless: svc-vaporwave crontab owns its dispatch.)
-  > Yes. Re-enable each parked making-project at weight 1–2 once it declares stability milestone, no further per-project ask. vkv-inventory stays 0 regardless.
   - 2026-07-26 (realisateur nightly-batch, machine-append; witness: this
     run's own dispatch prompt + scheduler `git diff` of the collector's
     `--consume` rewrite): tonight's run was handed five EMPTY replies to
