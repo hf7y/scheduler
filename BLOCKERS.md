@@ -44,6 +44,38 @@ only ever sees its own section, never another project's.
 
 ## chezz
 
+- **The `questions/chezz.md` symlink points at a checkout that goes stale on
+  every push — this is why no QUESTIONS.md answer has ever round-tripped**
+  (filed 2026-07-27 late run, chezz nightly, machine-append; witness:
+  `readlink -f questions/chezz.md` + `git rev-list --count HEAD..origin/main`
+  in the target checkout, run this session).
+  `questions/chezz.md` and `focus/chezz.md` resolve into
+  `/home/zach/Documents/Project Archive/chezz` — a *different* chezz checkout
+  from the one the nightly job runs in
+  (`/home/zach/.local/share/chezz-nightly-batch/repo`). That archive checkout
+  was **6 commits behind origin/main** when this run started, so the three
+  questions filed 2026-07-27 (balance-tuning delegation, chezz-classic scope,
+  screenshot hosting) were **invisible to Zach**, and the four he could see
+  were stale. Five tracker notes and two nightly reports have told him an
+  answer was awaited in a file that did not contain the question. That, not
+  his silence, is why the chezz milestone's "the `> `-reply path round-trips"
+  bullet has never been demonstrable.
+  **Done from chezz's side, no action needed there:** the live instance is
+  fast-forwarded (was clean and 0 ahead, so lossless — all 7 questions now
+  read correctly through the symlink, verified through that path), and
+  `npm run check-answers` (chezz `7fc0d3b`) now asserts human-copy ==
+  run-copy and fails loud, wired into both chezz run modes as a step-1 probe.
+  **What chezz cannot fix from inside its own repo, and is asking for:** the
+  guard detects the drift but re-drifts on *every* chezz push, since pushing
+  makes the archive checkout one behind again. It needs one of —
+  (a) repoint both symlinks at the checkout the nightly job actually uses, or
+  (b) have the scheduler `git merge --ff-only origin/main` the symlinked
+  checkout before each run, or
+  (c) confirm the archive checkout is the intended canonical one and give the
+  nightly job a way to push into it.
+  A decision on which is a human call about how the scheduler is meant to
+  work, so it isn't being guessed at from chezz.
+
 - **Four design forks are the only thing holding otherwise-ready backlog
   work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
   machine-append; witness: `questions/chezz.md` read this run + tracker
