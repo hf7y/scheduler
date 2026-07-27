@@ -919,6 +919,45 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **[shipped-inline] [iface: answer-session] 2026-07-26 (interactive,
+  human-directed quickfix) — `scheduler -q` with no project now prints a
+  questions overview instead of a bare project-name dump. Recorded as a
+  STATED ACCRETION-FREEZE EXCEPTION, not silent accretion.** What
+  shipped: every project with any open questions as `unanswered/total`,
+  `*` where the file changed since you last opened it, unread sorted
+  first, plus a one-line count and a "nothing open:" tail. Verified by
+  running it (counts match the glance's QUESTIONS column exactly), and
+  each branch exercised against a scratch `SCHED_ROOT` — unread-star,
+  all-replied, and the no-questions-anywhere empty state.
+  - **The freeze it crosses, named plainly.** The milestone declared
+    earlier the same day says "no view gains a legend line or new verb —
+    new needs go into the spec," and slates `questions` itself for
+    retirement to a one-line redirect stub. This added a sub-view and two
+    legend lines to exactly that surface. Human-directed and dated here so
+    the redesign counts it as debt to fold in, not as an existing view to
+    preserve. Revert with `git revert <sha>` if the freeze should hold
+    strictly; the FOCUS entries are worth keeping either way.
+  - **(re-arrival: 2026-07-20, 2026-07-26, 2026-07-26)** — shape stable
+    across all three, per realisateur/PRECIPITATION.md signal 1: item 0's
+    "one file I actually read" and the blockers-as-computed-view design
+    (2026-07-20, which already concluded questions and blockers are one
+    list filtered two ways), realisateur/PLAYBOOK.md Play 5 #2 (the
+    ranked answer-session surface — the only play in that audit acting
+    directly on the rate-limiting enzyme), and this ask. Promotion
+    passes over nothing: it did not jump a queued item, it consumed
+    interactive time the freeze had reserved for the redesign.
+  - **Names what it retires:** `require_project`'s bare project-list dump
+    for `-q` (gone, that path no longer runs), and the duplicated
+    question-counting awk — `questions_counts()` / `questions_unopened()`
+    are now one implementation shared with `cmd_glance`, so the two views
+    cannot drift about what counts as an open question. At target state
+    this view retires INTO the consolidated `blockers` view; it must not
+    survive alongside it as a sixth surface.
+  - **Not built, stays queued in the spec above:** ranking by released
+    work, and standing-policy vocabulary so a `yes` is durable rather
+    than per-question. 105 unanswered across 17 projects at the time of
+    writing — the count is the argument for the ranking half.
+
 - **[batch] [iface: sweep-attribution] 2026-07-26 (interactive /ideate,
   human-approved) — MERGED build item: the sweep-attribution regulator,
   one pass, four pieces.** Subsumes the 2026-07-26 21:22 and 21:56
@@ -1117,6 +1156,20 @@ to build sooner.
 - **2026-07-25 20:33 (via `scheduler -i`):** from chezz fable-review triage 2026-07-25: make the staleness/freshness checks exit nonzero on failure so a stale run fails loud (fable-review item 3, staleness-check exit-nonzero + sweep-tier ownership) -- scheduler/realisateur-side, chezz can't do this from its own repo; routed here per the never-quietly-decline rule
 
 - *(ADOPTED as the Current stability milestone, 2026-07-26 interactive /ideate — this entry is now the milestone's spec, no longer a queued proposal)* **2026-07-25 19:51 (via `scheduler -i`):** Front-door consolidation -- promote parked item 0 to the NEXT stability milestone (adopt when the current zero-silent-failure bar closes; 4/5 checked, last box routed to realisateur). Override stated per realisateur ideate 4.5: re-derivation convergence -- the 2026-07-20 target UX (item 0) was re-derived independently by Zach 2026-07-25 near line-for-line, the strongest ready-to-build signal this ecosystem produces (doctrine: realisateur/UNIVERSE.md, written same session). Bar: the entire human surface is three stable PRINTABLE views -- `scheduler` noargs (now/next + one-line gate/dials footer), `scheduler <project>` (detail, inline reply, reorder/reweight from there), `scheduler blockers` (the one blocked-on-you place) -- each view footer printing its own mutation one-liners. Decisions locked 2026-07-25 (Zach, via realisateur /ideate): HARD FOLD + RETIRE (glance/status/overview/next/explain/focus/questions/report/pacing-show as separate surfaces retire to one-line redirect stubs; usage() <= ~20 lines); STATIC + VERBS, no TUI (printable doctrine holds); DIALS = one-line noargs footer, full pacing/drift/deploy detail stays under pacing. ACCRETION FREEZE effective now: no view gains a legend line or new verb before the redesign -- new needs go into this spec. Weights raised same session to get here soon (scheduler 3->4, realisateur 1->3, exit stated in _paced.conf: both drop back when this milestone is reached).
+
+  - **SPEC REQUIREMENT filed into this entry 2026-07-26 (per the freeze's
+    own "new needs go into this spec" clause): the `blockers` view must
+    answer "which projects owe me an answer, and which of those have I
+    not looked at" without opening a file per project.** Per-project
+    `unanswered/total` plus an unread marker, unread sorted first — the
+    `n/m` + `*` vocabulary the glance already uses, so the consolidated
+    view inherits it rather than inventing a third. Source: a
+    human-directed quickfix shipped the same day as a stopgap on `-q`
+    (see the dated entry at the top of this Backlog), which is a
+    *prefix* of this requirement, not a substitute — the ranking half
+    (order by how much queued work each answer releases) and the
+    standing-policy vocabulary are the part that still needs building,
+    and they belong here, in the one obligation view, not on `-q`.
 
 - **2026-07-25 19:28 (via `scheduler -i`):** check Chezz's questions.md. Add the scheduler_subdir to be .scheduler for chezz's repo
 
