@@ -918,10 +918,39 @@ both are now dead weight rather than a guess about future need. Retiring
 them (`deployable_scripts()`, `cmd_pacing_deploy`, the drift block in
 `cmd_pacing`, the `deploy` line in `usage()`, ~80 lines and one verb) is a
 clean catabolic pass with a real precondition met, and it is exactly the
-kind of surface Law 3 says never gets removed on its own. NOT done here:
-that is a deliberate retirement decision, and the accretion freeze governs
-what the front door looks like. Left as the next obvious catabolic item.
+kind of surface Law 3 says never gets removed on its own.
 `# verified 2026-07-27 via ls -l ~/.local/bin; scheduler pacing`
+
+  **DONE 2026-07-27 (paced cycle) — the retirement above is executed.**
+  `deployable_scripts()` → `installed_scripts()` (now includes symlinks,
+  since they are what it checks); `cmd_pacing_deploy` and the copy-based
+  drift block are gone; `pacing deploy` is a one-line loud stub (exit 1,
+  names what retired it) so a `cp`-era habit can't look like it worked;
+  `usage()` loses the `pacing deploy` entry. Net −24 lines, one verb
+  retired, **no new verb** (accretion freeze respected: same block, same
+  place in `pacing show`). What replaced the drift check is the
+  PRECONDITION check — every installed counterpart must still be a
+  symlink that still resolves: `COPY` (a real file re-appeared, the
+  2026-07-26 `usage-paced-runner.sh` case), `BROKEN` (dangling),
+  `FOREIGN` (points at a different script), `OK` (with resolved target).
+  Verified: all four branches plus the none-installed case exercised in a
+  fabricated `HOME`, live run clean (four `OK`), retired-verb stub and bad
+  verb both exit 1, `bash -n` clean, and re-run under
+  `env -u SSH_AUTH_SOCK` (identical). This is the human-approved import
+  swap (a) from BLOCKERS.md `## realisateur` call 3 / PLAYBOOK Play 2 —
+  the **second of the two halves NAMED** as the axis-1 sequencing gate
+  (first half: `sync-crontab.sh --apply` refuses a dirty `schedule/`,
+  `e1042a4`, earlier today).
+  **NOT clearance to flip a command column yet, and this is a real gap in
+  how the gate was specified, not a technicality:** both named halves are
+  now done, but the gate's stated *intent* — "the paced runner dispatches
+  from a committed/validated copy of `_paced*.conf`" — is still NOT met.
+  `usage-paced-runner.sh` is a symlink into the canonical checkout and
+  reads `schedule/_paced.conf` out of that checkout's **working tree**, so
+  an uncommitted edit to the command column still goes live on the next
+  5-minute tick with nothing checking it. Symlinking fixed script drift;
+  it does not make the conf a committed artifact. Filed as a judgment call
+  in `.scheduler/QUESTIONS.md` (2026-07-27) rather than decided here.
 - `<project>-nightly-batch-loop.sh` / `-bug-sweep-loop.sh` (~20 legacy
   wrappers) → copies, but they only set variables and then
   `source "<repo>/lib/sweep-loop-common.sh"` by absolute path, so the LOGIC

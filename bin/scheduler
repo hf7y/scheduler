@@ -155,8 +155,8 @@ usage: scheduler [command] [project]
                          participants, reorder round-robin tie-breaks)
   pacing [show] [-h]     usage-paced-runner.sh's tick interval + max
                          dispatches/tick, the live usage-gate.sh verdict, and
-                         a drift check between repo bin/*.sh and their
-                         deployed ~/.local/bin copies (defaults to `show`).
+                         a check that every installed ~/.local/bin script is
+                         still a symlink into this repo (defaults to `show`).
                          -h/--human: plain-English translation of the gate
                          numbers instead of the raw util/burnline/slack line
   pacing tick '<cron>'  set schedule/_runner.conf's RUNNER_CRON (how often
@@ -165,10 +165,6 @@ usage: scheduler [command] [project]
   pacing max <n>         set PACED_MAX_PER_TICK (dispatches allowed per tick
                          before yielding back to cron even if usage-gate.sh
                          still says RUN), re-sync + apply, and commit
-  pacing deploy [script] copy drifted repo bin/*.sh over their stale
-                         ~/.local/bin/ counterpart (all drifted scripts if
-                         no name given) -- the manual step `pacing show`'s
-                         DRIFT lines are telling you to take
   idea <project> "text", -i
                          drop a new idea/feature-request for a project
                          without opening an editor. realisateur gets a new
@@ -562,18 +558,23 @@ runner_conf_field() {
   grep -E "^${field}=" "$RUNNER_CONF" | tail -1 | cut -d= -f2- | tr -d '"'
 }
 
-# deployable_scripts -- every repo bin/ file that also exists as a REAL
-# (non-symlinked) file at the same basename under ~/.local/bin. Those are
-# the ones that can drift: a manual `cp` deploy step, not the live
-# symlink `scheduler` itself uses. Shared by `pacing`'s drift report and
-# its `deploy` action so there's one definition of "in scope".
-deployable_scripts() {
+# installed_scripts -- every repo bin/ file that also has a counterpart at
+# the same basename under ~/.local/bin (symlink or real file, both).
+#
+# RETIRES `deployable_scripts()` + `scheduler pacing deploy` (removed
+# 2026-07-27): all four installed counterparts are now symlinks into the
+# repo, so there is no copy left to re-deploy and no drift for a `deploy`
+# verb to fix. What remains worth checking is the PRECONDITION -- that
+# each one is still a symlink and still resolves -- because a stray `cp`
+# over a symlink silently re-creates the whole drift class this retires
+# (it already bit once: usage-paced-runner.sh ran two days stale as a
+# copy, 2026-07-26). realisateur/PLAYBOOK.md Play 2.
+installed_scripts() {
   local f b dep
   for f in "$SCHED_ROOT"/bin/*.sh "$SCHED_ROOT/bin/scheduler"; do
     b="$(basename "$f")"
     dep="$HOME/.local/bin/$b"
-    [ -e "$dep" ] || continue
-    [ -L "$dep" ] && continue
+    [ -e "$dep" ] || [ -L "$dep" ] || continue
     echo "$b"
   done
 }
@@ -649,18 +650,27 @@ cmd_pacing_show() {
     echo "  (no ~/.local/bin/usage-gate.sh -- not deployed)"
   fi
   echo
-  echo "deployed-copy drift (repo bin/ vs ~/.local/bin/, real files only):"
-  local b any=0
+  echo "installed scripts (~/.local/bin -> repo bin/, must be symlinks):"
+  local b dep tgt any=0
   while IFS= read -r b; do
     [ -n "$b" ] || continue
     any=1
-    if diff -q "$SCHED_ROOT/bin/$b" "$HOME/.local/bin/$b" >/dev/null 2>&1; then
-      echo "  OK    $b"
-    else
-      echo "  DRIFT $b   (repo has changes not deployed -- \`scheduler pacing deploy $b\`)"
+    dep="$HOME/.local/bin/$b"
+    if [ ! -L "$dep" ]; then
+      echo "  COPY   $b   (a real file, not a symlink -- CAN GO STALE; fix:"
+      echo "               ln -sfn '$SCHED_ROOT/bin/$b' '$dep')"
+      continue
     fi
-  done < <(deployable_scripts)
-  [ "$any" = 1 ] || echo "  (nothing deployable found)"
+    tgt="$(readlink -f "$dep" 2>/dev/null || true)"
+    if [ -z "$tgt" ] || [ ! -e "$tgt" ]; then
+      echo "  BROKEN $b   (symlink resolves to nothing: $(readlink "$dep"))"
+    elif [ "$(basename "$tgt")" != "$b" ]; then
+      echo "  FOREIGN $b  (symlink points at a different script: $tgt)"
+    else
+      echo "  OK     $b -> $tgt"
+    fi
+  done < <(installed_scripts)
+  [ "$any" = 1 ] || echo "  (no repo bin/ script is installed under ~/.local/bin)"
 }
 
 cmd_pacing_tick() {
@@ -702,37 +712,21 @@ cmd_pacing_max() {
   cmd_commit_file "$RUNNER_CONF" "scheduler pacing: max dispatches/tick $old_max -> $n"
 }
 
-cmd_pacing_deploy() {
-  local target="${1:-}" b any=0
-  while IFS= read -r b; do
-    [ -n "$b" ] || continue
-    [ -n "$target" ] && [ "$b" != "$target" ] && continue
-    if diff -q "$SCHED_ROOT/bin/$b" "$HOME/.local/bin/$b" >/dev/null 2>&1; then
-      continue
-    fi
-    cp "$SCHED_ROOT/bin/$b" "$HOME/.local/bin/$b"
-    chmod +x "$HOME/.local/bin/$b"
-    echo "deployed $b -> $HOME/.local/bin/$b"
-    any=1
-  done < <(deployable_scripts)
-  if [ "$any" = 0 ]; then
-    if [ -n "$target" ]; then
-      echo "scheduler: '$target' not drifted (or not a deployable script) -- nothing done"
-    else
-      echo "nothing to deploy -- all installed copies already match repo"
-    fi
-  fi
-}
-
 cmd_pacing() {
   case "${1:-}" in
     ""|-h|--human) cmd_pacing_show "${1:-}" ;;
     show) shift; cmd_pacing_show "${1:-}" ;;
     tick) shift; cmd_pacing_tick "$@" ;;
     max) cmd_pacing_max "${2:-}" ;;
-    deploy) cmd_pacing_deploy "${2:-}" ;;
+    deploy)
+      # retired 2026-07-27: installed scripts are symlinks into the repo,
+      # so there is no copy to re-deploy. Stub, not silence -- a `cp`-era
+      # habit should fail loud, not look like it worked.
+      echo "scheduler: 'pacing deploy' is retired -- ~/.local/bin entries are symlinks into the repo, so the repo IS what runs. \`scheduler pacing\` reports any that reverted to a copy." >&2
+      exit 1
+      ;;
     *)
-      echo "usage: scheduler pacing [show|-h|tick '<cron-expr>'|max <n>|deploy [script]]" >&2
+      echo "usage: scheduler pacing [show|-h|tick '<cron-expr>'|max <n>]" >&2
       exit 1
       ;;
   esac
