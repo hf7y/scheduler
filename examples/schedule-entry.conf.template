@@ -22,11 +22,21 @@
 PROJECT="<project-name>"
 
 # Optional -- this project's real working copy, if it has one. Used to
-# symlink its .claude/QUESTIONS.md into ../questions/<project>.md and its
-# .claude/FOCUS.md into ../focus/<project>.md (sync-crontab.sh --apply
-# creates the QUESTIONS.md file with a template header first if missing).
+# symlink its $SCHEDULER_SUBDIR/QUESTIONS.md into ../questions/<project>.md
+# and its $SCHEDULER_SUBDIR/FOCUS.md into ../focus/<project>.md
+# (sync-crontab.sh --apply creates the QUESTIONS.md file with a template
+# header first if missing).
 # Leave blank for a project with no local working copy in this shape.
 PROJECT_REPO_PATH="/home/zach/Documents/Project Archive/<project>"
+
+# Subdirectory (within PROJECT_REPO_PATH) where this project's own
+# FOCUS.md/QUESTIONS.md live. Default ".claude" for backwards compat, but
+# use ".scheduler" for every new registration: the harness's
+# sensitive-file gate makes .claude/ unwritable from inside an unattended
+# run, and FOCUS.md/QUESTIONS.md are exactly the files that run needs to
+# write. See schedule/chezz.conf or schedule/realisateur.conf for a real
+# example.
+SCHEDULER_SUBDIR=".scheduler"
 
 # ===========================================================================
 # RUNTIME CONFIG (read by bin/scheduler-run; ignored for a tier that still
@@ -93,7 +103,7 @@ BATCH_CRON="auto"                       # "auto" (or blank) lets sync-crontab.sh
 # --- new-style runtime config (used when BATCH_SCRIPT is blank) ---
 BATCH_PROMPT="/nightly-batch
 
-This is a fully unattended overnight run. Read .claude/FOCUS.md FIRST --
+This is a fully unattended overnight run. Read .scheduler/FOCUS.md FIRST --
 everything tonight is scoped by it. Write your report to
 ~/reports/<project>/\$(date +%Y-%m-%dT%H%M).md, then symlink
 ~/reports/<project>/LATEST.md to point at that exact file instead of

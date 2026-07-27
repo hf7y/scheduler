@@ -14,7 +14,10 @@ per-project wrapper scripts, see [`MIGRATION.md`](MIGRATION.md).
 - **Tier 1 — Bug Sweeper**: fast, frequent, narrow, fixed daytime window.
   Mechanical fixes only.
 - **Tier 2 — Overnight Batch**: slow, thorough, broad. One long run per
-  project per night, scoped by that project's `.claude/FOCUS.md`.
+  project per night, scoped by that project's `.scheduler/FOCUS.md` (set
+  `SCHEDULER_SUBDIR=".scheduler"` in the project's `schedule/<project>.conf`
+  — `.claude/FOCUS.md` is unwritable from inside an unattended run, since
+  the harness's sensitive-file gate covers `.claude/`).
 
 A project can register either tier, both, or (like `scheduler` itself) just
 Tier 2.
@@ -35,9 +38,11 @@ bin/sync-crontab.sh                       # preview the crontab this produces
 bin/sync-crontab.sh --apply               # back up + install it
 ```
 
-`--apply` also symlinks the project's `.claude/QUESTIONS.md` and
-`.claude/FOCUS.md` into `questions/` and `focus/` here, so every project's
-scope-input and flagged-questions are browsable/editable from one place.
+`--apply` also symlinks the project's `$SCHEDULER_SUBDIR/QUESTIONS.md` and
+`$SCHEDULER_SUBDIR/FOCUS.md` (`.scheduler/` for a new registration,
+`.claude/` only as a legacy default) into `questions/` and `focus/` here,
+so every project's scope-input and flagged-questions are browsable/editable
+from one place.
 
 Deregistering: delete the conf, re-run `--apply` (the managed crontab block
 is fully regenerated from whatever confs currently exist).
