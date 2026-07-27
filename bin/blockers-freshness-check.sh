@@ -26,7 +26,9 @@
 # convention. A human (or an /ideate pass) still decides RESOLVED/RETRACTED.
 set -uo pipefail
 
-SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
+# Overridable so the parse paths can be exercised against fixture files
+# offline (same scratch-SCHED_ROOT convention bin/scheduler's tests use).
+SCHED_ROOT="${SCHED_ROOT:-/home/zach/Documents/Project Archive/scheduler}"
 BLOCKERS_FILE="$SCHED_ROOT/BLOCKERS.md"
 STALE_DAYS="${STALE_DAYS:-14}"
 
@@ -42,22 +44,57 @@ echo "(offline-first: no claude calls -- findings are SIGNALS, not verdicts.)"
 # heading (case-insensitive). Project headings are "## <key>" matching
 # schedule/<key>.conf's PROJECT/PROJECT_KEY, same contract collect-feedback.sh
 # --section relies on.
+#
+# Both the stop heading and the project headings are matched as WHOLE LINES
+# and only outside fenced code blocks. Prefix matching was a real bug, not a
+# nit: BLOCKERS.md's own header sentence explains where resolved entries go
+# by naming the heading ("...moves it down into `## Recently resolved`"), so
+# a prefix match stopped the scan inside the header and this script reported
+# "0/0 active project section(s) flagged" -- a clean bill of health -- for two
+# days after ec89b84 corrupted the file (2026-07-25..27). Same root cause as
+# the machine-append that caused the corruption: a structural marker matched
+# by a rule the file's own prose about that marker can satisfy.
 active_text="$(awk '
-  BEGIN{stop=0}
-  /^##[[:space:]]+[Rr]ecently [Rr]esolved/{stop=1}
+  BEGIN{stop=0; fence=0}
+  /^[[:space:]]*(```|~~~)/{fence=!fence; if(!stop) print; next}
+  !fence && /^##[[:space:]]+[Rr]ecently[[:space:]]+[Rr]esolved[[:space:]]*$/{stop=1}
   stop{next}
   {print}
 ' "$BLOCKERS_FILE")"
 
-projects="$(printf '%s\n' "$active_text" | grep -oE '^##[[:space:]]+[A-Za-z0-9_-]+' | sed -E 's/^##[[:space:]]+//' | sort -u)"
+projects="$(printf '%s\n' "$active_text" | awk '
+  BEGIN{fence=0}
+  /^[[:space:]]*(```|~~~)/{fence=!fence; next}
+  !fence && /^##[[:space:]]+[A-Za-z0-9_-]+[[:space:]]*$/{
+    sub(/^##[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print
+  }
+' | sort -u)"
+
+# A section-scoped reader that finds ZERO sections in a non-trivial file has
+# not found "nothing to report" -- it has failed to parse, and must say so
+# loudly rather than printing a passing summary (realisateur BUILD-DISCIPLINE
+# pattern 14's UNKNOWN rule, applied to this script's own scoping).
+file_bytes="$(wc -c <"$BLOCKERS_FILE")"
+if [ -z "$projects" ] && [ "$file_bytes" -gt 500 ]; then
+  echo "FATAL: no '## <project>' headings found in the active section of" >&2
+  echo "  $BLOCKERS_FILE ($file_bytes bytes) -- this is a PARSE FAILURE, not a" >&2
+  echo "  clean result. Likely causes: a duplicate/misplaced '## Recently" >&2
+  echo "  resolved' heading ahead of the real one, or the file's structure" >&2
+  echo "  was damaged by an append/merge. Inspect it by hand; this check" >&2
+  echo "  reports UNKNOWN and refuses to imply the blockers are fresh." >&2
+  exit 3
+fi
 
 flagged=0
 checked=0
 
 for name in $projects; do
   section="$(printf '%s\n' "$active_text" | awk -v h="## $name" '
-    $0 == h {grab=1; next}
-    /^##[[:space:]]/{grab=0}
+    BEGIN{fence=0}
+    /^[[:space:]]*(```|~~~)/{fence=!fence; if(grab) print; next}
+    !fence { trimmed=$0; sub(/[[:space:]]+$/, "", trimmed) }
+    !fence && trimmed == h {grab=1; next}
+    !fence && /^##[[:space:]]/{grab=0}
     grab{print}
   ')"
   [ -z "$section" ] && continue
