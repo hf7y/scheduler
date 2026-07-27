@@ -200,6 +200,20 @@ fi
 
 MAX_PER_TICK="${PACED_MAX_PER_TICK:-8}"
 
+# --- validate conf is committed before dispatch (2026-07-27) ----------------
+# FOCUS.md's "Consolidation roadmap" item 1 gate: "the paced runner
+# dispatches from a committed/validated copy of _paced*.conf". The gate has
+# two named halves: sync-crontab.sh --apply refuses a dirty schedule/
+# (committed), and this check refuses to dispatch a participant whose conf
+# is dirty relative to HEAD (verified). Reuse the same --check-clean gate so
+# the rule has one definition.
+if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
+  if ! "$SELF_DIR/sync-crontab.sh" --check-clean 2>/dev/null; then
+    log "REFUSE -- schedule/ is dirty relative to HEAD (run git commit in the repo to proceed)"
+    exit 2
+  fi
+fi
+
 # --- dispatch loop --------------------------------------------------------
 # Each iteration re-checks the gate against LIVE headers -- the previous
 # cycle's spend has already landed by the time we re-probe -- so this stops
