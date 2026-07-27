@@ -75,7 +75,6 @@ only ever sees its own section, never another project's.
   nightly job a way to push into it.
   A decision on which is a human call about how the scheduler is meant to
   work, so it isn't being guessed at from chezz.
-> File this through the scheduler front door if it isn't already and zach will
   interact via scheduler's docs. scheduler -i scheduler "..." or also 
   scheduler -i realisateur "..." if warranted.
 
@@ -95,7 +94,6 @@ only ever sees its own section, never another project's.
   (archbishop pricing, pawn supply, spawn gating) on its own judgment
   with regression pins? A yes turns four perma-deferred reports into
   ordinary queue work.
-> Yes. May nightly tune.
   - 2026-07-26 (chezz nightly, machine-append; witness: tracker fetch
     `&type=feature&status=open` -> 8 open, was 27): the AI move-quality
     cluster named above is RESOLVED -- 10 reports closed via chezz
@@ -140,7 +138,6 @@ only ever sees its own section, never another project's.
     sandbox (403 without a key, not a timeout), so the key really is the
     only remaining step. Tracker report 2026-07-17T07:25:16.315Z stays
     open for exactly this and says so.
-> Will handle in interactive session.
 
 - **2026-07-22 15:09 `scheduler -i` (general-scaffold convergence):
   RESOLVED in-repo 2026-07-25 -- nothing needed your scope-widening
