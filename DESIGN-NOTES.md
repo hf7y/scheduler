@@ -1577,3 +1577,57 @@ inside the python decision core via `os.environ`, but the gate never passed
 it there — so it only ever took effect when a *caller* had exported it, and
 a shell-var (or, now, conf) value would have been silently ignored. It is
 now passed explicitly alongside `CEILING`/`MIN_SLACK`.
+
+## 2026-07-27 (/ideate, human-directed) — four decisions
+
+**Axis-1 gate: build the runner-side dirty-conf refusal BEFORE flipping
+chezz's command column, not after.** Both named sub-halves of the gate
+(`sync-crontab.sh --apply` refusing a dirty `schedule/`, and the
+symlink-deploy import) are done, but the gate's actual intent — "the
+paced runner dispatches only from a committed/validated conf" — is still
+false (`usage-paced-runner.sh` reads `PACED_CONF` from the working tree
+and dispatches from it even when dirty). Human call: build the missing
+third piece — `usage-paced-runner.sh` refuses (or reads
+`git show HEAD:...`) when `schedule/_paced.conf`'s relevant line is dirty
+relative to HEAD, reusing the same `--check-clean` gate `e1042a4` already
+defined — THEN flip chezz. Rationale, in the human's own words: "a
+jujitsu way of flipping built but not wired [is safer than] wired without
+built loud = noisy as aesthetic (whiney)" — i.e. prefer a real gate to a
+flip that relies on loud failure as its safety net. Same fix likely
+covers the sibling BLOCKERS.md scheduler-section question about
+symlink-deployed *scripts* going live pre-commit (same shape, different
+artifact) — worth checking once built whether one mechanism covers both.
+
+**Orphaned paced-cycle merges: retry against current `main`, not a static
+fork-from-last-branch.** 14 commits across `paced/2026-07-25` and
+`paced/2026-07-26` are stranded because `bin/scheduler-dev-cycle.sh`'s
+merge-into-`main` step only fires when `main` is clean and checked out,
+and nothing retries a skipped merge later — the next day's cycle forks
+fresh from `main` and orphans the tail. Decided: don't fork the new day's
+branch from the last unmerged branch as a static rule. Instead, each
+cycle should mechanically attempt to reconcile any still-unmerged prior
+`paced/<date>` branch against *current* `main` before/alongside starting
+new work — "merge is always claude + zach [current `main` is the
+human-reconciled line, treat it as the leader and follow it], attempt to
+reconcile [against it] every time, mechanically." A stranded branch keeps
+getting a merge attempt each cycle until it succeeds, rather than being
+abandoned after one skipped attempt or permanently pinned as the new
+fork-point.
+
+**Three dark jobs (`chezz-bug-sweep`, `vkv-inventory-bug-sweep`,
+`vkv-inventory-nightly-batch`) renewed, not retired** (human: "Renew all
+three"). Executed live this session: `rm ~/.local/share/<job>/expires_at`
+for all three — the dead-man-switch stamp re-writes on next run per
+`lib/sweep-loop-common.sh`'s existing design, no code change needed.
+
+**AUTONOMY_TIER: no new engine enforcement queued right now — default
+stays "commit/push/merge freely unless irrevertible," per the existing
+[[AUTONOMY_TIER + irreversibility gate]] design (2026-07-25).** Human:
+"It's pretty always commit push merge whatever unless its irrevertible."
+The deeper question of whether that default posture is itself the right
+one is explicitly routed out of this repo: "delegate to bibliothecaire
+and philosophy if zach's cowboy ways are morally permissible.
+bibliothecaire now owns philosophy" — bibliothecaire is now the owner of
+that standing question, not scheduler. Filed as a cross-project routing
+note in `BLOCKERS.md`'s `## bibliothecaire` section, same pattern as any
+other cross-project route.

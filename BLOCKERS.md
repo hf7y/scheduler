@@ -193,21 +193,6 @@ only ever sees its own section, never another project's.
 
 ## scheduler
 
-- **2026-07-27 (interactive session): three jobs have been dark for 8 days
-  -- renew them or retire them?** `chezz-bug-sweep` (expired 07-23),
-  `vkv-inventory-bug-sweep` (07-24), `vkv-inventory-nightly-batch` (07-25).
-  All three stopped at the 2026-07-19/20 monthly-spend cutoff and then
-  burned their remaining lease while BLOCKED FROM RUNNING, so they expired
-  having produced nothing. `crt` and `realisateur` were renewed this
-  session because their leases outlasted the outage and both were healthy;
-  these three were deliberately left expired pending your call, because
-  "renew" is a claim that the job still earns its slot. Both bug-sweeps'
-  last real runs were `precheck: nothing to do` no-ops, which is weak
-  evidence they currently earn one. Renew with
-  `rm ~/.local/share/<job>/expires_at`; retire by removing the job from
-  its `schedule/<project>.conf`.
-  > (answer inline here)
-
 - **2026-07-27 (interactive session): a symlink-deployed script goes LIVE
   the moment the working tree changes, before any commit -- accept, or
   gate it?** Hit three times in one session: edits to
@@ -218,9 +203,28 @@ only ever sees its own section, never another project's.
   config, and that entry's option (b) does not cover it. Nothing went
   wrong this time; the exposure is that a half-finished edit to the engine
   every project's jobs inherit is indistinguishable from a deployed one.
-  Not filed as work because the useful answer might be "accept it, the
-  window is small and the repo is swept every 30m".
+  **Likely covered by the same fix, not a separate build (2026-07-27
+  `/ideate`, human-directed):** the axis-1 decision below (build
+  `usage-paced-runner.sh`'s dirty-conf refusal before flipping chezz)
+  should be checked for whether it also covers scripts once built — same
+  "uncommitted edit goes live pre-commit" shape, different artifact. Not
+  closed until that's actually verified against a real script edit.
   > (answer inline here)
+
+- **2026-07-27 (`/ideate`, human-directed): axis-1's stated gate — "the
+  paced runner dispatches only from a committed/validated conf" — build
+  the missing runner-side refusal BEFORE flipping chezz's command
+  column, not after.** Both named sub-halves of the gate are done
+  (`sync-crontab.sh --apply`'s dirty-`schedule/` refusal, and the
+  symlink-deploy import) but `usage-paced-runner.sh` still dispatches
+  from a dirty working-tree `_paced.conf` regardless. Decided: build
+  `usage-paced-runner.sh` refusing (or reading `git show HEAD:...`
+  instead) when the relevant conf line is dirty relative to HEAD,
+  reusing `e1042a4`'s `--check-clean` gate, THEN flip chezz — not the
+  other way around. Rationale in the human's words: "a jujitsu way of
+  flipping built but not wired [beats] wired without built loud = noisy
+  as aesthetic (whiney)." Full rationale: `DESIGN-NOTES.md` 2026-07-27.
+  Queued to the Backlog for `/nightly-batch` to build.
 
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
@@ -529,7 +533,32 @@ happened yet for any of them.
   which is BUILD-DISCIPLINE pattern 13 ("a decision without a dispatch
   path") in its quieter form.
 
+- **Routed 2026-07-27 (`/ideate`, human-directed): is the standing
+  "commit/push/merge freely unless irrevertible" autonomy default
+  actually morally/philosophically sound, or does it need a tighter
+  bar?** Raised while deciding whether `AUTONOMY_TIER` needs real engine
+  enforcement beyond the existing irreversibility gate (see
+  `DESIGN-NOTES.md` 2026-07-27 and `.scheduler/FOCUS.md`'s
+  `AUTONOMY_TIER` section). No engine work is queued in scheduler over
+  this — the human's call was "it's pretty always commit push merge
+  whatever unless its irrevertible" as the working answer for now — but
+  the deeper question of whether that's the *right* default was
+  explicitly handed to this project: "delegate to bibliothecaire and
+  philosophy if zach's cowboy ways are morally permissible. bibliothecaire
+  now owns philosophy." This is a standing ownership assignment, not a
+  one-off question — treat bibliothecaire as the home for this class of
+  question going forward, not just this instance of it.
+
 ## Recently resolved
+
+- **scheduler: three 8-day-dark jobs renewed, not retired** (resolved
+  2026-07-27, `/ideate`, human-directed: "Renew all three"). `rm
+  ~/.local/share/<job>/expires_at` run live for `chezz-bug-sweep`,
+  `vkv-inventory-bug-sweep`, `vkv-inventory-nightly-batch` — stamp
+  re-writes on next run per `lib/sweep-loop-common.sh`'s existing
+  design, no code change needed. All three had gone dark from burning
+  their lease while blocked by the 2026-07-19/20 monthly-spend outage,
+  not from being unwanted.
 
 - **scheduler `EXPIRY_DAYS` dead-man switches: all 5 fired jobs
   dispositioned** (resolved 2026-07-25 11:00, human-directed in-session:
