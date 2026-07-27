@@ -1408,7 +1408,19 @@ cmd_sweep() {
       while IFS= read -r rel; do
         [ -n "$rel" ] || continue
         echo "== $name: auto-committing $rel =="
-        cmd_commit_file "$path/$rel"
+        # Honest attribution: this branch adopts whatever dirty .md a repo
+        # happens to have, which is NOT necessarily scheduler's own edit or
+        # even a human's -- it could be a live interactive session's
+        # in-progress work that the vim auto-commit hook hasn't caught yet
+        # (a hook that predates a ~/.vimrc change, or a non-vim editor).
+        # cmd_commit_file's own fallback message ("Human edit via
+        # scheduler: ...") asserts authorship this call site cannot know,
+        # which is exactly what mis-attributed a live session's edit under
+        # Zach's own name in realisateur (93ad456, 2026-07-26) -- see
+        # .scheduler/QUESTIONS.md same date. Pass an explicit message that
+        # names this as the reactive sweep backstop, not a human or
+        # scheduler-authored edit.
+        cmd_commit_file "$path/$rel" "scheduler sweep: adopted dirty $rel (reactive backstop -- author unknown, possibly a live session not yet auto-committed) ($(date '+%Y-%m-%dT%H:%M'))"
       done <<< "$dirty_md"
     fi
 
