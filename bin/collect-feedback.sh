@@ -47,6 +47,16 @@
 #                     a report's LATEST.md -- that file already gets
 #                     overwritten wholesale by the run that acts on it.
 #
+# Consumption receipt (added 2026-07-27): every --consume call that
+# actually removes >=1 matched entry appends one line to
+# ~/.local/share/scheduler-glance/consumed-receipts.log (override with
+# SCHEDULER_RECEIPT_DIR) -- timestamp, file, section, count. This exists
+# so "an entry vanished from a QUESTIONS.md/BLOCKERS.md" can later be told
+# apart from "a human hand-deleted an entry nothing ever consumed" --
+# before this, --consume left no trace it had run, so there was no answer
+# key to check a disappearance against. Purely additive: does not change
+# what gets removed or when, only records that removal happened.
+#
 # Deliberately generic: works on any text file, not just reports, so the
 # same %%TAG convention can be reused anywhere a human wants to leave an
 # inline note for the next unattended run.
@@ -165,6 +175,14 @@ OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v co
 
 if [ "$CONSUME" = "1" ] && [ -n "$KEEP_FILE" ]; then
   mv "$KEEP_FILE" "$FILE"
+  if [ -n "$OUT" ]; then
+    RECEIPT_COUNT="$(printf '%s\n' "$OUT" | grep -c '^### ')"
+    RECEIPT_DIR="${SCHEDULER_RECEIPT_DIR:-$HOME/.local/share/scheduler-glance}"
+    mkdir -p "$RECEIPT_DIR" 2>/dev/null || true
+    printf '%s\tfile=%s\tsection=%s\tconsumed=%s\n' \
+      "$(date -Is)" "$FILE" "${SECTION:--}" "$RECEIPT_COUNT" \
+      >> "$RECEIPT_DIR/consumed-receipts.log" 2>/dev/null || true
+  fi
 fi
 
 if [ -n "$OUT" ]; then
