@@ -1784,6 +1784,36 @@ cmd_sweep() {
     echo "no tripped dead-man switches (expires_at stamps) found"
   fi
 
+  # Eighth pass: managed config that isn't committed. The passive half of
+  # the committed-config gate added to bin/sync-crontab.sh 2026-07-27 --
+  # that one refuses to DEPLOY from a dirty schedule/, this one notices a
+  # schedule/ that has been sitting dirty since some earlier session, which
+  # is the state the human never sees until a `--apply` months later
+  # silently ships (or silently drops) an edit nobody remembers making.
+  # Calls sync-crontab.sh's own --check-clean rather than re-deriving the
+  # rule here, so the two halves can never disagree: it writes nothing and
+  # reads no crontab. Same discipline as every pass above -- a signal, not
+  # an auto-fix; committing someone's half-finished config edit for them is
+  # exactly the sweep-attribution mistake this repo is already unpicking.
+  if [ -x "$SCHED_ROOT/bin/sync-crontab.sh" ]; then
+    local conf_check_out conf_check_rc
+    conf_check_out="$("$SCHED_ROOT/bin/sync-crontab.sh" --check-clean 2>&1)"
+    conf_check_rc=$?
+    # rc 2 is the gate's own "dirty/unverifiable" verdict. Any OTHER
+    # nonzero rc means the check itself did not run (e.g. an installed
+    # sync-crontab.sh predating --check-clean) -- say that, don't report a
+    # tool mismatch as a config finding.
+    if [ "$conf_check_rc" -eq 2 ]; then
+      echo "== [managed-config] scheduler's own schedule/ is NOT committed -- sync-crontab.sh --apply will refuse until it is =="
+      echo "$conf_check_out" | sed 's/^/  /'
+    elif [ "$conf_check_rc" -ne 0 ]; then
+      echo "== [managed-config] could not check (sync-crontab.sh --check-clean exited $conf_check_rc) -- config committed-ness is UNKNOWN, not clean =="
+      echo "$conf_check_out" | sed 's/^/  /'
+    else
+      echo "managed config clean ($conf_check_out)"
+    fi
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."

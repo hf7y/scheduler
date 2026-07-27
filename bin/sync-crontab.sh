@@ -107,10 +107,14 @@ read_crontab_for() {
 
 APPLY=0
 ADOPT=0
+ALLOW_DIRTY=0
+CHECK_CLEAN_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --apply) APPLY=1 ;;
     --adopt) ADOPT=1 ;;
+    --allow-dirty) ALLOW_DIRTY=1 ;;
+    --check-clean) CHECK_CLEAN_ONLY=1 ;;
     -h|--help)
       echo "Usage: $0 [--apply]"
       echo "  (no args)  preview the crontab this would produce"
@@ -118,6 +122,12 @@ for arg in "$@"; do
       echo "  --adopt    drop UNMANAGED lines whose command exactly matches a line"
       echo "             this run manages -- i.e. take ownership of a job that was"
       echo "             previously hand-installed, instead of duplicating it"
+      echo "  --check-clean  run ONLY the committed-config gate (see below) and exit:"
+      echo "             0 = schedule/ matches HEAD, 2 = dirty/unverifiable. Writes"
+      echo "             nothing, reads no crontab -- safe to call from a sweep."
+      echo "  --allow-dirty  proceed with --apply even when schedule/ is dirty or"
+      echo "             not verifiable against a git ref. Deliberate escape hatch;"
+      echo "             it says so in the output so the override is on the record."
       exit 0
       ;;
     *) echo "unknown arg: $arg (see --help)" >&2; exit 1 ;;
@@ -127,6 +137,67 @@ done
 if [ ! -d "$SCHEDULE_DIR" ]; then
   echo "no $SCHEDULE_DIR yet -- nothing to sync" >&2
   exit 0
+fi
+
+# ---- committed-config gate -------------------------------------------
+# CLAUDE.md build discipline: "deploy verified against a git ref; drift
+# fails loud." Until now this script would happily install cron lines
+# generated from a half-saved schedule/*.conf -- config that exists in
+# exactly one working tree and nowhere in history. That is the same
+# dirty-tree-as-deployed-config shape that already bit this repo for real
+# (2026-07-26: a usage-ceiling edit lived only in the working tree, so the
+# deployed behaviour had no committed source; a9bffa2).
+#
+# Dirty = any tracked modification/staged change under schedule/, or any
+# UNTRACKED schedule/*.conf (a conf that has never been committed at all
+# is the worst case, not an exempt one). Preview mode only warns -- seeing
+# what an in-progress edit would produce is the normal way to check it
+# before committing. --apply refuses.
+schedule_dirty_report() {
+  # Prints one line per problem to stdout; returns 0 if clean, 1 if dirty,
+  # 2 if the tree can't be verified against a git ref at all.
+  git -C "$SCHED_DIR" rev-parse --git-dir >/dev/null 2>&1 || {
+    echo "schedule/ is not inside a git repository -- nothing to verify it against"
+    return 2
+  }
+  local out
+  out="$(git -C "$SCHED_DIR" status --porcelain -- schedule 2>&1)" || {
+    echo "git status failed for schedule/: $out"
+    return 2
+  }
+  [ -n "$out" ] || return 0
+  printf '%s\n' "$out"
+  return 1
+}
+
+DIRTY_REPORT="$(schedule_dirty_report)"; DIRTY_RC=$?
+
+if [ "$DIRTY_RC" -ne 0 ]; then
+  {
+    if [ "$DIRTY_RC" -eq 2 ]; then
+      echo "UNVERIFIABLE: schedule/ cannot be checked against a git ref:"
+    else
+      echo "DIRTY: schedule/ does not match HEAD -- these would be deployed from an uncommitted state:"
+    fi
+    printf '%s\n' "$DIRTY_REPORT" | sed 's/^/    /'
+  } >&2
+fi
+
+if [ "$CHECK_CLEAN_ONLY" -eq 1 ]; then
+  if [ "$DIRTY_RC" -eq 0 ]; then
+    echo "schedule/ is clean at $(git -C "$SCHED_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')"
+    exit 0
+  fi
+  exit 2
+fi
+
+if [ "$DIRTY_RC" -ne 0 ] && [ "$APPLY" -eq 1 ]; then
+  if [ "$ALLOW_DIRTY" -eq 1 ]; then
+    echo "OVERRIDE: --allow-dirty given; installing cron lines generated from the state above anyway." >&2
+  else
+    echo "REFUSING to --apply: commit schedule/ first (or pass --allow-dirty to override deliberately)." >&2
+    exit 2
+  fi
 fi
 
 # Batch config for Tier 2 auto-staggering -- see "BATCH_CRON=auto" below.

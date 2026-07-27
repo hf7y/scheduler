@@ -1338,6 +1338,54 @@ Both are small. Both have already been paid for once.
   check for "managed conf dirty / crontab disagrees with committed conf"
   is the passive half.
 
+  **DONE (active half) 2026-07-27 paced cycle: `bin/sync-crontab.sh`
+  committed-config gate.** `--apply` now exits 2 rather than installing
+  cron lines generated from a `schedule/` that doesn't match HEAD (tracked
+  modification, staged change, OR an untracked `schedule/*.conf` — a conf
+  never committed at all is the worst case, not an exempt one). A tree
+  that isn't inside a git repo counts as UNVERIFIABLE and refuses too:
+  "can't check" is not "clean". Preview (no `--apply`) is deliberately
+  unchanged except for a stderr warning — inspecting an in-progress edit
+  before committing it is the normal workflow, and the preview's stdout is
+  byte-identical to before. `--allow-dirty` is the on-the-record override;
+  `--check-clean` runs only the gate (0 clean / 2 dirty, writes nothing,
+  reads no crontab) so the passive half below can call it without
+  duplicating the logic.
+
+  **DONE (passive half) 2026-07-27, same cycle: `cmd_sweep` eighth pass.**
+  `scheduler sweep` now calls `sync-crontab.sh --check-clean` and reports a
+  `schedule/` that has been left sitting uncommitted — the state a human
+  never sees until some later `--apply` ships or drops an edit nobody
+  remembers making. It calls the gate rather than re-deriving the rule, so
+  the two halves can't disagree. Reports only, never auto-commits: adopting
+  someone's half-finished config edit is exactly the sweep-attribution
+  mistake being unpicked elsewhere in this file. rc 2 (the gate's own
+  dirty verdict) and any other nonzero rc are reported differently — an
+  installed `sync-crontab.sh` predating `--check-clean` says
+  "committed-ness UNKNOWN, not clean", not a false config finding. Note
+  `SCHED_ROOT` is the primary checkout, so the pass reports on the real
+  repo, not on whatever worktree a cycle runs from. Verified by exercising
+  all four branches (clean / dirty / old-script rc=1 / script absent).
+  **The backlog item above is now fully closed, both halves.**
+
+  Original verification of the active half, without ever invoking `--apply`: all
+  four gate branches (clean/dirty/override/non-git) exercised by sourcing
+  the gate's own bytes out of the script with `APPLY=1`, plus
+  `--check-clean` end-to-end against a real dirty tracked conf, a real
+  untracked conf, and a clean tree (also under `env -u SSH_AUTH_SOCK`),
+  `bash -n` clean, and a byte-for-byte preview diff against the HEAD
+  version. **Still open: the passive half** — a `scheduler sweep` check
+  for "managed conf dirty / crontab disagrees with committed conf".
+  `--check-clean` is the hook it should call.
+
+  **Sequencing note:** this is one of the two halves of the hard gate that
+  QUESTIONS.md's answered axis-1 question (option (a), converge paced
+  dispatch on `bin/scheduler-run`) says must land BEFORE any `_paced*.conf`
+  command-column flip. The other half — the symlink-deploy import for
+  `scheduler pacing deploy`/drift, so the paced runner dispatches from a
+  committed copy — is untouched. Do NOT read this item's completion as
+  clearance to start flipping command columns.
+
 - *(subsumed by [iface: usage-ceiling-conf] above, 2026-07-26 /ideate)* **[batch] 2026-07-26 (human-directed session) — filed separately on
   purpose:** the **config-settable usage ceiling** (see the 2026-07-25
   17:06 entry further down for the full scoping: `schedule/_usage.conf`,
