@@ -1103,15 +1103,39 @@ to build sooner.
       proj="$1" marker="…$proj…"` expands every word before assigning any,
       so `$proj` was unbound under `set -u`, the probe aborted, and sweep
       committed anyway — a guard that fails OPEN. Fixed and re-witnessed.
-    - **STILL OPEN, the half that would have covered the wtul incident:**
-      the batch side. `lib/sweep-loop-common.sh` still has no probe, so a
-      project's own nightly run does not defer to a live editor. That one
-      DOES need the starvation cap (a long session must not silently
-      starve a project's batch forever) and it changes every project's
-      every job through one shared library, which is why it was not
-      bundled into this pass. Item 2's mtime quiescence guard also remains
-      wanted and independent: a marker only covers writers who take it,
-      and raw vim (not launched through the front door) still takes none.
+    - **BATCH SIDE CLOSED the same session (human-directed "yes"), which
+      completes item 3 of the sweep-attribution regulator.**
+      `lib/sweep-loop-common.sh` now probes `<PROJECT_KEY>.interactive`
+      immediately after the two flocks — job-vs-job was already handled
+      there, this is job-vs-human, in the one shared library every
+      registered project's every job inherits (the same one-place property
+      REGISTRY_LOCK has). A live holder makes the run stand down before
+      any clone or claude spend. **Starvation cap: `INTERACTIVE_DEFER_MAX`
+      (default 3, settable per job via RUNNER_ENV or `schedule/<key>.conf`)
+      consecutive deferrals, then it runs anyway and says so LOUDLY** —
+      log WARNING plus a critical `notify-send`, because silent indefinite
+      deferral is a worse failure than warn-then-continue. The counter
+      lives at `$STATE_DIR/interactive_deferrals` and is removed on any run
+      that proceeds, so the cap counts CONSECUTIVE misses, not lifetime.
+      A deferral writes a real ===-delimited `=== skipped (human editing,
+      deferral N/M) ===` record, matching what the expiry block was
+      changed to do earlier for exactly this reason: a bare prose line is
+      invisible to `scheduler status`, which would then re-report the
+      previous run as current and hide that the project has been standing
+      down. Exit 4 — distinct from success (0), fatal (1), expired (3) —
+      so `usage-paced-runner.sh`'s `rc=` line tells deferred from worked
+      without parsing the log.
+      - **Witnessed** with a throwaway JOB_NAME/PROJECT_KEY and a past
+        expiry stamp as a backstop (so a probe that fell through would
+        stop at expiry rather than clone or spend): live marker → rc 4 and
+        `deferral 1 of 2`, again → `deferral 2 of 2`, third run → WARNING
+        line + proceeded (rc 3, the backstop, proving it went past the
+        probe) + counter reset; no marker at all → straight through, rc 3,
+        counter removed. Stale marker (dead pid) reads as nobody editing.
+      - **Still open and independent:** item 2's mtime quiescence guard. A
+        marker only covers writers who take it — raw vim on a project's
+        own checkout, not launched through the front door, still takes
+        none. That guard needs no writer cooperation at all.
 
 - **[batch] 2026-07-26 (human-directed log review) — `usage-gate.sh`
   swallows curl failures and never retries.** Observed, not hypothetical:
