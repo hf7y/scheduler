@@ -108,7 +108,7 @@ unilaterally in the middle of a routine sweep).
 If anything this sweep touched genuinely needs a decision only the user
 can make -- bigger than one report's "needs a human call" note (step 2):
 an ambiguous policy question, a real tradeoff, a "which of these two
-directions" fork -- append it to `.claude/QUESTIONS.md` at the repo root
+directions" fork -- append it to `.scheduler/QUESTIONS.md` at the repo root
 (create with a one-line header if it doesn't exist). Append only, never
 overwrite or trim existing entries. Format: `- **YYYY-MM-DD (bug-sweep):
 <question>**` + short context, then a `  > (answer inline here)`
@@ -136,7 +136,7 @@ Fetched: N (M new) · Fixed & pushed: F · Reclassified: R · Handed to nightly:
 Below that, in prose: what got fixed and committed, what got reclassified
 as a feature (and why), what got handed off to nightly (and why), what
 got a note-only bug left open, how many new reports came in since last
-sweep, and whether anything got appended to `.claude/QUESTIONS.md`. Don't
+sweep, and whether anything got appended to `.scheduler/QUESTIONS.md`. Don't
 resolve, reclassify, or hand off more than a handful of reports in one
 sweep without flagging anything that felt like a judgment call, even if
 you didn't block on it.

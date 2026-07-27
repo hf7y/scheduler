@@ -2,19 +2,22 @@
 description: Nightly thorough pass -- feature work, redesigns, refactors too big for the bug sweeper, scoped by FOCUS.md
 ---
 
-<!-- Copy this to .claude/commands/nightly-batch.md in a project's repo,
-     alongside a real .claude/FOCUS.md (see FOCUS.md.template). Mirrors
+<!-- Copy this to .claude/commands/nightly-batch.md in a project's repo
+     (slash commands must live under .claude/commands/ -- that path is
+     fixed by the harness), alongside a real .scheduler/FOCUS.md (see
+     FOCUS.md.template; NOT .claude/FOCUS.md -- the sensitive-file gate
+     makes .claude/ unwritable from inside this very run). Mirrors
      bug-sweep.md.template's structure and chezz's real, more mature
      nightly-batch.md (2026-07-17) -- read that directly if in doubt,
      this template distills it. Adjust the report path/project name in
      step 5 and the tracker URL in step 1 to match the project this gets
      copied into. -->
 
-Read `.claude/FOCUS.md` first -- including its "build maximally
+Read `.scheduler/FOCUS.md` first -- including its "build maximally
 autonomously" policy. Build first, don't just analyze: pick the most
 reasonable interpretation of an accumulated idea and build it, on its own
 branch if it's not a continuation of the stated focus, flagged in
-`.claude/QUESTIONS.md` and the report. Only actually stop and wait for
+`.scheduler/QUESTIONS.md` and the report. Only actually stop and wait for
 the user when the action itself can't be reverted -- an ordinary commit,
 branch, or tracker POST never qualifies.
 
@@ -24,7 +27,7 @@ review step until the morning.
 ## 1. Orient
 
 `git log --oneline -10`, current branch state, `README.md`, and
-`.claude/FOCUS.md`. If the previous nightly run left work in progress
+`.scheduler/FOCUS.md`. If the previous nightly run left work in progress
 (check the last report under `~/reports/<PROJECT>/`), pick up from there
 rather than starting over. Also fetch the full tracker backlog with
 `&status=all&type=all` (see `../INTAKE.md`) so nothing already resolved
@@ -38,7 +41,7 @@ ALWAYS in scope tonight, in addition to whatever FOCUS.md says, not
 something FOCUS.md needs to mention by name. Note every one you find
 before moving on, so step 3 doesn't miss one.
 
-**Read `.claude/QUESTIONS.md` and process any answers** (this tier owns
+**Read `.scheduler/QUESTIONS.md` and process any answers** (this tier owns
 that; `/bug-sweep` only appends). The user replies to a question inline,
 on a line starting with `> ` (a Markdown blockquote) directly under it --
 QUESTIONS.md's own header documents the convention. For every question
@@ -73,7 +76,7 @@ one feature's commits from another's.
 For each `NIGHTLY:`-flagged bug you fix, resolve it on the tracker the
 same way `/bug-sweep` would, referencing the commit hash (see
 `../INTAKE.md`) -- do not leave it for a future sweep to re-discover. For
-each feature you build, note in `.claude/QUESTIONS.md` (step 5) which
+each feature you build, note in `.scheduler/QUESTIONS.md` (step 5) which
 branch it landed on -- that note IS the review point, not a request to
 build it.
 
@@ -112,7 +115,7 @@ paragraph of prose. Below that, cover: what
 shipped (with commit references), what broke and got fixed, what was
 deliberately deferred and why (per FOCUS.md), any `NIGHTLY:`-flagged bugs
 resolved, a summary of any new feature-backlog ideas seen since the last
-report, and whether anything got appended to `.claude/QUESTIONS.md`
+report, and whether anything got appended to `.scheduler/QUESTIONS.md`
 (point at it, don't duplicate its full text here). This is read once,
 quickly, the next time this machine boots up -- write for that, not for
 completeness's own sake.

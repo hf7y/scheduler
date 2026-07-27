@@ -1084,6 +1084,41 @@ Asked for: the heading matcher requires a line that is exactly "## <PROJECT_KEY>
 
 Both are small. Both have already been paid for once.
 
+- **2026-07-26 22:30 (via `/nightly-batch`, paced cycle): the live
+  dispatcher runs a hand-copied, one-commit-stale script, and being a copy
+  silently disabled its own auto-pull. Detection BUILT this cycle; the
+  one-line fix is human (see `.scheduler/QUESTIONS.md`, same date).**
+  Found while looking for the next milestone item, verified live, not
+  hypothetical: `~/.local/bin/usage-paced-runner.sh` — the file cron
+  executes every 5 minutes — is a **copy**, not a symlink into the
+  checkout, and matches `d431e8b` (2026-07-24) rather than `origin/main`.
+  Two consequences, both silent until now: (1) commits to
+  `bin/usage-paced-runner.sh` never go live (today's expiry-skip work
+  included); (2) the auto-pull built 2026-07-24 — the mechanism that was
+  supposed to make a commit on one host reach the other — derives its repo
+  from `readlink -f "$0"/..`, which under a copy install is `~/.local`,
+  not a git checkout, so the entire pull block is skipped. Witness: **0
+  `PULL` lines in all 1633 lines** of that job's `run.log`, and 11
+  `legacy absolute path` lines (the runner falling back to a hardcoded
+  `_paced.conf` path because it can't find a repo — the same defect the
+  2026-07-25 fable-review item names). `scheduler-dev-cycle.sh` and
+  `usage-gate.sh` are copies too; they happen to match `origin/main`
+  today and will rot the same way with nothing watching.
+  **BUILT (2026-07-26 paced cycle):** `bin/deploy-drift-check.sh` —
+  offline, read-only, zero-AI, same signals-not-verdicts convention as
+  `blockers-freshness-check.sh` — compares every `~/.local/bin/<name>`
+  against `bin/<name>` at a git ref (`DEPLOY_REF`, default `origin/main`
+  → `main` → `HEAD`), reporting DRIFT (naming the commit the copy *does*
+  match and how many later commits never went live), COPY (matches today,
+  nothing keeps it in sync), or BROKEN (dangling symlink); symlinks pass
+  by construction. Wired into `cmd_sweep` as an eighth pass, so it runs on
+  sweep's own independent cron tick. Worktree-aware: `fix:` lines point at
+  the main checkout, never at the throwaway paced worktree the cycle runs
+  from. It never writes under `~/.local/bin` — converting the three copies
+  to symlinks is a human step, and whether that's even wanted (auto-deploy
+  on commit vs. a deliberate manual deploy gate) is the open question
+  filed in QUESTIONS.md.
+
 - **[shipped-inline] [iface: answer-session] 2026-07-26 (interactive,
   human-directed quickfix) — `scheduler -q` with no project now prints a
   questions overview instead of a bare project-name dump. Recorded as a
@@ -1452,11 +1487,39 @@ Both are small. Both have already been paid for once.
   matches what's committed*. Both are real; fixing either alone leaves the
   other.
 
-- **2026-07-26 13:14 (via `scheduler -i`):** Templates still teach the gated .claude/ layout -- update examples/ to .scheduler/ (realisateur, 2026-07-26). examples/FOCUS.md.template, nightly-batch.md.template, CLAUDE.md.template, schedule-entry.conf.template and README.md all still instruct new projects to put FOCUS.md/QUESTIONS.md in .claude/, where the harness sensitive-file gate makes them unwritable by the very nightly runs they scope. Every project scaffolded from these templates inherits the bug (realisateur's 2026-07-26 scaffolds only avoided it because the run hit the wall live and improvised .scheduler/). Ask: change the templates + README registration docs to teach .scheduler/{FOCUS,QUESTIONS}.md + SCHEDULER_SUBDIR=".scheduler" in the conf template, with a one-line rationale comment. Context: realisateur migrated its own files today (fa222cb + scheduler 1284b58); ecosystem pass for the 10 remaining .claude/ projects is queued in realisateur .scheduler/FOCUS.md; origin of the convention: BLOCKERS.md ## wtul 2026-07-24 (ffab7d9). This is scheduler's repo content, hence the front door per ideate.md section 5.
+- **2026-07-26 13:14 (via `scheduler -i`): DONE (2026-07-26 paced cycle).** Templates still teach the gated .claude/ layout -- update examples/ to .scheduler/ (realisateur, 2026-07-26). `examples/FOCUS.md.template`, `QUESTIONS.md.template`, `CLAUDE.md.template`, `nightly-batch.md.template`, `bug-sweep.md.template`, `nightly-batch-loop.sh` (legacy reference), `schedule-entry.conf.template`, and `README.md` all instructed new projects to put FOCUS.md/QUESTIONS.md in `.claude/`, where the harness sensitive-file gate makes them unwritable by the very nightly runs they scope. Every FOCUS.md/QUESTIONS.md reference in those files now points at `.scheduler/` (each carrying a one-line rationale comment on why, not just the path swap); `.claude/commands/*.md` self-references were left alone since slash commands are required to live there by the harness. `schedule-entry.conf.template` gained an explicit `SCHEDULER_SUBDIR=".scheduler"` field (previously only real per-project confs like chezz/realisateur had it — the template itself still defaulted silently to `.claude`) with a comment naming the sensitive-file gate as the reason and pointing at a real example. Verified: `grep -rn '\.claude/FOCUS\|\.claude/QUESTIONS' examples/ README.md` now only matches the deliberate "NOT .claude/..." explanatory sentences, none are instructions to use it; `bash -n examples/nightly-batch-loop.sh` clean. Context: realisateur migrated its own files 2026-07-26 (fa222cb + scheduler 1284b58); ecosystem pass for the remaining `.claude/` projects stays queued in realisateur's own `.scheduler/FOCUS.md`, unaffected by this — this item was scoped to the templates only.
 
 - **2026-07-26 11:08 (via `scheduler -i`):** FOCUS-file autocommit watcher: two fixes queued from realisateur's 2026-07-26 write-race incident (see realisateur .claude/FOCUS.md same date, race entry). At ~10:30 the watcher committed a LIVE interactive session's uncommitted .claude/FOCUS.md edits as 'Human edit via scheduler' — under Zach's own name in realisateur (93ad456, published, cannot be reattributed) and as hf7y on crt's stale checkout — and its push moved origin under the session's feet. Proposed: (a) honest attribution — an adopted working-tree edit is 'autocommit-watcher', never 'Human edit'/a human's name; or refuse to adopt .claude/-gated files entirely; (b) before committing/pushing from a working tree it does not own, probe for a live interactive session (flock probe, same shape as realisateur's bin/check-project-busy.sh, pointed the other direction) and skip that tick if one is live. Second live exhibit of UNIVERSE.md's multi-writer FOCUS-file gap; realisateur is building its own half (atomic focus-commit.sh helper) separately.
+  **Part (a) DONE (2026-07-26 paced cycle).** `cmd_sweep`'s auto-commit
+  call (`bin/scheduler`, the one call site that adopts a dirty `.md` with
+  no explicit message, hitting `cmd_commit_file`'s "Human edit via
+  scheduler" fallback) now passes its own honest message: `scheduler
+  sweep: adopted dirty <file> (reactive backstop -- author unknown,
+  possibly a live session not yet auto-committed) (<timestamp>)`. The
+  vim auto-commit hook's own call (`~/.vimrc`, outside this repo) already
+  said "Human edit via scheduler vim hook" correctly — a live human did
+  make that edit — so it needed no change; only the sweep backstop, which
+  cannot know who wrote the file, was misattributing authorship. Verified:
+  `bash -n bin/scheduler` clean; ran `cmd_commit_file` directly against a
+  throwaway repo with the new message and confirmed the exact string lands
+  in `git log`. Part (b) — probing for a live interactive session before
+  sweep commits/pushes — is real design/build work (a new flock convention
+  the editing session would also need to hold) and stays open, not
+  attempted this cycle.
 
 - *(subsumed by [iface: crash-durability] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **2026-07-26 09:32 (via `scheduler -i`):** sweep-loop-common.sh: bootstrap reset --hard origin/$BRANCH silently DESTROYS committed-but-unpushed work from a prior run. Bit chezz 2026-07-25: the 20:10 nightly hit the monthly spend limit, died before its push step, left 3 real commits (0880f3d tip: 4 shipped features + size-policy + scaffold work, tracker already marked resolved against those hashes); the engine even logged 'WARNING: local commit made but NOT pushed' -- then the next cycle's reset erased them anyway. Chezz's 2026-07-26 run recovered them from the reflog (luck-dependent, gc window) and pushed. Fix where the uncommitted-work stash guard already lives (~line 288): before reset --hard, if git rev-list --count origin/$BRANCH..HEAD > 0, create a rescue ref (e.g. branch rescue/<JOB_NAME>-<date>) or retry the push, and log loudly. The stash guard protects uncommitted work; committed-ahead work has no equivalent today.
+  **DONE (2026-07-26 paced cycle).** Same shape as the existing stash
+  guard, right before it hands off to `git reset --hard origin/$BRANCH`:
+  computes `git rev-list --count origin/$BRANCH..HEAD`, and if nonzero,
+  creates `rescue/<JOB_NAME>-<timestamp>` pointing at the current HEAD,
+  logs a `WARNING:` naming the ref and the recovery command, and fires a
+  `notify-send -u critical`, before the reset runs. Verified with a
+  throwaway bare-origin + clone: committed one commit ahead of origin
+  (simulating a died-before-push prior run), ran the exact
+  rescue-then-reset sequence, confirmed the branch tip lands back on
+  origin's commit while `git log --oneline --all` still shows the
+  stranded commit reachable via the new `rescue/...` ref -- no more
+  reflog-window luck required. `bash -n lib/sweep-loop-common.sh` clean.
 
 - **2026-07-25 20:33 (via `scheduler -i`):** from chezz fable-review triage 2026-07-25: make the staleness/freshness checks exit nonzero on failure so a stale run fails loud (fable-review item 3, staleness-check exit-nonzero + sweep-tier ownership) -- scheduler/realisateur-side, chezz can't do this from its own repo; routed here per the never-quietly-decline rule
 
@@ -1523,6 +1586,52 @@ Both are small. Both have already been paid for once.
   file from day one; (c) whatever ships must name what it retires: update
   the `RUNNER_ENV` guidance in `_runner.conf`/docs so the ceiling isn't
   settable in two competing places.
+  **DONE (2026-07-26 paced cycle)** — all three scoping notes honoured.
+  `bin/usage-gate.sh` now resolves `USAGE_CEILING`, `USAGE_MIN_SLACK`,
+  `USAGE_RUSH_BEFORE_RESET_MIN` and `USAGE_PROBE_MODEL` **per field** from:
+  explicit env → `schedule/_usage.<host>.conf` → `schedule/_usage.conf` →
+  its own built-in defaults. (a) the conf dir is resolved the way
+  `usage-paced-runner.sh` already does it (`readlink -f` on `$0`, then the
+  same legacy absolute-path fallback constant) so the copy-not-symlink
+  install at `~/.local/bin/usage-gate.sh` still finds the repo's
+  `schedule/`; `USAGE_CONF_DIR` overrides it for tests. (b) host-scoped
+  `_usage.<host>.conf` supported from day one, same convention as
+  `_paced.<host>.conf`. (c) `schedule/_runner.conf` now says in-file that
+  the gate's pacing knobs do NOT belong in `RUNNER_ENV` and why (env wins,
+  so a stale crontab-line value would silently outrank the conf a human
+  just edited) — the retired path named at the enforcement point, not only
+  in docs. Shipped `_usage.conf` has every knob **commented out** on
+  purpose: the script stays the single definition of each default (a
+  repo-less copy install has to fall back to them regardless), and the file
+  is purely the override layer — so this landed with **zero** change to
+  live pacing. Parsed rather than sourced (the gate holds a live OAuth token
+  and its own `CEILING`/`QUIET` vars at that point); an unparseable or
+  out-of-range value is a loud `ERROR` exit 2 — which every caller already
+  treats as HOLD — naming file+key+value, chosen over warn-and-default
+  because pacing against a typo is the failure you can't see. The verdict
+  line gained one field, `knobs=ceiling:<src>,min_slack:<src>,rush_min:<src>`,
+  so "is my edit live?" is answerable; no new output lines, per the
+  accretion freeze. Fixed in passing: `USAGE_RUSH_BEFORE_RESET_MIN` was read
+  from `os.environ` inside the python core but never passed there, so a
+  conf/shell-var value would have been silently ignored — now passed
+  explicitly. Verified offline with a fake-`curl` harness feeding fabricated
+  rate-limit headers: defaults-when-no-conf, base conf, host conf overriding
+  the base **for that field only** while the base still supplies the others,
+  host conf correctly ignored for a different host, env beating both, a conf
+  ceiling actually flipping the verdict to HOLD (0.20 vs 0.30 util), exit
+  codes 0/1/2, `USAGE_GATE_QUIET=1` still one word, comment-only conf → not
+  an error, an invalid value in the host conf naming the host file, and a
+  bad base value repaired by a valid host override. Plus a real live probe
+  (correct verdict against real headers), a copy-install run from a dir with
+  no sibling `schedule/` (confirmed it takes the legacy absolute path and
+  falls through to defaults cleanly), and both downstream consumers re-run
+  against the new line: `bin/scheduler`'s `pacing_show_human` and
+  `usage-paced-runner.sh`'s log-summary grep. Live evidence the retired path
+  was a real hazard: this cycle's own environment carries a hand-set
+  `USAGE_CEILING=0.99` that appears in no conf at all (`_runner.conf` sets
+  only `PACED_MAX_PER_TICK=16`) — env still wins, so that stays in force
+  until a human drops it or uncomments a value; see DESIGN-NOTES.md
+  2026-07-26 for the full writeup.
 
 - **2026-07-25 11:51 (via `scheduler -i`):** Investigate 'a door': remote idea-intake for 'scheduler -i' so drops don't require originating on mandark, raised via realisateur's 2026-07-25 nightly-batch pass (senechal session origin). PARKED against current milestone (zero-silent-failure unattended dispatch) -- this is a new intake surface, not required to reach it. Scoping done, not built: intake options are (a) SSH-only -- push a signed .idea/text file to a dedicated bare repo over the same SSH path dexter already uses for crt (git-shell-only key, no shell access), a post-receive hook calls cmd_idea/writes FOCUS.md, no new network service; (b) a tiny authenticated HTTP endpoint (webhook-style) that shells out to the same insertion logic -- more reachable from a phone but is a genuinely new internet-facing surface needing its own hardening; (c) email/SMS relay -- adds a third-party dependency and parsing surface for little benefit over (a). Recommend (a) as the only option that reuses the existing SSH-key/git-shell pattern with no new listening service; senechal's own secret-guarding charter makes an internet-reachable file-editing endpoint (b) the one to threat-model hardest if ever chosen. Revisit once scheduler's current milestone is reached.
 
@@ -2999,6 +3108,38 @@ urgency heuristic — same boundary, applied to a second knob.
 - **2026-07-25:** sweep autocommit mislabels and commits mid-session. At 02:00 it committed ~38 half-written files from a live interactive session as "Human edit via scheduler" — provenance record now lies (these were agent writes), and it is "dirty tree is a stop" pointed backwards: the engine edited history out from under a live session. Fix: skip a repo whose session lock / recent mtime says someone is working, and label what it knows ("sweep autocommit: uncommitted changes found"), not what it guesses.
 - **2026-07-25:** **real working copies never pull, so every local edit lands on a stale base.** Measured today: crt 51 commits behind origin, groc-mangr 26, chezz 18, sequestria 15, nine-speakers 12, vim-arcade 11, home-assistant/gardien/senechal 3. Dispatch clones push to origin; nothing pulls the human-facing clones back. Every one of the 9 fable-review commits was rejected non-fast-forward on first push. Fix: a pull/freshness step (sweep tick could `git fetch` + report behind-counts in the glance), or make the working copies genuinely disposable.
 - **2026-07-25:** that staleness already strands work silently. `bin/scheduler:686-692` warns "N commits behind — committing anyway", commits, and its push then fails; the message scrolls past in cron output. vim-arcade carried an unpushed `Idea added via 'scheduler -i'` commit that had been invisible to every dispatch since (rebased and pushed today). The freshness check is a warning where it needs to be a stop or a fix — same class as the aedile/vkv orphaning, different mechanism.
+  **DONE (2026-07-26 paced cycle) — it is now a fix where one is safe, and
+  a loud stop where it isn't.** `cmd_commit_file` (the ONE implementation
+  behind `scheduler -i`, the vim auto-commit hook, `sweep`'s .md backstop,
+  `pacing tick`, `weight`, and `-b --claude`'s tidy) now splits the
+  behind-origin case three ways instead of printing one NOTE and
+  committing onto the stale base regardless: **behind only, fast-forward
+  clean** → `git merge --ff-only origin/$branch` first, so the edit lands
+  on origin's current state and pushes normally (this is the common case —
+  the same fetch+`--ff-only` move `usage-paced-runner.sh` already makes
+  every tick, so no new policy); **behind, FF refused** (origin touched the
+  same file) → commit locally, skip the push, and say so as a `WARNING:`
+  naming git's own reason and the recovery command; **genuinely diverged**
+  (ahead AND behind) → never fast-forwarded, never auto-merged, same rule
+  `report_divergence` already states. Second half of the same defect,
+  fixed with it: the push was `push --quiet 2>/dev/null` and the failure
+  message then GUESSED the cause ("check credentials/network"). It now
+  captures git's output and prints a real `push reason:` line — same
+  convention `lib/sweep-loop-common.sh` already uses. Live witness for why
+  the guess wasn't good enough: wtul's working copy is carrying
+  `Human edit via scheduler: QUESTIONS.md (2026-07-26T23:30)` unpushed
+  right now, and because the old code discarded stderr, *why* is
+  unknowable after the fact — a read-only `git push --dry-run` today says
+  the push would succeed. Verified with an 8-case offline harness over
+  throwaway bare-origin+clone repos (in-sync, behind-FF, FF-blocked-by-
+  untracked, diverged, push-fails-for-a-real-reason, no-op, tracked-file-
+  dirty-FF-clean, tracked-file-dirty-FF-refused): every "should land" case
+  ends with HEAD on origin and **zero merge commits created**, every
+  "should stop" case leaves the local edit byte-intact and prints the
+  reason + recovery line. `bash -n bin/scheduler` clean. Not covered, on
+  purpose: the parallel finding above it (working copies never pull at
+  all) — this fixes the write path that strands ideas, not the general
+  behind-origin audit, which stays queued below.
 - **2026-07-25:** a project's FOCUS.md path is not discoverable — inject-suggestions.sh hardcoded 14 paths and broke the day chezz moved `.claude/`→`.scheduler/`. `SCHEDULER_SUBDIR` already exists in the confs; anything that wants a project's FOCUS.md should resolve it through one shared helper, not retype the path (config-read-from-one-source).
 - **2026-07-25:** `lib/sweep-loop-common.sh:229-231` — `git checkout "$BRANCH"`, `git fetch`, and `git reset --hard "origin/$BRANCH"` are all unchecked (no `set -e`). The 2026-07-24 dexter fix guarded the clone and explicitly noted these "silently failed too", but only the clone got the check. Live consequence: home-assistant's wrapper sets no BRANCH, so it defaults to `main` while baudin only has `master` — every pass logs `error: pathspec 'main' did not match` + `fatal: ambiguous argument 'origin/main'`, the reset-to-origin guarantee silently does not apply, the push check reports "could not read origin/main ... looks like an SSH/auth/network failure" (wrong diagnosis), and the run's own summary claimed "Everything's committed, pushed, and reports are in sync" while a real commit sat unpushed. Fix: check all three, and default BRANCH to the remote's actual HEAD (`git ls-remote --symref origin HEAD`) rather than the literal string `main`.
 - **2026-07-25:** BRANCH is per-wrapper and invisible from the conf, so a FOCUS.md edit can land on a branch dispatch never reads. wtul's working copy sits on `label-printer-integration` while `wtul-batch-loop.sh` reads `main` — anything committed in the working copy without switching branches is invisible to the job. Same shape as the SCHEDULER_SUBDIR miss: a per-project path/ref that a survey can't see and nothing asserts.

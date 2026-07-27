@@ -14,7 +14,7 @@
 #
 # NOT wired up anywhere yet. To actually use: copy this per project,
 # fill in the config block, add a REAL .claude/commands/nightly-batch.md
-# (see ../examples/nightly-batch.md.template) and a REAL .claude/FOCUS.md
+# (see ../examples/nightly-batch.md.template) and a REAL .scheduler/FOCUS.md
 # (see ../examples/FOCUS.md.template) to that project's repo, then add a
 # crontab entry (see README.md's "Open decisions" for timing).
 
@@ -32,7 +32,7 @@ MAX_TURNS=200
 PROMPT="/nightly-batch
 
 This is a fully unattended overnight run with no human review step.
-Read .claude/FOCUS.md FIRST -- everything you do tonight is scoped by
+Read .scheduler/FOCUS.md FIRST -- everything you do tonight is scoped by
 that file. An accumulated feature idea or report that is not in service
 of the current focus should be written up as deferred in tonight's
 report, not implemented, no matter how easy it looks.

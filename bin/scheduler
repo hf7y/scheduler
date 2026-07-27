@@ -186,8 +186,10 @@ usage: scheduler [command] [project]
                          that predates a ~/.vimrc change never fires new
                          autocmds). Safely auto-commits AND pushes dirty
                          *.md files one at a time (same tested logic as
-                         `-i`; auto-push skipped and left local-only if
-                         behind origin); never
+                         `-i`; if the repo is merely behind origin it
+                         fast-forwards FIRST so the edit still lands,
+                         rather than stranding a local-only commit no
+                         dispatch will ever see); never
                          touches non-.md files or attempts to resolve a
                          genuine ahead+behind divergence -- those are only
                          ever reported, never auto-resolved.
@@ -311,7 +313,12 @@ WHAT `scheduler` (THIS TOOL) DOES AND DOESN'T DO
   auto-commits (and, where safe, auto-pushes) dirty *.md files a vim
   autocmd hook may have missed -- it never touches non-.md files and
   never resolves a genuine ahead+behind divergence itself, only reports
-  it. Nothing this tool does merges a branch or deploys anything.
+  it. If that repo is merely BEHIND origin (no local-only commits), it
+  fast-forwards first so your edit lands on origin instead of sitting
+  local-only where no dispatch can see it; if it can't fast-forward, it
+  says so loudly and names the recovery command rather than leaving a
+  quiet stranded commit. Nothing this tool does merges a branch or
+  deploys anything.
 
 WHAT'S NOT BUILT YET (don't assume these exist)
   - AUTONOMY_TIER (a per-project push/merge/deploy trust dial) is
@@ -869,6 +876,15 @@ cmd_pacing() {
   esac
 }
 
+# oneline <text> -- collapse a multi-line git error into one readable line.
+# Reporting only the FIRST line loses the part that matters (git puts the
+# summary first and the offending filenames after it, e.g. "The following
+# untracked working tree files would be overwritten by merge:" / "<file>"),
+# and the callers below print these inside a single "reason:" line.
+oneline() {
+  printf '%s' "$1" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//' | cut -c1-300
+}
+
 cmd_commit_file() {
   # THE single implementation of "safely auto-commit one file, with a
   # staleness warning first" -- shared by `scheduler -i` (calls this
@@ -910,19 +926,64 @@ cmd_commit_file() {
   # fetch` against a local bare remote (~/git-remotes/*.git, most projects
   # here) is effectively instant; against a real GitHub remote it's a
   # normal network round-trip -- worth it for what it catches.
-  local branch behind
+  #
+  # 2026-07-26: the check used to STOP at warning -- it printed a NOTE,
+  # committed onto the stale base anyway, then skipped the push. That is
+  # not a warning about a stranded commit, it is the thing that MANUFACTURES
+  # one: a scheduled run resets its own dedicated clone `--hard` to origin
+  # before every dispatch, so a local-only commit is exactly as invisible to
+  # dispatch as an uncommitted edit, and the NOTE scrolls past in cron
+  # output. Real cost, twice over: vim-arcade and wtul both carried
+  # `Idea added via 'scheduler -i'` commits that no dispatch ever saw
+  # (FOCUS.md, 2026-07-25 propagation findings -- "the freshness check is a
+  # warning where it needs to be a stop or a fix"). It is now a FIX for the
+  # only case that can be fixed automatically, and a loud stop otherwise.
+  local branch behind ahead ff_out stall_reason=""
   branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
   git -C "$repo" fetch --quiet 2>/dev/null
   behind="$(git -C "$repo" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+  ahead="$(git -C "$repo" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
   if [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
-    echo "NOTE: $repo is $behind commit(s) behind origin/$branch -- committing anyway (your edit is safe), but pull/merge before pushing to avoid a real divergence"
+    if [ "${ahead:-0}" -gt 0 ] 2>/dev/null; then
+      # Genuinely diverged. Never automatic -- same rule report_divergence
+      # already states ("NOT auto-resolved, ever").
+      stall_reason="DIVERGED from origin/$branch ($ahead local-only, $behind remote-only commit(s)) -- reconciling that is a merge decision, never an automatic one"
+      echo "WARNING: $repo has DIVERGED from origin/$branch -- $ahead local-only, $behind remote-only commit(s). Committing your edit locally, but NOT fast-forwarding or pushing: that needs a real merge decision."
+    elif ff_out="$(git -C "$repo" merge --ff-only "origin/$branch" 2>&1)"; then
+      # Pure fast-forward: no merge decision exists to get wrong, and
+      # --ff-only refuses rather than inventing a merge commit or
+      # clobbering local changes, so this can only succeed when it is
+      # safe. The edit itself is untracked/modified in the worktree at
+      # this point, so it survives the fast-forward and then commits on
+      # top of origin's current state -- and can push.
+      echo "$repo was $behind commit(s) behind origin/$branch -- fast-forwarded first so this edit lands on origin's current state"
+      behind=0
+    else
+      stall_reason="behind origin/$branch by $behind commit(s) and NOT fast-forwardable -- git said: $(oneline "$ff_out")"
+      echo "WARNING: $repo is $behind commit(s) behind origin/$branch and could NOT fast-forward -- committing locally (your edit is safe) but the push will be skipped. Reason: $(oneline "$ff_out")"
+    fi
   fi
   [ -n "$msg" ] || msg="Human edit via scheduler: $(basename "$path") ($(date '+%Y-%m-%dT%H:%M'))"
   if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "$msg" -- "$path"; then
-    if [ "${behind:-0}" -eq 0 ] 2>/dev/null && git -C "$repo" push --quiet 2>/dev/null; then
+    local push_out="" push_rc=0
+    if [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
+      echo "WARNING: committed locally in $repo but NOT pushed -- a scheduled run resets its own clone --hard to origin, so this edit stays invisible to dispatch until it lands on origin."
+      echo "  push reason: $stall_reason"
+      echo "  recover with: git -C \"$repo\" pull --rebase && git -C \"$repo\" push"
+      return 0
+    fi
+    # Was `push --quiet 2>/dev/null`, which threw the failure away and then
+    # GUESSED at the cause ("check credentials/network"). Same lesson as
+    # lib/sweep-loop-common.sh's `push reason:` line: say WHY, from the
+    # command's own output, rather than offering a plausible diagnosis
+    # nobody verified.
+    push_out="$(git -C "$repo" push 2>&1)"; push_rc=$?
+    if [ "$push_rc" -eq 0 ]; then
       echo "committed + pushed in $repo"
     else
-      echo "committed locally in $repo -- run 'git -C \"$repo\" push' by hand (auto-push skipped: $([ "${behind:-0}" -gt 0 ] 2>/dev/null && echo "behind origin, resolve divergence first" || echo "push failed, check credentials/network"))"
+      echo "WARNING: committed locally in $repo but NOT pushed -- a scheduled run resets its own clone --hard to origin, so this edit stays invisible to dispatch until it lands on origin."
+      echo "  push reason: git push exited $push_rc -- $(oneline "$push_out")"
+      echo "  recover with: git -C \"$repo\" push"
     fi
   else
     echo "(auto-commit failed -- left as an uncommitted edit at $path; commit by hand)" >&2
@@ -1723,7 +1784,19 @@ cmd_sweep() {
         while IFS= read -r rel; do
           [ -n "$rel" ] || continue
           echo "== $name: auto-committing $rel =="
-          cmd_commit_file "$path/$rel"
+          # Honest attribution: this branch adopts whatever dirty .md a repo
+          # happens to have, which is NOT necessarily scheduler's own edit or
+          # even a human's -- it could be a live interactive session's
+          # in-progress work that the vim auto-commit hook hasn't caught yet
+          # (a hook that predates a ~/.vimrc change, or a non-vim editor).
+          # cmd_commit_file's own fallback message ("Human edit via
+          # scheduler: ...") asserts authorship this call site cannot know,
+          # which is exactly what mis-attributed a live session's edit under
+          # Zach's own name in realisateur (93ad456, 2026-07-26) -- see
+          # .scheduler/QUESTIONS.md same date. Pass an explicit message that
+          # names this as the reactive sweep backstop, not a human or
+          # scheduler-authored edit.
+          cmd_commit_file "$path/$rel" "scheduler sweep: adopted dirty $rel (reactive backstop -- author unknown, possibly a live session not yet auto-committed) ($(date '+%Y-%m-%dT%H:%M'))"
         done <<< "$dirty_md"
       fi
     fi
@@ -1962,6 +2035,27 @@ cmd_sweep() {
       echo "$conf_check_out" | sed 's/^/  /'
     else
       echo "managed config clean ($conf_check_out)"
+    fi
+  fi
+
+  # Ninth pass: installed-vs-git drift (bin/deploy-drift-check.sh). Found
+  # live 2026-07-26: ~/.local/bin/usage-paced-runner.sh -- the file cron
+  # actually runs every 5 minutes -- is a hand-made COPY, one commit behind
+  # the repo, and being a copy ALSO silently disabled its own auto-pull
+  # (that block derives the repo from its own path, which under a copy
+  # install is ~/.local, not a checkout: 0 PULL lines in its whole run.log).
+  # So "the improvement we committed is live" was an assumed external
+  # dependency that had quietly stopped being true -- the milestone's own
+  # failure class, and BUILD-DISCIPLINE's "deploy verified against a git
+  # ref; drift fails loud." Read-only like every pass above: it reports,
+  # a human runs the `ln -sfn` (installed wrappers stay outside this
+  # repo's write scope).
+  if [ -x "$SCHED_ROOT/bin/deploy-drift-check.sh" ]; then
+    local deploy_check_out
+    deploy_check_out="$("$SCHED_ROOT/bin/deploy-drift-check.sh" 2>&1)"
+    if [ $? -ne 0 ]; then
+      echo "== [deploy-drift] installed scripts do not match git =="
+      echo "$deploy_check_out" | sed 's/^/  /'
     fi
   fi
 

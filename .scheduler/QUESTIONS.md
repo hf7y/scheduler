@@ -101,6 +101,42 @@ its line once you've actually read and dealt with it.
   loud channel there).
 
 
+- **2026-07-26 (via /nightly-batch, paced cycle): should the three
+  installed COPIES under `~/.local/bin` become symlinks into the checkout?
+  Detection is built; the fix is one `ln -sfn` each and I won't run it --
+  installed wrappers are outside an unattended cycle's write scope, and
+  the choice is a real policy call, not a typo.** Verified live this
+  cycle: `~/.local/bin/usage-paced-runner.sh` (what cron runs every 5
+  minutes) is a copy matching `d431e8b` (2026-07-24), one commit behind
+  `origin/main`; `scheduler-dev-cycle.sh` and `usage-gate.sh` are copies
+  that match today; only `scheduler` is a symlink. The sharper half is
+  that a copy install doesn't just go stale, it **changes behavior**: the
+  runner's auto-pull (built 2026-07-24 so a commit on one host reaches
+  the other) resolves its repo from its own path, gets `~/.local` under a
+  copy install, finds no git dir, and skips the pull entirely -- 0 `PULL`
+  lines in 1633 lines of its `run.log`, and 11 `[legacy absolute path]`
+  fallbacks for the same reason. The two answers I can see:
+  (a) **symlink all three** (`ln -sfn "<checkout>/bin/<name>"
+  ~/.local/bin/<name>`) -- every merged commit is live immediately, the
+  auto-pull and the repo-relative `_paced.conf` resolution both start
+  working, and drift becomes impossible rather than merely detected;
+  (b) **keep them copies on purpose**, as a manual deploy gate so a bad
+  commit doesn't reach a 5-minute cron tick unreviewed -- in which case
+  the runner needs an explicit repo path (e.g. a `SCHEDULER_REPO_ROOT`
+  in `_runner.conf`'s `RUNNER_ENV`) instead of path-derived resolution,
+  because today it silently gets neither behavior.
+  I've built the detector either way: `bin/deploy-drift-check.sh`, wired
+  into `scheduler sweep`, which now prints all three findings with the
+  exact `ln -sfn` line -- so under (b) the sweep will keep flagging the
+  copies, and that noise is itself a reason to answer rather than leave
+  it. Related, seen the same pass and *not* drift: today's paced cycles
+  ran with a hand-set `USAGE_CEILING` (0.95, then 0.99) while
+  `sync-crontab.sh`'s preview still emits only `PACED_MAX_PER_TICK=16` --
+  the crontab is consistent with the repo; the ceiling was overridden
+  per-invocation, which is exactly the ephemeral-override pain the
+  "make the usage-gate ceiling settable from a config file" backlog item
+  (2026-07-25 17:06) is about.
+
 - **2026-07-24 (RESOLVED BY THE 2026-07-24 dexter self-build -- items 1
   and 3 of the old MVP-setup entry).** Item 1 (Claude Code installed on
   dexter, logged into the same primary Max account): confirmed --
@@ -280,6 +316,43 @@ its line once you've actually read and dealt with it.
   one-line edit, `date +%Y-%m-%d` -> `date +%Y-%m-%dT%H%M` at line 68) or
   an explicit permission grant for that one path if unattended cycles
   should be able to fix their own command files going forward.
+
+- **2026-07-26 (via `/nightly-batch`, paced cycle): the live ceiling
+  (`USAGE_CEILING=0.99`) is set somewhere I can't see or edit — do you want
+  it moved into `schedule/_usage.conf`, and at what value?** Built this
+  cycle: the gate now reads its pacing knobs from `schedule/_usage.conf` /
+  `_usage.<host>.conf`, so a durable ceiling is a one-line conf edit instead
+  of a `RUNNER_ENV` + `--apply` round trip that ends up on a crontab line
+  (commit `4355972`, FOCUS.md backlog item 2026-07-25 17:06). Env still
+  outranks the conf, deliberately — one-off `USAGE_CEILING=x` tests keep
+  working.
+
+  The catch, found while testing: **this cycle's own environment carries
+  `USAGE_CEILING=0.99`, and that value appears in no conf in this repo.**
+  `schedule/_runner.conf` sets only `PACED_MAX_PER_TICK=16`, and an earlier
+  cycle today already noted the crontab preview matches the repo — so 0.99
+  is a hand-set override living outside version control (an earlier cycle
+  logged it as "hand-set 0.95 → 0.99"). I did not go looking in the live
+  crontab: reading it means running `crontab`, which this job is forbidden
+  to do. Because env wins, **live pacing is unchanged by my commit** — 0.99
+  stays in force until you act.
+
+  Three things I'd want your call on rather than guessing:
+  1. **Should 0.99 become the committed value** in `_usage.conf` (uncomment
+     `USAGE_CEILING=0.99`), or was it a temporary push toward a quota
+     deadline that should decay back to the 0.85 default? At the moment I
+     checked, the 7d window was at 90% utilisation — at the 0.85 default the
+     gate returns HOLD, so this is the difference between dispatching and
+     not, i.e. don't let it drift by accident either way.
+  2. **Once it's in the conf, the ambient env value should be dropped** from
+     wherever it's set — otherwise the conf is decorative and the real value
+     is still invisible. That edit is outside this repo (a `crontab -e`, or
+     whatever shell/wrapper exports it), so it's yours.
+  3. **Per-host or shared?** `_usage.dexter.conf` would let dexter keep more
+     headroom now that two hosts probe one account budget
+     (DESIGN-NOTES.md:807 anticipated exactly this). I built the mechanism
+     but set no host-scoped value — nothing suggests dexter needs a
+     different ceiling *yet*.
 
 - **2026-07-27 (paced cycle): both NAMED halves of the axis-1 sequencing
   gate are now done, but the gate's stated INTENT isn't met. Does the

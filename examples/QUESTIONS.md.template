@@ -1,16 +1,20 @@
 # Questions for the user
 
-<!-- Copy this to .claude/QUESTIONS.md in a project's repo (or just let
+<!-- Copy this to .scheduler/QUESTIONS.md in a project's repo (or just let
      /bug-sweep or /nightly-batch create it on first use -- both commands
-     already know to). Running log, appended to (never overwritten or
-     trimmed) by either command whenever something bigger than a routine
-     tracker note comes up -- an ambiguous policy question, a real
-     tradeoff, a "which of these two directions" fork. This is the "can
-     both tiers flag something for me, somewhere I can easily find it"
-     answer -- deliberately a real file at the repo root, not buried in
-     ~/reports/, so opening the project itself surfaces it (and it's
-     symlinked into scheduler/questions/<project>.md + printed by
-     bin/morning-report.sh). -->
+     already know to). NOT .claude/QUESTIONS.md -- the harness's
+     sensitive-file gate makes .claude/ unwritable from inside an
+     unattended run, which is exactly what needs to write this file.
+     Set SCHEDULER_SUBDIR=".scheduler" in this project's
+     schedule/<project>.conf to match. Running log, appended to (never
+     overwritten or trimmed) by either command whenever something bigger
+     than a routine tracker note comes up -- an ambiguous policy
+     question, a real tradeoff, a "which of these two directions" fork.
+     This is the "can both tiers flag something for me, somewhere I can
+     easily find it" answer -- deliberately a real file at the repo
+     root, not buried in ~/reports/, so opening the project itself
+     surfaces it (and it's symlinked into scheduler/questions/<project>.md
+     + printed by bin/morning-report.sh). -->
 
 ## How to answer (this is the two-way interface)
 
