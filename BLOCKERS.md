@@ -75,7 +75,6 @@ only ever sees its own section, never another project's.
   -- or "take the custom fairy-piece font track instead, which has no
   such gate" -- is all that's needed; until then the report stays open
   by design, not by neglect.
-> Yes, pursue the gemini path, safe bounded account balance exists for
   testing precisely this. Lift creds from vkv-inventory if possible
   pending the creation of chezz specific ones
 
@@ -113,7 +112,6 @@ only ever sees its own section, never another project's.
   and per-project recipe live in realisateur `.scheduler/FOCUS.md`
   (2026-07-26 migration entry). realisateur itself is already done
   (`fa222cb` + `1284b58`).
-> This has been handled. Report noisy if it hasn't. 
 
 ## scheduler
 
