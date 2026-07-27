@@ -217,39 +217,47 @@ INTERACTIVE_MARKER="$REGISTRY_DIR/${PROJECT_KEY}.interactive"
 DEFER_COUNT_FILE="$STATE_DIR/interactive_deferrals"
 INTERACTIVE_DEFER_MAX="${INTERACTIVE_DEFER_MAX:-3}"
 
-HUMAN_PID="$(awk -F= '$1=="pid"{print $2}' "$INTERACTIVE_MARKER" 2>/dev/null || true)"
-if [ -n "$HUMAN_PID" ] && ! kill -0 "$HUMAN_PID" 2>/dev/null; then
-  HUMAN_PID=""    # stale marker: its writer is gone, so nobody is editing
+# The probe/cap policy itself now lives in lib/registry-lock.sh so the
+# scheduler's own dev cycle obeys the same rule (2026-07-27) -- it had no
+# registry participation at all and used a dirty-tree heuristic instead.
+# Behaviour here is unchanged; only the decision moved. This file keeps the
+# LOG WORDING, because the exit-code vocabulary (4 = deferred) and the
+# ===-delimited run record are this job engine's contract, not the policy's.
+# shellcheck source=lib/registry-lock.sh
+. "$(dirname "${BASH_SOURCE[0]}")/registry-lock.sh"
+
+if registry_should_defer "$PROJECT_KEY" "$DEFER_COUNT_FILE" "$INTERACTIVE_DEFER_MAX"; then
+  HUMAN_PID="$REGISTRY_DEFER_PID"
+  HUMAN_SINCE="$REGISTRY_DEFER_SINCE"
+  DEFERRALS="$REGISTRY_DEFER_COUNT"
+  NOW_IS="$(date -Is)"
+  # A real ===-delimited run record, same reasoning as the expiry block
+  # below: a bare prose line is invisible to `scheduler status`, which
+  # would then re-report the PREVIOUS run as this project's current state
+  # and hide the fact that it has been standing down.
+  {
+    echo "=== $NOW_IS ==="
+    echo "deferred -- a human is editing '$PROJECT_KEY' right now (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}); no work attempted (no clone, no claude)."
+    echo "deferral $DEFERRALS of $INTERACTIVE_DEFER_MAX; the next dispatch runs anyway and says so loudly. Marker: $INTERACTIVE_MARKER"
+    echo "=== skipped (human editing, deferral $DEFERRALS/$INTERACTIVE_DEFER_MAX) $NOW_IS (0s) ==="
+  } >> "$LOG"
+  # Exit 4: distinct from success (0), fatal (1) and expired (3), so
+  # usage-paced-runner.sh's `rc=` line tells deferred from worked without
+  # parsing this log. The rotation simply comes back next tick.
+  exit 4
 fi
 
-if [ -n "$HUMAN_PID" ]; then
-  DEFERRALS="$(cat "$DEFER_COUNT_FILE" 2>/dev/null || echo 0)"
-  case "$DEFERRALS" in ''|*[!0-9]*) DEFERRALS=0 ;; esac
-  DEFERRALS=$(( DEFERRALS + 1 ))
-  HUMAN_SINCE="$(awk -F= '$1=="started_at"{print $2}' "$INTERACTIVE_MARKER" 2>/dev/null || true)"
-  if [ "$DEFERRALS" -le "$INTERACTIVE_DEFER_MAX" ]; then
-    echo "$DEFERRALS" > "$DEFER_COUNT_FILE"
-    NOW_IS="$(date -Is)"
-    # A real ===-delimited run record, same reasoning as the expiry block
-    # below: a bare prose line is invisible to `scheduler status`, which
-    # would then re-report the PREVIOUS run as this project's current state
-    # and hide the fact that it has been standing down.
-    {
-      echo "=== $NOW_IS ==="
-      echo "deferred -- a human is editing '$PROJECT_KEY' right now (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}); no work attempted (no clone, no claude)."
-      echo "deferral $DEFERRALS of $INTERACTIVE_DEFER_MAX; the next dispatch runs anyway and says so loudly. Marker: $INTERACTIVE_MARKER"
-      echo "=== skipped (human editing, deferral $DEFERRALS/$INTERACTIVE_DEFER_MAX) $NOW_IS (0s) ==="
-    } >> "$LOG"
-    # Exit 4: distinct from success (0), fatal (1) and expired (3), so
-    # usage-paced-runner.sh's `rc=` line tells deferred from worked without
-    # parsing this log. The rotation simply comes back next tick.
-    exit 4
-  fi
-  # Cap reached -- proceed, but never quietly.
+# Proceeding. registry_should_defer() returns 1 both when nobody is there and
+# when the starvation cap fired -- REGISTRY_DEFER_CAPPED distinguishes them,
+# and the capped case must never be quiet.
+if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
+  HUMAN_PID="$REGISTRY_DEFER_PID"
+  HUMAN_SINCE="$REGISTRY_DEFER_SINCE"
+  DEFERRALS="$REGISTRY_DEFER_COUNT"
   echo "$(date -Is) WARNING: proceeding despite a live interactive session on '$PROJECT_KEY' (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}) -- $DEFERRALS consecutive deferrals reached INTERACTIVE_DEFER_MAX=$INTERACTIVE_DEFER_MAX. This run may write files you have open; your editor's next save reconciles via the vimrc 3-way merge." >> "$LOG"
   notify-send -u critical "$JOB_NAME: running while you edit" "$PROJECT_KEY deferred $DEFERRALS times and is now running anyway (INTERACTIVE_DEFER_MAX=$INTERACTIVE_DEFER_MAX). Close the editor or expect a merge on save." 2>/dev/null || true
+  rm -f "$DEFER_COUNT_FILE"
 fi
-rm -f "$DEFER_COUNT_FILE"
 
 echo "{\"job\":\"$JOB_NAME\",\"tier\":\"$TIER\",\"started_at\":\"$(date -Is)\",\"pid\":$$}" > "$REGISTRY_MARKER"
 trap 'rm -f "$REGISTRY_MARKER"' EXIT

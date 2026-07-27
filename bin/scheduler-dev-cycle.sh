@@ -198,9 +198,53 @@ if ! flock -n 200; then
   echo "$(date -Is) paced-dev already running, skipping" >> "$LOG"
   exit 0
 fi
+
+# ---- The shared lockout (2026-07-27) --------------------------------------
+# This script used to take the private $LOCK above and NOTHING else: no
+# registry lock, no .active marker, and -- the one that mattered -- no read of
+# the .interactive marker that says a human is in this repo. Every OTHER
+# project's job got both halves from lib/sweep-loop-common.sh; the scheduler's
+# own cycle, the one editing the scheduler, was the single job exempt from the
+# scheduler's own lockout.
+#
+# In its place it inferred human presence from `git status --porcelain` being
+# clean (see the merge below). That proxy is what stranded 14 commits across
+# 2026-07-25/26: a dirty tree is not a person (a `sweep` autocommit trips it
+# too), it cannot tell "busy now" from "busy forever" so it has no starvation
+# cap, and its only response was to give up permanently.
+#
+# The clean-tree test STAYS where it is -- you genuinely cannot merge into a
+# dirty tree -- but it is now a git precondition, which is all it ever was.
+# "Is a human here" is answered by the marker, which is the question it was
+# built for.
+# shellcheck source=../lib/registry-lock.sh
+. "$SCHED_REPO/lib/registry-lock.sh"
+
+PROJECT_KEY="scheduler"
+DEFER_COUNT_FILE="$STATE_DIR/interactive_deferrals"
+INTERACTIVE_DEFER_MAX="${INTERACTIVE_DEFER_MAX:-3}"
+
+if ! registry_claim "$PROJECT_KEY" "$JOB_NAME" "paced-dev"; then
+  echo "$(date -Is) project '$PROJECT_KEY' already has an active job (${REGISTRY_HOLDER:-unknown}) -- skipping to avoid a concurrent-push conflict" >> "$LOG"
+  exit 0
+fi
+
+if registry_should_defer "$PROJECT_KEY" "$DEFER_COUNT_FILE" "$INTERACTIVE_DEFER_MAX"; then
+  echo "$(date -Is) deferred -- a human is working in '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}); deferral $REGISTRY_DEFER_COUNT of $REGISTRY_DEFER_MAX, then this runs anyway and says so. Nothing is stranded by deferring: reconcile_prior_cycles() picks up any unmerged branch next cycle." >> "$LOG"
+  registry_release
+  exit 4
+fi
+if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
+  echo "$(date -Is) WARNING: proceeding despite a live interactive session on '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}) -- $REGISTRY_DEFER_COUNT consecutive deferrals hit INTERACTIVE_DEFER_MAX=$REGISTRY_DEFER_MAX. This cycle may write files you have open." >> "$LOG"
+  notify-send -u critical "$JOB_NAME: running while you edit" "scheduler self-dev deferred $REGISTRY_DEFER_COUNT times and is now running anyway." 2>/dev/null || true
+  rm -f "$DEFER_COUNT_FILE"
+fi
 [ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
-cleanup() { cd "$SCHED_REPO" 2>/dev/null && git worktree remove --force "$WORKTREE" 2>/dev/null || true; }
+cleanup() {
+  registry_release
+  cd "$SCHED_REPO" 2>/dev/null && git worktree remove --force "$WORKTREE" 2>/dev/null || true
+}
 trap cleanup EXIT
 
 {
