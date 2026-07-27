@@ -311,3 +311,60 @@ its line once you've actually read and dealt with it.
   Not decided here: FOCUS.md's own text names (i)+(ii) as the gate, so
   picking (b) is adding a requirement, and picking (a) is accepting a
   gap the decision's own rationale was about. Human call.
+
+- **2026-07-27 (interactive session): a paced cycle that declines to merge
+  strands its work PERMANENTLY -- 14 commits currently orphaned. Should
+  the dirty-tree fallback retry, or should the next day's branch fork from
+  the previous branch instead of `main`?** Verified by reading
+  `~/.local/share/scheduler-paced-dev/*.log`, not inferred: the merge in
+  `bin/scheduler-dev-cycle.sh` is gated on the main checkout being clean
+  AND on `main`. When a human is mid-edit (vim on `BLOCKERS.md`, or a
+  `sweep` autocommit in flight) the cycle logs `merge_mode=merge but
+  ... isn't clean/on-main right now ... leaving <branch> unmerged, safe
+  fallback` and moves on. That fallback IS safe. What is not safe is that
+  **nothing ever retries it**: the next day, `git worktree add -b
+  paced/<newdate> ... main` forks from `main`, so the prior day's tail is
+  orphaned with no mechanism pointing at it again. Once the first dirty-
+  tree collision of a day happens, every later cycle that day is lost too.
+  Live damage as of today: `paced/2026-07-25` (7 commits, stranded after
+  the 00:53 merge) and `paced/2026-07-26` (7 commits, 3 logged fallbacks).
+  This is NOT duplicated work that later cycles redid -- checked file by
+  file: `bin/deploy-drift-check.sh`, `schedule/_usage.conf`,
+  `docs/scheduler-cli.md`, the `RESCUE_REF` unpushed-commit guard in
+  `lib/sweep-loop-common.sh`, usage-gate reading `_usage.conf`, and the
+  `scheduler man` page are ALL absent from `main`. Both branches now
+  conflict against `main` (overlap in `bin/scheduler`, `README.md`,
+  `.scheduler/FOCUS.md`, `QUESTIONS.md`, `DESIGN-NOTES.md`,
+  `schedule/_paced.conf`), so recovery is a real merge, not a fast-forward.
+  Sharpest detail: `f08c0f1 scheduler -i / sweep: fast-forward instead of
+  stranding the commit` is itself stranded on the branch it would have
+  helped. Human call on both the recovery (merge the two tails vs
+  cherry-pick vs abandon) and the fix (retry-on-next-cycle vs fork the new
+  day's branch from the last unmerged one vs make the merge not need a
+  clean tree at all, since it merges INTO main from a worktree).
+
+- **2026-07-27 (interactive session): should `EXPIRY_DAYS` keep measuring
+  wall-clock from renewal, when an outage silently spends the whole
+  lease?** Not a bug -- `lib/sweep-loop-common.sh:266` writes the stamp
+  only when the file is missing, and line 273 documents that explicitly.
+  So the lease is 7 days from renewal regardless of whether the job ever
+  got to run. What that did in practice, reconstructed from heartbeats and
+  sweep logs: the 2026-07-19/20 monthly-spend cutoff stopped the fleet
+  (`vkv-inventory-nightly-batch` logged `You've hit your monthly spend
+  limit` and FAILED); three jobs then burned their entire remaining lease
+  while BLOCKED FROM RUNNING and expired on 07-23/24/25 having produced
+  nothing -- `chezz-bug-sweep`, `vkv-inventory-bug-sweep`,
+  `vkv-inventory-nightly-batch`, all still dark 8 days later. The two
+  whose leases outlasted the outage (`crt`, `realisateur`) resumed fine
+  once the account moved to Max on 07-24, which is what isolates the cause
+  to lease-vs-outage overlap rather than anything job-specific.
+  Compounding it, expiry surfaces only via a transient `notify-send` and a
+  manually-run `scheduler sweep` -- which is why nobody noticed for 8
+  days. Three ways to read it: (a) working as intended, a lease is a
+  human-reaffirmation cadence and outages are irrelevant to it -- fix only
+  the VISIBILITY; (b) pause or extend the lease while the usage gate is
+  holding, so a lease measures actual opportunity to run; (c) keep
+  wall-clock but make expiry-while-never-having-run a distinct, louder
+  state than ordinary expiry. Human call -- this is a safety mechanism's
+  semantics, so it should not change as a side effect of a maintenance
+  pass.
