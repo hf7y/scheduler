@@ -984,6 +984,31 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-27 01:49 (via `scheduler -i`):** (from realisateur /ideate 2026-07-27, follow-up to the two guards filed earlier tonight) THIRD proposal, and this one is the reason the other two matter: bin/blockers-freshness-check.sh was silently blinded for two days and reported a clean summary the entire time.
+
+WHAT HAPPENED. ec89b84 (chezz's machine-append, 2026-07-25) inserted its "## chezz" section at the first "## " it found in BLOCKERS.md. That occurrence was inside the header's own explanatory sentence -- the one that tells the reader where resolved entries go, and does so by naming the heading: "...actually moves it down into `## Recently resolved` or deletes it."
+
+The header got cut mid-clause and its tail was left wearing a heading it never had: a second "## Recently resolved" at line 91, 372 lines ahead of the real one at line 463.
+
+blockers-freshness-check.sh scopes itself to the active section as "everything before the first ## Recently resolved" (its own comment, line 41; the awk stops on /^##[[:space:]]+[Rr]ecently [Rr]esolved/). From ec89b84 onward that was line 91. Every project's real blockers -- scheduler, aedile, wtul, crt, vkv-inventory, gardien, senechal, realisateur -- sat below it, in what the script understood to be already-resolved history.
+
+MEASURED, NOT INFERRED. Same script, only the file differs:
+  corrupt file:  == summary: 0/0 active project section(s) flagged ==
+  repaired file: == summary: 4/9 active project section(s) flagged ==
+                 (crt, realisateur, senechal, vkv-inventory all STALE-BY-DRIFT)
+
+Zero out of zero. Not an error, not an empty result -- a clean bill of health, in the standard format, from a check that had been blinded. The corruption's first casualty was the only script watching for it.
+
+ASKED FOR, two changes, both small:
+
+1. A section-scoped reader that finds ZERO sections must report UNKNOWN or FATAL, never zero findings. A file known to have sections and suddenly having none is a parse failure wearing a passing summary. Concretely: if $projects is empty, or if the active section is empty while the file is non-trivially sized, exit nonzero with a loud message rather than printing "0/0 ... flagged". Same reasoning as realisateur BUILD-DISCIPLINE pattern 14's UNKNOWN rule, applied here to the script's own scoping rather than to its domain.
+
+2. Anchor the stop-heading match at both ends -- /^##[[:space:]]+[Rr]ecently [Rr]esolved[[:space:]]*$/ -- and skip fenced code blocks. The current prefix match accepts the header's own sentence about the format. Same root cause as proposal 2 filed earlier tonight (machine-append anchoring on a "## " inside prose): a structural marker matched by a rule that the file's own documentation of that marker can satisfy. The writer and the reader made the identical mistake 24 hours apart without knowing about each other, which is better evidence that the matching rule is wrong than either implementation being at fault.
+
+Worth noting for sequencing: proposal 1 (watcher refuses conflict markers / duplicate ## headings) would also have caught this one, since the duplicate "## Recently resolved" is exactly a duplicate heading. Proposals 1 and 3 are independent guards on the same failure -- a writer-side refusal and a reader-side honest UNKNOWN -- and both are worth having, because the reader-side one also covers damage that arrives by a route the watcher never sees.
+
+Repaired by hand in 1a6bc0a (realisateur /ideate, Zach-directed). Recorded as realisateur BUILD-DISCIPLINE pattern 15, "a file's prose about its own structure gets parsed as its structure."
+
 - **2026-07-27 01:42 (via `scheduler -i`):** (from realisateur /ideate 2026-07-27, Zach-directed) Two watcher/collector guards, both with a live exhibit in scheduler's own BLOCKERS.md today. Filed through the front door because both are scheduler engine, not realisateur's to edit.
 
 PROPOSAL 1 -- the autocommit watcher must refuse a file it cannot safely adopt.
