@@ -42,6 +42,13 @@ actually moves it down into `## chezz
   -- or "take the custom fairy-piece font track instead, which has no
   such gate" -- is all that's needed; until then the report stays open
   by design, not by neglect.
+<<<<<<< /tmp/vzTGDTh/5
+> Yes, pursue the gemini path, safe bounded account balance exists for
+  testing precisely this. Lift creds from vkv-inventory if possible
+  pending the creation of chezz specific ones
+
+=======
+>>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 - **2026-07-22 15:09 `scheduler -i` (general-scaffold convergence):
   RESOLVED in-repo 2026-07-25 -- nothing needed your scope-widening
   after all** (chezz nightly, machine-append; witness: chezz commit
@@ -76,6 +83,10 @@ actually moves it down into `## chezz
   and per-project recipe live in realisateur `.scheduler/FOCUS.md`
   (2026-07-26 migration entry). realisateur itself is already done
   (`fa222cb` + `1284b58`).
+<<<<<<< /tmp/vzTGDTh/5
+> This has been handled. Report noisy if it hasn't. 
+=======
+>>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
 ## Recently resolved` or deletes it. Doing
 that sweep is part of `/ideate`'s own triage, not a side effect of
@@ -166,6 +177,19 @@ only ever sees its own section, never another project's.
   (the convention `scheduler` and `aedile` already use), per Zach's
   explicit preference. Once migrated, the allow rules and this whole
   entry move to Recently resolved.
+  in fewer lines.
+
+- **2026-07-26 (realisateur append — the entry above stays, this is its
+  status):** the migration above is now absorbed into a queued
+  ecosystem-wide `.claude/`→`.scheduler/` pass (worklist + sequencing in
+  realisateur `.scheduler/FOCUS.md`, 2026-07-26 migration entry) — wtul
+  goes FIRST, using the scouted scope above verbatim. realisateur itself
+  migrated today (realisateur `fa222cb`, scheduler `1284b58`) as the
+  pass's template. Root-cause note, so this doesn't recur: this entry
+  sat unexecuted for 2 days because it was filed here — and BLOCKERS.md
+  is by standing rule not a work queue, so nothing ever dispatched it.
+  Recorded as BUILD-DISCIPLINE failure pattern 13 ("a decision without
+  a dispatch path") in realisateur.
 
 - **2026-07-26 (realisateur append — the entry above stays, this is its
   status):** the migration above is now absorbed into a queued
@@ -225,6 +249,88 @@ happened yet for any of them.
   delegation entry filed the same day in `senechal/.claude/FOCUS.md`
   (senechal owns "what Zach has at home" at the top level, delegates the
   actual serving of it to this instance).
+> zach@mandark:~$ clasp create
+> Created new script: https://script.google.com/d/1mkI4QL-KrQYxZoEuDJnLgrxiGaIFtO_3F0yTId0WmdvpfLdrcmDhnevg/edit
+> └─ appsscript.json
+> Cloned one file..
+
+## gardien
+
+
+- *(Machine-append, scheduler paced cycle 2026-07-26: the tag line above
+  is consumed by gardien's next scheduled run; this section can be moved
+  to Recently resolved once gardien's FOCUS.md actually carries the op
+  list.)*
+
+## senechal
+
+
+- *(Machine-append, scheduler paced cycle 2026-07-26: the tag line above
+  is consumed by senechal's next scheduled run; this section can be moved
+  to Recently resolved once senechal's FOCUS.md carries the condition +
+  interim flag.)*
+
+## realisateur
+
+- **Five yes/no calls from the 2026-07-26 strategy audit — each is one
+  `> ` reply, none blocks the others** (filed 2026-07-26, realisateur
+  interactive strategy session, machine-append; witness:
+  `realisateur/PLAYBOOK.md` @ `436f774` + the three-agent audit it
+  records). Full rationale lives in PLAYBOOK.md; these are only the
+  parts that need YOU:
+  1. **Bless `PLAYBOOK.md` as standing doctrine** (or reply with edits)
+     — it now governs build-vs-import-vs-retire allocation the way
+     UNIVERSE.md governs laws.
+     > Blessed be
+  2. **Commit-message PreToolUse hook: install at user level**
+     (`~/.claude/settings.json`, covers every project) rather than
+     per-repo? The build itself you already approved 2026-07-25
+     (narrow deny-with-message form); this is only the
+     where-it-lives call the design notes said to confirm.
+     > Confirm. Wire there or drop an easy file and a 1-liner for me 
+       to copy if you get gated.
+  3. **Import swaps — approve any subset:** (a) symlinks replace
+     `scheduler pacing deploy`/drift-detection (also fixes the LIVE
+     drift found in `usage-paced-runner.sh`, the script cron runs every
+     5 min); (b) `ccusage` replaces `token-usage.sh`'s parsing core;
+     (c) `gitleaks` replaces hygiene-lint's hand regexes (harness
+     stays); (d) restic/rsnapshot under `gardien.py`'s storage layer
+     when it unparks.
+     > Approved (a), (b), (c) — 2026-07-26, interactive /ideate in the
+     > scheduler repo, Zach via AskUserQuestion. (d) restic/rsnapshot
+     > stays deferred until gardien actually unparks. Note: (a) is also
+     > the sequencing prerequisite for the axis-1 decision (paced runner
+     > dispatching from a committed conf) — see scheduler DESIGN-NOTES.md
+     > 2026-07-26 /ideate entry. Queued as a [batch] item in scheduler's
+     > FOCUS.md Backlog same pass.
+  4. **Catabolic worklist — approve retiring ~1,000 already-labeled-
+     superseded lines** (morning-report ×2, build-services-view +
+     `services/`, `incubation-audit.sh`, overnight-dev ×2, the two
+     162-line loop-script forks, sync-crontab's dead auto-stagger), one
+     retirement per pass, each commit naming what retires it.
+     > Approved — 2026-07-26, interactive /ideate in the scheduler repo,
+     > Zach via AskUserQuestion. One retirement per pass, each commit
+     > naming what it retires, exactly as filed. The scheduler loop-fork
+     > retirement is gated behind the axis-1 (a) `scheduler-run` flip
+     > (see scheduler FOCUS.md axis 1, decided same pass). Queued as a
+     > [batch] item in scheduler's FOCUS.md Backlog same pass.
+  5. **Standing re-admission policy:** as each parked making-project
+     declares its stability milestone (jobs queued 2026-07-26 in
+     groc-mangr/nine-speakers/sequestria/vim-arcade), re-enable it at
+     weight 1–2 with no further per-project ask — yes turns four future
+     decisions into ordinary queue work. (vkv-inventory stays `0`
+     regardless: svc-vaporwave crontab owns its dispatch.)
+     > Yes.
+  - 2026-07-26 (realisateur nightly-batch, machine-append; witness: this
+    run's own dispatch prompt + scheduler `git diff` of the collector's
+    `--consume` rewrite): tonight's run was handed five EMPTY replies to
+    the five calls above — a collector bug consumed the bare `>` answer
+    slots as if they were answers and deleted them from this file. The
+    slots are restored, nothing was treated as approved, and all five
+    calls still await you. Bug fixed in `bin/collect-feedback.sh`
+    (scheduler `bb5c762`): a bare `>` line is now kept as an un-answered
+    slot, same as the `(answer inline here)` placeholder.
+    > Thank you. 
 
 ## gardien
 
