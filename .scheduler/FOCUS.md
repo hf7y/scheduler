@@ -903,6 +903,39 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **[batch] 2026-07-26 22:15 (human-directed, /ideate) — split the one
+  ceiling into TWO numbers: a per-dispatch admission ceiling and a weekly
+  target.** Today `USAGE_CEILING` is a single value doing two unrelated
+  jobs, and raising it to 0.99 (a9bffa2) to chase the weekly target
+  silently degraded the other job. The two intents:
+  (1) **Admission ceiling (~0.95, or better: derived).** The question this
+  answers is *"is there room for the batch I am about to start to
+  FINISH?"* — a batch admitted at 0.98 gets cut off mid-turn when it hits
+  the wall, and per the crash-aftermath item below that means a dirty
+  worktree and discarded work. This should ideally not be a guessed
+  constant but **the size a big batch actually needs** — the data to
+  derive it exists (per-cycle utilisation deltas are observable in the
+  paced runner log; the evening of 2026-07-26 ran ~2.7 pts/hour sustained
+  on the 7d window). Ship a static ~0.95 if deriving is too much for one
+  batch, but name the derived version as the goal.
+  (2) **Weekly target = 0.99.** The question this answers is *"how much of
+  the 7d budget should be spent before it resets?"* Unused weekly quota
+  does not roll over, so the target is deliberately near the wall — same
+  reasoning that motivated rush-before-reset.
+  These are different numbers for different reasons and will diverge
+  further (a bigger batch raises #1; #2 stays pinned at ~0.99). Note the
+  interaction with **rush-before-reset**: in the final 120 min the
+  admission ceiling is what should *still* apply — rush drops the
+  even-burn pacing hold, but it must not admit a batch that cannot
+  finish. Also note the 5h window: the admission check plausibly needs to
+  read 5h headroom, not just 7d, since that is the window that actually
+  cuts a running batch off mid-turn. **Build this together with the
+  config-settable-ceiling item (2026-07-25 17:06, below)** — that item
+  already specifies the conf file, env-wins precedence, per-host
+  overrides, and the "name what it retires" cleanup; this one only says
+  the conf needs two keys instead of one. Doing them separately means
+  shipping a one-key conf and immediately re-cutting it.
+
 - **2026-07-26 21:56 (via `scheduler -i`):** ITEM 3 of the sweep-attribution regulator, JOB-SIDE HALF (realisateur built its half 2026-07-26, see below). Zach's framing: "just as likely I am interactively working with scheduler while its batch fires... a way to lock the repo while interacting seems prudent, a default way that requires no human discipline is the way to build." CORRECTION to how item 3 was originally filed: the ecosystem-wide per-project lock ALREADY EXISTS and needs no new infrastructure -- lib/sweep-loop-common.sh keys REGISTRY_LOCK by PROJECT_KEY (not JOB_NAME) in ~/.local/share/scheduler-registry/, and its own comment states that is precisely what makes every tier/job for one project contend for one slot. Every registered project's every job already takes it automatically through that one shared library. So the gap is NOT "build a lock"; it is that the lock is JOB-VS-JOB ONLY and nothing in the system represents a HUMAN. DONE ALREADY (realisateur side, no scheduler change needed): (a) bin/check-project-busy.sh promoted to probe the canonical registry lock first -- it previously scanned only per-job dirs and explicitly EXCLUDED scheduler-registry, re-deriving by directory-name guessing what the registry states canonically; the per-job scan is now a fallback for pre-registry jobs and is skipped when the registry already answered. (b) bin/session-marker.sh + global ~/.claude/settings.json SessionStart/SessionEnd hooks now write ~/.local/share/scheduler-registry/<PROJECT_KEY>.interactive whenever a Claude session starts anywhere under a registered PROJECT_REPO_PATH -- one config, every project, zero per-project scaffolding, zero human discipline, silent no-op for unrelated work on this machine. It lands in the SAME directory as the .active job marker so one place answers "is anything writing to this project right now". CRITICAL DESIGN CONSTRAINT, verified against the hooks reference and by test: SessionEnd is NOT guaranteed to fire on crash or SIGKILL, so the marker must NEVER be an flock held by a detached process -- that would orphan and wedge a project's batch permanently and silently, a silent-failure path introduced to fix a race. Liveness is therefore a PID probe (kill -0), release is only the fast path, and a crashed session's marker reads FREE by construction; negative-tested with a dead pid. WHAT SCHEDULER NEEDS TO BUILD: in lib/sweep-loop-common.sh, after the existing two flocks, probe <PROJECT_KEY>.interactive the same way (kill -0 on the pid field, NOT file existence) and if a live human session holds it, log and exit 0 -- deferring to the next tick. Because that library is the shared entrypoint for every registered project's every job, this is one edit that all projects inherit, matching the same one-place property the REGISTRY_LOCK already has. Deferral is cheap: the paced runner is a rotation, it comes back. MUST INCLUDE A STARVATION CAP: "defer whenever a human is present" means a long interactive session silently starves that project's batch forever, so after N consecutive deferrals proceed anyway and log LOUDLY (warn-then-continue is failure pattern 8, but silent indefinite deferral is pattern 1, which is worse -- the cap is the lesser evil and must be visible either way). ALSO STILL WANTED, and independent of the lock: item 2's mtime quiescence guard, because a lock only protects writers who take it and vim, a raw shell, and `scheduler sweep` itself never will -- lock for cooperative writers, mtime for everyone else, both not either. Live witness the same session: `check-project-busy.sh senechal` correctly reported BUSY from the registry lock while senechal-nightly-batch was mid-run (pid 96695, started 21:55:03), and realisateur DEFERRED a cross-write it was about to make into senechal's FOCUS.md as a result -- the guard working end to end, against a real job, before this was even finished.
 
 - **[batch] 2026-07-26 (human-directed log review) — `usage-gate.sh`
