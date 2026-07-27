@@ -122,9 +122,12 @@ usage: scheduler [command] [project]
                          digest -- then opens the tidied file as usual
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
   questions [project] [n], -q
-                         open a project's QUESTIONS.md (list if omitted);
-                         with a number, jump vim straight to that bullet
-                         instead of opening at the top of the file
+                         open a project's QUESTIONS.md; with a number, jump
+                         vim straight to that bullet instead of opening at
+                         the top of the file. With no project, print the
+                         questions overview: every project with any open
+                         questions as unanswered/total, `*` where the file
+                         changed since you last opened it, unread first.
   report [project], -r  open a project's latest report (LATEST.md)
   next [n], -n           what usage-paced-runner.sh will actually dispatch
                          next, in real rotation order (reads its rotation
@@ -855,6 +858,128 @@ cmd_weight() {
   fi
 }
 
+# Prints "<unanswered> <answered>" for one QUESTIONS.md. One
+# implementation shared by cmd_glance and cmd_questions_list -- these two
+# views disagreeing about what counts as an open question is exactly the
+# "meaningless count" complaint that drove the counting rules below.
+#
+# Distinguishes genuinely unanswered questions from ones you've already
+# replied to inline but the project's next run hasn't yet processed --
+# added 2026-07-20 so the count reflects your own inline edits instead of
+# only updating once a run clears the block. A bullet counts as answered
+# if a real `> ` reply (not the "(answer inline here)" placeholder)
+# appears before the next bullet/heading; RESOLVED/ACKNOWLEDGED bullets
+# are excluded entirely either way (case-insensitive via tolower(), not
+# just the first letter -- a plain-ASCII "resolved|acknowledged" regex
+# match silently missed full-caps "RESOLVED" during testing).
+# Real question bullets always start `- **YYYY-MM-DD` (the format every
+# command is told to append) -- requiring that date prefix, plus skipping
+# fenced ``` code blocks, excludes the template's own "How to answer"
+# boilerplate (an example bullet inside a code fence, plus prose bullets
+# like "- **`/nightly-batch` owns answer-processing.**") which a bare
+# `/^- \*\*/` match was wrongly counting as real open questions on every
+# project using the standard QUESTIONS.md template (found 2026-07-22:
+# every project showed 2-4 phantom "open questions" from this).
+questions_counts() {
+  local qfile="$1"
+  [ -f "$qfile" ] || { echo "0 0"; return 0; }
+  local out
+  out="$(awk '
+    BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0; infence=0}
+    /^```/ { infence = !infence; next }
+    infence { next }
+    /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
+      if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
+      started=1
+      is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
+      has_reply=0
+      next
+    }
+    started && /^[ \t]*>[ \t]?/ {
+      line=$0
+      sub(/^[ \t]*>[ \t]?/, "", line)
+      if (line !~ /^\(answer inline here\)/) has_reply=1
+    }
+    END { if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
+          print unanswered, answered }
+  ' "$qfile" 2>/dev/null)"
+  echo "${out:-0 0}"
+}
+
+# True when this project's QUESTIONS.md changed since you last opened it
+# via `scheduler questions`/`status` -- the `*` in both question views,
+# added 2026-07-22 so an open count doesn't read the same whether it's
+# brand new or something you've already seen and just haven't gotten to.
+# Approximate (file mtime vs a per-project "last opened" timestamp), not
+# a real read-receipt. Only meaningful when something is still
+# unanswered, so a zero count is never starred.
+questions_unopened() {
+  local proj="$1" q_unanswered="${2:-0}"
+  [ "$q_unanswered" -gt 0 ] 2>/dev/null || return 1
+  local qmtime qseen
+  qmtime="$(stat -c %Y "$SCHED_ROOT/questions/$proj.md" 2>/dev/null || echo 0)"
+  qseen="$(get_seen "$proj")"
+  [ "$qmtime" -gt "$qseen" ] 2>/dev/null
+}
+
+cmd_questions_list() {
+  # `scheduler -q` with no project. Was a bare "available projects:" dump
+  # from require_project, which made you re-run the full glance (or open
+  # files one by one) just to find out which project actually wanted
+  # something from you. Same n/m + `*` vocabulary as the glance's
+  # QUESTIONS column, no new state -- this is the glance filtered to the
+  # one question "does anything need my answer", nothing more.
+  echo "scheduler questions — $(date '+%Y-%m-%d %H:%M')"
+  echo
+  local rows="" quiet="" n_unanswered=0 n_unopened=0 n_projects=0
+  while IFS= read -r proj; do
+    local qfile="$SCHED_ROOT/questions/$proj.md"
+    local qu qa
+    read -r qu qa <<<"$(questions_counts "$qfile")"
+    local total=$(( qu + qa ))
+    if [ "$total" -eq 0 ]; then
+      quiet="$quiet $proj"
+      continue
+    fi
+    n_projects=$(( n_projects + 1 ))
+    n_unanswered=$(( n_unanswered + qu ))
+    # Note only where the row is NOT the ordinary "waiting on you" case:
+    # printing that on 17 of 18 rows is column noise, and the `*` already
+    # carries the one distinction that matters at a glance.
+    local star=" " note="" score=$qu
+    if questions_unopened "$proj" "$qu"; then
+      star="*"; n_unopened=$(( n_unopened + 1 ))
+      score=$(( score + 1000 ))
+    elif [ "$qu" -eq 0 ]; then
+      note="all replied — waiting on ${proj}'s next run to process them"
+    fi
+    rows="$rows$(printf '%06d\t  %s %-20s %-7s %s' \
+      "$score" "$star" "$proj" "$qu/$total" "$note")"$'\n'
+  done < <(projects)
+
+  if [ "$n_projects" -eq 0 ]; then
+    # Nothing open anywhere: the counts and the n/m legend below would all
+    # be zeroes explaining a table that isn't there.
+    echo "  no open questions on any project."
+    echo
+    echo "-> scheduler -q <project>   open one anyway (answered/resolved history)"
+    return 0
+  else
+    # sed trims the trailing pad left by the fixed-width count column on
+    # rows with no note -- invisible in a terminal, but it turns a copied
+    # row into whitespace junk when you paste one into a file.
+    printf '%s' "$rows" | sort -rn | cut -f2- | sed 's/[[:space:]]*$//'
+  fi
+  echo
+  # Counts before the legend: the numbers are the point, the vocabulary
+  # note is the footnote.
+  echo "  $n_unanswered unanswered across $n_projects project(s); $n_unopened with unread changes (*)."
+  echo "  n/m = unanswered/total; total includes replies your project run hasn't processed yet."
+  [ -n "$quiet" ] && echo "  nothing open:$quiet"
+  echo
+  echo "-> scheduler -q <project> [n]   open one (with n, jump straight to bullet n)"
+}
+
 cmd_questions_jump() {
   local proj="$1" idx="$2"
   local qfile="$SCHED_ROOT/questions/$proj.md"
@@ -922,60 +1047,12 @@ cmd_glance() {
     local qfile="$SCHED_ROOT/questions/$proj.md"
     local qlabel="-"
     if [ -f "$qfile" ]; then
-      # Distinguishes genuinely unanswered questions from ones you've
-      # already replied to inline but the project's next run hasn't yet
-      # processed -- added 2026-07-20 so the glance count reflects your
-      # own inline edits instead of only updating once a run clears the
-      # block. A bullet counts as answered if a real `> ` reply (not the
-      # "(answer inline here)" placeholder) appears before the next
-      # bullet/heading; RESOLVED/ACKNOWLEDGED bullets are excluded
-      # entirely either way (case-insensitive via tolower(), not just
-      # the first letter -- a plain-ASCII "resolved|acknowledged" regex
-      # match silently missed full-caps "RESOLVED" during testing).
-      # Real question bullets always start `- **YYYY-MM-DD` (the format
-      # every command is told to append) -- requiring that date prefix,
-      # plus skipping fenced ``` code blocks, excludes the template's own
-      # "How to answer" boilerplate (an example bullet inside a code
-      # fence, plus prose bullets like "- **`/nightly-batch` owns
-      # answer-processing.**") which a bare `/^- \*\*/` match was
-      # wrongly counting as real open questions on every project using
-      # the standard QUESTIONS.md template (found 2026-07-22: every
-      # project showed 2-4 phantom "open questions" from this).
-      read -r q_unanswered q_answered <<<"$(awk '
-        BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0; infence=0}
-        /^```/ { infence = !infence; next }
-        infence { next }
-        /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
-          if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
-          started=1
-          is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
-          has_reply=0
-          next
-        }
-        started && /^[ \t]*>[ \t]?/ {
-          line=$0
-          sub(/^[ \t]*>[ \t]?/, "", line)
-          if (line !~ /^\(answer inline here\)/) has_reply=1
-        }
-        END { if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
-              print unanswered, answered }
-      ' "$qfile" 2>/dev/null)"
-      q_unanswered="${q_unanswered:-0}"; q_answered="${q_answered:-0}"
+      read -r q_unanswered q_answered <<<"$(questions_counts "$qfile")"
       local q_total=$(( q_unanswered + q_answered ))
       if [ "$q_total" -gt 0 ] 2>/dev/null; then
         qlabel="$q_unanswered/$q_total"
       fi
-      # `*` = this file changed since you last opened it via `scheduler
-      # questions`/`status` -- added 2026-07-22 so an open count doesn't
-      # read the same whether it's brand new or something you've already
-      # seen and just haven't gotten to. Approximate (file mtime vs a
-      # per-project "last opened" timestamp), not a real read-receipt.
-      if [ "$q_unanswered" -gt 0 ] 2>/dev/null; then
-        local qmtime qseen
-        qmtime="$(stat -c %Y "$qfile" 2>/dev/null || echo 0)"
-        qseen="$(get_seen "$proj")"
-        [ "$qmtime" -gt "$qseen" ] 2>/dev/null && qlabel="*$qlabel"
-      fi
+      questions_unopened "$proj" "$q_unanswered" && qlabel="*$qlabel"
     fi
 
     # Excludes bullets already marked RESOLVED/PARKED inline (BLOCKERS.md's
@@ -1989,7 +2066,11 @@ case "${1:-}" in
     open_file "$SCHED_ROOT/focus/$2.md"
     ;;
   questions|-q)
-    require_project questions "${2:-}"
+    # No project = the questions overview, not require_project's bare
+    # name dump (see cmd_questions_list). Deliberately does NOT mark_seen:
+    # reading a count is not reading the questions, so `*` survives until
+    # you actually open the file.
+    if [ -z "${2:-}" ]; then cmd_questions_list; exit 0; fi
     mark_seen "$2"
     if [ -n "${3:-}" ]; then
       cmd_questions_jump "$2" "$3"
