@@ -879,6 +879,57 @@ to build sooner.
 
 6. Note: pushing this repo is now something scheduler can do itself. As long as that's revertable, it's just something that needs to be flagged for me to review (that it happened, what the consequences are/why I might want to revert it). To avoid conflicts with other scheduled jobs, we need awareness of effects. It makes sense to push/schedule this utility's development changes to occur after upcoming jobs are run, but before the morning.
 
+## Shared-host footprint (this project's machine-wide surface)
+
+*(Added 2026-07-26, human-directed, after `~/.local/bin/usage-paced-runner.sh`
+— the file cron runs every 5 minutes — was found DRIFTED two days stale
+against this repo. Build discipline requires this declaration and never had
+one here. Senechal holds the same statement, filed via `notify-senechal`, so
+the repair does not depend on anyone reading this file.)*
+
+`# verified 2026-07-26 via crontab -l; ls -l ~/.local/bin; ls -d ~/.local/share/scheduler-*`
+
+**Crontab (this user), scheduler-owned — 2 lines, both self-tagged
+`# scheduler:<job>:<kind>`:**
+- `*/5  * * * * PACED_MAX_PER_TICK=16 USAGE_CEILING=0.99 ~/.local/bin/usage-paced-runner.sh`
+- `*/15 * * * * ~/.local/bin/scheduler sweep`
+
+**`~/.local/bin` — expected state, and the repair when it is wrong:**
+- `scheduler` → **symlink** into `bin/scheduler`. Cannot drift.
+- `usage-paced-runner.sh` → **symlink** into `bin/usage-paced-runner.sh`
+  **as of 2026-07-26**. It was a `cp` deploy and had silently fallen two
+  days behind, missing the dead-man-switch block added 2026-07-26 — so
+  expired participants kept consuming dispatch slots even though the repo
+  said otherwise. The deployed copy contained NOTHING the repo lacked
+  (verified by diff before replacing), so nothing was discarded.
+  **Repair:** `ln -sfn "<repo>/bin/usage-paced-runner.sh" ~/.local/bin/usage-paced-runner.sh`
+  (use a temp name + `mv -T` for the atomic swap — cron may fire mid-edit).
+- `usage-gate.sh`, `scheduler-dev-cycle.sh` → still real **copies**, in sync
+  today but structurally able to drift. Same one-line repair converts them.
+  This is realisateur/PLAYBOOK.md Play 2 in miniature: symlinks retire the
+  drift class, rather than a `deploy` verb that re-copies it.
+- `<project>-nightly-batch-loop.sh` / `-bug-sweep-loop.sh` (~20 legacy
+  wrappers) → copies, but they only set variables and then
+  `source "<repo>/lib/sweep-loop-common.sh"` by absolute path, so the LOGIC
+  they run is never stale. New projects use `bin/scheduler-run` and add no
+  wrapper at all.
+
+**Detection:** `deployable_scripts()` in `bin/scheduler` deliberately skips
+symlinks — a symlinked entry leaves drift scope because it can no longer
+drift, and anything re-copied over one re-enters it and gets reported by
+`scheduler pacing`.
+
+**`~/.local/share` (state, not config):** `scheduler-registry/` (per-project
+`.lock`/`.active`/`.interactive`), `scheduler-glance/seen.tsv`,
+`scheduler-paced-runner/`, `scheduler-token-usage/`, and one `<job>/` dir
+per registered job (log, expiry stamp, deferral counter, dedicated clone).
+
+**Not scheduler's, listed so nobody re-owns them by mistake:** the
+`~/.claude/settings.json` SessionStart/SessionEnd hooks and the
+`6:30 weight-audit.sh` crontab line are **realisateur's**; the `~/.vimrc`
+autocommit/merge hooks call `scheduler _commit-file` but live in the
+human's own dotfiles.
+
 ## Watch and report tonight
 
 - **Per-project pre-commit hook cost — SURVEYED 2026-07-24 (paced cycle),
