@@ -280,3 +280,34 @@ its line once you've actually read and dealt with it.
   one-line edit, `date +%Y-%m-%d` -> `date +%Y-%m-%dT%H%M` at line 68) or
   an explicit permission grant for that one path if unattended cycles
   should be able to fix their own command files going forward.
+
+- **2026-07-27 (paced cycle): both NAMED halves of the axis-1 sequencing
+  gate are now done, but the gate's stated INTENT isn't met. Does the
+  chezz command-column flip get clearance, or does the paced runner need
+  its own dirty-conf refusal first?** The gate (FOCUS.md "Consolidation
+  roadmap" item 1, decided 2026-07-26) was written as two named halves:
+  (i) `sync-crontab.sh --apply` refuses a dirty `schedule/` — landed
+  `e1042a4`; (ii) the symlink-deploy import replacing `scheduler pacing
+  deploy`/drift — landed this cycle. Both are done. But the sentence they
+  were meant to satisfy — *"the paced runner dispatches from a
+  committed/validated copy of `_paced*.conf`"* — is still false, verified
+  by reading `bin/usage-paced-runner.sh`: `PACED_CONF` resolves to
+  `$REPO_ROOT/schedule/_paced.conf` in the **working tree**, and the
+  auto-pull block's dirty-tree branch only skips the *pull* (`PULL skip --
+  has uncommitted changes`) and then dispatches from the dirty conf
+  anyway. So an uncommitted command-column edit still goes live on the
+  next 5-minute tick, unchecked — exactly the live-edit risk that made
+  option (a) the riskier one. Symlinking retired *script* drift; it does
+  not make the conf a committed artifact. Two ways forward:
+  **(a)** treat the two named halves as the agreed bar and start flipping
+  (chezz first, watch one full dispatch) — the flip is a git-tracked edit
+  in a repo swept every 30 min, so the exposure window is small;
+  **(b)** first add the missing third piece — `usage-paced-runner.sh`
+  refuses to dispatch a participant whose conf line is dirty relative to
+  HEAD (or dispatches from `git show HEAD:schedule/_paced.conf`), reusing
+  the `--check-clean` gate from `e1042a4` so the rule has one definition
+  — then flip. Cheap to build and verifiable offline; it does mean one
+  more cycle before any flip.
+  Not decided here: FOCUS.md's own text names (i)+(ii) as the gate, so
+  picking (b) is adding a requirement, and picking (a) is accepting a
+  gap the decision's own rationale was about. Human call.
