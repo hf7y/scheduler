@@ -305,6 +305,30 @@ happened yet for any of them.
 
 ## realisateur
 
+- **2026-07-27 (realisateur `/ideate`, machine-append): `wtul`'s
+  unattended run edited realisateur's live `bin/notify-senechal.sh` and
+  left it uncommitted — whose commit is it, and does it land?** Witness:
+  `git status` in `~/Documents/Projects/realisateur` shows ` M
+  bin/notify-senechal.sh`, 12 lines, mtime 01:35; `wtul-batch` pid 222252
+  ran 01:24→~01:5x and is now `free`, so the edit is abandoned rather than
+  in flight; the matching diagnosis was filed by that same run as
+  `notify-senechal-false-FAIL-202-20260727-011731.idea` at the realisateur
+  repo root (committed `7b5bccb`). **The content is good** — an honest
+  "KNOWN FALSE NEGATIVE" annotation on the step-2 verification, second
+  false negative in two days. **The delivery is the problem, and it has a
+  clock on it:** CLAUDE.md's subagent rule says a dirty tree at exit is a
+  failed run, not a handoff, and the ~:30 autocommit watcher will adopt
+  these lines as `Human edit via scheduler` under Zach's name at the next
+  tick — which is exactly how `BLOCKERS.md` was corrupted earlier tonight
+  (`0e9b6a6`). This `/ideate` pass deliberately did **not** commit it: it
+  is not this session's work, and adopting another run's orphan under a
+  third party's name is the failure being reported. Dispatch pointer (not
+  a task filed here — see pattern 13): the real fix is the bounded
+  retry the `.idea` drop asks for, which realisateur's own nightly will
+  pick up from the repo root inbox.
+  > (answer inline here — commit it as-is under your name? let the
+  >  watcher take it? revert and let the nightly redo it from the .idea?)
+
 - **Five yes/no calls from the 2026-07-26 strategy audit — each is one
   `> ` reply, none blocks the others** (filed 2026-07-26, realisateur
   interactive strategy session, machine-append; witness:
