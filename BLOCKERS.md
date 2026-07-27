@@ -684,3 +684,20 @@ happened yet for any of them.
   https://www.amazon.com/dp/B099ZJ6555. Folded into `PERSONA-CHANNEL.md`/
   `cad/CAD-BACKLOG.md`; CAD work still waits on real dimensions once each
   part is in hand.
+
+- **2026-07-27 (realisateur `/cloture`): should every registered project
+  get an uncommitted-file intake path, not just realisateur?** Concrete
+  trigger: `wtul` had a manual PDF sitting uncommitted at repo root,
+  invisible to `wtul-batch` (backlog-driven off FOCUS.md only, no
+  repo-root scan) — resolved for that one file by hand this session
+  (wtul `4bbf097`, pushed), but Zach's stated intent is standing: dropping
+  an uncommitted file into a project's tree is a normal part of his
+  workflow (committing isn't), and every project should have *some* way
+  to fold that in rather than let it sit as permanent dirty-tree residue.
+  Full writeup in realisateur's `.scheduler/FOCUS.md` same date. Not
+  decided here: whether the shape is (a) copy realisateur's
+  `nightly-batch.md` §2 inbox-scan to every project, (b) something
+  lighter per-project (e.g. `closeout-lint.sh`'s dirty-tree FLAG growing
+  teeth), or (c) something else. Route to `/ideate` or a scheduler
+  steward pass to pick the shape — not a straight build.
+  > (answer inline here)
