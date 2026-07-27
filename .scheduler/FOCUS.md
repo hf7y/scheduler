@@ -1676,6 +1676,18 @@ Both are small. Both have already been paid for once.
 
 - **2026-07-25 00:47 (via `scheduler -i`):** look into crt and update your references to the VM which are deprecated
 
+- **2026-07-25 (paced cycle, routing note):** the `**Headline:**` report
+  convention (see "Current focus" item 3's cross-project note above) now
+  has a source-of-truth template (`examples/nightly-batch.md.template`)
+  but hasn't been propagated to any already-running project's real
+  `.claude/commands/nightly-batch.md` — scheduler can't edit outside this
+  repo. Routing to realisateur's intake, same pattern used for every
+  other cross-project fix filed in this backlog: propagate to chezz,
+  wtul, home-assistant, vkv-inventory (and any other registered project
+  with its own nightly-batch command) one at a time, verifying each
+  project's `LATEST.md` actually starts with the new line before moving
+  to the next.
+
 - **2026-07-24 22:33 (via `scheduler -i`):** pinning crt on dexter is not right. that's based on old role of dexter as part of the actual crt build. current crt work can happen on either machine
 
 - **2026-07-24 21:10 (realisateur session, BLOCKERS.md sweep):** Root
@@ -1845,6 +1857,26 @@ Both are small. Both have already been paid for once.
   just what the next run reads first; paced projects run whenever
   usage-gate.sh has spare quota, not on a fixed clock.)
  move all this text to a man page, reduce to a single line summary above the column headers. formatting should leave blank spaces so asterisks don't nudge fractions over. try to get all the / to line up in a column if that's easy. same for next up. aim to have the / line up and the : line up, pad with whitespace if necessay
+  **DONE 2026-07-25 (paced cycle), all three asks:** (1) the 13-line
+  in-glance explanation block collapsed to one legend line above the
+  column headers, full text moved to a real maintained man page —
+  `docs/scheduler-cli.md`, opened by a new `scheduler man` (`-m`)
+  subcommand (this also starts the "man page for scheduler" half of the
+  13:59 entry below; the terse command list deliberately stays ONLY in
+  `scheduler --help` so the two can't drift). (2) QUESTIONS/BLOCKERS
+  now render with a reserved 1-char `*` slot + right-aligned numerator,
+  so a star never nudges the fraction and every `/` lands in the same
+  column. (3) NEXT UP's total is right-aligned (`1/ 7:` vs `1/28:`) so
+  the `/` and `:` both line up. The man page also documents the `*`
+  convention plainly (the 19:56 entry's ask — its `+1✓` complaint
+  refers to notation that no longer exists in the current script, and
+  the proposed `?` marker is still not built, deliberately not
+  documented as if it were). Verified live: before/after runs of
+  `scheduler` (real data), a scratch-`$HOME` run to force starred rows
+  (slash column holds), `PAGER=cat scheduler man` renders the doc, a
+  copy run from a docs-less directory fails loud with a clear error
+  (the deployed-symlink fallback path), `scheduler notaproject` still
+  errors, `bash -n` clean.
 
 - **2026-07-22 15:44 (via `scheduler -i`):** separate vaporwave and zach jobs which are running on different accounts visually since they have different quotas. print current quota information at the top of each section for context as well as an estimate for when the next job would run based on current quota info. non-ai call. generally scheduler bin interaction should be non-ai unless explicitly requested via flag
 
@@ -1864,6 +1896,28 @@ Both are small. Both have already been paid for once.
      should check item 0's status first; a quick trace-and-patch is
      still worth doing regardless (a hanging script is a real problem
      even mid-redesign), just don't over-invest in it.
+     **RESOLVED 2026-07-25 (paced cycle) — trace found the hang was
+     ALREADY fixed, plus one residual vector patched.** The hang this
+     entry reports was traced+fixed 2026-07-20 in `a224b41` (the
+     deploy-freshness loop sourced `_paced.conf` as if it were a project
+     conf, executing its pipe-delimited participant lines as shell and
+     invoking a live wrapper — same class as `build-services-view.sh`'s
+     `61f7dbd`); the crt session's two reproductions predate that fix
+     landing. Confirmed today: repeated full runs complete in ~0.4s. The
+     deprecation header's "known unresolved hang bug" line (written
+     hours AFTER the fix, `ab075da`) was stale on arrival — corrected in
+     place. The suspected-but-not-actual cause this entry names (an
+     unreachable `DEPLOY_FRESH_CMD` probe) IS still a real future hang
+     vector though — patched same cycle: probes now run under
+     `timeout` (`DEPLOY_PROBE_TIMEOUT`, default 15s), with a timed-out
+     probe reported as its own distinct "could NOT verify" line rather
+     than mislabeled "deploy pending". Verified with a fabricated
+     4-conf harness (fresh/stale/hanging/conf-var-referencing probes:
+     3.05s total with a `sleep 300` probe present, correct message per
+     state) and a before/after diff of the real repo's output
+     (byte-identical, crt's real pending-deploy line unchanged). Kept
+     deliberately shallow per the direction above — no deeper
+     investment in a deprecated script.
   2. **Standardize a machine-parseable per-project headline field in
      report templates — human-approved ("yes there should be
      standardization of report formats like that").** Concrete ask: every
@@ -1875,6 +1929,21 @@ Both are small. Both have already been paid for once.
      that open with prose instead of a title). Cross-project change —
      touches the shared report template every project's nightly-batch
      writes into, not just scheduler's own files.
+     **Source-of-truth half DONE 2026-07-25 (paced cycle):**
+     `examples/nightly-batch.md.template` step 6 now requires the
+     report's first line to be exactly `**Headline:** <one sentence>`,
+     matching `bug-sweep.md.template`'s existing `## Summary` convention
+     in spirit. Tried to also update this project's own
+     `.claude/commands/nightly-batch.md` to dogfood it — confirmed live
+     that `.claude/**` writes are still hard-refused in this unattended
+     run (the same permission-gate finding item 2/3 above already
+     documents), so that specific file needs a human or interactive
+     session to touch. **Not yet propagated to any other already-running
+     project's real `.claude/commands/nightly-batch.md`** (chezz, wtul,
+     home-assistant, vkv-inventory, …) — same "scheduler can't edit
+     outside this repo" boundary used everywhere else in this file;
+     routing to realisateur's `-i` front door is the right next step for
+     that half, not something to hand-fix from here.
 
 - **2026-07-22 15:19 (via `scheduler -i`):** should the idea intake in scheduler actually file things to realisateur first so it can triage/prioritize? or actually file in both locations. should realisateur properly run before other jobs within a certain window? or should those ideas await implementation until realisateur analyses them? wondering how ideas intake should evolve based on the evolving scheduler/realisateur split. drop questions to me about this if appropriate but also pick off low hanging fruit if an obvious principled first step or steps is available right now
 
@@ -1931,6 +2000,11 @@ Both are small. Both have already been paid for once.
 - **2026-07-22 14:02 (via `scheduler -i`):** revisit integration with realisateur. realisateur should not promote ideas to scheduler until out of an incubation period. this prevents the scheduler status from getting crowded with nacent ideas. potential automated flag whereby scheduler suggests projects migrate to realisateur if they're underdeveloped (few files, nothing pending). eventual symmetrical structure to move projects to archive once out of development
 
 - **2026-07-22 13:59 (via `scheduler -i`):** streamline the cli flow. scheduler no args should produce what's scheduled, in order of priority, with information about next run, time/cost etc. scheduler <project> should tab-complete. should show more detail about project including next tasks/requests in order of priority. flag design can remain for backwards compatibility. focus questions blockers should all be called out in the project view (truncated with suggested command to expand if too many lines). should have an easy way to promote a project's urgency in both the main scheduler view and it's individual project. start developing and maintaining a man page for scheduler that explains its use.
+  **Man-page half DONE 2026-07-25 (paced cycle):** `docs/scheduler-cli.md`
+  + `scheduler man` (`-m`) — see the 15:48 entry's DONE note above for
+  scope + verification. The rest of this entry (priority-ordered rows
+  landed 2026-07-22; ETA/next-run/cost columns, urgency promotion) stays
+  open as already tracked elsewhere in this backlog.
 
 - **2026-07-22 (Zach, via chat): `bin/scheduler` no-args glance should be
   priority-ordered, not registration-ordered.** Top row = whatever's next
@@ -2022,6 +2096,29 @@ Both are small. Both have already been paid for once.
   real look at whether any OTHER registered project also blanket-
   `.gitignore`s `.claude/` and has the same latent bug, not just
   wavebucks/aedile.
+  **SURVEYED 2026-07-25 (paced cycle) — read-only, confirms the bug is
+  real and still live for aedile specifically, nobody else.** Checked
+  every registered project's repo-root `.gitignore` for a `.claude/`
+  pattern: `crt` and `wtul` only ignore specific per-developer state
+  files (`settings.local.json`, a lock file) — narrow, intentional,
+  not the bug this entry describes. Only `wavebucks` (aedile's parent
+  monorepo) blanket-ignores the whole `.claude/` directory
+  (`/home/zach/Documents/vkv/wavebucks/.gitignore:10`). Confirmed live
+  with `git ls-files aedile/.claude` (empty — zero tracked files) and
+  `git status --ignored` (`!! aedile/.claude/`, the entire tree
+  ignored). This is NOT just the historical FOCUS.md/QUESTIONS.md case
+  already fixed by moving to `.scheduler/` — **aedile currently has two
+  real, undated-in-git files sitting only in this ignored directory**
+  (`aedile/.claude/QUESTIONS.md`, `aedile/.claude/NEXT-STEPS.md`, both
+  with real content as of this survey) that would silently vanish on
+  any re-clone or worktree reset, with no git history to recover them
+  from — the exact live risk this entry warned about, not a closed
+  case. Scheduler can't edit aedile's repo or `.gitignore` (outside
+  this repo); routing to realisateur's intake per this file's usual
+  cross-project pattern: either move those two files' real content into
+  aedile's already-adopted `.scheduler/` convention, or narrow
+  wavebucks' `.gitignore` the way crt/wtul already do. No other
+  registered project needs this fix.
 
 - **2026-07-20 22:20 (via chat): full revisit of the svc-vaporwave split
   needed — bigger than the observability-only fix queued just above.**
@@ -2108,19 +2205,35 @@ Both are small. Both have already been paid for once.
   that can drift.
 
 - **2026-07-20 19:56 (via `scheduler -i`):** the convention for scheduler on open questions/blockers: use * to indicate new items that haven't been touched by Zach. open blockers that zach has seen are counted but have no freshness flag. ? indicates that the file has been edited and the sweeper hasn't run yet (maybe blockers and questions have been addressed that aren't accounted for. running sweep should clear the questionmarks). The current check off notation is opaque and undocumented +1✓ is unclear to me.
+  **Documentation half DONE 2026-07-25 (paced cycle):** the `*`
+  convention is now documented in `docs/scheduler-cli.md` (`scheduler
+  man`); the `+1✓` notation complained about here no longer exists in
+  the current `bin/scheduler` (predates a rewrite — grep-confirmed).
+  The proposed `?`-means-edited-but-unswept marker is NOT built and
+  stays the open half of this entry.
 
-- **Batched, not built now 2026-07-20: `scheduler -i <project>` with no
-  text argument should open `$EDITOR`** instead of failing with a usage
-  message — pre-populate a blank templated bullet at the backlog
-  insertion point (so existing/older ideas are naturally visible right
-  there, no separate "show parked ideas" feature needed) for a normal
-  project; for realisateur, open a fresh empty `.idea` file. After the
-  editor closes: if real content was typed, run it through
-  `cmd_commit_file` same as today; if the placeholder was left untouched,
-  clean up rather than leaving a stray empty entry. Deliberately NOT
-  building a richer "surface my parked ideas for me" UX here — that's
-  explicitly realisateur's future abstract-visioning scope (see its own
-  FOCUS.md), not something to guess at from scheduler's side.
+- **DONE 2026-07-25 (paced cycle): `scheduler -i <project>` with no text
+  argument now opens `$EDITOR`** instead of failing with a usage message.
+  For a normal project, a scratch copy of its real FOCUS.md is opened
+  with a blank templated placeholder bullet already inserted at the same
+  backlog/feature-request (or new "Ideas" section) insertion point the
+  text-argument path uses — existing/older ideas stay visible right there
+  for context, no separate "show parked ideas" feature needed. For
+  realisateur, a fresh scratch file opens with a comment-only placeholder,
+  matching its own `.idea`-file convention. After the editor closes: if
+  the placeholder line/comment-only state is gone (real content was
+  typed), the result is saved over the real file and pushed through
+  `cmd_commit_file` same as the text-argument path; if it's untouched,
+  the scratch file is discarded with no commit. Deliberately did NOT build
+  a richer "surface my parked ideas for me" UX here — that's explicitly
+  realisateur's future abstract-visioning scope (see its own FOCUS.md),
+  not something to guess at from scheduler's side. Verified against a
+  disposable scratch `SCHED_ROOT` (never the real one) with a scripted
+  `$EDITOR` standing in for a human: new-file cancel (no file created),
+  new-file real-content (single correct "## Ideas" heading, no
+  duplication), existing-file cancel (byte-identical file, confirmed via
+  `diff`), existing-file real-content, and both the realisateur
+  cancel/real-content branches. `bash -n bin/scheduler` clean.
 - **RESOLVED 2026-07-20: home-assistant's real divergence, found by the
   first-ever `scheduler sweep` run, reconciled with human direction.**
   Worth keeping the root-cause shape on file since it's a real pattern,
@@ -2344,13 +2457,24 @@ Both are small. Both have already been paid for once.
   ?scope=sweep-status` returns HTML when stale, JSON when fresh (see that
   repo's `tools/deploy.sh`). Opt-in, so projects with no deploy step are
   unaffected and the report stays byte-identical for them.
-- **Right-size per-tier model choice** (see Cost insight above) — audit each
-  registered project's `schedule/*.conf` `<TIER>_MODEL` fields; identify
-  which nightly/batch tiers are running Opus (or Opus-priced reasoning) for
-  work that's mechanical enough for Sonnet, and propose the downgrade
-  per-project (don't silently change other repos' confs from here — flag it,
-  same as other cross-project proposals). Opus is ~5x Sonnet per token, so
-  this is likely the single cheapest lever for slimming automation cost.
+- **Right-size per-tier model choice — AUDITED 2026-07-25 (paced cycle),
+  no downgrade needed anywhere.** Checked every `<TIER>_MODEL`-shaped
+  field across all real config, not just this repo's: `grep -i model`
+  over every `schedule/*.conf` here (only comment-text false positives,
+  e.g. aedile's "safety model" prose, no project actually sets any
+  `*_MODEL` field), plus every live installed `~/.local/bin/*-loop.sh`
+  wrapper (reading outside this repo is fine, same rule used elsewhere in
+  this file) — only `chezz-bug-sweep-loop.sh` sets `MODEL` at all, and
+  it's already `claude-sonnet-5` (its own comment: "runs the mechanical
+  triage/fix on Sonnet instead of the CLI default"). Confirmed from
+  `lib/sweep-loop-common.sh`'s own header + dispatch line (`${MODEL:+
+  --model "$MODEL"}`) that an unset `MODEL` means no `--model` flag at
+  all, i.e. every other project's nightly/batch/sweep tier already runs
+  on the plain CLI default, never Opus. So there is no live Opus-on-
+  mechanical-work cost to fix — this item's premise (find Opus tiers,
+  propose Sonnet) doesn't apply to anything actually configured today.
+  Revisit only if a project's conf or wrapper is ever changed to set
+  `*_MODEL=claude-opus-*` for routine work.
 
 - **DONE 2026-07-19: inline `%%TAG` feedback in reports.** The human
   reviews a report/tracker file directly in vim (mappings in `~/.vimrc`,
@@ -2704,18 +2828,47 @@ now need converging, in this order:
    `REPO_URL`/`SCHEDULER_SUBDIR` by name), `bash -n` clean on every edited
    conf.
 
-2. **Sweep pacing** — Tier 1 bug-sweeps (chezz, vkv-inventory) have been
-   sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
+2. **Sweep pacing — chezz DONE 2026-07-25 (paced cycle); vkv-inventory
+   deliberately deferred.** Tier 1 bug-sweeps (chezz, vkv-inventory) had
+   been sitting paused (`SWEEP_JOB_NAME=""`) since the usage-paced governor
    migration orphaned them. **Decision made 2026-07-20: fold sweeps into
    the main `_paced.conf` rotation** as ordinary participants alongside
    the Tier 2 batches (not a separate faster rotation) — accept the
    cadence drop (once per full rotation lap instead of every ~15min) as
-   the tradeoff for one dispatcher instead of two. **Next unattended
-   cycle: add chezz's and vkv-inventory's bug-sweep wrappers to
-   `schedule/_paced.conf`, un-pause `SWEEP_JOB_NAME` in their confs**
-   (pointing at the paced runner path, not a fixed cron), verify with a
-   `sync-crontab.sh` preview that the fixed sweep cron lines are now
-   suppressed the same way batch lines already are for paced participants.
+   the tradeoff for one dispatcher instead of two.
+
+   **Real gap found while implementing this, fixed first:**
+   `bin/sync-crontab.sh` only suppressed a paced participant's fixed cron
+   line for the BATCH tier (`is_paced "$PROJECT"` check), never for SWEEP
+   — so literally following this item's own instructions (restore
+   `SWEEP_JOB_NAME`/`SWEEP_CRON`, add the wrapper to `_paced.conf`) would
+   have double-dispatched chezz's bug-sweep: once on a real fixed cron
+   line, once from the paced rotation. Added the same `is_paced` check to
+   the SWEEP tier, mirroring BATCH exactly. Verified as a true no-op today
+   (byte-identical `sync-crontab.sh` stdout/stderr before/after, since no
+   project currently trips the new branch) before relying on it.
+
+   **Then, with that fixed:** added `chezz-sweep` as a new participant in
+   `schedule/_paced.conf` (`chezz-bug-sweep-loop.sh`, enabled, weight 1 —
+   a distinct line from the existing `chezz` BATCH participant, same
+   project) and un-paused `SWEEP_JOB_NAME="chezz-bug-sweep"`/
+   `SWEEP_SCRIPT=".../chezz-bug-sweep-loop.sh"` in `schedule/chezz.conf`
+   (no `SWEEP_CRON` — that's what tells `sync-crontab.sh` to suppress the
+   fixed-cron line now that `is_paced("chezz")` is true). Verified: `bash
+   -n` clean on `sync-crontab.sh`/`scheduler`/`usage-paced-runner.sh`; a
+   `sync-crontab.sh` preview now prints `note [chezz/SWEEP]: paced
+   participant -- fixed cron suppressed` and its stdout (the actual
+   generated crontab) stays byte-identical to before this whole change
+   (the sweep was never in the fixed crontab and still isn't — it's
+   dispatched by the paced runner instead); `scheduler status chezz`,
+   `scheduler` (glance), and `scheduler sweep` all ran clean end to end
+   with the new `chezz-sweep` line present, no confusion between it and
+   the registered `chezz` project. **`vkv-inventory`'s bug-sweep is NOT
+   folded in** — `vkv-inventory` itself is still `enabled=0` in
+   `_paced.conf` pending the separate, already-flagged svc-vaporwave
+   migration judgment call; adding its sweep to the rotation while the
+   project itself is paused would just be more surface on something
+   already blocked. Revisit once that call is made.
 
 3. **File layout — `SCHEDULER_SUBDIR=".scheduler"` propagation.** Was
    blocked on the permission-gate investigation above; that's now

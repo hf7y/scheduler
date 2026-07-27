@@ -165,14 +165,20 @@ usage: scheduler [command] [project]
   pacing max <n>         set PACED_MAX_PER_TICK (dispatches allowed per tick
                          before yielding back to cron even if usage-gate.sh
                          still says RUN), re-sync + apply, and commit
-  idea <project> "text", -i
-                         drop a new idea/feature-request for a project
-                         without opening an editor. realisateur gets a new
-                         .idea file (its own real inbox convention); every
-                         other project gets a timestamped line inserted
-                         into its FOCUS.md backlog/feature-request section
-                         (or a new "Ideas" section, created if the project
-                         has no FOCUS.md yet)
+  idea <project> ["text"], -i
+                         drop a new idea/feature-request for a project.
+                         realisateur gets a new .idea file (its own real
+                         inbox convention); every other project gets a
+                         timestamped line inserted into its FOCUS.md
+                         backlog/feature-request section (or a new "Ideas"
+                         section, created if the project has no FOCUS.md
+                         yet). Omit "text" to open $EDITOR instead: a
+                         normal project's FOCUS.md opens with a blank
+                         templated bullet already inserted at that same
+                         spot (existing ideas stay visible for context);
+                         leaving the placeholder line untouched and
+                         quitting cancels instead of committing an empty
+                         entry.
   sweep, -s              reactive backstop for the vim auto-commit hook --
                          scans every registered repo (+ scheduler itself)
                          for uncommitted/unpushed/diverged state the hook
@@ -191,6 +197,10 @@ usage: scheduler [command] [project]
                          where scope + questions live and how a reply
                          round-trips) -- for YOUR understanding, not
                          another design doc for an agent to read.
+  man, -m                open the maintained man page
+                         (docs/scheduler-cli.md) in $PAGER -- glance
+                         column meanings, the `*` convention, where each
+                         number comes from, and the files behind it all.
   <project>              shorthand for `status <project>` below (works
                          with a bare registered project name, no verb)
   status <project>, -c  offline (no AI) deep-dive on one project: git
@@ -314,6 +324,23 @@ WHAT'S NOT BUILT YET (don't assume these exist)
   - No project has moved off having a local checkout; the
     "scheduler owns scope, runs from anywhere" design is groundwork only.
 EOF
+}
+
+# cmd_man -- open the maintained man page (docs/scheduler-cli.md, where
+# the glance view's former in-screen explanation text moved, 2026-07-25).
+# Resolves script-relative first so a dev worktree's copy shows its own
+# doc; the deployed ~/.local/bin/scheduler symlink/copy has no ../docs,
+# so it falls back to the real checkout via SCHED_ROOT.
+cmd_man() {
+  local here doc
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  doc="$here/../docs/scheduler-cli.md"
+  [ -f "$doc" ] || doc="$SCHED_ROOT/docs/scheduler-cli.md"
+  if [ ! -f "$doc" ]; then
+    echo "scheduler: man page not found (expected docs/scheduler-cli.md)" >&2
+    return 1
+  fi
+  "${PAGER:-less}" "$doc"
 }
 
 projects() {
@@ -480,14 +507,124 @@ resolve_focus_path() {
   echo "$repo_path/${subdir:-.claude}/FOCUS.md"
 }
 
+# cmd_idea_editor -- the no-text-argument path (`scheduler -i <project>`
+# with nothing after the project name). Built 2026-07-25, batched from
+# FOCUS.md's 2026-07-20 backlog entry: open $EDITOR instead of failing
+# with a usage message. For a normal project, pre-populates a blank
+# templated bullet AT the real backlog insertion point on a scratch copy
+# of the real FOCUS.md, so existing/older ideas are naturally visible
+# right there while typing (no separate "show parked ideas" feature
+# needed) -- then either saves that edited copy over the real file (real
+# content was typed) or discards it (the placeholder line was left
+# untouched, i.e. cancelled) rather than leaving a stray empty entry.
+# realisateur gets a fresh scratch file with a comment placeholder
+# instead, matching its own bare `.idea`-file convention.
+cmd_idea_editor() {
+  local proj="$1"
+
+  if [ "$proj" = "realisateur" ]; then
+    local repo_path
+    repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
+    if [ -z "$repo_path" ]; then
+      echo "scheduler: realisateur has no PROJECT_REPO_PATH set" >&2
+      exit 1
+    fi
+    local tmp
+    tmp="$(mktemp)"
+    printf '# Idea for realisateur -- type below, then save+quit to submit.\n# Leave this empty (comment lines only) and quit to cancel.\n' > "$tmp"
+    "${EDITOR:-vi}" "$tmp"
+    local content
+    content="$(grep -v '^#' "$tmp" | sed '/^[[:space:]]*$/d')"
+    rm -f "$tmp"
+    if [ -z "$content" ]; then
+      echo "scheduler: idea cancelled (nothing typed)"
+      return 0
+    fi
+    local slug ts file
+    ts="$(date +%Y%m%d-%H%M%S)"
+    slug="$(printf '%s' "$content" | head -1 | tr -c 'a-zA-Z0-9' '-' | tr -s '-' | cut -c1-30 | sed 's/^-*//; s/-*$//')"
+    [ -n "$slug" ] || slug="idea"
+    file="$repo_path/${slug}-${ts}.idea"
+    printf '%s\n' "$content" > "$file"
+    echo "dropped: $file"
+    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle)"
+    cmd_commit_file "$file" "Idea added via \`scheduler -i\` (editor): $(basename "$file")"
+    return 0
+  fi
+
+  local focus_path
+  focus_path="$(resolve_focus_path "$proj")" || exit 1
+  local placeholder="(type your idea here -- leave this line untouched and quit to cancel)"
+  local ts="$(date '+%Y-%m-%d %H:%M')"
+  local line="- **$ts (via \`scheduler -i\`):** $placeholder"
+
+  local tmp
+  tmp="$(mktemp)"
+  if [ -f "$focus_path" ]; then
+    cp "$focus_path" "$tmp"
+    # Same insertion logic as the text-argument path below: into an
+    # existing backlog/feature-request section if one exists, else a new
+    # "Ideas" section appended at the end.
+    if awk -v IGNORECASE=1 '/^#+.*(backlog|feature request)/{f=1} END{exit !f}' "$tmp"; then
+      awk -v IGNORECASE=1 -v line="$line" '
+        { print }
+        !done && /^#+.*(backlog|feature request)/ { print ""; print line; done=1 }
+      ' "$tmp" > "$tmp.ins" && mv "$tmp.ins" "$tmp"
+    else
+      {
+        echo
+        echo "## Ideas (added via \`scheduler -i\`)"
+        echo
+        echo "$line"
+      } >> "$tmp"
+    fi
+  else
+    # New file: the placeholder line goes straight into the same "Ideas"
+    # section the scaffold creates, in one shot -- no separate insertion
+    # pass, so there's no second "## Ideas" heading appended right after
+    # the first one.
+    {
+      echo "<!-- Per-project scope marker -- this file was CREATED by"
+      echo "     \`scheduler -i\` from a dropped idea. It's just that idea,"
+      echo "     not a real scope doc yet -- flesh this out properly, or at"
+      echo "     least confirm it before the next unattended run treats it"
+      echo "     as gospel. -->"
+      echo
+      echo "## Ideas (added via \`scheduler -i\`)"
+      echo
+      echo "$line"
+    } > "$tmp"
+  fi
+
+  "${EDITOR:-vi}" "$tmp"
+
+  if grep -qF "$placeholder" "$tmp"; then
+    rm -f "$tmp"
+    echo "scheduler: idea cancelled (placeholder left untouched)"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$focus_path")"
+  mv "$tmp" "$focus_path"
+  echo "updated: $focus_path"
+  cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\` (editor): $(basename "$focus_path")"
+}
+
 cmd_idea() {
   local proj="${1:-}" text="${2:-}"
-  if [ -z "$proj" ] || [ -z "$text" ]; then
-    echo "usage: scheduler idea <project> \"idea text\""
+  if [ -z "$proj" ]; then
+    echo "usage: scheduler idea <project> [\"idea text\"]"
+    echo
+    echo "  (omit the idea text to open \$EDITOR instead)"
     echo
     echo "available projects:"
     projects | sed 's/^/  /'
     exit 1
+  fi
+
+  if [ -z "$text" ]; then
+    cmd_idea_editor "$proj"
+    return
   fi
 
   if [ "$proj" = "realisateur" ]; then
@@ -1092,20 +1229,12 @@ cmd_blockers_jump() {
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
+  # The full column-by-column explanation that used to print here every
+  # time moved to docs/scheduler-cli.md (`scheduler man`) -- flagged
+  # 2026-07-22: "move all this text to a man page, reduce to a single
+  # line summary above the column headers."
+  echo "  (* = new since you last opened it here; column details: scheduler man)"
   printf '  %-16s %-10s %-9s %-10s %-10s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "LAST RUN" "ETA" "NEXT UP"
-  echo "  (* = changed since you last opened it here. QUESTIONS is unopened/total --"
-  echo "  total includes ones you've already replied to inline but whose project run"
-  echo "  hasn't processed yet; see 'scheduler questions <project>' or the man-page-ish"
-  echo "  notes in \`scheduler\` usage/docs/feedback-tags.md for what 'total' counts."
-  echo "  LAST RUN is the age of that project's ~/reports/<project>/LATEST.md (a"
-  echo "  proxy for its last completed run, not a scheduler-tracked timestamp)."
-  echo "  NEXT UP is 1/<FOCUS.md backlog size>: <top item's title> -- just what the"
-  echo "  next run reads first, may reprioritize instead of clearing it outright."
-  echo "  ETA is FOCUS.md backlog size x this project's own average recent gap"
-  echo "  between paced dispatches (from usage-paced-runner.sh's log) -- a rough"
-  echo "  projection off real history, NOT a promise: assumes 1 backlog item"
-  echo "  clears per cycle, backlog size stays fixed, and recent pace holds."
-  echo "  'no history' = fewer than 2 recorded dispatches yet for that project.)"
   local any_blockers=0
   local global_eta_secs=0 global_eta_proj="" any_unknown_eta=0
   local any_unpushed=0
@@ -1124,10 +1253,26 @@ cmd_glance() {
     if [ -f "$qfile" ]; then
       read -r q_unanswered q_answered <<<"$(questions_counts "$qfile")"
       local q_total=$(( q_unanswered + q_answered ))
+      local q_star=""
       if [ "$q_total" -gt 0 ] 2>/dev/null; then
         qlabel="$q_unanswered/$q_total"
       fi
-      questions_unopened "$proj" "$q_unanswered" && qlabel="*$qlabel"
+      # `*` = this file changed since you last opened it via `scheduler
+      # questions`/`status` -- added 2026-07-22 so an open count doesn't
+      # read the same whether it's brand new or something you've already
+      # seen and just haven't gotten to. Approximate (file mtime vs a
+      # per-project "last opened" timestamp), not a real read-receipt.
+      questions_unopened "$proj" "$q_unanswered" && q_star="*"
+    fi
+    # Fixed-shape render: a reserved 1-char `*` slot + right-aligned
+    # numerator, so every row's `/` lands in the same column whether or
+    # not the star is present (flagged 2026-07-22: "formatting should
+    # leave blank spaces so asterisks don't nudge fractions over ...
+    # try to get all the / to line up").
+    if [ "$qlabel" = "-" ]; then
+      qlabel="  -"
+    else
+      qlabel="$(printf '%1s%2s/%s' "$q_star" "$q_unanswered" "$q_total")"
     fi
 
     # Excludes bullets already marked RESOLVED/PARKED inline (BLOCKERS.md's
@@ -1155,13 +1300,15 @@ cmd_glance() {
         insec { print }
       ' "$SCHED_ROOT/BLOCKERS.md" | md5sum | cut -d" " -f1)"
     fi
-    local blabel="-"
+    # Same reserved-star-slot treatment as QUESTIONS above, so a `*`
+    # never nudges the count out of column.
+    local blabel=" -"
     if [ "$bn" -gt 0 ] 2>/dev/null; then
-      blabel="$bn"
       any_blockers=1
-      local bseen
+      local bseen bstar=""
       bseen="$(get_seen "blockers:$proj")"
-      [ -n "$bsection" ] && [ "$bsection" != "$bseen" ] && blabel="*$blabel"
+      [ -n "$bsection" ] && [ "$bsection" != "$bseen" ] && bstar="*"
+      blabel="$(printf '%1s%s' "$bstar" "$bn")"
     fi
 
     # Cheap "what's coming" approximation: total bulleted backlog items
@@ -1259,7 +1406,9 @@ cmd_glance() {
       if [ -n "$f_total" ] && [ "$f_total" -gt 0 ] 2>/dev/null; then
         local kw="$f_keyword"
         [ "${#kw}" -gt 28 ] && kw="${kw:0:27}…"
-        next="1/$f_total: $kw"
+        # Right-aligned total so the `/` and `:` line up down the column
+        # (same 2026-07-22 formatting ask as the QUESTIONS column).
+        next="$(printf '1/%2s: %s' "$f_total" "$kw")"
       fi
     fi
 
@@ -2221,6 +2370,7 @@ case "${1:-}" in
   paced|-p) open_file "$PACED_CONF" ;;
   pacing) shift; cmd_pacing "$@" ;;
   explain|-e) cmd_explain ;;
+  man|-m) cmd_man ;;
   _commit-file)
     # Internal, not a documented user-facing verb (leading underscore
     # matches the schedule/_*.conf "meta, not a project" convention) --

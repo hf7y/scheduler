@@ -104,7 +104,11 @@ entries), format `- **YYYY-MM-DD (nightly-batch):** <text>`:
 
 `~/reports/<PROJECT NAME -- fill in>/$(date +%Y-%m-%dT%H%M).md`, then
 symlink `~/reports/<PROJECT NAME>/LATEST.md` to point at that exact file
-(don't write a second copy). Cover exactly: what
+(don't write a second copy). **First line of the file must be exactly**
+`**Headline:** <one sentence>` -- the single most important thing this
+run did or found, written so a downstream reader (or another tool
+aggregating across projects) never has to guess a summary from the first
+paragraph of prose. Below that, cover: what
 shipped (with commit references), what broke and got fixed, what was
 deliberately deferred and why (per FOCUS.md), any `NIGHTLY:`-flagged bugs
 resolved, a summary of any new feature-backlog ideas seen since the last

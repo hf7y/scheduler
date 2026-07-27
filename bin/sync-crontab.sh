@@ -437,6 +437,10 @@ for conf in "${CONF_FILES[@]}"; do
   # meant to run every N minutes in a fixed window, not once nightly, so
   # "batching" doesn't apply the same way. ---
   jn="${SWEEP_JOB_NAME:-}"; sc="${SWEEP_SCRIPT:-}"; cr="${SWEEP_CRON:-}"
+  if is_paced "$PROJECT" && { [ -n "$jn" ] || [ -n "$sc" ] || [ -n "$cr" ]; }; then
+    echo "note [$name/SWEEP]: paced participant -- fixed cron suppressed, dispatched by ${RUNNER_JOB:-usage-paced-runner}" >&2
+    jn=""; sc=""; cr=""   # fall through to the "not used" branch below
+  fi
   if [ -z "$jn" ] && [ -z "$sc" ] && [ -z "$cr" ]; then
     : # not used for this project
   elif [ -z "$jn" ] || [ -z "$cr" ]; then
