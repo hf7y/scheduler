@@ -1014,6 +1014,18 @@ human's own dotfiles.
   one pass, four pieces.** Subsumes the 2026-07-26 21:22 and 21:56
   entries below (same-shape re-arrival per realisateur/PRECIPITATION.md
   signal 1; merged so they can't be built separately and half-fixed).
+  **FIFTH OCCURRENCE, 2026-07-27 00:00, and it argues for the build order
+  below rather than against it:** the `*/15` sweep tick adopted THIS
+  session's in-flight FOCUS.md edit (the new Shared-host footprint
+  section) and committed it as `Human edit via scheduler: FOCUS.md` under
+  `hf7y <dangerpine@gmail.com>` — 51 lines an agent wrote, signed as the
+  human's, and pushed. Notable because it happened ~20 minutes AFTER the
+  human-presence marker guard shipped in this same session: no marker was
+  held, because this session started before the SessionStart hook was
+  installed and never opened a scheduler file through the front door. The
+  guard behaved exactly as documented; the point is that item (1) is the
+  only one of the four that needs to detect nothing at all. Do it first
+  and unconditionally, as already written.
   Build order inside the pass: (1) honest default commit message +
   distinct committer identity at the one place the default is set
   (`bin/scheduler`, ~line 706) — first and unconditional; (2) mtime
