@@ -1068,16 +1068,50 @@ to build sooner.
     `<p>.interactive`. So the one workflow the aggregation folders exist
     to enable — sit in scheduler, answer three projects' questions — is
     exactly the one the human-presence marker cannot see, and each of
-    those three projects reads FREE while you are typing into it. Two
-    candidate fixes, not yet chosen: resolve the marker from the FILE
-    being written (the vim hook already resolves symlink→project for its
-    commit; same lookup could stamp `<p>.interactive`), or accept it and
-    lean on item 2's mtime quiescence guard, which is symlink-agnostic
-    because it only looks at the real file. Prefer the second if only one
-    gets built — it needs no writer cooperation at all. Verified
-    2026-07-26 by reading both scripts plus an end-to-end
+    those three projects reads FREE while you are typing into it.
+    Verified 2026-07-26 by reading both scripts plus an end-to-end
     acquire/probe/release against a live pid (the mechanism itself works;
     this is a keying gap, not a bug in it).
+
+  - **CLOSED (front-door half) 2026-07-26, human-directed: "can't I lock a
+    project when I open its .md file via scheduler?"** — yes, and the
+    front door is the one writer that always knows which project's file it
+    is about to open. `bin/scheduler` now stamps `<p>.interactive` from
+    the FILE's project (`project_for_path()` resolves symlinks, so
+    `questions/wtul.md` marks **wtul**, not scheduler) immediately before
+    `exec "$EDITOR"` — and because `exec` REPLACES the process, the pid in
+    the marker *becomes the editor's own pid*. The marker therefore dies
+    exactly when your editor does: no trap, no cleanup, no SessionEnd
+    equivalent to miss, and no way to leave a lock holding after a crash.
+    That is the same self-healing property session-marker.sh chose, gotten
+    for free rather than defended. Covers `-q`/`-f`/`-r`/`-p` and both
+    jump paths; `-b` (BLOCKERS.md) is cross-project and holds nothing.
+    Reader half shipped in the same pass: `cmd_sweep` now defers its
+    auto-commit for any project with a live holder (item 3's "HONOR THE
+    EXISTING LOCK", scheduler-side) and prints what it held. No starvation
+    cap needed there — sweep only ever commits, so deferring leaves the
+    file exactly as the human has it, and the next 15-minute tick picks it
+    up once the editor exits. The vim hook's own commits are deliberately
+    unaffected: that path has real provenance, sweep does not.
+    - **Witnessed, not assumed** (isolated throwaway repo + scratch
+      `SCHED_ROOT`, so no real project was risked): live marker → sweep
+      printed `deferring auto-commit … (pid N)` and left the file dirty;
+      pid killed → next sweep committed it. Cross-checked against the
+      OTHER reader — `check-project-busy.sh testproj` reported `BUSY` off
+      the same marker, so both halves of the ecosystem agree on one file.
+      The first run of this test FAILED and caught a real bug: `local
+      proj="$1" marker="…$proj…"` expands every word before assigning any,
+      so `$proj` was unbound under `set -u`, the probe aborted, and sweep
+      committed anyway — a guard that fails OPEN. Fixed and re-witnessed.
+    - **STILL OPEN, the half that would have covered the wtul incident:**
+      the batch side. `lib/sweep-loop-common.sh` still has no probe, so a
+      project's own nightly run does not defer to a live editor. That one
+      DOES need the starvation cap (a long session must not silently
+      starve a project's batch forever) and it changes every project's
+      every job through one shared library, which is why it was not
+      bundled into this pass. Item 2's mtime quiescence guard also remains
+      wanted and independent: a marker only covers writers who take it,
+      and raw vim (not launched through the front door) still takes none.
 
 - **[batch] 2026-07-26 (human-directed log review) — `usage-gate.sh`
   swallows curl failures and never retries.** Observed, not hypothetical:
