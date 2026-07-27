@@ -903,6 +903,43 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **[batch] [recurring theme — for realisateur] 2026-07-26 (human-directed
+  session):** *Config changes land as uncommitted working-tree edits and
+  half-deploy.* Today's exhibit: the usage-gate ceiling. A prior session
+  was supposed to raise it 0.85 → 0.99; what was actually on disk was an
+  **uncommitted** `schedule/_runner.conf` edit setting `0.95`, already
+  synced into the live crontab. So the live value was wrong (0.95, not the
+  intended 0.99), it disagreed with the committed repo (0.85 default), and
+  one `git checkout`/`reset --hard` would have silently reverted the
+  deployed behaviour with nothing flagging it. Fixed by hand this session
+  (a9bffa2, ceiling now 0.99, crontab re-synced).
+  **This is the recurring shape, not a one-off** — it is the same failure
+  family as the 2026-07-26 09:32 entry below (`reset --hard` destroying
+  committed-but-unpushed work) and the 2026-07-26 11:08 autocommit-watcher
+  race: *state that the running system depends on lives in a working tree
+  nobody proves is clean.* Flagged for realisateur to treat as an
+  ecosystem theme (dirty-tree-as-deployed-config), not to fix one file.
+  Wanted here, concretely: `bin/sync-crontab.sh --apply` should refuse (or
+  loudly warn) when the `schedule/*.conf` it is generating from is dirty
+  relative to HEAD — deploying from uncommitted config is exactly the
+  "deploy verified against a git ref; drift fails loud" item in
+  CLAUDE.md's build discipline, currently unenforced. A `scheduler sweep`
+  check for "managed conf dirty / crontab disagrees with committed conf"
+  is the passive half.
+
+- **[batch] 2026-07-26 (human-directed session) — filed separately on
+  purpose:** the **config-settable usage ceiling** (see the 2026-07-25
+  17:06 entry further down for the full scoping: `schedule/_usage.conf`,
+  env-wins precedence, per-host `_usage.<host>.conf`, and naming what it
+  retires). Today's 0.99 change had to be made by editing `RUNNER_ENV` and
+  re-running `sync-crontab.sh --apply`, and the value now exists in two
+  places — the conf and `bin/usage-gate.sh:41`'s `0.85` default — which is
+  precisely the single-source violation that entry describes. Keeping this
+  as its own item rather than folding it into the dirty-tree theme above:
+  one is *where the value lives*, the other is *whether what's deployed
+  matches what's committed*. Both are real; fixing either alone leaves the
+  other.
+
 - **2026-07-26 13:14 (via `scheduler -i`):** Templates still teach the gated .claude/ layout -- update examples/ to .scheduler/ (realisateur, 2026-07-26). examples/FOCUS.md.template, nightly-batch.md.template, CLAUDE.md.template, schedule-entry.conf.template and README.md all still instruct new projects to put FOCUS.md/QUESTIONS.md in .claude/, where the harness sensitive-file gate makes them unwritable by the very nightly runs they scope. Every project scaffolded from these templates inherits the bug (realisateur's 2026-07-26 scaffolds only avoided it because the run hit the wall live and improvised .scheduler/). Ask: change the templates + README registration docs to teach .scheduler/{FOCUS,QUESTIONS}.md + SCHEDULER_SUBDIR=".scheduler" in the conf template, with a one-line rationale comment. Context: realisateur migrated its own files today (fa222cb + scheduler 1284b58); ecosystem pass for the 10 remaining .claude/ projects is queued in realisateur .scheduler/FOCUS.md; origin of the convention: BLOCKERS.md ## wtul 2026-07-24 (ffab7d9). This is scheduler's repo content, hence the front door per ideate.md section 5.
 
 - **2026-07-26 11:08 (via `scheduler -i`):** FOCUS-file autocommit watcher: two fixes queued from realisateur's 2026-07-26 write-race incident (see realisateur .claude/FOCUS.md same date, race entry). At ~10:30 the watcher committed a LIVE interactive session's uncommitted .claude/FOCUS.md edits as 'Human edit via scheduler' — under Zach's own name in realisateur (93ad456, published, cannot be reattributed) and as hf7y on crt's stale checkout — and its push moved origin under the session's feet. Proposed: (a) honest attribution — an adopted working-tree edit is 'autocommit-watcher', never 'Human edit'/a human's name; or refuse to adopt .claude/-gated files entirely; (b) before committing/pushing from a working tree it does not own, probe for a live interactive session (flock probe, same shape as realisateur's bin/check-project-busy.sh, pointed the other direction) and skip that tick if one is live. Second live exhibit of UNIVERSE.md's multi-writer FOCUS-file gap; realisateur is building its own half (atomic focus-commit.sh helper) separately.
