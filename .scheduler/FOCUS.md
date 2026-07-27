@@ -1350,7 +1350,25 @@ Both are small. Both have already been paid for once.
   byte-identical to before. `--allow-dirty` is the on-the-record override;
   `--check-clean` runs only the gate (0 clean / 2 dirty, writes nothing,
   reads no crontab) so the passive half below can call it without
-  duplicating the logic. Verified without ever invoking `--apply`: all
+  duplicating the logic.
+
+  **DONE (passive half) 2026-07-27, same cycle: `cmd_sweep` eighth pass.**
+  `scheduler sweep` now calls `sync-crontab.sh --check-clean` and reports a
+  `schedule/` that has been left sitting uncommitted — the state a human
+  never sees until some later `--apply` ships or drops an edit nobody
+  remembers making. It calls the gate rather than re-deriving the rule, so
+  the two halves can't disagree. Reports only, never auto-commits: adopting
+  someone's half-finished config edit is exactly the sweep-attribution
+  mistake being unpicked elsewhere in this file. rc 2 (the gate's own
+  dirty verdict) and any other nonzero rc are reported differently — an
+  installed `sync-crontab.sh` predating `--check-clean` says
+  "committed-ness UNKNOWN, not clean", not a false config finding. Note
+  `SCHED_ROOT` is the primary checkout, so the pass reports on the real
+  repo, not on whatever worktree a cycle runs from. Verified by exercising
+  all four branches (clean / dirty / old-script rc=1 / script absent).
+  **The backlog item above is now fully closed, both halves.**
+
+  Original verification of the active half, without ever invoking `--apply`: all
   four gate branches (clean/dirty/override/non-git) exercised by sourcing
   the gate's own bytes out of the script with `APPLY=1`, plus
   `--check-clean` end-to-end against a real dirty tracked conf, a real
