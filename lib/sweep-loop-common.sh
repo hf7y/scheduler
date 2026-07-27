@@ -190,6 +190,67 @@ if ! flock -n 201; then
   echo "$(date -Is) project '$PROJECT_KEY' already has an active job ($OTHER) -- skipping this run to avoid a concurrent-push conflict" >> "$LOG"
   exit 0
 fi
+# ---- job vs. HUMAN --------------------------------------------------------
+# The two flocks above are job-vs-job. This is the other half: is a person
+# editing this project right now? $REGISTRY_DIR/<PROJECT_KEY>.interactive is
+# written by realisateur/bin/session-marker.sh (a Claude session started under
+# this project's repo) and by bin/scheduler's front door (you opened one of
+# this project's .md files through `scheduler -q/-f/-r`). Same directory as
+# .active on purpose -- one place answers "is anything writing to this project
+# right now."
+#
+# LIVENESS IS A PID PROBE, never the file's existence. Neither writer can
+# guarantee a clean release (SessionEnd is not guaranteed on crash; an editor
+# can be SIGKILLed), so trusting the file alone would wedge this project's
+# batch permanently and SILENTLY -- introducing a silent-failure path in order
+# to fix a race, which is the trade this repo exists to refuse.
+#
+# STARVATION CAP, non-negotiable: "defer whenever a human is present" means a
+# long session starves this project's batch forever. After
+# INTERACTIVE_DEFER_MAX consecutive deferrals, proceed anyway and say so
+# LOUDLY. Warn-then-continue is a real failure pattern; silent indefinite
+# deferral is a worse one. The cap is the lesser evil and is visible either
+# way. Set INTERACTIVE_DEFER_MAX per job via RUNNER_ENV or the project's own
+# schedule/<key>.conf; 3 consecutive misses is roughly "you have been editing
+# across three of this project's turns."
+INTERACTIVE_MARKER="$REGISTRY_DIR/${PROJECT_KEY}.interactive"
+DEFER_COUNT_FILE="$STATE_DIR/interactive_deferrals"
+INTERACTIVE_DEFER_MAX="${INTERACTIVE_DEFER_MAX:-3}"
+
+HUMAN_PID="$(awk -F= '$1=="pid"{print $2}' "$INTERACTIVE_MARKER" 2>/dev/null || true)"
+if [ -n "$HUMAN_PID" ] && ! kill -0 "$HUMAN_PID" 2>/dev/null; then
+  HUMAN_PID=""    # stale marker: its writer is gone, so nobody is editing
+fi
+
+if [ -n "$HUMAN_PID" ]; then
+  DEFERRALS="$(cat "$DEFER_COUNT_FILE" 2>/dev/null || echo 0)"
+  case "$DEFERRALS" in ''|*[!0-9]*) DEFERRALS=0 ;; esac
+  DEFERRALS=$(( DEFERRALS + 1 ))
+  HUMAN_SINCE="$(awk -F= '$1=="started_at"{print $2}' "$INTERACTIVE_MARKER" 2>/dev/null || true)"
+  if [ "$DEFERRALS" -le "$INTERACTIVE_DEFER_MAX" ]; then
+    echo "$DEFERRALS" > "$DEFER_COUNT_FILE"
+    NOW_IS="$(date -Is)"
+    # A real ===-delimited run record, same reasoning as the expiry block
+    # below: a bare prose line is invisible to `scheduler status`, which
+    # would then re-report the PREVIOUS run as this project's current state
+    # and hide the fact that it has been standing down.
+    {
+      echo "=== $NOW_IS ==="
+      echo "deferred -- a human is editing '$PROJECT_KEY' right now (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}); no work attempted (no clone, no claude)."
+      echo "deferral $DEFERRALS of $INTERACTIVE_DEFER_MAX; the next dispatch runs anyway and says so loudly. Marker: $INTERACTIVE_MARKER"
+      echo "=== skipped (human editing, deferral $DEFERRALS/$INTERACTIVE_DEFER_MAX) $NOW_IS (0s) ==="
+    } >> "$LOG"
+    # Exit 4: distinct from success (0), fatal (1) and expired (3), so
+    # usage-paced-runner.sh's `rc=` line tells deferred from worked without
+    # parsing this log. The rotation simply comes back next tick.
+    exit 4
+  fi
+  # Cap reached -- proceed, but never quietly.
+  echo "$(date -Is) WARNING: proceeding despite a live interactive session on '$PROJECT_KEY' (pid $HUMAN_PID, since ${HUMAN_SINCE:-unknown}) -- $DEFERRALS consecutive deferrals reached INTERACTIVE_DEFER_MAX=$INTERACTIVE_DEFER_MAX. This run may write files you have open; your editor's next save reconciles via the vimrc 3-way merge." >> "$LOG"
+  notify-send -u critical "$JOB_NAME: running while you edit" "$PROJECT_KEY deferred $DEFERRALS times and is now running anyway (INTERACTIVE_DEFER_MAX=$INTERACTIVE_DEFER_MAX). Close the editor or expect a merge on save." 2>/dev/null || true
+fi
+rm -f "$DEFER_COUNT_FILE"
+
 echo "{\"job\":\"$JOB_NAME\",\"tier\":\"$TIER\",\"started_at\":\"$(date -Is)\",\"pid\":$$}" > "$REGISTRY_MARKER"
 trap 'rm -f "$REGISTRY_MARKER"' EXIT
 
