@@ -77,6 +77,112 @@ REPORT="$REPORTS_DIR/${DATE}-paced.md"
 MERGE_MODE_FILE="$STATE_DIR/merge_mode"
 merge_mode() { [ -f "$MERGE_MODE_FILE" ] && cat "$MERGE_MODE_FILE" || echo "merge"; }
 
+# ---- Reconciliation of PRIOR cycles (2026-07-27) --------------------------
+#
+# WHAT THIS RETIRES: the two "left for a human" dead ends further down --
+# the dirty-tree fallback ("merge_mode=merge but ... isn't clean/on-main
+# ... safe fallback") and the failed-push path ("CRITICAL: could not push
+# main after this cycle"). Both were safe in the moment and both ended the
+# cycle in a state that NOTHING EVER REVISITED. Because the day's branch is
+# created with `git worktree add -b paced/<date> ... main` (below), the next
+# day forks from `main` and the previous day's unmerged tail is orphaned
+# permanently -- no mechanism pointed at it again. The prose fallbacks stay
+# (they are still the right immediate move); what changes is that they are
+# now the FIRST half of a retry, not the whole story.
+#
+# Verified damage this was written against, re-probed not quoted --
+# `git log --oneline main..paced/2026-07-25` and `...07-26`, 2026-07-27:
+# 7 unmerged commits each, confirmed ABSENT from main file-by-file (not
+# superseded by later cycles), including `bin/deploy-drift-check.sh`,
+# `schedule/_usage.conf`, `docs/scheduler-cli.md`, and the `RESCUE_REF`
+# unpushed-commit guard in `lib/sweep-loop-common.sh`. Root cause read out
+# of ~/.local/share/scheduler-paced-dev/run.log, which logged the dirty-tree
+# fallback three times on 07-26 and never merged that branch again.
+#
+# WHY AT CYCLE START: the blockers are transient (a human mid-edit in vim,
+# a `sweep` autocommit in flight, a network blip on push) but the loss was
+# permanent. Running first means a blocker costs ONE CYCLE instead of the
+# work. Under the paced runner this retries every few minutes, so a branch
+# stays stranded only as long as the tree is genuinely busy.
+#
+# Never destructive: a conflicting merge is aborted and left for a human,
+# and no branch ref is ever deleted. A conflict is reported EVERY cycle
+# (honest -- the debt is still there) but notified only once per branch, so
+# a real blockage doesn't become notification spam that trains you to
+# ignore it.
+reconcile_prior_cycles() {
+  local mode b n ahead marker merged_any=0 conflicted=0
+
+  mode="$(merge_mode)"
+  if [ "$mode" != "merge" ]; then
+    echo "reconcile: merge_mode=$mode (manual pause) -- prior branches stay unmerged BY CHOICE, not by accident"
+    return 0
+  fi
+
+  # Same precondition as the merge below: never touch a tree someone else
+  # is working in. Difference from the old behavior is only what happens
+  # next -- this returns to be retried, it does not abandon anything.
+  if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" != "main" ] || [ -n "$(git status --porcelain)" ]; then
+    echo "reconcile: SKIPPED -- $SCHED_REPO is not clean/on-main (likely a human mid-edit). Retried next cycle; nothing is orphaned by this skip."
+    return 0
+  fi
+
+  git fetch origin main --quiet 2>&1 || echo "reconcile: fetch failed (network?) -- proceeding against local refs"
+
+  # Fast-forward onto origin first so merges land on the current base --
+  # but only when main has nothing of its own to lose. If main is ahead
+  # (the failed-push case) the push retry below is what resolves it.
+  if [ "$(git rev-list --count origin/main..main 2>/dev/null || echo 0)" -eq 0 ]; then
+    git merge --ff-only origin/main --quiet 2>&1 || true
+  fi
+
+  # (1) Every paced/<date> branch still holding commits main lacks --
+  # including today's, if an earlier cycle today failed to merge it.
+  # Oldest first, so recovered history lands in the order it was written.
+  for b in $(git for-each-ref --format='%(refname:short)' 'refs/heads/paced/*' 2>/dev/null | sort); do
+    n="$(git rev-list --count "main..$b" 2>/dev/null || echo 0)"
+    [ "${n:-0}" -gt 0 ] || continue
+    marker="$STATE_DIR/conflict-${b//\//-}"
+    echo "reconcile: $b holds $n commit(s) not on main -- attempting merge"
+    if git merge --no-ff --no-edit "$b" >/dev/null 2>&1; then
+      merged_any=1
+      echo "reconcile: MERGED $b into main -- $(git rev-parse HEAD) (revert with: git revert -m 1 $(git rev-parse HEAD))"
+      rm -f "$marker"
+    else
+      git merge --abort 2>/dev/null || true
+      conflicted=$((conflicted + 1))
+      echo "reconcile: CONFLICT merging $b -- aborted, main UNCHANGED. Needs a human: git merge $b"
+      if [ ! -f "$marker" ]; then
+        : > "$marker"
+        notify-send -u critical "$JOB_NAME" "$b conflicts with main -- $n commit(s) stranded, needs a hand merge (see $LOG)" 2>/dev/null || true
+      fi
+    fi
+  done
+
+  # (2) Push whatever is now ahead -- both the merges just made and any
+  # commits a previous cycle merged locally but could not push.
+  ahead="$(git rev-list --count origin/main..main 2>/dev/null || echo 0)"
+  if [ "${ahead:-0}" -gt 0 ]; then
+    echo "reconcile: local main is $ahead commit(s) ahead of origin/main -- pushing"
+    if git push origin main --quiet 2>&1; then
+      echo "reconcile: pushed -- local main and origin/main are level"
+    else
+      echo "reconcile: push FAILED -- local main left ahead of origin, will retry next cycle"
+      notify-send -u critical "$JOB_NAME" "reconcile could not push main ($ahead ahead) -- see $LOG" 2>/dev/null || true
+    fi
+  fi
+
+  # The summary line must never contradict the lines above it. An earlier
+  # draft printed "nothing to reconcile" straight after reporting two
+  # conflicts, because it keyed only on merged_any and ahead -- caught by
+  # the live witness in tests/reconcile-witness.sh, case 7.
+  if [ "$conflicted" -gt 0 ]; then
+    echo "reconcile: $conflicted branch(es) STILL STRANDED after this pass -- not clean, needs a hand merge"
+  elif [ "$merged_any" = "0" ] && [ "${ahead:-0}" -eq 0 ]; then
+    echo "reconcile: nothing to reconcile (no unmerged paced/* branches, main level with origin)"
+  fi
+}
+
 MAX_TURNS="${MAX_TURNS:-60}"
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
 NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
@@ -104,6 +210,14 @@ trap cleanup EXIT
 
   git worktree remove --force "$WORKTREE" 2>/dev/null || true
   git worktree prune
+
+  # Recover anything a previous cycle could not merge or push, BEFORE the
+  # branch below is created -- `git worktree add -b ... main` forks from
+  # main, so reconciling first is what stops a new day's branch from
+  # stepping over the previous day's stranded tail. See the function's
+  # header for the incident this was written against.
+  reconcile_prior_cycles
+
   # Branch paced/<date>: create from main on the day's first cycle, else reuse.
   if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
     git worktree add "$WORKTREE" "$BRANCH" || { echo "worktree add (reuse) failed"; exit 1; }
@@ -192,7 +306,7 @@ Commit each finished change with a clear message. Then append a section for THIS
           if [ "$PUSHED" = "1" ]; then
             notify-send "$JOB_NAME" "Pushed self-dev cycle $MERGE_SHA to origin/main -- review via revert: git revert -m 1 $MERGE_SHA" 2>/dev/null || true
           else
-            echo "CRITICAL: could not push main after this cycle -- local main is ahead of origin/main, needs a human"
+            echo "CRITICAL: could not push main after this cycle -- local main is ahead of origin/main. Retried automatically by reconcile_prior_cycles() next cycle (since 2026-07-27); needs a human only if that keeps failing."
             notify-send -u critical "$JOB_NAME" "self-dev cycle merged but COULD NOT PUSH -- local main ahead of origin, investigate $LOG" 2>/dev/null || true
           fi
         else
@@ -200,7 +314,7 @@ Commit each finished change with a clear message. Then append a section for THIS
           git merge --abort 2>/dev/null || true
         fi
       else
-        echo "merge_mode=merge but $SCHED_REPO isn't clean/on-main right now (likely another session's in-progress edit) -- leaving $BRANCH unmerged, safe fallback"
+        echo "merge_mode=merge but $SCHED_REPO isn't clean/on-main right now (likely another session's in-progress edit) -- leaving $BRANCH unmerged. NOT a dead end since 2026-07-27: reconcile_prior_cycles() retries this at the start of every later cycle."
       fi
     else
       echo "merge_mode=$MODE -- leaving $BRANCH unmerged for manual review (manual pause, not the default)"
