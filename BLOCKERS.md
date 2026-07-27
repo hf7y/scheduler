@@ -228,7 +228,6 @@ happened yet for any of them.
 
 ## gardien
 
-%%ACTION Write your AUTONOMY_TIER irreversibility-gate op list into this repo's own FOCUS.md (human decision, scheduler QUESTIONS.md 2026-07-25, translated to schedule/gardien.conf AUTONOMY_TIER="high" 2026-07-26): RAID writes are WORM-shaped -- copy/add/move-with-original-retained are revertible and may run autonomously under tier "high", but DELETE and DEDUP destroy information and are "genuinely irreversible actions" under the universal gate (scheduler FOCUS.md Vision section) -- they ALWAYS need explicit human sign-off regardless of tier. State that concrete op list (delete/dedup = human-gated, copy/move-with-original-retained = autonomous) in FOCUS.md as this project's specific instance of the gate, not a new guardrails concept.
 
 - *(Machine-append, scheduler paced cycle 2026-07-26: the tag line above
   is consumed by gardien's next scheduled run; this section can be moved
