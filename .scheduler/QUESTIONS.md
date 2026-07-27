@@ -247,46 +247,15 @@ its line once you've actually read and dealt with it.
   another host has a dispatch due imminently) is still queued as a fast
   follow, not a blocker.
 
-- **2026-07-25 (via /nightly-batch, paced cycle): does the axis-1
-  `bin/scheduler-run` migration (FOCUS.md "Consolidation roadmap" item 1)
-  need to change, given it's currently a no-op for every project it names?**
-  MIGRATION.md's flip (drop `*_SCRIPT`, verify `sync-crontab.sh` preview,
-  `--apply`) only affects entries in the *generated crontab* -- but
-  `chezz`, `home-assistant`, and `wtul` are all now dispatched as **paced
-  participants** instead, meaning `bin/usage-paced-runner.sh` execs the
-  literal wrapper-path string straight out of `schedule/_paced*.conf`'s
-  command column and never looks at `schedule/<project>.conf`'s
-  `BATCH_SCRIPT`/runtime fields or the generated crontab at all (confirmed
-  by reading `usage-paced-runner.sh`'s dispatch loop and by
-  `sync-crontab.sh` preview's own "paced participant -- fixed cron
-  suppressed" note for all three). `vkv-inventory` is disabled in
-  `_paced.conf` for an unrelated reason (unverified svc-vaporwave
-  migration). So dropping `BATCH_SCRIPT` for any of the four would edit a
-  file nothing currently reads for dispatch purposes -- it would look
-  "migrated" without moving anything. Two ways to actually finish axis-1
-  for a paced participant, and I don't want to guess which you'd prefer:
-  (a) change that project's line in `schedule/_paced*.conf` to invoke
-  `bin/scheduler-run <project> nightly-batch` instead of the wrapper path
-  directly -- the real switch, but a materially bigger/riskier edit than
-  MIGRATION.md describes: two hosts (mandark/dexter) pull and act on
-  `_paced*.conf` within one 5-minute tick, with no `--apply`-style human
-  gate the crontab flip has, so a mistake here is live much faster; or
-  (b) leave axis-1 explicitly scoped to *non-paced* projects only (rewrite
-  the FOCUS.md item to say so) and treat "paced participant still calls
-  its own wrapper" as an accepted, permanent shape rather than a debt to
-  pay off, since the paced runner's dispatch contract (`name|enabled|cmd`)
-  doesn't actually care whether `cmd` is a legacy wrapper or
-  `scheduler-run` under the hood -- there may be no real value being left
-  on the table by never doing (a). Full finding written up in FOCUS.md's
-  "Consolidation roadmap" item 1, same date.
-  > **(a) — converge on `scheduler-run`** (answered 2026-07-26, interactive
-  > /ideate, Zach). Rewrite the `_paced*.conf` command column to invoke
-  > `bin/scheduler-run`, but sequenced AFTER a safety gate lands first:
-  > the paced runner must dispatch from a committed/validated copy of the
-  > conf (the symlink-deploy import + the "sync-crontab refuses dirty
-  > confs" item both point the same way), so a half-saved edit can't go
-  > live within one 5-minute tick on two hosts. Rationale + sequencing in
-  > DESIGN-NOTES.md 2026-07-26 (/ideate pass) and FOCUS.md axis 1.
+- **RESOLVED 2026-07-27 (paced cycle) — axis-1 `bin/scheduler-run`
+  migration for paced participants.** Answered 2026-07-26 (interactive
+  /ideate, Zach): **option (a)**, converge the `_paced*.conf` command
+  column on `bin/scheduler-run`, sequenced AFTER the "dispatch from a
+  committed/validated conf" gate lands. Full answer, rationale and
+  sequencing now live in FOCUS.md "Consolidation roadmap" item 1 and
+  DESIGN-NOTES.md 2026-07-26 — this entry is consumed so no later cycle
+  re-asks it. Half of that gate (`sync-crontab.sh --apply` refuses dirty
+  `schedule/`) landed 2026-07-27; the symlink-deploy half has not.
 
 - **2026-07-25 (via /nightly-batch, paced cycle): `.claude/commands/nightly-batch.md`'s
   own report-filename bug (line 68, `$(date +%Y-%m-%d).md`) can't be fixed

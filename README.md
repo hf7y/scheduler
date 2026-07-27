@@ -42,13 +42,32 @@ scope-input and flagged-questions are browsable/editable from one place.
 Deregistering: delete the conf, re-run `--apply` (the managed crontab block
 is fully regenerated from whatever confs currently exist).
 
+### Committed-config gate
+
+`--apply` refuses (exit 2) when `schedule/` is dirty relative to `HEAD` —
+any tracked modification, staged change, or untracked `schedule/*.conf`.
+Deploying cron lines generated from an uncommitted working tree is config
+that exists in one directory and nowhere in history; this repo has already
+been bitten by exactly that (2026-07-26, a usage-ceiling edit that lived
+only in the working tree, `a9bffa2`). Same rule if the tree isn't inside a
+git repo at all — unverifiable is treated as dirty, not as clean.
+
+- **Preview (no `--apply`) still works on a dirty tree** and only warns on
+  stderr. Checking what an in-progress edit would produce, before
+  committing it, is the intended workflow.
+- `--allow-dirty` overrides the refusal deliberately, and says so in the
+  output.
+- `bin/sync-crontab.sh --check-clean` runs *only* this gate and exits
+  0 (clean) or 2 (dirty/unverifiable). Writes nothing and reads no
+  crontab, so it's safe to call from a sweep or another script.
+
 ## What's in here
 
 | Path | What it is |
 |---|---|
 | `lib/sweep-loop-common.sh` | The engine: lock / expiry / heartbeat / dedicated clone / `reset --hard` / invoke-claude / push-verify / cross-tier registry mutex. Sourced, not run. |
 | `bin/scheduler-run` | Generic entrypoint. `scheduler-run <project> <sweep\|batch>` reads `schedule/<project>.conf` and sources the engine. Replaces per-project `~/.local/bin/*-loop.sh` wrappers. |
-| `bin/sync-crontab.sh` | Reads every `schedule/*.conf`, rewrites only the scheduler-managed crontab block, auto-staggers `BATCH_CRON=auto` slots, syncs `questions/`+`focus/` symlinks. Preview by default; `--apply` writes. |
+| `bin/sync-crontab.sh` | Reads every `schedule/*.conf`, rewrites only the scheduler-managed crontab block, auto-staggers `BATCH_CRON=auto` slots, syncs `questions/`+`focus/` symlinks. Preview by default; `--apply` writes. `--apply` **refuses** if `schedule/` is dirty relative to HEAD (or isn't verifiable against a git ref) — see "Committed-config gate" below. |
 | `bin/tracker-bug-sweep-precheck.sh` | Reusable `PRECHECK_CMD` gate: skips the `claude` call entirely when the tracker's open-report set is unchanged. |
 | `bin/morning-report.sh` | **Deprecated 2026-07-20** — superseded by `bin/scheduler` (see below). Aggregates every project's `~/reports/<project>/LATEST.md` + flagged questions, prints a `DEPLOY PENDING` line for a stale deploy. Left working, not the thing to build against now. |
 | `bin/scheduler` | The current CLI — `scheduler` (glance — also flags any registered project sitting on stranded, unpushed commits in its dedicated clone, e.g. a silent push-credential gap, or a branch beyond `main` with unmerged commits (a finished `nightly/<date>`/`paced/<date>` cycle nobody merged yet), without needing a separate `sweep` run), `scheduler -b/-f/-q/-r [project]`, `scheduler -i <project> "idea"` (auto-commits, never auto-pushes), `scheduler status <project>` (`-c`; offline git/feedback/questions/last-run deep-dive, no AI by default — `--claude` for a read-only one-shot summary, `--interactive`/`-I` for a live session preloaded with the same report), `scheduler <project>` (bare registered project name, no verb — shorthand for `scheduler status <project>`), `scheduler sweep`/`-s` (offline, read-only except auto-committing safe `*.md` drift: dirty working checkouts, unpushed dedicated clones, and stale `~/.local/share/scheduler-registry/*.active` markers left by a run that was killed/crashed before its own exit trap could clean up). `~/.local/bin/scheduler` is a symlink to this file (see `.scheduler/FOCUS.md` item 3). |
