@@ -6,7 +6,23 @@ controls all the other jobs.
 
 ## Stability milestone
 
-**Current:** scheduler dispatches every registered project unattended with zero silent failures — a run that gets cut off, can't push, or has its assumed external dependency (a migrated crontab, a credential) quietly stop being true is always flagged loudly, never left to look like nothing happened — and the user can explain how the system actually works instead of just trusting `bin/scheduler` to smooth over the parts they don't follow — status: in-progress
+**Current:** the entire human surface is three stable PRINTABLE views — `scheduler` noargs (now/next + one-line gate/dials footer), `scheduler <project>` (detail, inline reply, reorder/reweight from there), `scheduler blockers` (the one blocked-on-you place) — with the legacy views (glance/status/overview/next/explain/focus/questions/report/pacing-show as separate surfaces) retired to one-line redirect stubs and `usage()` ≤ ~20 lines; ACCRETION FREEZE holds until then (no view gains a legend line or new verb — new needs go into the spec) — status: in-progress
+
+*(Declared 2026-07-26, interactive /ideate, human-directed: adopted from
+the 2026-07-25 19:51 front-door-consolidation entry in the Backlog, which
+carries the full locked decisions — HARD FOLD + RETIRE, STATIC + VERBS no
+TUI, DIALS as a one-line footer. This is Law 3's first retirement-pressure
+proof per realisateur/UNIVERSE.md, and the stated `_paced.conf` weight
+exit: scheduler 4→3, realisateur 3→1 when this bar is reached.)*
+
+**Previous milestone (zero silent failures) — 4 of 5 boxes done; treated
+as reached-pending-external 2026-07-26:** the one open box (every
+project's `/nightly-batch` consuming its own QUESTIONS replies — the
+vkv-inventory gap) is routed to realisateur and cannot be closed from
+this repo; it stays tracked below as that project's obligation, not as
+this repo's active bar. Original bar text follows for the record:
+
+scheduler dispatches every registered project unattended with zero silent failures — a run that gets cut off, can't push, or has its assumed external dependency (a migrated crontab, a credential) quietly stop being true is always flagged loudly, never left to look like nothing happened — and the user can explain how the system actually works instead of just trusting `bin/scheduler` to smooth over the parts they don't follow — status: in-progress
 Done when:
 - [x] Stale `.active`-marker / stranded-run detection built (a run cut off before any commit shows up nowhere today) — queued 2026-07-20, built on `paced/2026-07-24` and reconciled into `main` 2026-07-24: `cmd_sweep` in `bin/scheduler` scans `~/.local/share/scheduler-registry/*.active` and flags any marker whose PID is no longer running as stranded (its EXIT trap never fired — killed, crashed, or a reboot, most likely before any commit, which is why the git-based checks can't see it), plus a softer "still running, unusually long" flag for a live PID past `STALE_ACTIVE_MARKER_SECONDS` (default 7200s). Verified with fabricated markers (dead-PID correctly flagged STALE, live-PID/just-started correctly silent).
 - [x] Stale/incomplete-push visibility built (`pushed: no` in `scheduler status`/`sweep.log` says WHY — spend-limit cutoff vs. something else — instead of a silent generic no-op; this is what the 2026-07-24 chezz/wtul credential-gap misdiagnosis actually needed and didn't have). Built this paced cycle: `lib/sweep-loop-common.sh`'s existing `WARNING: local commit made but NOT pushed` case now emits a `push reason:` line distinguishing four causes — claude's own run exited non-zero (STATUS=FAILED, likely a turn/spend cutoff before it reached a push step); `git ls-remote` couldn't read `origin/$BRANCH` at all (SSH/auth/network failure); local is a clean fast-forward of remote and a read-only `git push --dry-run` says it WOULD succeed (claude simply never ran `git push` this cycle, not a credential/conflict problem); or remote has commits local doesn't (genuinely diverged, needs merge/rebase, not a credential issue). All read-only (`--dry-run` only, no live push attempted by this diagnostic). `bin/scheduler`'s `build_status_report` now greps and surfaces the new `push reason:` line alongside the existing `WARNING:` line. Verified: `bash -n` on both files; the fast-forward/dry-run-succeeds and genuinely-diverged branches each reproduced against real throwaway git repos; the unreachable-remote branch reproduced with `env -u SSH_AUTH_SOCK` (simulating cron with no agent) against a real GitHub SSH remote, correctly surfacing "Permission denied (publickey)" as the reason instead of a generic no-op; a fabricated `sweep.log` confirmed `scheduler status`'s grep picks up the new line end to end. Earlier partial progress (the glance-view "stranded local commits" footer, visibility that it's unpushed) stays as-is, unchanged. The credentials half (issuing a real deploy key per repo) is still human-only, unchanged.
@@ -903,7 +919,71 @@ to build sooner.
 
 ## Backlog (the intake — add a line to propose an idea)
 
-- **[batch] 2026-07-26 22:15 (human-directed, /ideate) — split the one
+- **[batch] [iface: sweep-attribution] 2026-07-26 (interactive /ideate,
+  human-approved) — MERGED build item: the sweep-attribution regulator,
+  one pass, four pieces.** Subsumes the 2026-07-26 21:22 and 21:56
+  entries below (same-shape re-arrival per realisateur/PRECIPITATION.md
+  signal 1; merged so they can't be built separately and half-fixed).
+  Build order inside the pass: (1) honest default commit message +
+  distinct committer identity at the one place the default is set
+  (`bin/scheduler`, ~line 706) — first and unconditional; (2) mtime
+  quiescence guard (`find -mmin +N`) — covers non-cooperative writers;
+  (3) job-side `.interactive`-marker probe in `lib/sweep-loop-common.sh`
+  (kill -0 on the pid field, never flock; MUST carry the starvation cap
+  — after N deferrals proceed loudly); (4) `scheduler -i --agent <name>`
+  provenance variant so precipitation-scan's HUMAN/INBOX classification
+  stays exact. Full design detail stays in the two subsumed entries —
+  this entry is the dispatch unit, those are the spec.
+
+- **[batch] [iface: usage-ceiling-conf] 2026-07-26 (interactive /ideate,
+  human-approved) — MERGED build item: the usage-ceiling work is ONE
+  pass, not three.** Subsumes the 2026-07-26 22:15 two-ceilings split,
+  the 2026-07-25 17:06 config-settable-ceiling scoping, and the
+  2026-07-26 filed-separately pointer below. One `schedule/_usage.conf`
+  with TWO keys (admission ceiling ~0.95 — derived-from-observed-batch-
+  size as the named goal — and weekly target 0.99), env-wins precedence,
+  per-host override, admission plausibly reading the 5h window, and the
+  single-source cleanup naming what it retires (`usage-gate.sh:41`'s
+  inline default, the `RUNNER_ENV` retyping). The subsumed entries hold
+  the full scoping; this is the dispatch unit.
+
+- **[batch] [iface: crash-durability] 2026-07-26 (interactive /ideate,
+  human-approved) — MERGED build item: one guard for crash aftermath,
+  both halves, same code site.** Subsumes the 2026-07-26 09:32 entry
+  (bootstrap `reset --hard` destroys committed-but-unpushed commits —
+  rescue ref `rescue/<JOB_NAME>-<date>` before reset when
+  `rev-list origin/$BRANCH..HEAD > 0`) and the 2026-07-26 log-review
+  crash-aftermath entry (STATUS=FAILED leaves a dirty worktree the next
+  reset wipes — commit-or-stash onto `crashed/<project>/<date>`,
+  untracked files included) below. Both live in
+  `lib/sweep-loop-common.sh` around the existing stash guard (~line 288)
+  and the FAILED path; building one without the other leaves a run's
+  work destroyable by the half not built. Name both refs in the report.
+
+- **[batch] 2026-07-26 (interactive /ideate, human-APPROVED — this is the
+  `> ` answer to BLOCKERS.md ## realisateur call 4): the catabolic
+  worklist from realisateur/PLAYBOOK.md Play 3 — retire ~1,000
+  already-self-labeled-superseded lines.** One retirement per pass, each
+  commit naming what retires it: `morning-report.sh` + `morning-report.md`;
+  `build-services-view.sh` + `services/`; both `overnight-dev.sh` copies;
+  the two 162-line loop-script forks (`scheduler-`/`aedile-nightly-batch-
+  loop.sh` → 5-line shim; NOTE: gated behind the axis-1 (a) flip above
+  for the scheduler one); `sync-crontab.sh`'s dead auto-stagger
+  subsystem. (`incubation-audit.sh` is realisateur's own, not this
+  repo's.)
+
+- **[batch] 2026-07-26 (interactive /ideate, human-APPROVED — this is the
+  `> ` answer to BLOCKERS.md ## realisateur call 3, subset a-c): import
+  swaps from realisateur/PLAYBOOK.md Play 2.** (a) symlinks replace
+  `scheduler pacing deploy`/`deployable_scripts()`/drift reporting —
+  ALSO the safety-gate prerequisite for the axis-1 (a) flip, do first;
+  (b) `ccusage` replaces `bin/token-usage.sh`'s 262-line parsing core,
+  keeping the ~35-line conf→session-dir mapping; (c) `gitleaks` replaces
+  `hygiene-lint.sh`'s hand secret regexes, staying inside the exit-0
+  signals-not-verdicts harness. (d) restic/rsnapshot deferred until
+  gardien unparks — not approved yet, per the same answer.
+
+- *(subsumed by [iface: usage-ceiling-conf] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **[batch] 2026-07-26 22:15 (human-directed, /ideate) — split the one
   ceiling into TWO numbers: a per-dispatch admission ceiling and a weekly
   target.** Today `USAGE_CEILING` is a single value doing two unrelated
   jobs, and raising it to 0.99 (a9bffa2) to chase the weekly target
@@ -936,7 +1016,7 @@ to build sooner.
   the conf needs two keys instead of one. Doing them separately means
   shipping a one-key conf and immediately re-cutting it.
 
-- **2026-07-26 21:56 (via `scheduler -i`):** ITEM 3 of the sweep-attribution regulator, JOB-SIDE HALF (realisateur built its half 2026-07-26, see below). Zach's framing: "just as likely I am interactively working with scheduler while its batch fires... a way to lock the repo while interacting seems prudent, a default way that requires no human discipline is the way to build." CORRECTION to how item 3 was originally filed: the ecosystem-wide per-project lock ALREADY EXISTS and needs no new infrastructure -- lib/sweep-loop-common.sh keys REGISTRY_LOCK by PROJECT_KEY (not JOB_NAME) in ~/.local/share/scheduler-registry/, and its own comment states that is precisely what makes every tier/job for one project contend for one slot. Every registered project's every job already takes it automatically through that one shared library. So the gap is NOT "build a lock"; it is that the lock is JOB-VS-JOB ONLY and nothing in the system represents a HUMAN. DONE ALREADY (realisateur side, no scheduler change needed): (a) bin/check-project-busy.sh promoted to probe the canonical registry lock first -- it previously scanned only per-job dirs and explicitly EXCLUDED scheduler-registry, re-deriving by directory-name guessing what the registry states canonically; the per-job scan is now a fallback for pre-registry jobs and is skipped when the registry already answered. (b) bin/session-marker.sh + global ~/.claude/settings.json SessionStart/SessionEnd hooks now write ~/.local/share/scheduler-registry/<PROJECT_KEY>.interactive whenever a Claude session starts anywhere under a registered PROJECT_REPO_PATH -- one config, every project, zero per-project scaffolding, zero human discipline, silent no-op for unrelated work on this machine. It lands in the SAME directory as the .active job marker so one place answers "is anything writing to this project right now". CRITICAL DESIGN CONSTRAINT, verified against the hooks reference and by test: SessionEnd is NOT guaranteed to fire on crash or SIGKILL, so the marker must NEVER be an flock held by a detached process -- that would orphan and wedge a project's batch permanently and silently, a silent-failure path introduced to fix a race. Liveness is therefore a PID probe (kill -0), release is only the fast path, and a crashed session's marker reads FREE by construction; negative-tested with a dead pid. WHAT SCHEDULER NEEDS TO BUILD: in lib/sweep-loop-common.sh, after the existing two flocks, probe <PROJECT_KEY>.interactive the same way (kill -0 on the pid field, NOT file existence) and if a live human session holds it, log and exit 0 -- deferring to the next tick. Because that library is the shared entrypoint for every registered project's every job, this is one edit that all projects inherit, matching the same one-place property the REGISTRY_LOCK already has. Deferral is cheap: the paced runner is a rotation, it comes back. MUST INCLUDE A STARVATION CAP: "defer whenever a human is present" means a long interactive session silently starves that project's batch forever, so after N consecutive deferrals proceed anyway and log LOUDLY (warn-then-continue is failure pattern 8, but silent indefinite deferral is pattern 1, which is worse -- the cap is the lesser evil and must be visible either way). ALSO STILL WANTED, and independent of the lock: item 2's mtime quiescence guard, because a lock only protects writers who take it and vim, a raw shell, and `scheduler sweep` itself never will -- lock for cooperative writers, mtime for everyone else, both not either. Live witness the same session: `check-project-busy.sh senechal` correctly reported BUSY from the registry lock while senechal-nightly-batch was mid-run (pid 96695, started 21:55:03), and realisateur DEFERRED a cross-write it was about to make into senechal's FOCUS.md as a result -- the guard working end to end, against a real job, before this was even finished.
+- *(subsumed by [iface: sweep-attribution] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **2026-07-26 21:56 (via `scheduler -i`):** ITEM 3 of the sweep-attribution regulator, JOB-SIDE HALF (realisateur built its half 2026-07-26, see below). Zach's framing: "just as likely I am interactively working with scheduler while its batch fires... a way to lock the repo while interacting seems prudent, a default way that requires no human discipline is the way to build." CORRECTION to how item 3 was originally filed: the ecosystem-wide per-project lock ALREADY EXISTS and needs no new infrastructure -- lib/sweep-loop-common.sh keys REGISTRY_LOCK by PROJECT_KEY (not JOB_NAME) in ~/.local/share/scheduler-registry/, and its own comment states that is precisely what makes every tier/job for one project contend for one slot. Every registered project's every job already takes it automatically through that one shared library. So the gap is NOT "build a lock"; it is that the lock is JOB-VS-JOB ONLY and nothing in the system represents a HUMAN. DONE ALREADY (realisateur side, no scheduler change needed): (a) bin/check-project-busy.sh promoted to probe the canonical registry lock first -- it previously scanned only per-job dirs and explicitly EXCLUDED scheduler-registry, re-deriving by directory-name guessing what the registry states canonically; the per-job scan is now a fallback for pre-registry jobs and is skipped when the registry already answered. (b) bin/session-marker.sh + global ~/.claude/settings.json SessionStart/SessionEnd hooks now write ~/.local/share/scheduler-registry/<PROJECT_KEY>.interactive whenever a Claude session starts anywhere under a registered PROJECT_REPO_PATH -- one config, every project, zero per-project scaffolding, zero human discipline, silent no-op for unrelated work on this machine. It lands in the SAME directory as the .active job marker so one place answers "is anything writing to this project right now". CRITICAL DESIGN CONSTRAINT, verified against the hooks reference and by test: SessionEnd is NOT guaranteed to fire on crash or SIGKILL, so the marker must NEVER be an flock held by a detached process -- that would orphan and wedge a project's batch permanently and silently, a silent-failure path introduced to fix a race. Liveness is therefore a PID probe (kill -0), release is only the fast path, and a crashed session's marker reads FREE by construction; negative-tested with a dead pid. WHAT SCHEDULER NEEDS TO BUILD: in lib/sweep-loop-common.sh, after the existing two flocks, probe <PROJECT_KEY>.interactive the same way (kill -0 on the pid field, NOT file existence) and if a live human session holds it, log and exit 0 -- deferring to the next tick. Because that library is the shared entrypoint for every registered project's every job, this is one edit that all projects inherit, matching the same one-place property the REGISTRY_LOCK already has. Deferral is cheap: the paced runner is a rotation, it comes back. MUST INCLUDE A STARVATION CAP: "defer whenever a human is present" means a long interactive session silently starves that project's batch forever, so after N consecutive deferrals proceed anyway and log LOUDLY (warn-then-continue is failure pattern 8, but silent indefinite deferral is pattern 1, which is worse -- the cap is the lesser evil and must be visible either way). ALSO STILL WANTED, and independent of the lock: item 2's mtime quiescence guard, because a lock only protects writers who take it and vim, a raw shell, and `scheduler sweep` itself never will -- lock for cooperative writers, mtime for everyone else, both not either. Live witness the same session: `check-project-busy.sh senechal` correctly reported BUSY from the registry lock while senechal-nightly-batch was mid-run (pid 96695, started 21:55:03), and realisateur DEFERRED a cross-write it was about to make into senechal's FOCUS.md as a result -- the guard working end to end, against a real job, before this was even finished.
 
 - **[batch] 2026-07-26 (human-directed log review) — `usage-gate.sh`
   swallows curl failures and never retries.** Observed, not hypothetical:
@@ -961,7 +1041,7 @@ to build sooner.
   Keep ERROR→HOLD as the terminal behaviour — this only stops one packet
   loss from being indistinguishable from "the API is down."
 
-- **[batch] 2026-07-26 (human-directed log review) — a batch that dies
+- *(subsumed by [iface: crash-durability] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **[batch] 2026-07-26 (human-directed log review) — a batch that dies
   mid-turn leaves its worktree dirty, and the next run silently discards
   the work.** Today's three failures were all transient API drops, not
   project bugs: gardien 19:56 (`API Error: Unable to connect to API
@@ -989,7 +1069,7 @@ to build sooner.
   reason:` diagnostic, which already explains *why* nothing was pushed but
   does nothing to save what was written.
 
-- **2026-07-26 21:22 (via `scheduler -i`):** REGULATOR for the sweep-attribution interface (4 items, one cause). Root cause traced 2026-07-26 by realisateur: `scheduler sweep` (crontab */15) walks every registered repo's PRIMARY WORKING TREE, finds any dirty *.md, and calls cmd_commit_file with NO message arg -- so it falls through to the default "Human edit via scheduler: <file>". Its assumption (dirty .md == a human left an edit in vim) was true when vim was the only writer of these files and is false now that agent sessions edit the same tree. Fourth occurrence 2026-07-26 21:00 (prior: 13:15 same day, and two earlier): it adopted a live interactive session's in-flight PRECIPITATION.md/UNIVERSE.md/ideate.md -- a 192-line file that had not existed 20 minutes before -- and signed Zach's name and email to all three. NOTE the scope is wider than FOCUS files: ANY dirty *.md in ANY registered repo is fair game on a 15-minute clock, including half-written drafts. Batch isolation is NOT the gap and needs no change -- scheduled jobs already run against dedicated clones that reset hard to origin (cmd_commit_file's own comment says so, and sweep already has a second pass over them). Nor is "interactive sessions branch" a fix: sweep would commit the branch under Zach's name just the same, treating divergence while leaving false authorship intact. (1) HONEST ATTRIBUTION, one-line change at the single place the default msg is set (~line 706), do this first and unconditionally: sweep has NO provenance -- unlike -i and the vim hook, where a human demonstrably acted, it merely found a dirty file. It should say what is true ("sweep: auto-commit uncommitted <file>") and commit under a distinct identity the way the nightly already does with hf7y. This alone ends the provenance laundering without needing to detect sessions at all. (2) QUIESCENCE GUARD: a file modified 40 seconds ago is work in flight; one modified 3 hours ago is an abandoned edit. Skip commit unless mtime is older than N minutes (find -mmin +N). Needs no knowledge of Claude or vim and would have prevented the 21:00 case outright. (3) HONOR THE EXISTING LOCK, the real end state: realisateur/bin/check-project-busy.sh already probes flock on job dirs and its header explicitly chose locks over "guessing from mtimes". An interactive session should take that same lock and sweep should skip locked projects -- reusing the one regulator rather than inventing a second. (4) AGENT-AUTHOR VARIANT FOR -i (Zach's call, 2026-07-26): cmd_idea writes one fixed marker, "(via scheduler -i)", identical whether Zach typed it or an agent filed it -- so intake provenance is lost at the source, not just at sweep time. Proposal: an explicit agent variant (e.g. "scheduler -i --agent <name> <project> TEXT") writing a distinguishable marker and committing under an agent identity. This is not cosmetic: realisateur/bin/precipitation-scan.sh classifies entries INBOX/HUMAN/LOG by parsing exactly that string to decide what counts as a promotion signal, and PRECIPITATION.md ranks re-arrival of a HUMAN-origin idea as the strongest signal in the ecosystem. With no agent variant, an agent-filed idea is indistinguishable from a human-filed one, so the system can manufacture its own promotion evidence and boost its own suggestions -- a closed feedback loop in the one place the doctrine is most load-bearing. The variant makes that classification exact instead of inferred. Filed via the front door per /ideate 5 (engine change, realisateur does not hand-edit scheduler). Full trace + the ranked-signal doctrine: realisateur/PRECIPITATION.md and UNIVERSE.md (Law 3 / the Ashby reading -- this is the multi-writer FOCUS-file interface, still the ecosystem's least-regulated).
+- *(subsumed by [iface: sweep-attribution] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **2026-07-26 21:22 (via `scheduler -i`):** REGULATOR for the sweep-attribution interface (4 items, one cause). Root cause traced 2026-07-26 by realisateur: `scheduler sweep` (crontab */15) walks every registered repo's PRIMARY WORKING TREE, finds any dirty *.md, and calls cmd_commit_file with NO message arg -- so it falls through to the default "Human edit via scheduler: <file>". Its assumption (dirty .md == a human left an edit in vim) was true when vim was the only writer of these files and is false now that agent sessions edit the same tree. Fourth occurrence 2026-07-26 21:00 (prior: 13:15 same day, and two earlier): it adopted a live interactive session's in-flight PRECIPITATION.md/UNIVERSE.md/ideate.md -- a 192-line file that had not existed 20 minutes before -- and signed Zach's name and email to all three. NOTE the scope is wider than FOCUS files: ANY dirty *.md in ANY registered repo is fair game on a 15-minute clock, including half-written drafts. Batch isolation is NOT the gap and needs no change -- scheduled jobs already run against dedicated clones that reset hard to origin (cmd_commit_file's own comment says so, and sweep already has a second pass over them). Nor is "interactive sessions branch" a fix: sweep would commit the branch under Zach's name just the same, treating divergence while leaving false authorship intact. (1) HONEST ATTRIBUTION, one-line change at the single place the default msg is set (~line 706), do this first and unconditionally: sweep has NO provenance -- unlike -i and the vim hook, where a human demonstrably acted, it merely found a dirty file. It should say what is true ("sweep: auto-commit uncommitted <file>") and commit under a distinct identity the way the nightly already does with hf7y. This alone ends the provenance laundering without needing to detect sessions at all. (2) QUIESCENCE GUARD: a file modified 40 seconds ago is work in flight; one modified 3 hours ago is an abandoned edit. Skip commit unless mtime is older than N minutes (find -mmin +N). Needs no knowledge of Claude or vim and would have prevented the 21:00 case outright. (3) HONOR THE EXISTING LOCK, the real end state: realisateur/bin/check-project-busy.sh already probes flock on job dirs and its header explicitly chose locks over "guessing from mtimes". An interactive session should take that same lock and sweep should skip locked projects -- reusing the one regulator rather than inventing a second. (4) AGENT-AUTHOR VARIANT FOR -i (Zach's call, 2026-07-26): cmd_idea writes one fixed marker, "(via scheduler -i)", identical whether Zach typed it or an agent filed it -- so intake provenance is lost at the source, not just at sweep time. Proposal: an explicit agent variant (e.g. "scheduler -i --agent <name> <project> TEXT") writing a distinguishable marker and committing under an agent identity. This is not cosmetic: realisateur/bin/precipitation-scan.sh classifies entries INBOX/HUMAN/LOG by parsing exactly that string to decide what counts as a promotion signal, and PRECIPITATION.md ranks re-arrival of a HUMAN-origin idea as the strongest signal in the ecosystem. With no agent variant, an agent-filed idea is indistinguishable from a human-filed one, so the system can manufacture its own promotion evidence and boost its own suggestions -- a closed feedback loop in the one place the doctrine is most load-bearing. The variant makes that classification exact instead of inferred. Filed via the front door per /ideate 5 (engine change, realisateur does not hand-edit scheduler). Full trace + the ranked-signal doctrine: realisateur/PRECIPITATION.md and UNIVERSE.md (Law 3 / the Ashby reading -- this is the multi-writer FOCUS-file interface, still the ecosystem's least-regulated).
 
 - **[batch] [recurring theme — for realisateur] 2026-07-26 (human-directed
   session):** *Config changes land as uncommitted working-tree edits and
@@ -1015,7 +1095,7 @@ to build sooner.
   check for "managed conf dirty / crontab disagrees with committed conf"
   is the passive half.
 
-- **[batch] 2026-07-26 (human-directed session) — filed separately on
+- *(subsumed by [iface: usage-ceiling-conf] above, 2026-07-26 /ideate)* **[batch] 2026-07-26 (human-directed session) — filed separately on
   purpose:** the **config-settable usage ceiling** (see the 2026-07-25
   17:06 entry further down for the full scoping: `schedule/_usage.conf`,
   env-wins precedence, per-host `_usage.<host>.conf`, and naming what it
@@ -1032,11 +1112,11 @@ to build sooner.
 
 - **2026-07-26 11:08 (via `scheduler -i`):** FOCUS-file autocommit watcher: two fixes queued from realisateur's 2026-07-26 write-race incident (see realisateur .claude/FOCUS.md same date, race entry). At ~10:30 the watcher committed a LIVE interactive session's uncommitted .claude/FOCUS.md edits as 'Human edit via scheduler' — under Zach's own name in realisateur (93ad456, published, cannot be reattributed) and as hf7y on crt's stale checkout — and its push moved origin under the session's feet. Proposed: (a) honest attribution — an adopted working-tree edit is 'autocommit-watcher', never 'Human edit'/a human's name; or refuse to adopt .claude/-gated files entirely; (b) before committing/pushing from a working tree it does not own, probe for a live interactive session (flock probe, same shape as realisateur's bin/check-project-busy.sh, pointed the other direction) and skip that tick if one is live. Second live exhibit of UNIVERSE.md's multi-writer FOCUS-file gap; realisateur is building its own half (atomic focus-commit.sh helper) separately.
 
-- **2026-07-26 09:32 (via `scheduler -i`):** sweep-loop-common.sh: bootstrap reset --hard origin/$BRANCH silently DESTROYS committed-but-unpushed work from a prior run. Bit chezz 2026-07-25: the 20:10 nightly hit the monthly spend limit, died before its push step, left 3 real commits (0880f3d tip: 4 shipped features + size-policy + scaffold work, tracker already marked resolved against those hashes); the engine even logged 'WARNING: local commit made but NOT pushed' -- then the next cycle's reset erased them anyway. Chezz's 2026-07-26 run recovered them from the reflog (luck-dependent, gc window) and pushed. Fix where the uncommitted-work stash guard already lives (~line 288): before reset --hard, if git rev-list --count origin/$BRANCH..HEAD > 0, create a rescue ref (e.g. branch rescue/<JOB_NAME>-<date>) or retry the push, and log loudly. The stash guard protects uncommitted work; committed-ahead work has no equivalent today.
+- *(subsumed by [iface: crash-durability] above, 2026-07-26 /ideate — spec lives here, dispatch there)* **2026-07-26 09:32 (via `scheduler -i`):** sweep-loop-common.sh: bootstrap reset --hard origin/$BRANCH silently DESTROYS committed-but-unpushed work from a prior run. Bit chezz 2026-07-25: the 20:10 nightly hit the monthly spend limit, died before its push step, left 3 real commits (0880f3d tip: 4 shipped features + size-policy + scaffold work, tracker already marked resolved against those hashes); the engine even logged 'WARNING: local commit made but NOT pushed' -- then the next cycle's reset erased them anyway. Chezz's 2026-07-26 run recovered them from the reflog (luck-dependent, gc window) and pushed. Fix where the uncommitted-work stash guard already lives (~line 288): before reset --hard, if git rev-list --count origin/$BRANCH..HEAD > 0, create a rescue ref (e.g. branch rescue/<JOB_NAME>-<date>) or retry the push, and log loudly. The stash guard protects uncommitted work; committed-ahead work has no equivalent today.
 
 - **2026-07-25 20:33 (via `scheduler -i`):** from chezz fable-review triage 2026-07-25: make the staleness/freshness checks exit nonzero on failure so a stale run fails loud (fable-review item 3, staleness-check exit-nonzero + sweep-tier ownership) -- scheduler/realisateur-side, chezz can't do this from its own repo; routed here per the never-quietly-decline rule
 
-- **2026-07-25 19:51 (via `scheduler -i`):** Front-door consolidation -- promote parked item 0 to the NEXT stability milestone (adopt when the current zero-silent-failure bar closes; 4/5 checked, last box routed to realisateur). Override stated per realisateur ideate 4.5: re-derivation convergence -- the 2026-07-20 target UX (item 0) was re-derived independently by Zach 2026-07-25 near line-for-line, the strongest ready-to-build signal this ecosystem produces (doctrine: realisateur/UNIVERSE.md, written same session). Bar: the entire human surface is three stable PRINTABLE views -- `scheduler` noargs (now/next + one-line gate/dials footer), `scheduler <project>` (detail, inline reply, reorder/reweight from there), `scheduler blockers` (the one blocked-on-you place) -- each view footer printing its own mutation one-liners. Decisions locked 2026-07-25 (Zach, via realisateur /ideate): HARD FOLD + RETIRE (glance/status/overview/next/explain/focus/questions/report/pacing-show as separate surfaces retire to one-line redirect stubs; usage() <= ~20 lines); STATIC + VERBS, no TUI (printable doctrine holds); DIALS = one-line noargs footer, full pacing/drift/deploy detail stays under pacing. ACCRETION FREEZE effective now: no view gains a legend line or new verb before the redesign -- new needs go into this spec. Weights raised same session to get here soon (scheduler 3->4, realisateur 1->3, exit stated in _paced.conf: both drop back when this milestone is reached).
+- *(ADOPTED as the Current stability milestone, 2026-07-26 interactive /ideate — this entry is now the milestone's spec, no longer a queued proposal)* **2026-07-25 19:51 (via `scheduler -i`):** Front-door consolidation -- promote parked item 0 to the NEXT stability milestone (adopt when the current zero-silent-failure bar closes; 4/5 checked, last box routed to realisateur). Override stated per realisateur ideate 4.5: re-derivation convergence -- the 2026-07-20 target UX (item 0) was re-derived independently by Zach 2026-07-25 near line-for-line, the strongest ready-to-build signal this ecosystem produces (doctrine: realisateur/UNIVERSE.md, written same session). Bar: the entire human surface is three stable PRINTABLE views -- `scheduler` noargs (now/next + one-line gate/dials footer), `scheduler <project>` (detail, inline reply, reorder/reweight from there), `scheduler blockers` (the one blocked-on-you place) -- each view footer printing its own mutation one-liners. Decisions locked 2026-07-25 (Zach, via realisateur /ideate): HARD FOLD + RETIRE (glance/status/overview/next/explain/focus/questions/report/pacing-show as separate surfaces retire to one-line redirect stubs; usage() <= ~20 lines); STATIC + VERBS, no TUI (printable doctrine holds); DIALS = one-line noargs footer, full pacing/drift/deploy detail stays under pacing. ACCRETION FREEZE effective now: no view gains a legend line or new verb before the redesign -- new needs go into this spec. Weights raised same session to get here soon (scheduler 3->4, realisateur 1->3, exit stated in _paced.conf: both drop back when this milestone is reached).
 
 - **2026-07-25 19:28 (via `scheduler -i`):** check Chezz's questions.md. Add the scheduler_subdir to be .scheduler for chezz's repo
 
@@ -1064,7 +1144,7 @@ to build sooner.
   interactive `-b --claude` run) is still worth a glance next time one
   happens, but the mechanism is confirmed.
 
-- **2026-07-25 17:06 (human-directed session):** Make the usage-gate
+- *(subsumed by [iface: usage-ceiling-conf] above, 2026-07-26 /ideate — the conf-file scoping here is the spec)* **2026-07-25 17:06 (human-directed session):** Make the usage-gate
   **ceiling settable from a config file**, not only env. Today the 0.85
   cap lives solely in `bin/usage-gate.sh:41`
   (`CEILING="${USAGE_CEILING:-0.85}"`); the only persistent override path
@@ -2216,6 +2296,21 @@ now need converging, in this order:
    instead) is the open judgment call filed in `QUESTIONS.md` — don't
    pick a project and "execute MIGRATION.md" here again until that's
    answered, it'll just repeat this same no-op.
+
+   **DECIDED 2026-07-26 (interactive /ideate, Zach): option (a) — converge
+   paced dispatch on `bin/scheduler-run`.** The `_paced*.conf` command
+   column becomes `scheduler-run <project> nightly-batch`, which is also
+   what lets PLAYBOOK Play 3 retire the two 162-line loop-script forks
+   cleanly (5-line shim shape). **Hard sequencing gate, not optional:**
+   the live-edit risk that made this the "riskier" option must be closed
+   FIRST — the paced runner dispatches from a committed/validated copy of
+   `_paced*.conf` (the approved symlink-deploy import for `scheduler
+   pacing deploy`/drift plus the "refuse dirty confs" backlog item are
+   the two halves of that gate). Do the gate, verify drift fails loud,
+   THEN flip one project's command column at a time, chezz first, watching
+   one full dispatch before the next. Rationale: DESIGN-NOTES.md
+   2026-07-26 /ideate pass; the matching QUESTIONS.md entry carries the
+   `> ` answer.
 
    **1.5. `AUTONOMY_TIER` (see Vision section above) — bundle into the same
    pass.** While a project's conf is already open for the axis-1 migration,

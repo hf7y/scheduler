@@ -267,13 +267,24 @@ happened yet for any of them.
      (c) `gitleaks` replaces hygiene-lint's hand regexes (harness
      stays); (d) restic/rsnapshot under `gardien.py`'s storage layer
      when it unparks.
-     >
+     > Approved (a), (b), (c) — 2026-07-26, interactive /ideate in the
+     > scheduler repo, Zach via AskUserQuestion. (d) restic/rsnapshot
+     > stays deferred until gardien actually unparks. Note: (a) is also
+     > the sequencing prerequisite for the axis-1 decision (paced runner
+     > dispatching from a committed conf) — see scheduler DESIGN-NOTES.md
+     > 2026-07-26 /ideate entry. Queued as a [batch] item in scheduler's
+     > FOCUS.md Backlog same pass.
   4. **Catabolic worklist — approve retiring ~1,000 already-labeled-
      superseded lines** (morning-report ×2, build-services-view +
      `services/`, `incubation-audit.sh`, overnight-dev ×2, the two
      162-line loop-script forks, sync-crontab's dead auto-stagger), one
      retirement per pass, each commit naming what retires it.
-     >
+     > Approved — 2026-07-26, interactive /ideate in the scheduler repo,
+     > Zach via AskUserQuestion. One retirement per pass, each commit
+     > naming what it retires, exactly as filed. The scheduler loop-fork
+     > retirement is gated behind the axis-1 (a) `scheduler-run` flip
+     > (see scheduler FOCUS.md axis 1, decided same pass). Queued as a
+     > [batch] item in scheduler's FOCUS.md Backlog same pass.
   5. **Standing re-admission policy:** as each parked making-project
      declares its stability milestone (jobs queued 2026-07-26 in
      groc-mangr/nine-speakers/sequestria/vim-arcade), re-enable it at

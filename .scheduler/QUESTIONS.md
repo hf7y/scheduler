@@ -279,6 +279,14 @@ its line once you've actually read and dealt with it.
   `scheduler-run` under the hood -- there may be no real value being left
   on the table by never doing (a). Full finding written up in FOCUS.md's
   "Consolidation roadmap" item 1, same date.
+  > **(a) — converge on `scheduler-run`** (answered 2026-07-26, interactive
+  > /ideate, Zach). Rewrite the `_paced*.conf` command column to invoke
+  > `bin/scheduler-run`, but sequenced AFTER a safety gate lands first:
+  > the paced runner must dispatch from a committed/validated copy of the
+  > conf (the symlink-deploy import + the "sync-crontab refuses dirty
+  > confs" item both point the same way), so a half-saved edit can't go
+  > live within one 5-minute tick on two hosts. Rationale + sequencing in
+  > DESIGN-NOTES.md 2026-07-26 (/ideate pass) and FOCUS.md axis 1.
 
 - **2026-07-25 (via /nightly-batch, paced cycle): `.claude/commands/nightly-batch.md`'s
   own report-filename bug (line 68, `$(date +%Y-%m-%d).md`) can't be fixed

@@ -1457,3 +1457,61 @@ in four places. What was real underneath: aedile's `run.log` shows
 completed cycles on 07-20, 07-21 and 07-25 only, a genuine 07-22→24 gap
 whose likely cause was world-writable `~/.ssh` blocking `git push` —
 which aedile's own 07-25 run detected and fixed.
+
+## 2026-07-26 — /ideate: ecosystem-wide roadmap realignment (four decisions)
+
+Interactive /ideate pass, human-directed, scoped by the ask: "adjust
+scheduler's FOCUS.md roadmap/milestones based on a universe/ecosystem-wide
+understanding of scheduler's role." Inputs: realisateur's doctrine set
+(UNIVERSE.md's mechanism/judgment anatomy and Law 3, PLAYBOOK.md's
+2026-07-26 build/import/retire audit, PRECIPITATION.md's stamping
+doctrine, BUILD-DISCIPLINE pattern 13) plus this repo's own FOCUS/
+QUESTIONS/BLOCKERS state. No implementation code touched. All four
+decisions were asked directly (AskUserQuestion), none guessed.
+
+**1. Milestone transition — front-door consolidation is now the Current
+stability milestone.** The zero-silent-failure bar sits at 4/5 with its
+last box (QUESTIONS-reply consumption, the vkv-inventory gap) routed to
+realisateur — unclosable from this repo. Meanwhile realisateur's doctrine
+already treats scheduler's front-door redesign as Law 3's first
+retirement-pressure proof, an accretion freeze was already in effect, and
+the 2026-07-25 19:51 backlog entry (itself a re-derivation-convergence
+promotion) carried the full locked spec. Declaring it merely aligns
+FOCUS.md with reality. Old bar recorded as reached-pending-external; the
+weight exit (scheduler 4→3, realisateur 3→1) now keys off the new bar.
+
+**2. Axis 1 resolved: option (a), converge paced dispatch on
+`bin/scheduler-run` — WITH a hard sequencing gate.** The 2026-07-25
+finding stands (MIGRATION.md's flip is a no-op for every project it
+names). Rather than scoping the axis down or retiring it, the paced
+`_paced*.conf` command column itself migrates to `scheduler-run` — but
+only AFTER the live-edit risk is closed: the paced runner must dispatch
+from a committed/validated conf (the approved symlink-deploy import +
+the refuse-dirty-confs item are that gate). Then flip one project at a
+time, chezz first. This also unblocks Play 3's loop-fork retirement in
+its clean form. QUESTIONS.md's open entry got its `> ` answer.
+
+**3. PLAYBOOK asks approved: catabolic worklist + import swaps (a)-(c).**
+The two empty `> ` slots under BLOCKERS.md ## realisateur calls 3 and 4
+are now answered (approved) — symlinks for pacing deploy/drift, ccusage
+core, gitleaks-under-harness; and the ~1,000-line retirement list, one
+retirement per pass. (d) restic waits for gardien to unpark. Both queued
+as [batch] backlog items here so they have a dispatch path
+(BUILD-DISCIPLINE pattern 13: a decision without a dispatch path is not
+wired). Calls 1, 2, and 5 in that BLOCKERS entry remain open for Zach.
+
+**4. Backlog deduplication per PRECIPITATION stamping doctrine.** Three
+same-shape re-arrival clusters merged into single dispatch units at the
+top of the Backlog, originals stamped subsumed (spec stays in place,
+dispatch moves): [iface: sweep-attribution] (21:22 + 21:56),
+[iface: usage-ceiling-conf] (22:15 + 17:06 + the filed-separately
+pointer), [iface: crash-durability] (09:32 committed-unpushed rescue +
+the dirty-worktree crash-aftermath item — one guard, same code site).
+
+**Vision-debt reading (ideate step 4.5):** backlog ≈78 top-level items,
+oldest un-started material dates to 2026-07-18-19; intake this week ran
+~10+ items against ~2-3 cleared. Still diverging — but this pass moved
+the drain side: the new milestone is itself a large retirement, the
+catabolic worklist deletes rather than adds, and the merges cut three
+future passes into one each. The convergence lever remains realisateur's
+pruning + the re-admission policy call still open in BLOCKERS.
