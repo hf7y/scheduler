@@ -339,3 +339,40 @@ its line once you've actually read and dealt with it.
   one-line edit, `date +%Y-%m-%d` -> `date +%Y-%m-%dT%H%M` at line 68) or
   an explicit permission grant for that one path if unattended cycles
   should be able to fix their own command files going forward.
+
+- **2026-07-26 (via `/nightly-batch`, paced cycle): the live ceiling
+  (`USAGE_CEILING=0.99`) is set somewhere I can't see or edit — do you want
+  it moved into `schedule/_usage.conf`, and at what value?** Built this
+  cycle: the gate now reads its pacing knobs from `schedule/_usage.conf` /
+  `_usage.<host>.conf`, so a durable ceiling is a one-line conf edit instead
+  of a `RUNNER_ENV` + `--apply` round trip that ends up on a crontab line
+  (commit `4355972`, FOCUS.md backlog item 2026-07-25 17:06). Env still
+  outranks the conf, deliberately — one-off `USAGE_CEILING=x` tests keep
+  working.
+
+  The catch, found while testing: **this cycle's own environment carries
+  `USAGE_CEILING=0.99`, and that value appears in no conf in this repo.**
+  `schedule/_runner.conf` sets only `PACED_MAX_PER_TICK=16`, and an earlier
+  cycle today already noted the crontab preview matches the repo — so 0.99
+  is a hand-set override living outside version control (an earlier cycle
+  logged it as "hand-set 0.95 → 0.99"). I did not go looking in the live
+  crontab: reading it means running `crontab`, which this job is forbidden
+  to do. Because env wins, **live pacing is unchanged by my commit** — 0.99
+  stays in force until you act.
+
+  Three things I'd want your call on rather than guessing:
+  1. **Should 0.99 become the committed value** in `_usage.conf` (uncomment
+     `USAGE_CEILING=0.99`), or was it a temporary push toward a quota
+     deadline that should decay back to the 0.85 default? At the moment I
+     checked, the 7d window was at 90% utilisation — at the 0.85 default the
+     gate returns HOLD, so this is the difference between dispatching and
+     not, i.e. don't let it drift by accident either way.
+  2. **Once it's in the conf, the ambient env value should be dropped** from
+     wherever it's set — otherwise the conf is decorative and the real value
+     is still invisible. That edit is outside this repo (a `crontab -e`, or
+     whatever shell/wrapper exports it), so it's yours.
+  3. **Per-host or shared?** `_usage.dexter.conf` would let dexter keep more
+     headroom now that two hosts probe one account budget
+     (DESIGN-NOTES.md:807 anticipated exactly this). I built the mechanism
+     but set no host-scoped value — nothing suggests dexter needs a
+     different ceiling *yet*.
