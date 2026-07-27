@@ -984,6 +984,28 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-27 01:42 (via `scheduler -i`):** (from realisateur /ideate 2026-07-27, Zach-directed) Two watcher/collector guards, both with a live exhibit in scheduler's own BLOCKERS.md today. Filed through the front door because both are scheduler engine, not realisateur's to edit.
+
+PROPOSAL 1 -- the autocommit watcher must refuse a file it cannot safely adopt.
+
+Live exhibit: 0e9b6a6, "Human edit via scheduler: BLOCKERS.md (2026-07-27T01:15)", 106 insertions and zero deletions. The ~:30 watcher caught BLOCKERS.md in the middle of a live vimdiff merge and committed it under Zach's name. What it adopted: two unresolved conflict blocks (<<<<<<< /tmp/vzTGDTh/5 ... >>>>>>>) fencing two of Zach's own answers, and a verbatim duplicate of the whole ## gardien / ## senechal / ## realisateur tail -- an answered copy plus a blank-slot copy.
+
+The duplicate is the part that bites scheduler specifically: it put a SECOND "## realisateur" heading in the file, and collect-feedback.sh --section matches on that heading. That is the same shape as the 2026-07-26 empty-consume bug (fixed in bb5c762), arriving by a different route -- not a bare ">" being misread this time, but a whole duplicate section competing for the same anchor.
+
+Asked for: before committing, the watcher refuses (and says so loudly, leaving the tree dirty for the human) if the file contains a conflict marker at line start (^<<<<<<< , ^=======$, ^>>>>>>> ), or contains a duplicate "## " heading. Both are cheap greps. A dirty tree the human comes back to is strictly better than a corrupt file committed under their name -- and this repo's own doctrine already says a dirty tree at exit is a failed run, not a handoff.
+
+Note the asymmetry that makes this worth doing: the watcher exists so a human's uncommitted edits are never lost. Refusing on these two signatures does not lose anything -- the edits stay in the working tree, exactly where the human left them.
+
+PROPOSAL 2 -- machine-append must not anchor on a "## " that lives inside prose.
+
+Live exhibit: ec89b84, "BLOCKERS.md: machine-append a chezz section (chezz nightly 2026-07-25)". It inserted the ## chezz section INSIDE the header paragraph's own sentence, because that sentence contains the literal string `## Recently resolved` -- the header is explaining to the reader where resolved entries go. The append anchored on that occurrence.
+
+Damage: the header sentence was truncated at line 12 and its tail wore a fake "## Recently resolved" heading at line 91 -- a second heading with that exact name, sitting AHEAD of the real one, for two full days. Anything that scans for the Recently-resolved boundary would have found the wrong one. Repaired by hand today in 1a6bc0a (realisateur /ideate, Zach-directed); the fix here is so it cannot recur.
+
+Asked for: the heading matcher requires a line that is exactly "## <PROJECT_KEY>" -- start of line, nothing before it, and not inside a fenced code block or a backticked span. BLOCKERS.md's own header already states this contract in prose ("Each project's heading must be exactly ## <PROJECT_KEY>"); the request is to make the matcher agree with the file's own stated rule.
+
+Both are small. Both have already been paid for once.
+
 - **[shipped-inline] [iface: answer-session] 2026-07-26 (interactive,
   human-directed quickfix) — `scheduler -q` with no project now prints a
   questions overview instead of a bare project-name dump. Recorded as a
