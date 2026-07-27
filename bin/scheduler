@@ -356,12 +356,92 @@ get_seen() {
   [ -f "$SEEN_FILE" ] && awk -F'\t' -v k="$key" '$1==k{print $2; found=1} END{if(!found) print 0}' "$SEEN_FILE" || echo 0
 }
 
+# ---- human-presence marker (see realisateur/bin/session-marker.sh) --------
+# The ecosystem already represents "a human is working in project X" as
+# $REGISTRY_DIR/<project>.interactive, whose LIVENESS IS A PID PROBE, never
+# flock: SessionEnd/exit is not guaranteed on crash, and a held lock would
+# orphan and wedge that project's batch permanently and silently. Same
+# reasoning applies here, so this writes the same marker in the same
+# directory rather than inventing a second one -- one place answers "is
+# anything writing to this project right now."
+#
+# What this adds that the session hook could not: the hook keys off the
+# SESSION's cwd, but `questions/<p>.md` and `focus/<p>.md` are symlinks into
+# each project's own checkout, so answering three projects' questions from
+# the scheduler repo marked *scheduler* busy and left all three reading FREE
+# (filed 2026-07-26 on the sweep-attribution entry). The front door knows
+# exactly which project's file it is about to open, so it keys off the FILE.
+REGISTRY_DIR="$HOME/.local/share/scheduler-registry"
+
+# Which registered project owns this path? Resolves symlinks first, so the
+# aggregation folders (questions/, focus/) land on the real project rather
+# than on scheduler. Reports live outside every checkout, hence the second
+# case. Returns 1 for anything cross-project (BLOCKERS.md) or unregistered --
+# callers treat that as "nothing to hold", never as an error.
+project_for_path() {
+  local path="$1" real name repo
+  real="$(readlink -f -- "$path" 2>/dev/null)" || return 1
+  [ -n "$real" ] || return 1
+  while IFS= read -r name; do
+    repo="$(conf_field "$name" PROJECT_REPO_PATH)" || true
+    [ -n "$repo" ] || continue
+    repo="$(readlink -f -- "$repo" 2>/dev/null)" || continue
+    case "$real/" in "$repo"/*) printf '%s\n' "$name"; return 0 ;; esac
+  done < <(projects)
+  case "$real/" in
+    "$REPORTS_ROOT"/*)
+      name="${real#"$REPORTS_ROOT"/}"; name="${name%%/*}"
+      [ -n "$name" ] && { printf '%s\n' "$name"; return 0; }
+      ;;
+  esac
+  return 1
+}
+
+# Mark the file's project busy for as long as the editor lives. Called
+# immediately before `exec "$EDITOR"`: exec REPLACES this process, so the pid
+# written here becomes the editor's own pid -- the marker dies exactly when
+# the editor does, with no trap, no cleanup, and no way to leave a lock
+# holding after a crash. (An $EDITOR that forks and returns -- a GUI wrapper
+# -- makes the marker read free immediately; correct-by-default rather than
+# wedging, and the same failure direction the session hook chose.)
+hold_project_marker() {
+  local path="$1" proj
+  proj="$(project_for_path "$path")" || return 0
+  mkdir -p "$REGISTRY_DIR" 2>/dev/null || return 0
+  {
+    echo "pid=${BASHPID:-$$}"
+    echo "started_at=$(date -Is)"
+    echo "cwd=$path"
+    echo "owner=scheduler/bin/scheduler (front door opened this file)"
+  } > "$REGISTRY_DIR/$proj.interactive" 2>/dev/null || true
+  echo "scheduler: holding '$proj' busy while your editor is open"
+}
+
+# Is a live human editing this project right now? Prints the pid, exits 1 if
+# not. Field format and the kill -0 rule are set by the marker's other
+# reader, realisateur/bin/check-project-busy.sh -- keep them in step.
+interactive_holder() {
+  # Two statements, deliberately: bash expands every word of a `local`
+  # command BEFORE assigning any of them, so `local proj="$1"
+  # marker="...$proj..."` reads $proj from the OUTER scope -- unbound under
+  # `set -u`, which aborted this function and made sweep read "no holder"
+  # and commit anyway. Caught 2026-07-26 by the isolated sweep test.
+  local proj="$1" pid
+  local marker="$REGISTRY_DIR/$proj.interactive"
+  [ -f "$marker" ] || return 1
+  pid="$(awk -F= '$1=="pid"{print $2}' "$marker" 2>/dev/null)"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  printf '%s\n' "$pid"
+}
+
 open_file() {
   local path="$1"
   if [ ! -e "$path" ]; then
     echo "scheduler: no file yet at $path" >&2
     exit 1
   fi
+  hold_project_marker "$path"
   exec "$EDITOR" "$path"
 }
 
@@ -995,6 +1075,7 @@ cmd_questions_jump() {
     echo "scheduler: no question #$idx in $qfile" >&2
     exit 1
   fi
+  hold_project_marker "$qfile"
   exec "$EDITOR" "+$lineno" "$qfile"
 }
 
@@ -1479,14 +1560,29 @@ cmd_sweep() {
     # logic `-i` already uses. Anything else (code, YAML config, etc.) is
     # only ever reported -- see home-assistant's config/automations.yaml
     # divergence (2026-07-20) for exactly why this stays conservative.
-    local dirty_md
+    local dirty_md holder_pid
     dirty_md="$(git -C "$path" status --porcelain -- '*.md' 2>/dev/null | awk '{print $2}')"
     if [ -n "$dirty_md" ]; then
-      while IFS= read -r rel; do
-        [ -n "$rel" ] || continue
-        echo "== $name: auto-committing $rel =="
-        cmd_commit_file "$path/$rel"
-      done <<< "$dirty_md"
+      # Honor the human-presence marker (item 3 of the sweep-attribution
+      # regulator). Sweep has NO provenance -- it merely found a dirty file
+      # on a 15-minute clock -- so when a human is demonstrably editing this
+      # project right now, its edits are work in flight, not an abandoned
+      # save to rescue. Deferring costs nothing: sweep runs again in 15
+      # minutes, and the vim hook still commits the human's own saves
+      # meanwhile (that path HAS provenance and is deliberately unaffected).
+      # No starvation cap needed here, unlike the batch-side probe: sweep
+      # only ever commits, so a deferral leaves the file exactly as the
+      # human has it.
+      if holder_pid="$(interactive_holder "$name")"; then
+        echo "== $name: deferring auto-commit -- a human is editing it (pid $holder_pid) =="
+        echo "$dirty_md" | sed 's/^/  held: /'
+      else
+        while IFS= read -r rel; do
+          [ -n "$rel" ] || continue
+          echo "== $name: auto-committing $rel =="
+          cmd_commit_file "$path/$rel"
+        done <<< "$dirty_md"
+      fi
     fi
 
     local dirty_other
