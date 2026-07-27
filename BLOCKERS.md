@@ -401,12 +401,24 @@ happened yet for any of them.
   Bonabeau 1999 closed-access, no open copy of Beer's 2002 *Kybernetes*
   POSIWID paper, Coase 1937 *Economica* serving a Cloudflare 403 to an
   honest UA). Short themes: `holons` 1/2, `stigmergy` 0/2, `vsm` 0/2.
-  **Zach's call this session: he has access via Tulane's library (API or
+  ~~**Zach's call this session: he has access via Tulane's library (API or
   similar) and is wiring it up now — the honesty policy is NOT relaxed and
-  no secondary-source fallback is authorised.** Until that access is live
-  and proven from an unattended run, these three themes stay
-  `(waiting: institutional full-text access)`. A page number and the exact
-  sentence from a physical copy still closes any one of them instantly.
+  no secondary-source fallback is authorised.**~~
+  **RESOLVED 2026-07-27 (later the same day, interactive, Zach-directed):
+  superseded — secondary sourcing IS now authorised, and the blocker is
+  cleared without the library wiring landing.** Waiting on institutional
+  access was keeping three themes (and six concepts) at zero
+  indefinitely, and the DRM'd loan that did arrive is unreadable by an
+  unattended run anyway. The bar moved sideways, not down: primary text
+  is still `verified` and still preferred; a seminal author quoted in a
+  named secondary source is `verified-secondary` and **must** carry
+  `quoted_in` with a page/section, enforced by `bin/validate-quotes.py`
+  (negative-tested); a secondary author's analysis is quoted as that
+  author's own words; aggregators, blogs and LLM output are sources at
+  no tier. Rules: bibliothecaire `README.md`, "Secondary sources";
+  decision recorded in its `.scheduler/FOCUS.md` (`3ce87bc`). All
+  fourteen concepts are unattended-buildable from tonight. A page number
+  from a physical copy is still the better citation where one exists.
   This section exists because the blocker previously had no cross-project
   surface at all — it lived only in bibliothecaire's own QUESTIONS.md,
   which is BUILD-DISCIPLINE pattern 13 ("a decision without a dispatch
