@@ -1075,6 +1075,18 @@ human's own dotfiles.
   named `drilldown-browse-redesign` while the commits landed on `main`,
   which is exactly what misled this session).
 
+  [re-routed 2026-07-27 10:31 — NOT actionable from here, do not pick up]
+  The row below was filed in the wrong backlog. Scheduler's own cycle is
+  hard-barred from touching any file outside this repo
+  (`bin/scheduler-dev-cycle.sh:282,284`) and realisateur's nightly is told
+  not to act on other projects' FOCUS items unprompted — so it had no
+  permitted reader here. Re-filed through the front door into
+  realisateur's inbox: `bb542f0` (the doctrine proposal) and `f73e5c6`
+  (a /cloture mechanism request — that filing must VERIFY the destination
+  has a reader that is both permitted and alive, since this row is the
+  live exhibit of it not being verified). Kept, struck, rather than
+  deleted: the misfiling is the evidence.
+
   [batch] DEFERRED CROSS-WRITE, realisateur was BUSY: propose failure
   pattern 16 in `BUILD-DISCIPLINE.md` — *a correct refusal that nothing
   retries*. Distinct from pattern 8 (warn-then-continue proceeds; this one
