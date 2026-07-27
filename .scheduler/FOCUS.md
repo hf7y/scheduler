@@ -941,16 +941,18 @@ kind of surface Law 3 says never gets removed on its own.
   the **second of the two halves NAMED** as the axis-1 sequencing gate
   (first half: `sync-crontab.sh --apply` refuses a dirty `schedule/`,
   `e1042a4`, earlier today).
-  **NOT clearance to flip a command column yet, and this is a real gap in
-  how the gate was specified, not a technicality:** both named halves are
-  now done, but the gate's stated *intent* — "the paced runner dispatches
-  from a committed/validated copy of `_paced*.conf`" — is still NOT met.
-  `usage-paced-runner.sh` is a symlink into the canonical checkout and
-  reads `schedule/_paced.conf` out of that checkout's **working tree**, so
-  an uncommitted edit to the command column still goes live on the next
-  5-minute tick with nothing checking it. Symlinking fixed script drift;
-  it does not make the conf a committed artifact. Filed as a judgment call
-  in `.scheduler/QUESTIONS.md` (2026-07-27) rather than decided here.
+  
+  **2026-07-27 FOLLOW-UP: axis-1 gate NOW COMPLETE, both halves + intent
+  met.** The gap discovered above — gate's stated intent not met despite both
+  named halves being done — was addressed by implementing option (b): a third
+  piece (`usage-paced-runner.sh` refuses to dispatch from a dirty conf,
+  `ffa6430`, same paced cycle). Together, the three components satisfy the
+  intent: "the paced runner dispatches from a committed/validated copy of
+  `_paced*.conf`." This preparatory work makes the actual command-column
+  flip (option a) safely verifiable as a later cycle — the dispatch-time
+  validation is complete. **Clearance to flip is now pending user decision on
+  the flip itself** (when/if to start with chezz), not on incomplete
+  infrastructure.
 - `<project>-nightly-batch-loop.sh` / `-bug-sweep-loop.sh` (~20 legacy
   wrappers) → copies, but they only set variables and then
   `source "<repo>/lib/sweep-loop-common.sh"` by absolute path, so the LOGIC
