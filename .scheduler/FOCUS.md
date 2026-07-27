@@ -2377,6 +2377,38 @@ urgency heuristic — same boundary, applied to a second knob.
 - **2026-07-25:** sweep autocommit mislabels and commits mid-session. At 02:00 it committed ~38 half-written files from a live interactive session as "Human edit via scheduler" — provenance record now lies (these were agent writes), and it is "dirty tree is a stop" pointed backwards: the engine edited history out from under a live session. Fix: skip a repo whose session lock / recent mtime says someone is working, and label what it knows ("sweep autocommit: uncommitted changes found"), not what it guesses.
 - **2026-07-25:** **real working copies never pull, so every local edit lands on a stale base.** Measured today: crt 51 commits behind origin, groc-mangr 26, chezz 18, sequestria 15, nine-speakers 12, vim-arcade 11, home-assistant/gardien/senechal 3. Dispatch clones push to origin; nothing pulls the human-facing clones back. Every one of the 9 fable-review commits was rejected non-fast-forward on first push. Fix: a pull/freshness step (sweep tick could `git fetch` + report behind-counts in the glance), or make the working copies genuinely disposable.
 - **2026-07-25:** that staleness already strands work silently. `bin/scheduler:686-692` warns "N commits behind — committing anyway", commits, and its push then fails; the message scrolls past in cron output. vim-arcade carried an unpushed `Idea added via 'scheduler -i'` commit that had been invisible to every dispatch since (rebased and pushed today). The freshness check is a warning where it needs to be a stop or a fix — same class as the aedile/vkv orphaning, different mechanism.
+  **DONE (2026-07-26 paced cycle) — it is now a fix where one is safe, and
+  a loud stop where it isn't.** `cmd_commit_file` (the ONE implementation
+  behind `scheduler -i`, the vim auto-commit hook, `sweep`'s .md backstop,
+  `pacing tick`, `weight`, and `-b --claude`'s tidy) now splits the
+  behind-origin case three ways instead of printing one NOTE and
+  committing onto the stale base regardless: **behind only, fast-forward
+  clean** → `git merge --ff-only origin/$branch` first, so the edit lands
+  on origin's current state and pushes normally (this is the common case —
+  the same fetch+`--ff-only` move `usage-paced-runner.sh` already makes
+  every tick, so no new policy); **behind, FF refused** (origin touched the
+  same file) → commit locally, skip the push, and say so as a `WARNING:`
+  naming git's own reason and the recovery command; **genuinely diverged**
+  (ahead AND behind) → never fast-forwarded, never auto-merged, same rule
+  `report_divergence` already states. Second half of the same defect,
+  fixed with it: the push was `push --quiet 2>/dev/null` and the failure
+  message then GUESSED the cause ("check credentials/network"). It now
+  captures git's output and prints a real `push reason:` line — same
+  convention `lib/sweep-loop-common.sh` already uses. Live witness for why
+  the guess wasn't good enough: wtul's working copy is carrying
+  `Human edit via scheduler: QUESTIONS.md (2026-07-26T23:30)` unpushed
+  right now, and because the old code discarded stderr, *why* is
+  unknowable after the fact — a read-only `git push --dry-run` today says
+  the push would succeed. Verified with an 8-case offline harness over
+  throwaway bare-origin+clone repos (in-sync, behind-FF, FF-blocked-by-
+  untracked, diverged, push-fails-for-a-real-reason, no-op, tracked-file-
+  dirty-FF-clean, tracked-file-dirty-FF-refused): every "should land" case
+  ends with HEAD on origin and **zero merge commits created**, every
+  "should stop" case leaves the local edit byte-intact and prints the
+  reason + recovery line. `bash -n bin/scheduler` clean. Not covered, on
+  purpose: the parallel finding above it (working copies never pull at
+  all) — this fixes the write path that strands ideas, not the general
+  behind-origin audit, which stays queued below.
 - **2026-07-25:** a project's FOCUS.md path is not discoverable — inject-suggestions.sh hardcoded 14 paths and broke the day chezz moved `.claude/`→`.scheduler/`. `SCHEDULER_SUBDIR` already exists in the confs; anything that wants a project's FOCUS.md should resolve it through one shared helper, not retype the path (config-read-from-one-source).
 - **2026-07-25:** `lib/sweep-loop-common.sh:229-231` — `git checkout "$BRANCH"`, `git fetch`, and `git reset --hard "origin/$BRANCH"` are all unchecked (no `set -e`). The 2026-07-24 dexter fix guarded the clone and explicitly noted these "silently failed too", but only the clone got the check. Live consequence: home-assistant's wrapper sets no BRANCH, so it defaults to `main` while baudin only has `master` — every pass logs `error: pathspec 'main' did not match` + `fatal: ambiguous argument 'origin/main'`, the reset-to-origin guarantee silently does not apply, the push check reports "could not read origin/main ... looks like an SSH/auth/network failure" (wrong diagnosis), and the run's own summary claimed "Everything's committed, pushed, and reports are in sync" while a real commit sat unpushed. Fix: check all three, and default BRANCH to the remote's actual HEAD (`git ls-remote --symref origin HEAD`) rather than the literal string `main`.
 - **2026-07-25:** BRANCH is per-wrapper and invisible from the conf, so a FOCUS.md edit can land on a branch dispatch never reads. wtul's working copy sits on `label-printer-integration` while `wtul-batch-loop.sh` reads `main` — anything committed in the working copy without switching branches is invisible to the job. Same shape as the SCHEDULER_SUBDIR miss: a per-project path/ref that a survey can't see and nothing asserts.
