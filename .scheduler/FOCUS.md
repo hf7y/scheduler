@@ -924,6 +924,18 @@ to build sooner.
   attempted this cycle.
 
 - **2026-07-26 09:32 (via `scheduler -i`):** sweep-loop-common.sh: bootstrap reset --hard origin/$BRANCH silently DESTROYS committed-but-unpushed work from a prior run. Bit chezz 2026-07-25: the 20:10 nightly hit the monthly spend limit, died before its push step, left 3 real commits (0880f3d tip: 4 shipped features + size-policy + scaffold work, tracker already marked resolved against those hashes); the engine even logged 'WARNING: local commit made but NOT pushed' -- then the next cycle's reset erased them anyway. Chezz's 2026-07-26 run recovered them from the reflog (luck-dependent, gc window) and pushed. Fix where the uncommitted-work stash guard already lives (~line 288): before reset --hard, if git rev-list --count origin/$BRANCH..HEAD > 0, create a rescue ref (e.g. branch rescue/<JOB_NAME>-<date>) or retry the push, and log loudly. The stash guard protects uncommitted work; committed-ahead work has no equivalent today.
+  **DONE (2026-07-26 paced cycle).** Same shape as the existing stash
+  guard, right before it hands off to `git reset --hard origin/$BRANCH`:
+  computes `git rev-list --count origin/$BRANCH..HEAD`, and if nonzero,
+  creates `rescue/<JOB_NAME>-<timestamp>` pointing at the current HEAD,
+  logs a `WARNING:` naming the ref and the recovery command, and fires a
+  `notify-send -u critical`, before the reset runs. Verified with a
+  throwaway bare-origin + clone: committed one commit ahead of origin
+  (simulating a died-before-push prior run), ran the exact
+  rescue-then-reset sequence, confirmed the branch tip lands back on
+  origin's commit while `git log --oneline --all` still shows the
+  stranded commit reachable via the new `rescue/...` ref -- no more
+  reflog-window luck required. `bash -n lib/sweep-loop-common.sh` clean.
 
 - **2026-07-25 20:33 (via `scheduler -i`):** from chezz fable-review triage 2026-07-25: make the staleness/freshness checks exit nonzero on failure so a stale run fails loud (fable-review item 3, staleness-check exit-nonzero + sweep-tier ownership) -- scheduler/realisateur-side, chezz can't do this from its own repo; routed here per the never-quietly-decline rule
 

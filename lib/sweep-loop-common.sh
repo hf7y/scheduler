@@ -322,6 +322,19 @@ fi
     notify-send -u critical "$JOB_NAME" "fetch failed -- job aborted, see $LOG" 2>/dev/null || true
     exit 1
   fi
+  # Bit chezz 2026-07-25: a prior run can die (e.g. hit the monthly spend
+  # limit) after committing but before pushing, leaving real commits ahead
+  # of origin. The stash guard above protects uncommitted work; committed
+  # work had no equivalent -- this reset would destroy it outright, with
+  # only luck (the reflog GC window) standing between it and being gone.
+  # Rescue it into a dedicated ref before the reset can touch it.
+  AHEAD_COUNT=$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)
+  if [ "$AHEAD_COUNT" -gt 0 ]; then
+    RESCUE_REF="rescue/${JOB_NAME}-$(date +%Y%m%d%H%M%S)"
+    git branch "$RESCUE_REF" HEAD
+    echo "WARNING: $AHEAD_COUNT commit(s) ahead of origin/$BRANCH before reset --hard -- a prior run committed but never pushed. Rescued onto local ref '$RESCUE_REF' (git log $RESCUE_REF) before resetting; push it manually to recover."
+    notify-send -u critical "$JOB_NAME" "$AHEAD_COUNT unpushed commit(s) found -- rescued to $RESCUE_REF before reset, see $LOG" 2>/dev/null || true
+  fi
   if ! git reset --hard "origin/$BRANCH"; then
     echo "FATAL git reset --hard origin/$BRANCH failed -- aborting; the clone is NOT at origin's state"
     notify-send -u critical "$JOB_NAME" "reset to origin/$BRANCH failed -- job aborted, see $LOG" 2>/dev/null || true
