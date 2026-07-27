@@ -1037,6 +1037,57 @@ human's own dotfiles.
   refusal and machine-append anchoring) are still OPEN — this is only the
   reader-side guard.
 
+- **2026-07-27 10:2x (interactive session, closed via `/cloture`):** a
+  maintenance pass off `scheduler sweep` that turned into a lockout audit.
+  Landed, all pushed to `origin/main`: `8a3450d` (QUESTIONS: two design
+  calls), `dd086bb` (`reconcile_prior_cycles()` + `tests/reconcile-witness.sh`),
+  `3f97df4`+`ab4dcb8` (recovered 14 stranded commits), `ca02931` (self-dev
+  cycle joins the shared lockout; `lib/registry-lock.sh` +
+  `tests/registry-lock-witness.sh`), `6fc2d4f` (activity-based deferral).
+  Cross-project: `c49c70d` in realisateur, `606f07c` in bibliothecaire.
+
+  THE THREAD, because the individual fixes matter less than what connected
+  them. A paced cycle that declined to merge (dirty tree, or a failed push)
+  left work nothing ever revisited — the next day's branch forks from
+  `main`, so the tail was orphaned permanently: 14 commits across
+  2026-07-25/26, verified file-by-file as NOT superseded. The fallback was
+  correct in the moment and permanent by omission. Pulling that thread:
+  the dirty-tree test was standing in for "is a human here", because
+  `bin/scheduler-dev-cycle.sh` had NO registry participation at all — the
+  scheduler enforced its lockout on ~20 projects and exempted the one job
+  that edits the scheduler. And underneath that, the lockout was failing
+  OPEN ecosystem-wide: `session-marker.sh` recorded `${PPID}`, which dies
+  with the hook, so `check-project-busy` answered "free" for any repo with
+  a live human in it. Three layers, one root: a guard that was never
+  wired to the thing it guards.
+
+  [batch] `bin/scheduler:2024` prints a `WARNING: local commit made but NOT
+  pushed` line out of the last-run slice with no re-probe. For an EXPIRED
+  job that slice is frozen forever, so `scheduler status vkv-inventory`
+  still reports a 2026-07-20 warning whose commits reached `origin/main`
+  days ago — it cost this session a wrong diagnosis before the claim was
+  re-probed. The 2026-07-25 last-run-slice fix does not cover the dormant
+  case, and the `CRITICAL` line below it IS status-gated while this one is
+  not. Name proposed: STALE-BY-RESOLUTION (sibling to the sweep's
+  STALE-BY-DRIFT). Fix shape: make the warning unquotable — reachable only
+  via a re-probe returning resolved / unpushed / `unverifiable:<why>`,
+  ref-agnostic (check ancestry against any `refs/remotes/*`; the warning
+  named `drilldown-browse-redesign` while the commits landed on `main`,
+  which is exactly what misled this session).
+
+  [batch] DEFERRED CROSS-WRITE, realisateur was BUSY: propose failure
+  pattern 16 in `BUILD-DISCIPLINE.md` — *a correct refusal that nothing
+  retries*. Distinct from pattern 8 (warn-then-continue proceeds; this one
+  correctly STOPS, and the stopping is the loss) and from 13 (that is a
+  decision with no dispatch path; this is finished WORK with none). Live
+  exhibits from this session alone: the dirty-tree merge fallback, the
+  failed-push path, and — the reason it deserves doctrine — every one of
+  them logged loudly and was still lost, so "it failed loud" is not
+  sufficient. Rule shape: a fallback that declines to act must name what
+  retries it, or it is a dead end wearing a safe fallback's clothes.
+  Second deferred write to the same repo: realisateur's own
+  `.scheduler/FOCUS.md` has no record of `c49c70d`.
+
 - **2026-07-27 01:49 (via `scheduler -i`):** (from realisateur /ideate 2026-07-27, follow-up to the two guards filed earlier tonight) THIRD proposal, and this one is the reason the other two matter: bin/blockers-freshness-check.sh was silently blinded for two days and reported a clean summary the entire time.
 
 WHAT HAPPENED. ec89b84 (chezz's machine-append, 2026-07-25) inserted its "## chezz" section at the first "## " it found in BLOCKERS.md. That occurrence was inside the header's own explanatory sentence -- the one that tells the reader where resolved entries go, and does so by naming the heading: "...actually moves it down into `## Recently resolved` or deletes it."
