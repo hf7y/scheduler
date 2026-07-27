@@ -9,7 +9,40 @@ removed automatically (see `docs/feedback-tags.md`) — the blocker
 description itself is a different mechanism entirely: nothing scans for
 a RESOLVED/RETRACTED marker and prunes it automatically, so it stays in
 its project's active section until a human (or an `/ideate` pass)
-actually moves it down into `## chezz
+actually moves it down into `## Recently resolved` or deletes it. Doing
+that sweep is part of `/ideate`'s own triage, not a side effect of
+anything else running — an entry marked resolved a week ago and never
+moved is a sign that sweep hasn't happened, not a bug.
+
+**Machine-append policy (2026-07-25, human-directed).** This file is
+human-OWNED but no longer human-only-WRITE. An agent may APPEND here
+without waiting for Zach: a new blocker it discovered, a dated
+`RESOLVED`/`RETRACTED`/`SUPERSEDED` note under an existing entry, or a
+correction when it verified a claim and found it stale. The point is
+that an agent which learns a blocker is dead should be able to say so
+here, inline, rather than parking the knowledge in a FOCUS.md nobody
+cross-reads. Append-only means exactly that: an agent does NOT delete
+or rewrite a human's prose, does NOT move entries between sections, and
+does NOT prune — pruning and the active→resolved sweep stay human /
+`/ideate` triage, per the paragraph above. Every agent-written line
+carries a date and the witness that justifies it (the command run, the
+file read), because the failure this policy exists to prevent is a
+claim outliving its verification — see the 2026-07-25 svc-vaporwave
+entry below, where an unverified "no crontab exists there" in
+`schedule/_paced.conf` contradicted this file's own correct record for
+a full day and was believed over it. (`scheduler -b --claude`, added
+2026-07-25, is the mechanized form of the human sweep: Zach invokes it
+interactively and a one-shot claude pass condenses resolution notes and
+moves fully-resolved entries down to Recently resolved — human-directed
+each time, so it sits on the human-triage side of the line above, not
+an exception to it. Unattended runs still may not move or prune.)
+
+Each project's heading must be exactly `## <PROJECT_KEY>` (matches
+`schedule/<project>.conf`'s `PROJECT`/`PROJECT_KEY`) — that's what a
+run's own `collect-feedback.sh --section` call matches against, so it
+only ever sees its own section, never another project's.
+
+## chezz
 
 - **Four design forks are the only thing holding otherwise-ready backlog
   work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
@@ -42,13 +75,10 @@ actually moves it down into `## chezz
   -- or "take the custom fairy-piece font track instead, which has no
   such gate" -- is all that's needed; until then the report stays open
   by design, not by neglect.
-<<<<<<< /tmp/vzTGDTh/5
 > Yes, pursue the gemini path, safe bounded account balance exists for
   testing precisely this. Lift creds from vkv-inventory if possible
   pending the creation of chezz specific ones
 
-=======
->>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 - **2026-07-22 15:09 `scheduler -i` (general-scaffold convergence):
   RESOLVED in-repo 2026-07-25 -- nothing needed your scope-widening
   after all** (chezz nightly, machine-append; witness: chezz commit
@@ -83,43 +113,7 @@ actually moves it down into `## chezz
   and per-project recipe live in realisateur `.scheduler/FOCUS.md`
   (2026-07-26 migration entry). realisateur itself is already done
   (`fa222cb` + `1284b58`).
-<<<<<<< /tmp/vzTGDTh/5
 > This has been handled. Report noisy if it hasn't. 
-=======
->>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
-
-## Recently resolved` or deletes it. Doing
-that sweep is part of `/ideate`'s own triage, not a side effect of
-anything else running — an entry marked resolved a week ago and never
-moved is a sign that sweep hasn't happened, not a bug.
-
-**Machine-append policy (2026-07-25, human-directed).** This file is
-human-OWNED but no longer human-only-WRITE. An agent may APPEND here
-without waiting for Zach: a new blocker it discovered, a dated
-`RESOLVED`/`RETRACTED`/`SUPERSEDED` note under an existing entry, or a
-correction when it verified a claim and found it stale. The point is
-that an agent which learns a blocker is dead should be able to say so
-here, inline, rather than parking the knowledge in a FOCUS.md nobody
-cross-reads. Append-only means exactly that: an agent does NOT delete
-or rewrite a human's prose, does NOT move entries between sections, and
-does NOT prune — pruning and the active→resolved sweep stay human /
-`/ideate` triage, per the paragraph above. Every agent-written line
-carries a date and the witness that justifies it (the command run, the
-file read), because the failure this policy exists to prevent is a
-claim outliving its verification — see the 2026-07-25 svc-vaporwave
-entry below, where an unverified "no crontab exists there" in
-`schedule/_paced.conf` contradicted this file's own correct record for
-a full day and was believed over it. (`scheduler -b --claude`, added
-2026-07-25, is the mechanized form of the human sweep: Zach invokes it
-interactively and a one-shot claude pass condenses resolution notes and
-moves fully-resolved entries down to Recently resolved — human-directed
-each time, so it sits on the human-triage side of the line above, not
-an exception to it. Unattended runs still may not move or prune.)
-
-Each project's heading must be exactly `## <PROJECT_KEY>` (matches
-`schedule/<project>.conf`'s `PROJECT`/`PROJECT_KEY`) — that's what a
-run's own `collect-feedback.sh --section` call matches against, so it
-only ever sees its own section, never another project's.
 
 ## scheduler
 
@@ -177,19 +171,6 @@ only ever sees its own section, never another project's.
   (the convention `scheduler` and `aedile` already use), per Zach's
   explicit preference. Once migrated, the allow rules and this whole
   entry move to Recently resolved.
-  in fewer lines.
-
-- **2026-07-26 (realisateur append — the entry above stays, this is its
-  status):** the migration above is now absorbed into a queued
-  ecosystem-wide `.claude/`→`.scheduler/` pass (worklist + sequencing in
-  realisateur `.scheduler/FOCUS.md`, 2026-07-26 migration entry) — wtul
-  goes FIRST, using the scouted scope above verbatim. realisateur itself
-  migrated today (realisateur `fa222cb`, scheduler `1284b58`) as the
-  pass's template. Root-cause note, so this doesn't recur: this entry
-  sat unexecuted for 2 days because it was filed here — and BLOCKERS.md
-  is by standing rule not a work queue, so nothing ever dispatched it.
-  Recorded as BUILD-DISCIPLINE failure pattern 13 ("a decision without
-  a dispatch path") in realisateur.
 
 - **2026-07-26 (realisateur append — the entry above stays, this is its
   status):** the migration above is now absorbed into a queued
@@ -384,81 +365,28 @@ happened yet for any of them.
     slot, same as the `(answer inline here)` placeholder.
     > Thank you. 
 
-## gardien
+## bibliothecaire
 
-
-- *(Machine-append, scheduler paced cycle 2026-07-26: the tag line above
-  is consumed by gardien's next scheduled run; this section can be moved
-  to Recently resolved once gardien's FOCUS.md actually carries the op
-  list.)*
-
-## senechal
-
-
-- *(Machine-append, scheduler paced cycle 2026-07-26: the tag line above
-  is consumed by senechal's next scheduled run; this section can be moved
-  to Recently resolved once senechal's FOCUS.md carries the condition +
-  interim flag.)*
-
-## realisateur
-
-- **Five yes/no calls from the 2026-07-26 strategy audit — each is one
-  `> ` reply, none blocks the others** (filed 2026-07-26, realisateur
-  interactive strategy session, machine-append; witness:
-  `realisateur/PLAYBOOK.md` @ `436f774` + the three-agent audit it
-  records). Full rationale lives in PLAYBOOK.md; these are only the
-  parts that need YOU:
-  1. **Bless `PLAYBOOK.md` as standing doctrine** (or reply with edits)
-     — it now governs build-vs-import-vs-retire allocation the way
-     UNIVERSE.md governs laws.
-     >
-  2. **Commit-message PreToolUse hook: install at user level**
-     (`~/.claude/settings.json`, covers every project) rather than
-     per-repo? The build itself you already approved 2026-07-25
-     (narrow deny-with-message form); this is only the
-     where-it-lives call the design notes said to confirm.
-     >
-  3. **Import swaps — approve any subset:** (a) symlinks replace
-     `scheduler pacing deploy`/drift-detection (also fixes the LIVE
-     drift found in `usage-paced-runner.sh`, the script cron runs every
-     5 min); (b) `ccusage` replaces `token-usage.sh`'s parsing core;
-     (c) `gitleaks` replaces hygiene-lint's hand regexes (harness
-     stays); (d) restic/rsnapshot under `gardien.py`'s storage layer
-     when it unparks.
-     > Approved (a), (b), (c) — 2026-07-26, interactive /ideate in the
-     > scheduler repo, Zach via AskUserQuestion. (d) restic/rsnapshot
-     > stays deferred until gardien actually unparks. Note: (a) is also
-     > the sequencing prerequisite for the axis-1 decision (paced runner
-     > dispatching from a committed conf) — see scheduler DESIGN-NOTES.md
-     > 2026-07-26 /ideate entry. Queued as a [batch] item in scheduler's
-     > FOCUS.md Backlog same pass.
-  4. **Catabolic worklist — approve retiring ~1,000 already-labeled-
-     superseded lines** (morning-report ×2, build-services-view +
-     `services/`, `incubation-audit.sh`, overnight-dev ×2, the two
-     162-line loop-script forks, sync-crontab's dead auto-stagger), one
-     retirement per pass, each commit naming what retires it.
-     > Approved — 2026-07-26, interactive /ideate in the scheduler repo,
-     > Zach via AskUserQuestion. One retirement per pass, each commit
-     > naming what it retires, exactly as filed. The scheduler loop-fork
-     > retirement is gated behind the axis-1 (a) `scheduler-run` flip
-     > (see scheduler FOCUS.md axis 1, decided same pass). Queued as a
-     > [batch] item in scheduler's FOCUS.md Backlog same pass.
-  5. **Standing re-admission policy:** as each parked making-project
-     declares its stability milestone (jobs queued 2026-07-26 in
-     groc-mangr/nine-speakers/sequestria/vim-arcade), re-enable it at
-     weight 1–2 with no further per-project ask — yes turns four future
-     decisions into ordinary queue work. (vkv-inventory stays `0`
-     regardless: svc-vaporwave crontab owns its dispatch.)
-     >
-  - 2026-07-26 (realisateur nightly-batch, machine-append; witness: this
-    run's own dispatch prompt + scheduler `git diff` of the collector's
-    `--consume` rewrite): tonight's run was handed five EMPTY replies to
-    the five calls above — a collector bug consumed the bare `>` answer
-    slots as if they were answers and deleted them from this file. The
-    slots are restored, nothing was treated as approved, and all five
-    calls still await you. Bug fixed in `bin/collect-feedback.sh`
-    (scheduler `bb5c762`): a bare `>` line is now kept as an un-answered
-    slot, same as the `(answer inline here)` placeholder.
+- **Three of seven themes are blocked on primary texts behind a library
+  wall — and as of today that is being fixed by wiring institutional
+  access, not by lowering the bar** (filed 2026-07-27, realisateur
+  `/ideate`, Zach-directed; witness: bibliothecaire's own 2026-07-26
+  nightly re-probe recorded in its `.scheduler/QUESTIONS.md` + `SOURCES.md`
+  access column — all six Internet Archive copies of Koestler's *The Ghost
+  in the Machine* / *Beyond Reductionism* lending-restricted, Theraulaz &
+  Bonabeau 1999 closed-access, no open copy of Beer's 2002 *Kybernetes*
+  POSIWID paper, Coase 1937 *Economica* serving a Cloudflare 403 to an
+  honest UA). Short themes: `holons` 1/2, `stigmergy` 0/2, `vsm` 0/2.
+  **Zach's call this session: he has access via Tulane's library (API or
+  similar) and is wiring it up now — the honesty policy is NOT relaxed and
+  no secondary-source fallback is authorised.** Until that access is live
+  and proven from an unattended run, these three themes stay
+  `(waiting: institutional full-text access)`. A page number and the exact
+  sentence from a physical copy still closes any one of them instantly.
+  This section exists because the blocker previously had no cross-project
+  surface at all — it lived only in bibliothecaire's own QUESTIONS.md,
+  which is BUILD-DISCIPLINE pattern 13 ("a decision without a dispatch
+  path") in its quieter form.
 
 ## Recently resolved
 
