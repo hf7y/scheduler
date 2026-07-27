@@ -904,10 +904,24 @@ the repair does not depend on anyone reading this file.)*
   (verified by diff before replacing), so nothing was discarded.
   **Repair:** `ln -sfn "<repo>/bin/usage-paced-runner.sh" ~/.local/bin/usage-paced-runner.sh`
   (use a temp name + `mv -T` for the atomic swap — cron may fire mid-edit).
-- `usage-gate.sh`, `scheduler-dev-cycle.sh` → still real **copies**, in sync
-  today but structurally able to drift. Same one-line repair converts them.
-  This is realisateur/PLAYBOOK.md Play 2 in miniature: symlinks retire the
-  drift class, rather than a `deploy` verb that re-copies it.
+- `usage-gate.sh`, `scheduler-dev-cycle.sh` → **symlinks as of 2026-07-27**,
+  converted in the same session. Both were byte-identical to the repo at the
+  time, so nothing about what runs changed; what changed is that they can no
+  longer diverge. This is realisateur/PLAYBOOK.md Play 2 in miniature:
+  symlinks retire the drift class, rather than a `deploy` verb that re-copies
+  it.
+
+**All four are now symlinks, which makes Play 2's retirement available:**
+`deployable_scripts()` returns EMPTY, so `scheduler pacing` prints "(nothing
+deployable found)" and `scheduler pacing deploy` has nothing it can act on —
+both are now dead weight rather than a guess about future need. Retiring
+them (`deployable_scripts()`, `cmd_pacing_deploy`, the drift block in
+`cmd_pacing`, the `deploy` line in `usage()`, ~80 lines and one verb) is a
+clean catabolic pass with a real precondition met, and it is exactly the
+kind of surface Law 3 says never gets removed on its own. NOT done here:
+that is a deliberate retirement decision, and the accretion freeze governs
+what the front door looks like. Left as the next obvious catabolic item.
+`# verified 2026-07-27 via ls -l ~/.local/bin; scheduler pacing`
 - `<project>-nightly-batch-loop.sh` / `-bug-sweep-loop.sh` (~20 legacy
   wrappers) → copies, but they only set variables and then
   `source "<repo>/lib/sweep-loop-common.sh"` by absolute path, so the LOGIC
