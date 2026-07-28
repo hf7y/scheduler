@@ -1093,6 +1093,30 @@ human's own dotfiles.
      (reports, DESIGN-NOTES entries, conf comments). Real, but nothing
      has been bitten there yet; don't build ahead of evidence.
 
+  **Step 1 is DONE (2026-07-28, built in-session, `e8ccd4d`).**
+  `scheduler ask` generates the entry; `bin/questions-lint.sh` FLAGs
+  hand-written ones and unstamped state claims, wired into `sweep` in the
+  same commit; the renderer prints the bold span instead of line 1. The
+  retired prose paragraph was deleted, not left beside its replacement.
+
+  **Step 1b (queued, answers "how do we make a built-but-unwired check
+  fail noisily?" — human question, 2026-07-28).** Static analysis cannot
+  answer it: grepping for a script's name proves it is *mentioned*, and a
+  call site inside a branch that never executes greps identically to a
+  live one. What proves wiring is a RUNTIME WITNESS. Build: every check
+  in `bin/` touches
+  `~/.local/share/scheduler-checks/<name>.lastrun` as its first act, and
+  a `sweep` pass FLAGs any `bin/*-check.sh`/`*-lint.sh` whose witness is
+  missing or older than N days — "this exists, nothing has run it since
+  <date>." That is the same dead-man-switch shape as `EXPIRY_DAYS`, which
+  this repo already trusts for jobs, applied to checks. It catches both
+  never-wired and silently-unwired-later (a `sweep` pass deleted in a
+  refactor), which is the failure `blockers-freshness-check.sh` had for
+  two days and nothing reported. Interim measure already in place:
+  `sweep`'s new `questions-lint` pass has an `else` branch that prints
+  `MISSING or not executable -- a wired check vanished` rather than
+  silently skipping, so at least deletion is loud today.
+
   **Blockers on step 1 (the current step).**
   - None human-only. Step 1 is buildable now, entirely inside this repo.
   - Step 2 has one, and it is NOT scheduler's to decide: **bibliothecaire
@@ -1108,7 +1132,23 @@ human's own dotfiles.
   This pass cleared `.scheduler/QUESTIONS.md` down to what is still
   genuinely open. Each item names the question it consumed.
 
-  1. **Symlink all three installed wrappers** (consumed: 2026-07-26
+  1. **~~Symlink all three installed wrappers~~ — ALREADY DONE; the
+     question was stale and should never have been asked.**
+     `ls -l` on 2026-07-28 shows all four counterparts
+     (`usage-paced-runner.sh` 07-26 23:56, `scheduler-dev-cycle.sh` and
+     `usage-gate.sh` 07-27 00:47, `scheduler` 07-20) are symlinks into
+     the checkout. `installed_scripts()` in `bin/scheduler` says the same
+     and records that `deployable_scripts()` + `scheduler pacing deploy`
+     were retired 2026-07-27 for exactly this reason. So the 2026-07-26
+     entry's claim was true when written and false by the time it was
+     read, and a human decision was spent on a non-question. Nothing
+     caught it although `deploy-drift-check.sh` runs in `sweep` and knew.
+     Mechanism built in response, same day: `bin/questions-lint.sh` FLAGs
+     any entry asserting machine state without a `verified <date> via
+     <command>` stamp. Filed to realisateur as an ecosystem failure mode
+     (detector output and prose claims never meet) and to senechal as a
+     machine-state correction. Original text kept below for the record:
+     **Symlink all three installed wrappers** (consumed: 2026-07-26
      "should the installed COPIES become symlinks?", option (a)).
      `ln -sfn "<checkout>/bin/<name>" ~/.local/bin/<name>` for
      `usage-paced-runner.sh`, `scheduler-dev-cycle.sh`, `usage-gate.sh`.
