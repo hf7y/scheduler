@@ -165,6 +165,15 @@ usage: scheduler [command] [project]
   pacing max <n>         set PACED_MAX_PER_TICK (dispatches allowed per tick
                          before yielding back to cron even if usage-gate.sh
                          still says RUN), re-sync + apply, and commit
+  ask <project> "<question>"
+                         record ONE open question in that project's
+                         QUESTIONS.md. Pass the question text only -- the
+                         id, date and provenance are stamped for you, and
+                         the question is placed FIRST so summary views
+                         show the question rather than the date. This is
+                         the only supported way to add an entry;
+                         bin/questions-lint.sh FLAGs hand-written ones in
+                         `scheduler sweep`.
   idea <project> ["text"], -i
                          drop a new idea/feature-request for a project.
                          realisateur gets a new .idea file (its own real
@@ -512,6 +521,114 @@ resolve_focus_path() {
   fi
   subdir="$(conf_field "$proj" SCHEDULER_SUBDIR)"
   echo "$repo_path/${subdir:-.claude}/FOCUS.md"
+}
+
+resolve_questions_path() {
+  local proj="$1"
+  local repo_path subdir
+  repo_path="$(conf_field "$proj" PROJECT_REPO_PATH)"
+  if [ -z "$repo_path" ]; then
+    echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
+    return 1
+  fi
+  subdir="$(conf_field "$proj" SCHEDULER_SUBDIR)"
+  echo "$repo_path/${subdir:-.claude}/QUESTIONS.md"
+}
+
+# cmd_ask -- the ONE way an open question gets into a QUESTIONS.md.
+#
+# Built 2026-07-28 (human-directed, /ideate). This exists because the
+# alternative -- a written convention saying "put the question first" --
+# had already failed. Every writer hand-typed
+#   - **2026-07-26 (via /nightly-batch, paced cycle): <question>**
+# and led with the invariant part, so `scheduler status` (which shows an
+# entry's opening line) rendered ten different questions as ten
+# near-identical stubs of date + provenance. Prose cannot enforce field
+# order; a generator can. The caller supplies ONLY the question text.
+# Everything else -- id, date, provenance -- is stamped here, which is
+# what makes "the question is the first thing on the line" a structural
+# fact rather than a thing to remember.
+#
+# Emitted shape, and each part's reason:
+#   - **<question>**  `q-ab12cd` 2026-07-28, via <provenance>
+#     ^ bold span opens at col 5 and CLOSES ON THE SAME LINE, because
+#       that span is exactly what the summary renderer prints.
+#                       ^ stable short id, so a resolve/archive step and a
+#                         cross-reference have something to name that
+#                         survives the entry being reworded.
+# `bin/questions-lint.sh` FLAGs any entry not matching, so a hand-written
+# entry is a loud finding in `scheduler sweep` rather than silent decay.
+cmd_ask() {
+  local proj="${1:-}" text="${2:-}"
+  if [ -z "$proj" ] || [ -z "$text" ]; then
+    echo "usage: scheduler ask <project> \"<the question, in full>\""
+    echo
+    echo "  Records ONE open question in <project>'s QUESTIONS.md. Pass the"
+    echo "  question text only -- id, date and provenance are stamped for you,"
+    echo "  and the question is placed first so summary views show it."
+    echo
+    echo "  Provenance defaults to this session's context; override with"
+    echo "  SCHEDULER_ASK_VIA=\"<what asked>\"."
+    echo
+    echo "available projects:"
+    projects | sed 's/^/  /'
+    exit 1
+  fi
+
+  # One line, no embedded newlines: the whole mechanism rests on the bold
+  # span closing on the same physical line the entry opens. Fail loud
+  # rather than silently flattening -- a squashed multi-line question is
+  # exactly the unreadable output this command exists to prevent.
+  # NOT `grep -q $'\n'`: a newline in a grep PATTERN is an alternation
+  # separator, so that spelling matches every input and rejected every
+  # question (caught by running it, 2026-07-28).
+  if [ "$text" != "${text%%$'\n'*}" ]; then
+    echo "scheduler ask: the question must be a single line (it becomes the entry's" >&2
+    echo "  first line, which is what summary views print). Put detail in a follow-up" >&2
+    echo "  paragraph by editing the file, or in DESIGN-NOTES.md and link it." >&2
+    exit 1
+  fi
+
+  local qpath
+  qpath="$(resolve_questions_path "$proj")" || exit 1
+
+  local today id via
+  today="$(date '+%Y-%m-%d')"
+  id="q-$(printf '%s%s' "$today" "$text" | sha1sum | cut -c1-6)"
+  via="${SCHEDULER_ASK_VIA:-}"
+  if [ -z "$via" ]; then
+    if [ -t 0 ] && [ -t 1 ]; then via="interactive session"; else via="unattended run"; fi
+  fi
+
+  local entry="- **${text}**  \`${id}\` ${today}, via ${via}"
+
+  if [ ! -f "$qpath" ]; then
+    mkdir -p "$(dirname "$qpath")"
+    {
+      echo "# Questions for the user"
+      echo
+      echo "Created by \`scheduler ask\`. Entries are generated, not hand-typed:"
+      echo "the question comes first because that is the part summary views show."
+      echo "\`bin/questions-lint.sh\` FLAGs hand-written entries in \`scheduler sweep\`."
+      echo
+      echo "## Open"
+      echo
+      echo "$entry"
+    } > "$qpath"
+    echo "created: $qpath"
+  elif grep -qE '^## +Open *$' "$qpath"; then
+    awk -v entry="$entry" '
+      { print }
+      !done && /^## +Open *$/ { print ""; print entry; done=1 }
+    ' "$qpath" > "$qpath.tmp" && mv "$qpath.tmp" "$qpath"
+    echo "inserted under ## Open: $qpath"
+  else
+    { echo; echo "## Open"; echo; echo "$entry"; } >> "$qpath"
+    echo "appended new ## Open section to: $qpath"
+  fi
+
+  echo "  $entry"
+  cmd_commit_file "$qpath" "Question added via \`scheduler ask\`: $id ($proj)"
 }
 
 # cmd_idea_editor -- the no-text-argument path (`scheduler -i <project>`
@@ -1201,10 +1318,28 @@ questions_counts() {
     BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0; infence=0}
     /^```/ { infence = !infence; next }
     infence { next }
-    /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
+    # Ledger sections are archive, not open questions (2026-07-28).
+    /^## / {
+      if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
+      started=0
+      dead = (tolower($0) ~ /consumed|resolved|archive/) ? 1 : 0
+      next
+    }
+    dead { next }
+    # A real question bullet is one that carries EITHER a generated
+    # `q-xxxxxx` id (scheduler ask, 2026-07-28) OR the legacy
+    # `YYYY-MM-DD` prefix. Requiring one of the two still excludes the
+    # template boilerplate bullets that the bare /^- \*\*/ match wrongly
+    # counted in 2026-07-22 -- but no longer silently counts a generated,
+    # question-first entry as nothing at all, which is what a plain
+    # date-prefix requirement did to the first one filed.
+    /^- \*\*/ && ($0 ~ /`q-[0-9a-f]+`/ || $0 ~ /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/) {
       if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
       started=1
-      is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
+      if ($0 ~ /`q-[0-9a-f]+`/)
+        is_resolved = 0
+      else
+        is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
       has_reply=0
       next
     }
@@ -2024,6 +2159,28 @@ cmd_sweep() {
     fi
   fi
 
+  # Sixth-b pass: hand-written QUESTIONS.md entries + unstamped state
+  # claims (bin/questions-lint.sh, built 2026-07-28). Wired in the same
+  # commit that built it, deliberately: the check immediately above spent
+  # two days built-but-unwired and its own header says so. Same
+  # offline-first, zero-`claude`-cost discipline; exit 3 is BLIND, not
+  # clean.
+  if [ -x "$SCHED_ROOT/bin/questions-lint.sh" ]; then
+    local qlint_out qlint_rc
+    qlint_out="$("$SCHED_ROOT/bin/questions-lint.sh" 2>&1)"
+    qlint_rc=$?
+    if [ "$qlint_rc" -eq 3 ]; then
+      echo "== [questions-lint] CANNOT READ QUESTIONS.md -- check is BLIND =="
+      echo "$qlint_out" | sed 's/^/  /'
+    elif [ "$qlint_rc" -ne 0 ]; then
+      echo "== [questions-lint] hand-written entries / unstamped state claims =="
+      echo "$qlint_out" | tail -25 | sed 's/^/  /'
+      echo "  (full list: bin/questions-lint.sh -- new entries should come from \`scheduler ask\`)"
+    fi
+  else
+    echo "== [questions-lint] MISSING or not executable -- a wired check vanished =="
+  fi
+
   # Seventh pass: tripped dead-man switches (expires_at stamps). FOCUS.md
   # EXPIRY_DAYS finding 3 (2026-07-25): 5 of 14 jobs sat expired,
   # discoverable only by hand-scanning ~/.local/share/*/expires_at or by
@@ -2245,16 +2402,57 @@ build_status_report() {
     # Same unanswered/resolved logic as cmd_glance's awk block, but prints
     # the actual bullet text instead of just a count -- a deep-dive on one
     # project should show you the question, not send you to go open it.
+    #
+    # What it prints is the entry's BOLD SPAN, not its opening line
+    # (fixed 2026-07-28). The old code did `buf=$0` at the bullet header
+    # and never appended, so it printed line 1 and nothing else -- which
+    # under the old hand-typed convention was the date and provenance,
+    # rendering every question as an indistinguishable stub. `scheduler
+    # ask` now generates entries with the question inside a bold span
+    # that closes on the opening line, so the span IS the question.
+    # A legacy entry whose `**` never closes on that line is printed
+    # as-is and LABELLED, so the shortfall is visible here rather than
+    # looking like a question that just happens to read badly.
     local unanswered
     unanswered="$(awk '
-      function flush() { if (started && !is_resolved && !has_reply) print buf }
-      BEGIN { infence=0 }
+      function flush() {
+        if (!started || is_resolved || has_reply) return
+        if (match(buf, /^- \*\*.*\*\*/)) {
+          span = substr(buf, 5, RLENGTH - 6)
+          if (match(buf, /`q-[0-9a-f]+`/))
+            print span "  [" substr(buf, RSTART + 1, RLENGTH - 2) "]"
+          else
+            print span
+        } else {
+          print buf "   <-- hand-written entry: question not in a closing bold span (see questions-lint)"
+        }
+      }
+      BEGIN { infence=0; dead=0 }
       /^```/ { infence = !infence; next }
       infence { next }
-      /^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
+      # Section-aware (2026-07-28). A `## Consumed` / `## Recently
+      # resolved` ledger is ARCHIVE, not open questions -- without this
+      # every one-line ledger entry rendered as an open question whose
+      # text was just a date. Caught by running it, not by reading it.
+      /^## / {
+        flush()
+        dead = (tolower($0) ~ /consumed|resolved|archive/) ? 1 : 0
+        started=0
+        next
+      }
+      dead { next }
+      /^- \*\*/ {
         flush()
         started=1
-        is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
+        # Keyword sniffing applies to LEGACY entries only. A generated
+        # entry (`q-xxxxxx`) is deleted on resolution, so its presence
+        # already means open -- and sniffing broke it: the first question
+        # filed through `scheduler ask` disappeared from this view because
+        # the question itself contained the word "resolved".
+        if ($0 ~ /`q-[0-9a-f]+`/)
+          is_resolved = 0
+        else
+          is_resolved = (tolower($0) ~ /resolved|acknowledged/) ? 1 : 0
         has_reply=0; buf=$0
         next
       }
@@ -2495,6 +2693,7 @@ case "${1:-}" in
     open_file "$REPORTS_ROOT/$2/LATEST.md"
     ;;
   idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  ask) cmd_ask "${2:-}" "${3:-}" ;;
   next|-n) cmd_next "${2:-}" ;;
   run) cmd_run "${2:-}" ;;
   overview|-o)
