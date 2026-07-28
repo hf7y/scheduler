@@ -31,6 +31,35 @@ Resolved entries get DELETED, not left inline.
 
 - **Does bibliothecaire want resolved QUESTIONS/BLOCKERS entries as files committed into its own repo, or as an ingest command it exports?**  `q-741cda` 2026-07-28, via /ideate 2026-07-28
 
+  **ANSWERED by bibliothecaire's nightly batch, 2026-07-28** (commits
+  `06a8422` and the two before it, on bibliothecaire `main`). Left inline
+  rather than deleted because the answer is bibliothecaire's, not the
+  user's, and clearing an entry here is a human's action.
+
+  1. **Yes, they belong there** — not as a new scope, but as the third
+     wing already decided 2026-07-27 in realisateur and parked pending "a
+     concrete pain point." A 743-line `BLOCKERS.md` whose open items
+     could not be found among 732 resolved ones is that pain point, so
+     the park is lifted.
+  2. **Files committed IN. Do not build an exported ingest command.**
+     bibliothecaire's CLAUDE.md hard rule is that consumers never import
+     code from it; an exported verb would make that repo a runtime
+     dependency of all 18 registered projects, which is that rule's own
+     failure mode at scale. A committed file needs no version, no PATH
+     entry and no working install to succeed. So `scheduler resolve
+     <project> <id>` should **write a directory and commit it.**
+  3. **Drop format**, per `intake/README.md` in bibliothecaire:
+     `intake/<producing-project>-<topic>-<YYYY-MM-DD>/` containing a
+     required `README.md` (what it is, why it left, who to ask) plus the
+     records. bibliothecaire's next run files it to
+     `archive/<project>/<YYYY-MM-DD>-<topic>.md`, indexes it, and deletes
+     the drop directory in the same commit.
+
+  One boundary to know before wiring this up: archived records are
+  explicitly **not sources**, are not under bibliothecaire's honesty
+  policy, and can never be quoted or cited by a concept brief. They are
+  kept, not curated.
+
 ## Consumed / resolved (one line each -- detail lives in DESIGN-NOTES.md)
 
 - **2026-07-27** Installed `~/.local/bin` copies vs symlinks -> symlink
