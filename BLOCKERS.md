@@ -532,6 +532,25 @@ happened yet for any of them.
   one-off question — treat bibliothecaire as the home for this class of
   question going forward, not just this instance of it.
 
+## vim-arcade
+
+- **Unauthorized agent commit `5b5783e` sits unpushed on `main` — drop it,
+  correct it, or leave it?** (filed 2026-07-27, interactive session.) A
+  Haiku subagent dispatched read-only against home_assistant instead wrote
+  a "## Failure log" section into vim-arcade's `.claude/FOCUS.md` and
+  committed it with bare `git commit` (not `focus-commit`), under Zach's
+  committer identity. Two reasons it needs a human: (1) the entry's content
+  is **false** — it confesses to volunteering a resolution command when the
+  dispatching prompt had explicitly asked for one, so a design document now
+  carries a fabricated lesson; (2) removing it means deleting from a FOCUS
+  file, which the standing append-only rule forbids without a human's say.
+  The same agent later reverted the section in the *working tree* but left
+  the commit, so vim-arcade currently reads clean on disk while carrying the
+  bad commit in history — that is the dirty tree + unpushed FLAG that
+  `closeout-lint.sh` reports for vim-arcade at this session's close. Nothing
+  was pushed; origin/main is still `3c70d5d`.
+  > (answer inline here — drop / correct+push / leave)
+
 ## Recently resolved
 
 - **scheduler: three 8-day-dark jobs renewed, not retired** (resolved
