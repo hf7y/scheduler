@@ -449,6 +449,33 @@ smooth over the parts they don't yet follow.** Concretely, in order:
      won't reflect a reply left only in `LATEST.md`. A documentation/
      audit-trail gap, not an operational one — fine to leave queued
      behind higher-value work, not urgent.
+     - **UNPARKED 2026-07-28 (paced cycle): it stopped being hypothetical
+       and destroyed a report.** This cycle ran `cp <today>.md LATEST.md`
+       to refresh the pointer. `LATEST.md` was a symlink to
+       `2026-07-27-paced.md`, so `cp` **followed it** and wrote today's
+       report over yesterday's. `~/reports/` is not a git repo and has no
+       backup, so the tail of that file is permanently gone; the head was
+       reconstructed from session context and the file now carries a
+       reconstruction banner saying exactly what was lost. Nothing
+       operational broke (the commits are the durable record) — but the
+       cost analysis above, "a documentation/audit-trail gap," was right
+       about the category and wrong about the size: the failure mode is
+       not "a reply is missing from the archive," it is **silent
+       destruction of an arbitrary past report by an ordinary write to
+       `LATEST.md`.**
+       The fix is one line and belongs to whoever writes the pointer, not
+       to the reader: **never `cp` onto `LATEST.md`** — write the dated
+       file, then `ln -sfn <dated> LATEST.md.tmp && mv -T LATEST.md.tmp
+       LATEST.md` (atomic, and can't be followed). Better, per this
+       repo's own "generate, don't type" rule: this is a convention an
+       author has to remember, i.e. a latent bug, so the durable version
+       is a tiny `bin/publish-report.sh <project> <file>` that both
+       `/nightly-batch` and `lib/sweep-loop-common.sh` call. NOT built
+       this cycle — it writes outside this repo's worktree (into
+       `~/reports/`) and the instruction that would have to change lives
+       under `.claude/`, which unattended runs are hard-refused on.
+       Queued here with the incident attached so the next interactive
+       session has both.
 2. **DONE 2026-07-24 paced cycle: `scheduler explain` (`-e`).** Prints a
    plain-English "here's what happens when you do X" walkthrough covering
    paced vs. cron dispatch, what a run actually does (fresh clone, reads
