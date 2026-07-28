@@ -3683,8 +3683,14 @@ rip-speed-monitoring/spin-live-watch/web-photo-capture).
   above predicted this exact loss and I still had to be asked before I
   wrote it down.
 
-  [batch] DEFERRED CROSS-WRITE, realisateur was BUSY: realisateur's
-  `.scheduler/FOCUS.md` has no record of the overnight cybernetics study.
+  ~~[batch] DEFERRED CROSS-WRITE, realisateur was BUSY:~~ **RETIRED
+  2026-07-28 by realisateur `f9e6462`** — the lock cleared during the same
+  session, so the real write was made rather than left as a stub. This is
+  the pattern-16 rule working as intended: re-check the lock at close, do
+  not assume still-blocked. Struck rather than deleted, so the deferral
+  and its discharge are both legible.
+  Original payload: realisateur's
+  `.scheduler/FOCUS.md` had no record of the overnight cybernetics study.
   Branch `research/ecosystem-cybernetics`, pushed, `ddd422b` (100
   generations of results + `TECHNICAL-MANUAL.md` +
   `PHILOSOPHY-AND-CRITIQUE.md`) and `29c90ab` (`ELI5.md`). Headline
@@ -3699,7 +3705,9 @@ rip-speed-monitoring/spin-live-watch/web-photo-capture).
   for 50 generations because it was structurally unable to fire, which is
   the study's own subject matter committed by the study's own instrument.
 
-  [batch] DEFERRED CROSS-WRITE, realisateur was BUSY: the study's strongest
+  ~~[batch] DEFERRED CROSS-WRITE~~ **RETIRED 2026-07-28 by realisateur
+  `f9e6462`**, which carries the do-not-promote marker verbatim.
+  Original payload: the study's strongest
   observation is UNREGISTERED and must be guessed-first-then-tested before
   it counts. A sensor that fails toward OK scores PERFECTLY on every
   dashboard metric (0.00 wasted attention, 1.00 trust, zero false alarms)
@@ -3710,7 +3718,8 @@ rip-speed-monitoring/spin-live-watch/web-photo-capture).
   go through `sim/prereg.py` first, and `prereg.py` refuses to backdate.
   Do NOT promote it to a finding on the strength of this row.
 
-  [batch] Also unfiled in realisateur: `bin/silence-audit.sh` and
+  ~~[batch] Also unfiled in realisateur~~ **RETIRED 2026-07-28 by
+  realisateur `f9e6462`.** Original payload: `bin/silence-audit.sh` and
   `bin/install-silence-audit.sh` remain staged-only on
   `staging/silence-audit` (`39d64e0`, pushed, upstream clean), uninstalled
   and unwired by design. The install script is dry-run by default, names
