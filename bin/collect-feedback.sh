@@ -37,6 +37,29 @@
 #                     BLOCKERS.md organized with a "## <project>" heading
 #                     per project) be scanned separately per project, each
 #                     run only picking up its own section.
+# `--consume` MARKS replies, it does not delete them (changed 2026-07-28,
+# Zach-directed, after the defect below). A matched `> reply` is rewritten
+# in place as `>> reply` under a dated `>> _[consumed ...]_` header. It
+# stays visible, attributed, and in position; it is simply no longer
+# collectable, so it can never be handed to a second run as if fresh.
+# `>>` lines are skipped outright, which makes --consume idempotent.
+#
+# Why: --consume stripped the `> ` marker as a SIDE EFFECT of collecting,
+# before the calling run had decided whether to act. wtul run 28
+# (2026-07-27, wtul repo 0baabb6) consumed 28 of Zach's replies, judged
+# them "mostly not actionable", and deleted ZERO entries. The answers
+# survived only as unattributed prose wedged inside still-open questions:
+# invisible to every future --consume (nothing left to collect) and
+# indistinguishable from the question's own body text. A question had
+# been answered and by every mechanical measure never had been. Several
+# of those "not actionable" replies were specs -- a stream URL, three
+# Apps Script URLs plus "build it", a decided either/or.
+#
+# The deletion of an entry is the CALLER's job and always was; this
+# script's job is to report what it read. It no longer destroys evidence
+# on the caller's behalf. NOTE: the %%TAG path above still deletes and
+# has the identical defect -- filed in FOCUS.md, not fixed here.
+#
 #   --consume         after collecting, rewrite <file> removing the
 #                     matched %%TAG lines (headings, blocker descriptions,
 #                     and every other line are left untouched) so they
@@ -88,7 +111,7 @@ if [ "$CONSUME" = "1" ]; then
   KEEP_FILE="$(mktemp)"
 fi
 
-OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v consume="$CONSUME" '
+OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v consume="$CONSUME" -v consume_date="$(date +%Y-%m-%d)" '
   function norm(s,   t) {
     t = s
     sub(/^[ \t]*#+[ \t]*/, "", t)
@@ -138,6 +161,14 @@ OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v co
     }
     next
   }
+  /^[ \t]*>>/ {
+    # An ALREADY-CONSUMED reply (see the marking rule below). Never
+    # re-collected, never re-marked, kept verbatim. This is what makes
+    # --consume idempotent.
+    flush_reply()
+    if (consume) print $0 > keep_file
+    next
+  }
   /^[ \t]*>[ \t]?/ {
     content = $0
     sub(/^[ \t]*>[ \t]?/, "", content)
@@ -157,12 +188,28 @@ OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v co
       reply_anchor = anchor
       reply_text = content
       reply_matched = (section_filter == "" || heading_norm == section_filter)
+      if (consume && reply_matched) {
+        # Open the marked block. See the header note on why a consumed
+        # reply is MARKED and not deleted.
+        print ">> _[consumed " consume_date " -- read by a run; this entry is" > keep_file
+        print ">> still OPEN until something deletes it]_" > keep_file
+      }
     } else {
       reply_text = reply_text " " content
     }
-    if (consume && !reply_matched) print $0 > keep_file
-    # matched + consume: deliberately NOT written to keep_file -- removal,
-    # same as a consumed %%TAG line
+    if (consume) {
+      if (reply_matched) {
+        # MARK, do not delete: demote "> foo" to ">> foo". Still visibly
+        # the words of the human, in place and in order -- but no longer
+        # collectable, so it cannot reach a second run as if it were new.
+        # NB: no apostrophes in this awk program; it is single-quoted.
+        marked = $0
+        sub(/^([ \t]*)>/, "&>", marked)
+        print marked > keep_file
+      } else {
+        print $0 > keep_file
+      }
+    }
     next
   }
   {
