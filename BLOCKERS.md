@@ -548,6 +548,17 @@ happened yet for any of them.
   Recommendation is (b): it is the cheaper change and it is the one the
   night's data argues for.
   > (answer inline here — a/b/c)
+  > **ANSWERED 2026-07-28 (Zach, interactive): (b).** BUILT and pushed,
+  > `cf1a1a9` in realisateur. Section A now emits
+  > `BLIND [worktrees] <project>: N linked worktree(s) NOT examined below`,
+  > naming each worktree path and its branch, counted separately from FLAG
+  > and printed in the summary so it cannot read as a clean run. Placed
+  > BEFORE the `$HOURS` age gate — a registered repo's HEAD can be stale
+  > while a worktree branch is minutes fresh, and the gate would otherwise
+  > hide exactly this case (test A9). 24/24 in
+  > `bin/tests/closeout-lint.test.sh`, including two negative cases and one
+  > asserting BLIND is not a FLAG. Run against the real ecosystem it now
+  > names both live realisateur worktrees. This block is closable.
 
 - **2026-07-27 (realisateur `/ideate`, machine-append): `wtul`'s
   unattended run edited realisateur's live `bin/notify-senechal.sh` and
