@@ -1075,6 +1075,27 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 (from the wtul question-backlog investigation, Zach-directed):
+  the `%%TAG` path in `collect-feedback.sh` still destroys unacted feedback.**
+  Fixed today for `> ` replies (`3170b81`): `--consume` marks them `>>`
+  instead of deleting, because stripping the marker was a side effect of
+  *reading*, before the caller had decided whether to act. `%%ACTION`/
+  `%%BLOCKER`/`%%QUESTION`/`%%NOTE`/`%%APPROVE`/`%%REJECT` lines are still
+  deleted outright by the same call and have the identical defect.
+  The live failure this class already caused: wtul run 28 (2026-07-27,
+  wtul `0baabb6`) consumed 28 of Zach's replies, judged them "mostly not
+  actionable", deleted zero entries, and left the answers as unattributed
+  prose inside still-open questions — invisible to every later run.
+  Recovered 2026-07-28 (wtul `cbe597d`) only because the markers survived
+  in git. A `%%TAG` has no such luck: its keyword IS the marker, so a
+  destroyed one leaves a bare sentence with nothing identifying it as
+  feedback at all. Needs a marking convention that survives the round
+  trip and is skipped on re-read, the way `>>` is — `%%~ACTION` or
+  similar, chosen so the existing `^%%(ACTION|...)` match cannot see it.
+  Not done today: it touches the documented tag vocabulary in
+  `docs/feedback-tags.md` and every consumer of it, which is a wider blast
+  radius than the reply fix and deserves its own pass.
+
 - **2026-07-28 08:48 (via `scheduler -i`):** `scheduler -i` exits 0 when its write never reached origin. Found by senechal 2026-07-28; deferred at the time because check-project-busy reported scheduler BUSY, filed now that the lock cleared.
 
 REPRODUCED, not theorised. Filing a cross-write into wtul at 08:26:
