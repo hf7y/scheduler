@@ -7,23 +7,27 @@ come from whoever's working on it directly, human or agent, whenever
 something bigger than a routine edit comes up. Clear an entry by deleting
 its line once you've actually read and dealt with it.
 
-**Shape rule (2026-07-27, `/ideate`, human-directed).** An entry here is
-addressed to a HUMAN who has not read the code. Lead with the question
-itself in the bold line -- not the provenance -- and keep the whole entry
-short enough to answer without scrolling. Provenance (`(via
-/nightly-batch, paced cycle)`), verification transcripts, commit SHAs and
-the full reasoning belong in `DESIGN-NOTES.md`; link to it. The prior
-convention grew 30-line agent-to-agent essays whose first line -- the
-only part any summary view shows -- was almost always the date and the
-source, so `scheduler status` rendered ten questions as ten
-indistinguishable stubs. Answered entries get DELETED and recorded in the
-consumed ledger at the bottom, not left inline: on 2026-07-27 five of
-fifteen entries were resolved-in-place and still sat between the open
-ones.
+**Add entries with `scheduler ask <project> "<question>"` -- do not
+hand-type them.** RETIRES the "Shape rule" paragraph that stood here for
+one day (2026-07-27 to 2026-07-28): it asked writers to remember to put
+the question first, and a convention nobody can enforce is a latent bug.
+The id/date/provenance are now stamped by the generator and the question
+comes first structurally, because that bold span is exactly what
+`scheduler status` prints. `bin/questions-lint.sh` FLAGs hand-written
+entries and unstamped machine-state claims in `scheduler sweep`.
+Resolved entries get DELETED, not left inline.
 
 ## Open
 
 - **Do svc-vaporwave's aedile/vkv-inventory wrappers source their own copy of lib/sweep-loop-common.sh, or a path into /home/zach?**  `q-ba2045` 2026-07-28, via /nightly-batch paced cycle 2026-07-26, re-filed by /ideate
+
+  Second half, same step: aedile's wrapper is bespoke (opts out of the
+  shared engine, calls `claude -p` directly) and needs the auth-failure
+  branch added by hand. Loud "Not logged in" detection is built at source
+  and verified against shims, but this account cannot read
+  svc-vaporwave's home directory, so delivery can't be done or checked
+  from here. For a headless account the LOG line is the loud channel --
+  `notify-send` is a no-op there.
 
 - **Does bibliothecaire want resolved QUESTIONS/BLOCKERS entries as files committed into its own repo, or as an ingest command it exports?**  `q-741cda` 2026-07-28, via /ideate 2026-07-28
 
