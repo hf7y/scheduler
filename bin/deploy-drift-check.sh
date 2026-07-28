@@ -51,6 +51,16 @@ DEPLOY_DIR="${DEPLOY_DIR:-$HOME/.local/bin}"
 
 [ -d "$REPO_ROOT/bin" ] || { echo "FATAL: no bin/ under $REPO_ROOT" >&2; exit 2; }
 
+# Runtime witness -- record that this check actually RAN, so a
+# built-but-unwired check fails loud in `scheduler sweep` instead of looking
+# clean (lib/check-witness.sh + bin/check-witness-lint.sh, 2026-07-28).
+# Guarded, and never fatal -- bookkeeping must not be able to break a check.
+if [ -r "$REPO_ROOT/lib/check-witness.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/lib/check-witness.sh"
+  check_witness "$(basename "$SELF_REAL")"
+fi
+
 git_ok=0
 git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 && git_ok=1
 

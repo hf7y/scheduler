@@ -29,6 +29,18 @@ set -uo pipefail
 # Overridable so the parse paths can be exercised against fixture files
 # offline (same scratch-SCHED_ROOT convention bin/scheduler's tests use).
 SCHED_ROOT="${SCHED_ROOT:-/home/zach/Documents/Project Archive/scheduler}"
+
+# Runtime witness -- record that this check actually RAN, so a
+# built-but-unwired check fails loud in `scheduler sweep` instead of looking
+# clean (lib/check-witness.sh + bin/check-witness-lint.sh, 2026-07-28). This
+# check is the reason that mechanism exists: it was silently unwired for two
+# days in July 2026 and nothing reported it.
+# Guarded, and never fatal -- bookkeeping must not be able to break a check.
+if [ -r "$SCHED_ROOT/lib/check-witness.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$SCHED_ROOT/lib/check-witness.sh"
+  check_witness "$(basename "${BASH_SOURCE[0]}")"
+fi
 BLOCKERS_FILE="$SCHED_ROOT/BLOCKERS.md"
 STALE_DAYS="${STALE_DAYS:-14}"
 
