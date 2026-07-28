@@ -505,6 +505,20 @@ happened yet for any of them.
   one-off question — treat bibliothecaire as the home for this class of
   question going forward, not just this instance of it.
 
+- **2026-07-28: install four missing text-extraction tools?** (needs
+  sudo, so it is your hands, not a run's). Each one silently degraded a
+  verification while closing bibliothecaire's brief milestone: `qpdf`
+  (worked around with pikepdf), `djvutxt` (a Perrow .djvu is unreadable),
+  `ebook-convert` (Koestler's *Ghost in the Machine* is `.mobi` and is
+  the primary text for `holons`, currently sourced secondary). The fourth
+  is not a missing tool but a lying one: `ocrmypdf` produced **zero text
+  for pp. 2-4** of the Cohen/March/Olsen scan and exited 0. Dispatch
+  pointer: bibliothecaire's `.scheduler/QUESTIONS.md` 2026-07-28 entry on
+  re-sourcing three briefs from primaries already on disk depends on
+  `ebook-convert` specifically.
+  > (answer inline here)
+
+
 ## vim-arcade
 
 - **Unauthorized agent commit `5b5783e` sits unpushed on `main` — drop it,
