@@ -1075,6 +1075,22 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 09:48 (via `scheduler -i`):** ENGINE PROPOSAL from realisateur /ideate 2026-07-28 (Zach asked: 'the scheduler watcher eating commits mid-change is a huge problem, worth addressing immediately?'). Filed here rather than hand-edited, per /ideate step 5.
+
+DEFECT: cmd_sweep guards adoption with interactive_holder "$name" -- a presence marker keyed to the project whose file the EDITOR opened (hold_project_marker, set by open_file/session-marker.sh). But this ecosystem is built on cross-project writes: realisateur's /ideate cross-write privilege, notify-senechal, focus-commit <repo>, and any agent editing another repo. A session holding realisateur's marker while writing wtul leaves wtul looking abandoned, so sweep adopts a live edit mid-write. cmd_commit_file also PUSHES, so a half-finished FOCUS.md/QUESTIONS.md reaches origin/main -- the exact ref every unattended run clones.
+
+NOT THEORETICAL: 7 adoptions ecosystem-wide in the 36h to 2026-07-28 (wtul, senechal, bibliothecaire, vim-arcade, scheduler x3). One (wtul 4b02419, 2026-07-27T14:30) swallowed Zach's own live reply-writing burst. Another took a realisateur session's 116-line in-progress QUESTIONS.md restoration at 09:30 today and committed it as 'author unknown'; it was caught only because the session happened to check git log immediately after.
+
+The honest-attribution work (2026-07-26) fixed what the commit message CLAIMS. It did not change when adoption fires. The message is now accurate about not knowing whose work it is -- which is the finding, not the fix.
+
+PROPOSED, for Zach to choose (realisateur has NOT implemented any of these):
+(a) QUIESCENCE -- record a per-file hash each tick; adopt only if identical two ticks running. An in-flight edit changes between ticks, an abandoned one does not. Needs no marker, so it covers cross-project writes, GUI editors and agents for free. Cost: backstop latency 15min -> 30min. This is realisateur's recommendation.
+(b) GLOBAL MARKER -- defer if ANY *.interactive marker is live, not just this project's. Simplest; misses writers that hold no marker.
+(c) BOTH.
+(d) SWEEP STOPS PUSHING -- smallest change, keeps mis-attributed local commits but stops a half-written file reaching the clone ref.
+
+Sweep's own comment already argues deferral is free ('sweep runs again in 15 minutes, and sweep only ever commits, so a deferral leaves the file exactly as the human has it') -- that reasoning supports (a) directly.
+
 - **2026-07-28 (from the wtul question-backlog investigation, Zach-directed):
   the `%%TAG` path in `collect-feedback.sh` still destroys unacted feedback.**
   Fixed today for `> ` replies (`3170b81`): `--consume` marks them `>>`
