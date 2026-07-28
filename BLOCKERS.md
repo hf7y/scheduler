@@ -201,6 +201,36 @@ questions were answered in the same pass and are queued as decisions in
 `.scheduler/FOCUS.md` Backlog. One human-only step remains and is tracked
 in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
 
+- **2026-07-28 (scheduler `/cloture`): cron produces no log, and the fix
+  is one uncommented line + a service restart — do it, or is the silence
+  wanted?** Re-probed, not quoted: `/etc/rsyslog.d/50-default.conf:10`
+  reads `#cron.*  /var/log/cron.log`, commented out, so **there is no
+  record anywhere of a cron job that failed to start.** A job that runs
+  and fails leaves a sweep log; a job whose dispatch never happened leaves
+  nothing at all, and the two are indistinguishable from outside. This is
+  the dispatch-surface half of the same blindness the night's research was
+  about, and it is the cheapest sensor on the list. Machine-wide config,
+  so it needs `notify-senechal` when done and is not something an
+  unattended run should do on its own initiative. Ready to run in
+  `realisateur-research-ecosim/bin/decide.sh` option 3 (dry-run by
+  default), which prints its own revert line.
+  > (answer inline here — enable cron logging, or leave it off deliberately)
+
+- **2026-07-28 (scheduler `/cloture`): `bin/decide.sh` offers seven
+  remediations from the overnight audit and I am deliberately not running
+  any of them — which do you want?** They are yours to judge, not mine to
+  assume, and several are machine-wide. Verified working, dry-run by
+  default, each prints its own REVERT line: (1) renew vkv's dead-man
+  switch, (2) retire orphaned jobs, (3) enable cron logging, (4) fix
+  `LATEST.md` symlinks, (5) install `silence-audit`, (6) add aedile a
+  dead-man switch — it is the one nightly with no expiry at all and it
+  ALWAYS pushes, (7) make `scheduler status` report BLIND instead of OK
+  for accounts it cannot read. (7) is the one the research argues for
+  hardest; (6) is the one with the largest blast radius if left alone.
+  Lives on branch `research/ecosystem-cybernetics` at `29c90ab`, unwired
+  on purpose.
+  > (answer inline here — which numbers, if any)
+
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
@@ -350,6 +380,36 @@ happened yet for any of them.
   Zach has not yet looked at the 3-pin design write-up.
 
 ## vkv-inventory
+
+- **2026-07-28 (scheduler `/cloture`): the nightly's dead-man switch
+  TRIPPED and the job is now dark — renew it, or let it retire on
+  purpose? One `rm`, and it is on a clock.** Re-probed this morning, not
+  quoted: `expires_at` = `2026-07-27T20:51:32-05:00`, now
+  `2026-07-28T08:30`, so it lapsed ~12h ago. Today's 04:00 run reached the
+  gate and stopped: *"expired -- dead-man switch tripped; no work
+  attempted (no clone, no claude)"*. **The mechanism worked exactly as
+  designed** — it refused, it logged loudly, and it printed its own
+  renewal command. Nothing retries it, which is why this is filed rather
+  than admired: it is BUILD-DISCIPLINE pattern 16 (*a correct refusal that
+  nothing retries*) occurring live in production, and the reason pattern
+  16 got written today.
+
+  **The clock:** the same log line says `bin/sync-crontab.sh` prunes this
+  job's crontab line on its next `--apply` run. So the default outcome of
+  doing nothing is not "paused", it is "unscheduled", and after that the
+  switch is no longer the thing keeping it dark.
+
+  Context for the call: the last real run (2026-07-27 04:01) was healthy —
+  declared the project's first stability milestone, all three regression
+  harnesses clean (25/25, 6/6, 7/7), pushed `9d7d4d6 -> 2ce02f6` on
+  `drilldown-browse-redesign`. The only standing blocker there is the
+  bug-tracker 403, which is yours and unrelated. So this is not a sick
+  job; it is a healthy job whose lease ran out.
+
+  Renew (re-stamps now+7d on next run; bumping `EXPIRY_DAYS` alone does
+  NOT renew, the stamp is only written when the file is missing):
+  `sudo -u svc-vaporwave rm ~svc-vaporwave/.local/share/vkv-inventory-nightly-batch/expires_at`
+  > (answer inline here — renew, or retire the job deliberately)
 
 - **Zach's-home testing instance: needs an interactive Google login**
   (2026-07-25) — plan is to fork vkv-inventory's *deployment* (not its
