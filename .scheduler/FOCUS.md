@@ -4,6 +4,118 @@ The scheduler's Tier 2 job (`/nightly-batch`) is scoped by this file, same
 as every other project. Difference: this project is the **meta-tool** that
 controls all the other jobs.
 
+## The long arc (2026-07-28, interactive `/ideate`, realisateur)
+
+*Written because the vision was true but scattered: it lived in six
+sections of this file (Vision 2026-07-20, Architecture 2026-07-20,
+Registration, Short list + roadmap 2026-07-24, Consolidation roadmap
+2026-07-20, and the 2026-07-25 19:51 front-door entry now serving as the
+milestone spec), plus DESIGN-NOTES.md. None of them was wrong. But
+answering "what are we building, and is this idea on the path" required
+reading all six and reconciling three re-sequencings. This section is the
+single telling. The six sections below stay as the DETAIL and the
+receipts — where a claim here is thin, they are the authority; where they
+disagree with each other, this section is the reconciliation.*
+
+**Not decided by writing this down.** Everything below that is a decision
+carries its own date and provenance from those sections. Where something
+is genuinely still open, it says so by name rather than being smoothed
+over — silence here does not mean settled.
+
+### The vision, in one paragraph
+
+Scheduler runs **a fleet of autonomous builders, not a fleet of
+maintained projects.** Projects propose their own work, build it
+unattended, and push it; the human's role is not to operate the machine
+but to be the one thing the machine cannot supply — judgment on the
+questions it has correctly identified as beyond its authority. Safety
+comes from a **per-project autonomy dial matched to that project's actual
+stakes**, not one global trust ceiling: a vim game and a home-assistant
+install with physical devices should never share a policy. Above the dial
+sits one universal gate that no tier overrides — genuinely irreversible
+actions (a new paid dependency, a physical actuation, a non-revertible
+production cutover) always need a human. Self-spawning is the *point*,
+not the risk: realisateur scaffolding new projects unprompted is the
+value this system exists to produce, and the job is to make that safe by
+construction (bare local remotes, cost caps, the tier) rather than to
+rein it in afterward.
+
+The human surface to all of that is **three printable views and a text
+file** — not a dashboard, not a TUI. You read what is happening, you
+answer inline, the answer round-trips into the next run.
+
+### Why the surface keeps being the bottleneck
+
+The recurring failure mode of this project, in Zach's own words
+(2026-07-20, and re-derived independently 2026-07-25):
+*"my ideas outpace implementation of stable versions so the target is
+always moving."* Every capability added so far arrived with its own view
+— glance, status, overview, next, explain, focus, questions, report,
+pacing-show — because adding a surface is cheaper than folding one. The
+result is a tool whose `usage()` is longer than most of its commands and
+which the owner operates by trust rather than understanding. The
+ACCRETION FREEZE now in force is the correction: **no view gains a legend
+line or a new verb until the fold lands.** New needs go into the spec, not
+into the tool.
+
+This is also why the roadmap is sequenced the way it is below. Every
+consolidation step is a **retirement**, and each one names what it
+replaces. A step that only adds is out of order by definition.
+
+### The milestone chain, working backward from the vision
+
+**Now (in progress) — one front door.** Fold the entire human surface
+into three stable PRINTABLE views: `scheduler` noargs (now/next plus a
+one-line gate/dials footer), `scheduler <project>` (detail, inline reply,
+reorder and reweight from there), `scheduler blockers` (the one
+blocked-on-you place). Every legacy view retires to a one-line redirect
+stub; `usage()` drops to ~20 lines; each view footer prints its own
+mutation one-liners. Locked decisions: HARD FOLD + RETIRE, STATIC + VERBS
+(no TUI), DIALS as a one-line footer with full pacing detail staying under
+`pacing`. **Open inside this step:** what happens to the editor-opening
+verbs (`-p`, `-f`, `-q`, `-b`) — the bar names printable views, and those
+four print nothing. Filed as a question, not assumed either way.
+
+**Next (not started) — dispatch converges on one path.** The paced
+runner's `_paced*.conf` command column becomes `scheduler-run <project>
+nightly-batch`, retiring the per-project loop-script forks to 5-line
+shims. **Hard sequencing gate, not optional:** the live-edit risk closes
+FIRST — the runner must dispatch from a committed, validated copy of
+`_paced*.conf` (symlink-deploy plus refuse-dirty-confs are the two halves)
+and drift must fail loud. Then one project at a time, chezz first,
+watching a full dispatch before the next. This is where `AUTONOMY_TIER`
+stops being a declared-but-unread field and becomes engine-enforced, and
+where `REGISTRATION.md` plus a conf schema version have to exist so the
+migration has something to stamp.
+
+**Then (decided in shape, not scheduled) — one file per project.** Item 0:
+collapse the report and `QUESTIONS.md` into a single file the human
+answers inline in, once every project has settled onto
+`SCHEDULER_SUBDIR=".scheduler"`. Deliberately parked behind the layout
+migration so the two file-shape changes can be verified independently.
+
+**Later (direction only, deliberately vague) — scheduler leaves the
+laptop.** No local checkout; scheduler owns its own scope and is runnable
+anywhere; the GitHub-hosted projects come off this machine. That world is
+where the daemon question genuinely reopens — the 2026-07-20 decision was
+"keep cron," and its named revisit trigger is not project count but
+`usage-paced-runner.sh` itself becoming observably expensive to re-derive
+every 15 minutes. Until then the build-toward-it rule binds every new
+mechanism: state in files and re-derivable per invocation, idempotent
+poll-friendly checks, dispatch logic separable from what triggers it.
+
+**Not queued.** Google Calendar integration, glance-formatting polish, the
+BLOCKERS-as-computed-view redesign, the status-vocabulary unification.
+Real, kept, past the current bar.
+
+### What this arc implies for triage
+
+An idea belongs in the ACTIVE set only if it serves the current step —
+folding a view, retiring a surface, or closing the dirty-conf gate that
+gates the next step. An idea that adds a view, a verb, or a legend line is
+**against** the current step, not merely past it. That is a sharper test
+than park-by-default and it is the one to apply until the fold lands.
+
 ## Stability milestone
 
 **Current:** the entire human surface is three stable PRINTABLE views — `scheduler` noargs (now/next + one-line gate/dials footer), `scheduler <project>` (detail, inline reply, reorder/reweight from there), `scheduler blockers` (the one blocked-on-you place) — with the legacy views (glance/status/overview/next/explain/focus/questions/report/pacing-show as separate surfaces) retired to one-line redirect stubs and `usage()` ≤ ~20 lines; ACCRETION FREEZE holds until then (no view gains a legend line or new verb — new needs go into the spec) — status: in-progress
