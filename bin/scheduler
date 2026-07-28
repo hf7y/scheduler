@@ -764,6 +764,33 @@ cmd_commit_file() {
   if [ -z "$(git -C "$repo" status --porcelain -- "$path" 2>/dev/null)" ]; then
     return 0
   fi
+  # Refuse a file this path cannot safely adopt, rather than committing it
+  # under the human's name (2026-07-27, from realisateur /ideate's proposal
+  # 1: the 0e9b6a6 live exhibit -- a `~:30` tick caught BLOCKERS.md mid
+  # vimdiff-merge and committed two unresolved conflict blocks plus a
+  # verbatim duplicate "## realisateur" section under Zach's name; a dirty
+  # tree the human returns to is strictly better than a corrupt commit).
+  # Both checks are cheap and offline -- a literal conflict marker at line
+  # start, and a duplicate "## <heading>" (fence-skipped, same convention
+  # bin/blockers-freshness-check.sh already uses so the two can't drift
+  # about what "outside a fenced block" means).
+  if [ -f "$path" ]; then
+    if grep -qE '^(<<<<<<<( |$)|=======$|>>>>>>>( |$))' "$path" 2>/dev/null; then
+      echo "REFUSED: $path contains an unresolved conflict marker (<<<<<<<, =======, or >>>>>>> at line start) -- left as an uncommitted edit, resolve by hand" >&2
+      return 1
+    fi
+    local dup_headings
+    dup_headings="$(awk '
+      BEGIN{fence=0}
+      /^[[:space:]]*(```|~~~)/{fence=!fence; next}
+      !fence && /^##[[:space:]]+.+$/{print}
+    ' "$path" | sort | uniq -d)"
+    if [ -n "$dup_headings" ]; then
+      echo "REFUSED: $path has a duplicate heading -- left as an uncommitted edit, resolve by hand:" >&2
+      printf '  %s\n' "$dup_headings" >&2
+      return 1
+    fi
+  fi
   # Freshness check BEFORE committing -- the actual fix for "do I need to
   # git fetch && git status by hand before every edit" (2026-07-20): no,
   # the tool checks instead. Doesn't block the commit (the file content is
