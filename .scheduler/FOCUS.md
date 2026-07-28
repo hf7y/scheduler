@@ -1093,7 +1093,42 @@ human's own dotfiles.
      (reports, DESIGN-NOTES entries, conf comments). Real, but nothing
      has been bitten there yet; don't build ahead of evidence.
 
+  **The two failure modes this session, named (2026-07-28, human-directed).**
+  Naming them is the point — an unnamed failure mode recurs because
+  nobody can say "that's the one again."
+  - **"Layer not retired."** A defect gets a new layer while the old
+    layer stays live and keeps producing it. Instance: the unreadable
+    QUESTIONS.md was "fixed" on 2026-07-27 by adding a prose convention
+    to the file header, without deleting anything. It lasted one day.
+    Then `scheduler ask` was built on 2026-07-28 — and the FIRST version
+    of that build committed the same sin, shipping the generator while
+    leaving four separate documents still instructing agents to
+    hand-append the retired format. Caught by Zach, not by any check.
+  - **"I didn't check."** A claim about machine state is quoted from a
+    document instead of re-probed, and acted on. Instance: three
+    `~/.local/bin` scripts were asserted to be COPIES on 2026-07-26,
+    read on 2026-07-27, put to Zach as a real decision, answered — and
+    were already symlinks the whole time. `deploy-drift-check.sh` runs in
+    `sweep` and knew. One `ls -l` would have shown it. Both filed to
+    realisateur under these names.
+
   **Step 1 is DONE (2026-07-28, built in-session, `e8ccd4d`).**
+  **What it retires — named explicitly, because the first cut of this
+  build did not and that was the "layer not retired" failure in the act:**
+  1. the "Shape rule" paragraph in `.scheduler/QUESTIONS.md` (deleted);
+  2. `examples/QUESTIONS.md.template`'s taught format
+     `- **YYYY-MM-DD (nightly|bug-sweep): <question>**` (replaced with
+     the command);
+  3. `examples/bug-sweep.md.template`'s identical hand-append
+     instruction (replaced);
+  4. `.claude/commands/nightly-batch.md`'s "append the question to
+     `.scheduler/QUESTIONS.md`" instruction (replaced);
+  5. keyword-sniffing for `resolved|acknowledged` as the way to tell a
+     closed entry from an open one, for generated entries — the q-id and
+     the section heading now decide it, because sniffing silently ate the
+     first real question filed (its text contained the word "resolved").
+  Nothing above is left standing beside its replacement.
+
   `scheduler ask` generates the entry; `bin/questions-lint.sh` FLAGs
   hand-written ones and unstamped state claims, wired into `sweep` in the
   same commit; the renderer prints the bold span instead of line 1. The
