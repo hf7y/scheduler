@@ -19,6 +19,8 @@ Resolved entries get DELETED, not left inline.
 
 ## Open
 
+- **Under the three-printable-views milestone, what happens to the EDITOR-OPENING verbs -p/-f/-q/-b? The bar names three stable PRINTABLE views, and those four print nothing -- they open a file in $EDITOR. Three readings, all defensible: (a) RETIRE -p specifically, since the milestone spec already says 'scheduler <project>' does reorder/reweight-from-there, which is exactly what -p is for -- tweaks made to it now are throwaway and the ACCRETION FREEZE arguably already covered them; (b) EXEMPT editor-openers as a class -- the fold is about printing surfaces, so -p/-f/-q/-b survive alongside the three views; (c) KEEP -p but promote it into the deploy-gated writer -- the one sanctioned way to edit _paced.conf (edit, validate, commit, deploy, refuse-if-dirty), which would close the exact live-edit risk that is the hard sequencing gate on axis-1's scheduler-run convergence. Raised 2026-07-28 by Zach during realisateur /ideate ('we just made some tweaks to scheduler -p but maybe that was slated for deletion anyway') -- he stepped away before answering, so it is filed rather than assumed. (c) is the only one that does work the roadmap already needs.**  `q-13a017` 2026-07-28, via unattended run
+
 - **Does step 2's `scheduler resolve <project> <id>` get an exemption from the ACCRETION FREEZE, or does it wait for the front-door redesign?**  `q-f75d57` 2026-07-28, via /nightly-batch paced cycle 2026-07-28
 
   Two rules now point opposite ways and this cycle is not the one to
