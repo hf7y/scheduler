@@ -118,7 +118,10 @@ Commit each finished change with a clear message. Then append a section for THIS
     CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
     if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then
       echo "WARNING: live crontab CHANGED during cycle $i -- investigate"
-      notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG" 2>/dev/null || true
+      # q-756f82: a bare `|| true` guards a notify-send that FAILS, not one
+      # that NEVER RETURNS (dbus socket present, nobody listening -- live
+      # 2026-07-28). Bounded so a decoration cannot wedge the job.
+      timeout 5 notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG" 2>/dev/null || true
     fi
 
     if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
@@ -141,6 +144,6 @@ Commit each finished change with a clear message. Then append a section for THIS
   echo "############ $(date -Is) overnight-dev END -- review branch: $BASE ############"
   if [ "$BASE" != "main" ]; then
     echo "morning review:  git log --oneline main..$BASE   &&   git branch --list 'overnight/$DATE-*'"
-    notify-send "$JOB_NAME" "Overnight work done. Review: git log main..$BASE" 2>/dev/null || true
+    timeout 5 notify-send "$JOB_NAME" "Overnight work done. Review: git log main..$BASE" 2>/dev/null || true
   fi
 } >> "$LOG" 2>&1

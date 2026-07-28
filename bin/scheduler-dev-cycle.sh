@@ -154,7 +154,10 @@ reconcile_prior_cycles() {
       echo "reconcile: CONFLICT merging $b -- aborted, main UNCHANGED. Needs a human: git merge $b"
       if [ ! -f "$marker" ]; then
         : > "$marker"
-        notify-send -u critical "$JOB_NAME" "$b conflicts with main -- $n commit(s) stranded, needs a hand merge (see $LOG)" 2>/dev/null || true
+        # q-756f82: a bare `|| true` guards a notify-send that FAILS, not one
+        # that NEVER RETURNS (dbus socket present, nobody listening -- live
+        # 2026-07-28). Bounded so a decoration cannot wedge the job.
+        timeout 5 notify-send -u critical "$JOB_NAME" "$b conflicts with main -- $n commit(s) stranded, needs a hand merge (see $LOG)" 2>/dev/null || true
       fi
     fi
   done
@@ -168,7 +171,7 @@ reconcile_prior_cycles() {
       echo "reconcile: pushed -- local main and origin/main are level"
     else
       echo "reconcile: push FAILED -- local main left ahead of origin, will retry next cycle"
-      notify-send -u critical "$JOB_NAME" "reconcile could not push main ($ahead ahead) -- see $LOG" 2>/dev/null || true
+      timeout 5 notify-send -u critical "$JOB_NAME" "reconcile could not push main ($ahead ahead) -- see $LOG" 2>/dev/null || true
     fi
   fi
 
@@ -236,7 +239,7 @@ if registry_should_defer "$PROJECT_KEY" "$DEFER_STREAK_FILE" "$SCHED_REPO"; then
 fi
 if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
   echo "$(date -Is) WARNING: proceeding despite an ACTIVE repo on '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}) -- $REGISTRY_DEFER_REASON. This cycle may write files you have open." >> "$LOG"
-  notify-send -u critical "$JOB_NAME: running while you work" "scheduler self-dev has deferred continuously for ${REGISTRY_DEFER_STREAK_MIN}m (backstop ${REGISTRY_DEFER_MAX_HOURS}h) and is now running anyway." 2>/dev/null || true
+  timeout 5 notify-send -u critical "$JOB_NAME: running while you work" "scheduler self-dev has deferred continuously for ${REGISTRY_DEFER_STREAK_MIN}m (backstop ${REGISTRY_DEFER_MAX_HOURS}h) and is now running anyway." 2>/dev/null || true
 fi
 [ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
@@ -302,7 +305,7 @@ Commit each finished change with a clear message. Then append a section for THIS
   CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
   if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then
     echo "WARNING: live crontab CHANGED during a paced cycle -- investigate"
-    notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG" 2>/dev/null || true
+    timeout 5 notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG" 2>/dev/null || true
   fi
 
   MERGED=0
@@ -347,10 +350,10 @@ Commit each finished change with a clear message. Then append a section for THIS
               || { echo "reconcile merge failed -- giving up, local main left ahead of origin for a human"; break; }
           done
           if [ "$PUSHED" = "1" ]; then
-            notify-send "$JOB_NAME" "Pushed self-dev cycle $MERGE_SHA to origin/main -- review via revert: git revert -m 1 $MERGE_SHA" 2>/dev/null || true
+            timeout 5 notify-send "$JOB_NAME" "Pushed self-dev cycle $MERGE_SHA to origin/main -- review via revert: git revert -m 1 $MERGE_SHA" 2>/dev/null || true
           else
             echo "CRITICAL: could not push main after this cycle -- local main is ahead of origin/main. Retried automatically by reconcile_prior_cycles() next cycle (since 2026-07-27); needs a human only if that keeps failing."
-            notify-send -u critical "$JOB_NAME" "self-dev cycle merged but COULD NOT PUSH -- local main ahead of origin, investigate $LOG" 2>/dev/null || true
+            timeout 5 notify-send -u critical "$JOB_NAME" "self-dev cycle merged but COULD NOT PUSH -- local main ahead of origin, investigate $LOG" 2>/dev/null || true
           fi
         else
           echo "merge into main FAILED (conflict?) -- aborting merge, leaving $BRANCH for manual review"
@@ -372,7 +375,7 @@ Commit each finished change with a clear message. Then append a section for THIS
     else
       echo "cycle $STATUS: new commits on $BRANCH (unmerged) --"
       git log --oneline "main..$BRANCH" 2>/dev/null | head -20
-      notify-send "$JOB_NAME" "New commits on $BRANCH awaiting review/merge." 2>/dev/null || true
+      timeout 5 notify-send "$JOB_NAME" "New commits on $BRANCH awaiting review/merge." 2>/dev/null || true
     fi
   else
     echo "cycle $STATUS: no commits"

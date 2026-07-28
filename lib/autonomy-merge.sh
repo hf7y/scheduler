@@ -128,10 +128,13 @@ autonomy_sweep_repo() {
         done
         if [ "$pushed" = "1" ]; then
           echo "[$label] autonomy sweep: $branch MERGED and PUSHED -- $merge_sha (revert with: git revert -m 1 $merge_sha)"
-          notify-send "$label" "auto-merged $branch ($gate): $merge_sha -- revert with git revert -m 1 $merge_sha" 2>/dev/null || true
+          # q-756f82: a bare `|| true` guards a notify-send that FAILS, not one
+          # that NEVER RETURNS (dbus socket present, nobody listening -- live
+          # 2026-07-28). Bounded so a decoration cannot wedge the job.
+          timeout 5 notify-send "$label" "auto-merged $branch ($gate): $merge_sha -- revert with git revert -m 1 $merge_sha" 2>/dev/null || true
         else
           echo "[$label] autonomy sweep: CRITICAL merged $branch locally but could not push -- $default_branch ahead of origin, needs a human"
-          notify-send -u critical "$label" "auto-merge of $branch could not push -- investigate" 2>/dev/null || true
+          timeout 5 notify-send -u critical "$label" "auto-merge of $branch could not push -- investigate" 2>/dev/null || true
         fi
       else
         echo "[$label] autonomy sweep: $branch merge conflict -- aborting, leaving for manual review"

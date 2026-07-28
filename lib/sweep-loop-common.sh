@@ -178,6 +178,31 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
 mkdir -p "$STATE_DIR" "$REGISTRY_DIR"
 
+# Every notification in this engine goes through here (q-756f82, closed
+# 2026-07-28). `notify-send ... 2>/dev/null || true` guards a notify-send
+# that FAILS; it does nothing about one that NEVER RETURNS, and those are
+# different. Found live 2026-07-28 in lib/deadman-switch.sh:82 under
+# svc-vaporwave: the dbus socket at $XDG_RUNTIME_DIR/bus exists but nothing
+# is listening, so notify-send blocked forever and hung the run that
+# sourced it. This engine exports DBUS_SESSION_BUS_ADDRESS unconditionally
+# (line 177) for EVERY job, cron or not, so it points at that same socket
+# on any account without a live desktop session -- the cron path is not
+# immune, it just hasn't drawn the short straw yet. A wedged notify-send
+# here is worse than there: this one holds $LOCK and the registry marker,
+# so it blocks the project's other tier too.
+#
+# The notification is best-effort garnish and must never wedge the job it
+# decorates -- but a dropped one is not allowed to be silent either, so
+# the timeout case (rc 124) says so in the log.
+notify() {
+  local rc=0
+  timeout 5 notify-send "$@" 2>/dev/null || rc=$?
+  if [ "$rc" = "124" ]; then
+    echo "$(date -Is) WARNING: notify-send timed out after 5s (dbus socket present but unanswered, or a hung notification daemon) -- notification DROPPED: $*" >> "$LOG"
+  fi
+  return 0
+}
+
 exec 200>"$LOCK"
 if ! flock -n 200; then
   echo "$(date -Is) already running, skipping" >> "$LOG"
@@ -257,7 +282,7 @@ if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
   # ordinary path and says nothing -- notifying on it is what trains a person
   # to ignore the notification that matters.
   echo "$(date -Is) WARNING: proceeding despite an ACTIVE repo on '$PROJECT_KEY' (pid $REGISTRY_DEFER_PID, since ${REGISTRY_DEFER_SINCE:-unknown}) -- $REGISTRY_DEFER_REASON. This run may write files you have open; your editor's next save reconciles via the vimrc 3-way merge." >> "$LOG"
-  notify-send -u critical "$JOB_NAME: running while you work" "$PROJECT_KEY has deferred continuously for ${REGISTRY_DEFER_STREAK_MIN}m (backstop ${REGISTRY_DEFER_MAX_HOURS}h) and is now running anyway. Close the editor or expect a merge on save." 2>/dev/null || true
+  notify -u critical "$JOB_NAME: running while you work" "$PROJECT_KEY has deferred continuously for ${REGISTRY_DEFER_STREAK_MIN}m (backstop ${REGISTRY_DEFER_MAX_HOURS}h) and is now running anyway. Close the editor or expect a merge on save."
 fi
 
 echo "{\"job\":\"$JOB_NAME\",\"tier\":\"$TIER\",\"started_at\":\"$(date -Is)\",\"pid\":$$}" > "$REGISTRY_MARKER"
@@ -280,7 +305,7 @@ NOW_IS=$(date -Is)
 
 if [[ "$NOW_IS" > "$EXPIRES_AT" ]]; then
   MSG="Auto-disabled: dead-man switch tripped ($EXPIRES_AT). Renew: rm $EXPIRES_AT_FILE -- next run re-stamps now+${EXPIRY_DAYS}d. Bumping EXPIRY_DAYS alone does NOT renew (the stamp is only written when the file is missing)."
-  notify-send "$JOB_NAME" "$MSG" 2>/dev/null || true
+  notify "$JOB_NAME" "$MSG"
   # A real ===-delimited run record, not one bare prose line (changed
   # 2026-07-26, FOCUS.md EXPIRY_DAYS finding 2: expiry used to be a clean
   # exit 0 with a log line nothing surfaced -- invisible everywhere but
@@ -315,7 +340,7 @@ fi
 if [ ! -d "$REPO/.git" ]; then
   if ! git clone "$REPO_URL" "$REPO" >> "$LOG" 2>&1; then
     echo "$(date -Is) FATAL clone failed: '$REPO_URL' -> '$REPO' (git output above) -- aborting before any git or claude work" >> "$LOG"
-    notify-send -u critical "$JOB_NAME" "clone failed for $REPO_URL -- job aborted, see $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME" "clone failed for $REPO_URL -- job aborted, see $LOG"
     exit 1
   fi
 fi
@@ -333,7 +358,7 @@ fi
 SECONDS_SINCE=$((NOW_EPOCH - LAST_HEARTBEAT_EPOCH))
 
 if [ "$SECONDS_SINCE" -ge 86400 ]; then
-  notify-send "$JOB_NAME" "Still running. Expires $EXPIRES_AT." 2>/dev/null || true
+  notify "$JOB_NAME" "Still running. Expires $EXPIRES_AT."
   echo "$NOW_EPOCH" > "$HEARTBEAT_FILE"
 fi
 
@@ -344,7 +369,7 @@ fi
   # the reset --hard / claude call running against the cron working directory.
   if ! cd "$REPO/$REPO_SUBDIR"; then
     echo "FATAL cannot cd '$REPO/$REPO_SUBDIR' -- aborting before any git or claude work"
-    notify-send -u critical "$JOB_NAME" "cannot enter $REPO/$REPO_SUBDIR -- job aborted, see $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME" "cannot enter $REPO/$REPO_SUBDIR -- job aborted, see $LOG"
     exit 1
   fi
   # Hard safety check, not just a convention: this clone is meant to be
@@ -384,12 +409,12 @@ fi
   # unknown base can commit and push real work onto the wrong thing.
   if ! git checkout "$BRANCH"; then
     echo "FATAL cannot checkout '$BRANCH' in $REPO -- aborting before any claude work (does that branch exist on origin?)"
-    notify-send -u critical "$JOB_NAME" "checkout $BRANCH failed -- job aborted, see $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME" "checkout $BRANCH failed -- job aborted, see $LOG"
     exit 1
   fi
   if ! git fetch origin --quiet; then
     echo "FATAL git fetch origin failed -- aborting rather than running against a stale base"
-    notify-send -u critical "$JOB_NAME" "fetch failed -- job aborted, see $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME" "fetch failed -- job aborted, see $LOG"
     exit 1
   fi
   # Bit chezz 2026-07-25: a prior run can die (e.g. hit the monthly spend
@@ -403,11 +428,11 @@ fi
     RESCUE_REF="rescue/${JOB_NAME}-$(date +%Y%m%d%H%M%S)"
     git branch "$RESCUE_REF" HEAD
     echo "WARNING: $AHEAD_COUNT commit(s) ahead of origin/$BRANCH before reset --hard -- a prior run committed but never pushed. Rescued onto local ref '$RESCUE_REF' (git log $RESCUE_REF) before resetting; push it manually to recover."
-    notify-send -u critical "$JOB_NAME" "$AHEAD_COUNT unpushed commit(s) found -- rescued to $RESCUE_REF before reset, see $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME" "$AHEAD_COUNT unpushed commit(s) found -- rescued to $RESCUE_REF before reset, see $LOG"
   fi
   if ! git reset --hard "origin/$BRANCH"; then
     echo "FATAL git reset --hard origin/$BRANCH failed -- aborting; the clone is NOT at origin's state"
-    notify-send -u critical "$JOB_NAME" "reset to origin/$BRANCH failed -- job aborted, see $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME" "reset to origin/$BRANCH failed -- job aborted, see $LOG"
     exit 1
   fi
   BEFORE_SHA=$(git rev-parse HEAD)
@@ -492,7 +517,7 @@ $PROMPT"
     if grep -qiE 'not logged in|please run /login|invalid api key|oauth token.*(expired|revoked)|authentication[_ ]?error' "$CLAUDE_OUT" 2>/dev/null; then
       STATUS_DETAIL=" (auth: not logged in)"
       echo "CRITICAL: claude authentication failure -- this account's CLI credentials have lapsed (\"Not logged in\"), NOT a quota/turn cutoff. Fix: run any interactive claude session as OS user $(id -un) to refresh the login, then this job recovers on its own next scheduled run."
-      notify-send -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG" 2>/dev/null || true
+      notify -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG"
     fi
   fi
 
@@ -556,7 +581,7 @@ $PROMPT"
 
   if [ "$STATUS" = "FAILED" ]; then
     RUN_RC=1
-    notify-send -u critical "$JOB_NAME FAILED" "See log: $LOG" 2>/dev/null || true
+    notify -u critical "$JOB_NAME FAILED" "See log: $LOG"
   fi
 } >> "$LOG" 2>&1
 
