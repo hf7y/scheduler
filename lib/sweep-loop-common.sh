@@ -383,6 +383,19 @@ fi
     notify-send -u critical "$JOB_NAME" "fetch failed -- job aborted, see $LOG" 2>/dev/null || true
     exit 1
   fi
+  # The stash above (line ~349) only covers uncommitted working-tree
+  # changes. It does NOT cover commits already made on this branch that
+  # never reached origin -- e.g. a prior run that committed work then
+  # crashed/was killed before pushing. `reset --hard origin/$BRANCH` would
+  # silently discard those commits with no recovery path. Save them under
+  # a dated rescue ref first; cheap (a ref, not a copy) and a no-op when
+  # there's nothing ahead of origin.
+  AHEAD_COUNT=$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)
+  if [ "$AHEAD_COUNT" -gt 0 ] 2>/dev/null; then
+    RESCUE_REF="rescue/${JOB_NAME}-$(date +%Y-%m-%d)"
+    git update-ref "refs/heads/$RESCUE_REF" HEAD
+    echo "$AHEAD_COUNT commit(s) ahead of origin/$BRANCH found before reset --hard -- rescued to branch $RESCUE_REF (git log $RESCUE_REF to recover)"
+  fi
   if ! git reset --hard "origin/$BRANCH"; then
     echo "FATAL git reset --hard origin/$BRANCH failed -- aborting; the clone is NOT at origin's state"
     notify-send -u critical "$JOB_NAME" "reset to origin/$BRANCH failed -- job aborted, see $LOG" 2>/dev/null || true

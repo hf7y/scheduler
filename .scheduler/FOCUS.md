@@ -1165,18 +1165,34 @@ Both are small. Both have already been paid for once.
   inline default, the `RUNNER_ENV` retyping). The subsumed entries hold
   the full scoping; this is the dispatch unit.
 
-- **[batch] [iface: crash-durability] 2026-07-26 (interactive /ideate,
-  human-approved) — MERGED build item: one guard for crash aftermath,
-  both halves, same code site.** Subsumes the 2026-07-26 09:32 entry
-  (bootstrap `reset --hard` destroys committed-but-unpushed commits —
-  rescue ref `rescue/<JOB_NAME>-<date>` before reset when
-  `rev-list origin/$BRANCH..HEAD > 0`) and the 2026-07-26 log-review
+- **[DONE 2026-07-27, paced cycle — both halves of crash-durability now covered.]**
+  Subsumed the 2026-07-26 09:32 entry (bootstrap `reset --hard` destroys
+  committed-but-unpushed commits) and the 2026-07-26 log-review
   crash-aftermath entry (STATUS=FAILED leaves a dirty worktree the next
-  reset wipes — commit-or-stash onto `crashed/<project>/<date>`,
-  untracked files included) below. Both live in
-  `lib/sweep-loop-common.sh` around the existing stash guard (~line 288)
-  and the FAILED path; building one without the other leaves a run's
-  work destroyable by the half not built. Name both refs in the report.
+  reset wipes) below. **Half (i) built this cycle:** before every
+  `git reset --hard origin/$BRANCH` in `lib/sweep-loop-common.sh` (~line
+  386), if `git rev-list --count origin/$BRANCH..HEAD` is nonzero, the
+  commits are saved to `refs/heads/rescue/<JOB_NAME>-<date>` (a cheap ref
+  update, not a copy) before the reset, and logged loudly. Verified
+  offline against a fabricated bare-origin fixture reproducing the exact
+  chezz 2026-07-25 shape (a local commit never pushed): pre-fix, `reset
+  --hard` discarded it outright; post-fix, `git log rescue/test-job-<date>`
+  recovers it after the reset, and the no-commits-ahead case correctly
+  computes 0 and creates no ref. Plus `bash -n` (shellcheck not installed
+  on this host). **Half (ii) — already covered, not new work:** the
+  existing stash guard a few lines above (`git stash push -u`, landed in
+  `1e55488`, predates this FOCUS entry) already unconditionally stashes
+  any dirty tree — tracked AND untracked (`-u`) — before every reset,
+  independent of whether the prior run's STATUS was FAILED. That already
+  satisfies "commit-or-stash the dirty tree ... untracked files included";
+  a separate `crashed/<project>/<date>` ref gated on STATUS=FAILED would
+  duplicate it without adding recovery power (`git stash list` /
+  `git stash pop` already does the job). Not building a redundant second
+  mechanism, per this file's own no-second-regulator-for-one-failure
+  precedent (see the blockers-freshness/machine-append entries above).
+  **What this retires:** nothing new — the rescue-ref gap the 09:32 entry
+  named is the only piece that was genuinely unbuilt; the FAILED-path
+  half was a re-description of behavior already shipped.
 
 - **[batch] 2026-07-26 (interactive /ideate, human-APPROVED — this is the
   `> ` answer to BLOCKERS.md ## realisateur call 4): the catabolic
