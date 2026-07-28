@@ -127,7 +127,11 @@ only when they have something to say (see FOOTER LINES).
 Run `scheduler --help` — the authoritative, terse list lives there (one
 source, not retyped here). The non-obvious ones in brief: `explain`
 narrates how the whole system works; `status <project>` (or a bare
-project name) is the offline per-project deep-dive; `sweep` is the
+project name) is the offline per-project deep-dive — for a project whose
+conf sets `CRON_ACCOUNT`, its "last scheduled run" state is read from
+THAT account's home via `sudo -n -u <acct>`, and if that read fails the
+line says `BLIND` naming the account and path rather than falling back to
+`$HOME` (which would report a job that ran fine as never-run); `sweep` is the
 read-mostly repo-state backstop; `-i <project> "idea"` drops a
 timestamped idea into that project's backlog (omit "idea" to open
 `$EDITOR` on a pre-populated placeholder instead); `next` prints the real
