@@ -101,7 +101,7 @@ HARD RULES (this is infrastructure, not an app):
   * Prefer changes verifiable here and now (shellcheck, a dry-run, simulating cron's env with 'env -u SSH_AUTH_SOCK') over changes whose only test is 'wait for tonight'. If a change can't be safely verified without going live, write it up as a proposal in the report instead of committing it.
   * On a real judgment call or anything needing the user's blessing, append it to .scheduler/QUESTIONS.md and describe it in the report rather than deciding unilaterally.
 
-Commit each finished change with a clear message. Then append a section for THIS cycle to $REPORT (create it if absent) and refresh $REPORTS_DIR/LATEST.md to point at tonight's work, covering: what you changed and why, how you verified it, what you deferred and why, and any open questions. A change that isn't committed on $BRANCH didn't happen."
+Commit each finished change with a clear message. Then append a section for THIS cycle to $REPORT (create it if absent) and refresh the LATEST.md pointer by running: bin/publish-report.sh scheduler $(basename "$REPORT") -- do NOT 'cp' onto LATEST.md, it is a symlink and cp follows it straight into a past report (that destroyed 2026-07-27's report). The report should cover: what you changed and why, how you verified it, what you deferred and why, and any open questions. A change that isn't committed on $BRANCH didn't happen."
 
     if [ "${SCHED_DRYRUN:-0}" = "1" ]; then
       echo "DRYRUN: skipping claude invocation"
