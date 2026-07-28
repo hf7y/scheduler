@@ -1187,6 +1187,20 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 13:38 (via `scheduler -i`):** CORRECTION to the chezz migration checklist filed earlier today (2026-07-28, realisateur /ideate): step 4's proposed roster line DOES NOT WORK. Verified live on dexter, not reasoned about.
+
+WHAT I FILED: `chezz|1|2|/home/zach/scheduler/bin/scheduler-run chezz batch`, on the reasoning that dexter's existing crt line uses that form and the 2026-07-24 decision says no per-host wrapper should need to exist.
+
+WHAT ACTUALLY HAPPENS: `scheduler-run chezz batch` exits **rc=2** with "BATCH_SCRIPT is set in schedule/chezz.conf -- that legacy wrapper is authoritative for tier 'batch'; run it directly, or remove BATCH_SCRIPT to migrate onto scheduler-run (see MIGRATION.md)". chezz.conf sets BATCH_SCRIPT=/home/zach/.local/bin/chezz-nightly-batch-loop.sh, a path that exists on mandark and not on dexter. Credit where due: this fails loud and correct, which is why it took one probe instead of a silent 3am no-op -- contrast the 401 finding in the original filing.
+
+THE REAL FORK, which is scheduler's to settle, not realisateur's:
+(a) Remove BATCH_SCRIPT from chezz.conf, migrating chezz onto scheduler-run per MIGRATION.md. Clean, and moves chezz off the legacy path permanently. BUT the blast radius is BOTH HOSTS: chezz.conf is one shared file and mandark executes from this same git history on a */5 tick, so this changes how mandark dispatches chezz on its next tick, unreviewed. That is exactly the governing constraint DESIGN-NOTES names ("the blast radius of a commit here is both machines, immediately"). If this is the path, it wants the same treatment every other shared-script edit got: proven equivalent on mandark first, not just assumed.
+(b) Install chezz-nightly-batch-loop.sh at the same ~/.local/bin path on dexter. Smaller blast radius, works immediately. BUT it re-creates the per-host wrapper duplication that the 2026-07-24 decision explicitly rejected, and the wrapper already carries a known drift hazard: its PROMPT hardcodes .scheduler/FOCUS.md, which silently pointed at a nonexistent file for a day when chezz moved that path on 2026-07-24, and any run dispatched in that window ran UNSCOPED. Two copies doubles that surface.
+
+A third possibility worth naming rather than assuming away: this may be the concrete case that motivates the queued "one resolver for per-project path + ref" item, since both options above are workarounds for the same root cause -- a conf that mixes host-specific absolute paths with host-independent project identity.
+
+ALSO WORTH KNOWING, since it bears on which option is cheap: chezz's toolchain on dexter is now fully provisioned and proven under simulated cron (env -i + crontab PATH + /bin/sh -c): node v24.18.0, npm 11.16.0, headless chromium LAUNCH_OK. A PATH= line was added to dexter's crontab because cron gave only /usr/bin:/bin while ~/.bashrc returns early for non-interactive shells before its nvm block -- every scheduled job on dexter was previously unable to see node. Filed to senechal. So nothing about the toolchain blocks either option; the only remaining external blocker is registering dexter's new deploy key on the GitHub repo.
+
 - **2026-07-28 12:53 (via `scheduler -i`):** PIN POLICY SUPERSEDED (2026-07-28, Zach-directed via realisateur /ideate): pin by CONTENTION RELIEF, not only by hardware/network need.
 
 _paced.dexter.conf's standing rule -- "only hardware/network-evidenced projects belong here ... do NOT move a project here just to balance load" -- was written 2026-07-24 when mandark was not contended. It now is: bibliothecaire's overnight OCR and the newly-registered ecosim competed for memory on the same box and ended in a plasma crash senechal had to repair. Zach's decision: self-contained projects (no mandark-local hardware, no mandark-local path dependency) move to dexter deliberately, to relieve mandark. chezz is the first, beyond wtul's existing named exception.
