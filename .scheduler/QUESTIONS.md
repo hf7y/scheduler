@@ -19,6 +19,29 @@ Resolved entries get DELETED, not left inline.
 
 ## Open
 
+- **Does step 2's `scheduler resolve <project> <id>` get an exemption from the ACCRETION FREEZE, or does it wait for the front-door redesign?**  `q-f75d57` 2026-07-28, via /nightly-batch paced cycle 2026-07-28
+
+  Two rules now point opposite ways and this cycle is not the one to
+  break the tie. `q-741cda` came back ANSWERED by bibliothecaire the same
+  day, and its answer is explicit: `scheduler resolve <project> <id>`
+  should write a drop directory into bibliothecaire's repo and commit it.
+  That unblocks step 2 of the readability chain — **and it is a NEW
+  VERB**, which the Stability milestone's ACCRETION FREEZE says nobody
+  adds before the front-door redesign lands ("new needs go into the
+  spec"). Building it anyway would be "layer not retired" in the act:
+  growing the surface the milestone exists to shrink.
+  Three readings, and picking one is a judgment call, not a fact:
+  (a) exempt it — the freeze is about the three human-facing VIEWS, and
+  `resolve` is a mutation verb like the existing `ask`/`-i`, so it is
+  in-scope now; (b) hold it — put it in the redesign spec as a footer
+  one-liner of the `<project>` detail view and build it there; (c) build
+  the mechanism WITHOUT a verb — have `sweep`/`ask` do the drop, so no
+  new front-door entry appears.
+  Also worth stating plainly: step 2 writes into ANOTHER repo, so an
+  unattended paced cycle cannot deliver it under this job's hard rules
+  regardless of which reading wins. Whoever picks it up needs
+  `check-project-busy bibliothecaire` and a non-worktree session.
+
 - **Do svc-vaporwave's aedile/vkv-inventory wrappers source their own copy of lib/sweep-loop-common.sh, or a path into /home/zach?**  `q-ba2045` 2026-07-28, via /nightly-batch paced cycle 2026-07-26, re-filed by /ideate
 
   Second half, same step: aedile's wrapper is bespoke (opts out of the
