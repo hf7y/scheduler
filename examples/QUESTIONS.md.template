@@ -39,6 +39,19 @@ Contract the commands follow:
 - Unanswered questions are left untouched and never re-asked/duplicated.
 - To dismiss a question without any action, just delete its line by hand.
 
-Question format either tier appends:
-`- **YYYY-MM-DD (nightly|bug-sweep): <question>**` + short context, then a
-`  > (answer inline here)` placeholder line so the reply slot is obvious.
+Questions are ADDED WITH A COMMAND, not hand-typed:
+
+    scheduler ask <project> "<the question, in full>"
+
+RETIRES the hand-append format this file taught until 2026-07-28
+(`- **YYYY-MM-DD (nightly|bug-sweep): <question>**`). That format put the
+date and the source ahead of the question, and every summary view shows
+an entry's bold span -- so ten questions rendered as ten near-identical
+stubs of date + provenance, and scheduler's own file reached 15 entries
+that could not be read at a glance. `scheduler ask` stamps the id, date
+and provenance itself and puts the question first structurally, so the
+shape cannot be gotten wrong. `bin/questions-lint.sh` FLAGs hand-written
+entries in `scheduler sweep`.
+
+Add a `  > (answer inline here)` placeholder line under the generated
+entry so the reply slot stays obvious, plus short context if needed.

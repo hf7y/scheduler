@@ -108,11 +108,16 @@ unilaterally in the middle of a routine sweep).
 If anything this sweep touched genuinely needs a decision only the user
 can make -- bigger than one report's "needs a human call" note (step 2):
 an ambiguous policy question, a real tradeoff, a "which of these two
-directions" fork -- append it to `.scheduler/QUESTIONS.md` at the repo root
-(create with a one-line header if it doesn't exist). Append only, never
-overwrite or trim existing entries. Format: `- **YYYY-MM-DD (bug-sweep):
-<question>**` + short context, then a `  > (answer inline here)`
-placeholder line so the user's reply slot is obvious. Most sweeps have
+directions" fork -- record it with `scheduler ask <project> "<the
+question>"`, which writes the entry into `.scheduler/QUESTIONS.md` for
+you (creating the file if needed) with the id, date and provenance
+stamped and the question FIRST. RETIRES the hand-append format this
+template taught until 2026-07-28 (`- **YYYY-MM-DD (bug-sweep):
+<question>**`): leading with the date made every entry render as the same
+stub in `scheduler status`, which shows an entry's bold span.
+`bin/questions-lint.sh` FLAGs hand-written entries. Still append-only,
+never overwrite or trim existing entries; add short context and a
+`  > (answer inline here)` line under the generated entry. Most sweeps have
 nothing to add here; don't manufacture a question just to have an entry.
 
 Answer-processing is the **nightly's** job, not this sweep's. The user

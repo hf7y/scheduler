@@ -53,8 +53,12 @@ tomorrow," or anything that reshapes the engine every job depends on.
   If a change genuinely can't be verified without going live, **don't
   commit it** — write it up as a proposal in tonight's report instead.
 - **Don't invent scope.** If an item is ambiguous or needs a real
-  judgment call, append the question to `.scheduler/QUESTIONS.md` and
-  describe it in the report rather than guessing.
+  judgment call, record the question with
+  `scheduler ask scheduler "<the question>"` — not a hand-typed append —
+  and describe it in the report rather than guessing. The command stamps
+  id/date/provenance and puts the question first, which is what makes it
+  legible in `scheduler status`; hand-written entries are FLAGged by
+  `bin/questions-lint.sh` in `scheduler sweep`.
 - Keep `README.md` honest — if you change how something works, update the
   README in the same commit.
 - If you complete a backlog item, remove or check off its line in
