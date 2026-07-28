@@ -23,17 +23,9 @@ ones.
 
 ## Open
 
-- **Does bibliothecaire want resolved QUESTIONS/BLOCKERS entries as files committed into its own repo, or as an ingest command it exports?**  `q-741cda` 2026-07-28, via /ideate 2026-07-28
+- **Do svc-vaporwave's aedile/vkv-inventory wrappers source their own copy of lib/sweep-loop-common.sh, or a path into /home/zach?**  `q-ba2045` 2026-07-28, via /nightly-batch paced cycle 2026-07-26, re-filed by /ideate
 
-- **Do svc-vaporwave's aedile/vkv-inventory wrappers source their own
-  copy of `lib/sweep-loop-common.sh`, or a path into `/home/zach`?** And
-  for aedile's bespoke wrapper (it opts out of the shared engine and
-  calls `claude -p` directly), add the auth-failure branch by hand.
-  Loud "Not logged in" detection is BUILT at source and verified against
-  shims, but this account cannot read svc-vaporwave's home directory, so
-  delivery can't be done or checked from here. Needs you or a session as
-  svc-vaporwave. For a headless account the LOG line is the loud channel
-  -- `notify-send` is a no-op there. Full writeup: 2026-07-26 cycle notes.
+- **Does bibliothecaire want resolved QUESTIONS/BLOCKERS entries as files committed into its own repo, or as an ingest command it exports?**  `q-741cda` 2026-07-28, via /ideate 2026-07-28
 
 ## Consumed / resolved (one line each -- detail lives in DESIGN-NOTES.md)
 
