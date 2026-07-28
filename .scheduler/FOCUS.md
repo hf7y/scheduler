@@ -1020,6 +1020,8 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-27 19:18 (via `scheduler -i`):** senechal QUESTIONS.md (2026-07-24) has an open Zach reply asking: is the still-unconfirmed 'roman-named for vaporwave' naming question actually a memory leak from svc-vaporwave's account encapsulation -- i.e. does scheduler know about its own cross-user (zach vs svc-vaporwave) and cross-host role, or is this a stale comment predating a move? Worth a check on scheduler's side; senechal has no mechanism to inspect scheduler's own account-model assumptions.
+
 - **2026-07-27 14:56 (via `scheduler -i`):** had a merge conflict while editing blockers, presumably because it only holds scheduler busy not all projects which is correct. hopefully this gets addressed with the new front door
 
 - **2026-07-27 14:45 (via `scheduler -i`):** failure mode is *zach distracted* meaning projects get stalled behind a hardware gate e.g. and spend calls navel gazing if blocked by milestone rules, or at best developing deep vision. meanwhile, serendipity is a logic by which these projects should always sleep with one eye open; sometimes another project uses the printer, or crt, unblocking afterall. bibliothecaire maybe has the philosophy or this is genuine zach novelty
