@@ -1020,6 +1020,63 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-27 (`/ideate`, human-directed): four standing questions
+  ANSWERED — the four below are decisions, not proposals; build them.**
+  This pass cleared `.scheduler/QUESTIONS.md` down to what is still
+  genuinely open. Each item names the question it consumed.
+
+  1. **Symlink all three installed wrappers** (consumed: 2026-07-26
+     "should the installed COPIES become symlinks?", option (a)).
+     `ln -sfn "<checkout>/bin/<name>" ~/.local/bin/<name>` for
+     `usage-paced-runner.sh`, `scheduler-dev-cycle.sh`, `usage-gate.sh`.
+     What this fixes, verified before the decision, not assumed: the copy
+     install resolves the runner's repo from its own path, gets
+     `~/.local`, finds no git dir and skips the auto-pull entirely — 0
+     `PULL` lines in 1633 lines of `run.log`, plus 11 `[legacy absolute
+     path]` fallbacks. Rejected (b) "keep copies as a manual deploy
+     gate": the gate Zach actually wants is the dirty-tree refusal below,
+     not a stale-copy accident. **Sequencing (human-directed):** this is
+     what makes the BLOCKERS.md "gate it" answer load-bearing —
+     symlinking makes every commit live instantly, so the
+     `usage-paced-runner.sh` dirty-tree refusal should land FIRST or in
+     the same change. Machine-wide config: `notify-senechal` on flip.
+  2. **`USAGE_CEILING=0.92` becomes the committed value** in
+     `schedule/_usage.conf` (consumed: 2026-07-26 "the live ceiling is
+     set somewhere I can't see or edit"). Intermediate, deliberately:
+     0.99 was a hand-set push toward a quota deadline and leaves no
+     headroom; 0.85 returns HOLD at the ~90% 7d utilisation observed when
+     the question was written. Not per-host — no evidence dexter needs a
+     different ceiling yet, mechanism exists if that changes. **Second
+     half is human-only and NOT done by this pass:** the ambient
+     `USAGE_CEILING=0.99` lives outside this repo (a `crontab -e` or a
+     shell/wrapper export) and env still outranks the conf by design, so
+     until Zach drops it the conf is decorative and live pacing is
+     unchanged.
+  3. **`EXPIRY_DAYS` keeps wall-clock; expired-without-ever-having-run
+     becomes a distinct, louder state** (consumed: 2026-07-27
+     "should EXPIRY_DAYS keep measuring wall-clock?", option (c)).
+     Rejected (b) "pause the lease while the gate HOLDs": it makes a
+     safety mechanism's clock depend on another subsystem's state.
+     Rejected (a) "visibility only": true as far as it goes, but it does
+     not distinguish the 07-19-cutoff case where `chezz-bug-sweep`,
+     `vkv-inventory-bug-sweep` and `vkv-inventory-nightly-batch` burned
+     an entire 7-day lease while BLOCKED FROM RUNNING, expired having
+     produced nothing, and stayed dark 8 days. Build: track whether a
+     lease saw any successful run; if not, expiry emits a separate state
+     that survives in `scheduler` glance/blockers rather than only a
+     transient `notify-send` + a manually-run `scheduler sweep` — the
+     transience is why nobody noticed for 8 days.
+  4. **The non-hardware-on-dexter test is RETIRED; pin-by-need stands**
+     (consumed: 2026-07-25 wtul dexter deploy-key entry + its secondary
+     question). Only hardware-pinned projects go to dexter. wtul stays on
+     mandark (`wtul|1|2|` in `_paced.conf`, already restored). Drop
+     wtul's block from `schedule/_paced.dexter.conf` and the deploy-key
+     checklist with it; **no GitHub-UI step is needed** — the
+     `dexter-wtul-deploy` key was generated on dexter but never added to
+     GitHub, so nothing is authorized and nothing needs revoking, only
+     the unused local keypair + `~/.ssh/config` block cleaned up on
+     dexter. That cleanup is a dexter-side step, not mandark's.
+
 - **2026-07-27 19:18 (via `scheduler -i`):** senechal QUESTIONS.md (2026-07-24) has an open Zach reply asking: is the still-unconfirmed 'roman-named for vaporwave' naming question actually a memory leak from svc-vaporwave's account encapsulation -- i.e. does scheduler know about its own cross-user (zach vs svc-vaporwave) and cross-host role, or is this a stale comment predating a move? Worth a check on scheduler's side; senechal has no mechanism to inspect scheduler's own account-model assumptions.
 
 - **2026-07-27 14:56 (via `scheduler -i`):** had a merge conflict while editing blockers, presumably because it only holds scheduler busy not all projects which is correct. hopefully this gets addressed with the new front door

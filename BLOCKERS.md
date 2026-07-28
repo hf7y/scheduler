@@ -195,38 +195,11 @@ only ever sees its own section, never another project's.
 
 ## scheduler
 
-- **2026-07-27 (interactive session): a symlink-deployed script goes LIVE
-  the moment the working tree changes, before any commit -- accept, or
-  gate it?** Hit three times in one session: edits to
-  `bin/scheduler-dev-cycle.sh`, `lib/sweep-loop-common.sh` and
-  `bin/scheduler` were live on the next 5-minute tick while still
-  uncommitted. Same shape as the `_paced.conf` dirty-conf question already
-  in `.scheduler/QUESTIONS.md` (2026-07-27), but for *scripts* rather than
-  config, and that entry's option (b) does not cover it. Nothing went
-  wrong this time; the exposure is that a half-finished edit to the engine
-  every project's jobs inherit is indistinguishable from a deployed one.
-  **Likely covered by the same fix, not a separate build (2026-07-27
-  `/ideate`, human-directed):** the axis-1 decision below (build
-  `usage-paced-runner.sh`'s dirty-conf refusal before flipping chezz)
-  should be checked for whether it also covers scripts once built — same
-  "uncommitted edit goes live pre-commit" shape, different artifact. Not
-  closed until that's actually verified against a real script edit.
-  > Gate it. Implement the refusal gate for symlink-deployed scripts before flipping chezz, same as usage-paced-runner.sh's planned dirty-conf gate. A dirty tree is a failed run, not a deployment (CLAUDE.md rule).
-
-- **2026-07-27 (`/ideate`, human-directed): axis-1's stated gate — "the
-  paced runner dispatches only from a committed/validated conf" — build
-  the missing runner-side refusal BEFORE flipping chezz's command
-  column, not after.** Both named sub-halves of the gate are done
-  (`sync-crontab.sh --apply`'s dirty-`schedule/` refusal, and the
-  symlink-deploy import) but `usage-paced-runner.sh` still dispatches
-  from a dirty working-tree `_paced.conf` regardless. Decided: build
-  `usage-paced-runner.sh` refusing (or reading `git show HEAD:...`
-  instead) when the relevant conf line is dirty relative to HEAD,
-  reusing `e1042a4`'s `--check-clean` gate, THEN flip chezz — not the
-  other way around. Rationale in the human's words: "a jujitsu way of
-  flipping built but not wired [beats] wired without built loud = noisy
-  as aesthetic (whiney)." Full rationale: `DESIGN-NOTES.md` 2026-07-27.
-  Queued to the Backlog for `/nightly-batch` to build.
+_No open human-owned blockers as of 2026-07-27 (`/ideate` sweep). Both
+prior entries were answered and moved to Recently resolved; four standing
+questions were answered in the same pass and are queued as decisions in
+`.scheduler/FOCUS.md` Backlog. One human-only step remains and is tracked
+in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
 
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
@@ -552,6 +525,28 @@ happened yet for any of them.
   > (answer inline here — drop / correct+push / leave)
 
 ## Recently resolved
+
+- **scheduler: symlink-deployed scripts go live pre-commit — GATE IT**
+  (answered 2026-07-27, Zach, inline reply; swept here by `/ideate` the
+  same day). Zach's words: *"Gate it. Implement the refusal gate for
+  symlink-deployed scripts before flipping chezz, same as
+  usage-paced-runner.sh's planned dirty-conf gate. A dirty tree is a
+  failed run, not a deployment (CLAUDE.md rule)."* So it is the SAME
+  build as the axis-1 gate below, covering scripts as well as conf —
+  not a separate mechanism. Queued in `.scheduler/FOCUS.md` Backlog.
+  Sharpened by the same day's `/ideate` decision to symlink the three
+  remaining `~/.local/bin` copies: that makes every commit live
+  instantly, so this gate lands first or in the same change.
+
+- **scheduler: axis-1's committed-conf gate before flipping chezz**
+  (decided 2026-07-27, human-directed; swept here the same day). Build
+  `usage-paced-runner.sh` refusing (or reading `git show HEAD:...`)
+  when the relevant `_paced.conf` line is dirty relative to HEAD,
+  reusing `e1042a4`'s `--check-clean`, THEN flip chezz's command column
+  — not the other way around. Rationale, Zach's words: *"a jujitsu way
+  of flipping built but not wired [beats] wired without built loud =
+  noisy as aesthetic (whiney)."* Full writeup: `DESIGN-NOTES.md`
+  2026-07-27. Queued to the Backlog for `/nightly-batch` to build.
 
 - **scheduler: three 8-day-dark jobs renewed, not retired** (resolved
   2026-07-27, `/ideate`, human-directed: "Renew all three"). `rm
