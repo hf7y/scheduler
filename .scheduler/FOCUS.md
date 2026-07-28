@@ -1020,6 +1020,89 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 (`/ideate`, human-directed): the four readability findings
+  become MECHANISMS, not conventions. "Make mechanisms everywhere you can
+  based on this lesson."**
+
+  **Vision.** A document convention a human (or agent) has to *remember*
+  is a latent bug, and this repo has now been bitten by that four ways in
+  one file pair. The regulator is three rules, in this order: **generate,
+  don't type** (structure the writer cannot get wrong); **lint, don't
+  remind** (what can't be generated fails loud in `sweep`); **archive,
+  don't delete** (a removal leaves a receipt AND a retrievable copy).
+  What is DECIDED: all four items below get built as mechanism. What is
+  NOT decided and must not be assumed: the entry-ID scheme's exact form,
+  and whether bibliothecaire wants the archive as files-in-repo or as an
+  ingest call — that's bibliothecaire's call, not scheduler's (see
+  Blockers).
+
+  **Milestone chain.**
+  1. *(current)* **Generate the entry header.** Root cause of findings 1
+     and 2 together: nothing generates a question's header line, so every
+     writer retypes `- **<date> (<provenance>): <question>**` and puts the
+     invariant part first. Build a front-door verb (`scheduler ask
+     <project> "<question>"`, sibling of the existing `-i`/`_commit-file`
+     exports) that takes ONLY the question text and emits the header
+     itself: stable short ID, date, provenance derived from the caller,
+     question in the bold span. Then "question first" is structurally
+     true rather than asked-for, and the summary renderer's job becomes
+     "print the bold span," which is the same fix as the render bug.
+     Paired lint (`bin/questions-lint.sh`, wired into `scheduler sweep`):
+     FLAG any entry whose header was hand-written — no ID, question not
+     in the bold span, or header wrapping past one line.
+     Includes the standalone render bug it subsumes: `bin/scheduler:2258`
+     sets `buf=$0` at the bullet header and never appends, so
+     `scheduler status` prints line 1 of each entry and nothing else —
+     which on the pre-sweep file was the date and provenance for all ten
+     open questions. Fix the accumulation regardless; the generated
+     header is what makes line 1 worth printing.
+  2. *(next)* **Resolve-and-delete, with the copy handed to
+     bibliothecaire.** Decided 2026-07-28: resolved entries are DELETED
+     from `QUESTIONS.md`/`BLOCKERS.md`, not left inline and not kept in a
+     growing `## Recently resolved` — the backup goes to bibliothecaire,
+     whose job is keeping things. This retires the current
+     "don't silently rewrite history" convention in
+     `.scheduler/QUESTIONS.md`'s header and the `## Recently resolved`
+     section of `BLOCKERS.md` *as storage* (both stay only as long as it
+     takes to drain them into the archive). Build `scheduler resolve
+     <project> <id>`: extract entry, write it to bibliothecaire's archive
+     (busy-checked), delete from the live file, append to the existing
+     `~/.local/share/scheduler-glance/consumed-receipts.log`. This makes
+     the already-queued receipt-grading sweep check DECIDABLE for the
+     first time — a line removed with no receipt and no archive copy is
+     unambiguously a hand-deletion, where today the same evidence is
+     also what a legitimate `/ideate` sweep looks like.
+  3. *(later, undecided)* **Cross-document link integrity.**
+     `bin/doc-xref-check.sh`, run from `scheduler sweep` next to
+     `blockers-freshness-check.sh`: resolve every
+     `FOCUS.md`/`QUESTIONS.md`/`BLOCKERS.md`/`DESIGN-NOTES.md` reference
+     of the form `<file> <date>` or `<file> <date> "<title>"` against the
+     target file, and — once step 2 exists — against the archive too, so
+     a pointer to an archived entry RESOLVES instead of dangling. Two
+     live dangling references found 2026-07-27, both verified against
+     `HEAD`, neither noticed by anything: `BLOCKERS.md` cited a
+     "`_paced.conf` dirty-conf question already in `.scheduler/
+     QUESTIONS.md` (2026-07-27)" and the stranded-`paced/<date>`-branch
+     backlog item cited "`.scheduler/QUESTIONS.md` 2026-07-27 for the
+     full incident writeup." Neither exists. Must exit 3 and say
+     `check is BLIND` on a parse failure, per the lesson
+     `blockers-freshness-check.sh` already learned the hard way — a
+     xref checker that silently finds zero references reads as "no
+     dangling links."
+  4. *(not queued)* Generalising the regulator past these three files
+     (reports, DESIGN-NOTES entries, conf comments). Real, but nothing
+     has been bitten there yet; don't build ahead of evidence.
+
+  **Blockers on step 1 (the current step).**
+  - None human-only. Step 1 is buildable now, entirely inside this repo.
+  - Step 2 has one, and it is NOT scheduler's to decide: **bibliothecaire
+    must say what shape it wants the archive in** (files committed into
+    its own repo under a path it owns, vs. an ingest command it exports).
+    Cross-write DEFERRED 2026-07-28 — `check-project-busy bibliothecaire`
+    reported `BUSY: interactive session (pid 810045)`, so the question
+    was not written into its `.scheduler/QUESTIONS.md` this pass. Carry
+    it to the next one.
+
 - **2026-07-27 (`/ideate`, human-directed): four standing questions
   ANSWERED — the four below are decisions, not proposals; build them.**
   This pass cleared `.scheduler/QUESTIONS.md` down to what is still
