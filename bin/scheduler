@@ -481,7 +481,38 @@ open_file() {
     exit 1
   fi
   hold_project_marker "$path"
-  exec "$EDITOR" "$path"
+
+  # NOT `exec` any more (changed 2026-07-28, Zach-directed: "there should
+  # be a safety net that also enforces styling on my comments if I drift,
+  # or at least one that leaves a noisy exit when I quit vim"). exec
+  # REPLACES this process, so nothing could ever run after the editor --
+  # there was no seam to hang a post-edit check on.
+  #
+  # The busy-marker guarantee that motivated exec is preserved: the marker
+  # holds ${BASHPID:-$$}, which is THIS process, and this process now lives
+  # exactly as long as the editor plus the lint below. The one behavior
+  # difference is a wrapper killed out from under a live editor, which
+  # makes the marker read free -- the same failure direction exec already
+  # chose deliberately (free rather than wedged).
+  local rc=0
+  "$EDITOR" "$path" || rc=$?
+
+  # Safety net, not a gate. Repairs the drift, says so loudly, and never
+  # changes the editor's exit status over it -- a human quitting vim has
+  # not failed at anything.
+  local lint
+  lint="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/lint-replies.sh"
+  if [ -x "$lint" ]; then
+    "$lint" --fix "$path" || true
+  else
+    echo "" >&2
+    echo "  scheduler: WARNING -- bin/lint-replies.sh is missing or not" >&2
+    echo "  executable. Reply formatting in $path went UNCHECKED." >&2
+    echo "  A missing guard is a finding, not an inconvenience." >&2
+    echo "" >&2
+  fi
+
+  exit "$rc"
 }
 
 require_project() {
