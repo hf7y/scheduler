@@ -389,6 +389,29 @@ happened yet for any of them.
 
 ## realisateur
 
+- **2026-07-28 (scheduler `/cloture`): `closeout-lint`'s durability check
+  is worktree-blind — does it grow to see linked worktrees, or do we
+  accept that research/staging branches are outside its remit?** Witness,
+  same session: `closeout-lint` reported `realisateur HEAD 6h ago` with
+  **no FLAG**, while `git -C ~/Documents/Projects/realisateur-research-ecosim
+  status -sb` showed `research/ecosystem-cybernetics ... [ahead 2]` —
+  two commits (`ddd422b`, `29c90ab`) that had not reached the ref anything
+  clones. Section A reads the registered repo path's own HEAD only, so a
+  branch checked out in a linked worktree is invisible to it. Both
+  worktrees here (`-research-ecosim`, `-staging-silence-audit`) are listed
+  in `git worktree list`, i.e. the information is one command away and the
+  lint does not ask for it. This is the same shape as the finding the
+  session's own research produced (a sensor whose symbol set cannot
+  represent a state it will nonetheless be asked about), which is why it
+  is filed rather than patched at close. Resolved for this session by
+  pushing by hand. Not decided: (a) section A iterates `git worktree list`
+  per repo, (b) it FLAGs merely that unexamined worktrees exist —
+  a `BLIND` symbol rather than a check, (c) worktrees are declared out of
+  scope and that is written down so the silence is intentional.
+  Recommendation is (b): it is the cheaper change and it is the one the
+  night's data argues for.
+  > (answer inline here — a/b/c)
+
 - **2026-07-27 (realisateur `/ideate`, machine-append): `wtul`'s
   unattended run edited realisateur's live `bin/notify-senechal.sh` and
   left it uncommitted — whose commit is it, and does it land?** Witness:
