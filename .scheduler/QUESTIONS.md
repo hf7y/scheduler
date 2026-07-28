@@ -23,6 +23,8 @@ ones.
 
 ## Open
 
+- **Does bibliothecaire want resolved QUESTIONS/BLOCKERS entries as files committed into its own repo, or as an ingest command it exports?**  `q-741cda` 2026-07-28, via /ideate 2026-07-28
+
 - **Do svc-vaporwave's aedile/vkv-inventory wrappers source their own
   copy of `lib/sweep-loop-common.sh`, or a path into `/home/zach`?** And
   for aedile's bespoke wrapper (it opts out of the shared engine and
