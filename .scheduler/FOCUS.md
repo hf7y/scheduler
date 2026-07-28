@@ -3670,3 +3670,50 @@ rip-speed-monitoring/spin-live-watch/web-photo-capture).
     commit messages or counts — same message + different SHA can mean
     "identical, already safe" (wtul, here) or "genuinely diverged, use it"
     (vkv-inventory, here) and the count alone doesn't distinguish them.
+
+- **2026-07-28 (interactive `/cloture`, scheduler session): deferred
+  cross-writes to realisateur, and the reason this row exists at all.**
+  `check-project-busy realisateur` = BUSY (pid 1937642, a different
+  interactive claude, since 07:54:28; my own session is 1933794 — checked,
+  not assumed, because the two locks look identical in the output). So the
+  writes were correctly declined. They were then **announced in a chat
+  summary and nowhere else**, which is the live exhibit of the failure
+  pattern already proposed one screen up in this same file: *a correct
+  refusal that nothing retries.* Filing it properly is the point; the row
+  above predicted this exact loss and I still had to be asked before I
+  wrote it down.
+
+  [batch] DEFERRED CROSS-WRITE, realisateur was BUSY: realisateur's
+  `.scheduler/FOCUS.md` has no record of the overnight cybernetics study.
+  Branch `research/ecosystem-cybernetics`, pushed, `ddd422b` (100
+  generations of results + `TECHNICAL-MANUAL.md` +
+  `PHILOSOPHY-AND-CRITIQUE.md`) and `29c90ab` (`ELI5.md`). Headline
+  findings, so the record is usable without re-reading the sims:
+  reconciling co-blind sensors adds ZERO variety (`A_baseline` and
+  `B_more_sensors` identical to the digit in all 20 cells — so
+  `sensor-agree.sh`, queued in `UNIVERSE.md`, is aimed at the wrong
+  invariant); a third symbol cuts undetected disturbance ~92% and survives
+  hostile parameterisation; slack buys latency tolerance, NOT detection;
+  local repair and null-discrimination are complements. Four self-inflicted
+  defects are named in the manual's §8 — including a metric that read 0.0
+  for 50 generations because it was structurally unable to fire, which is
+  the study's own subject matter committed by the study's own instrument.
+
+  [batch] DEFERRED CROSS-WRITE, realisateur was BUSY: the study's strongest
+  observation is UNREGISTERED and must be guessed-first-then-tested before
+  it counts. A sensor that fails toward OK scores PERFECTLY on every
+  dashboard metric (0.00 wasted attention, 1.00 trust, zero false alarms)
+  while carrying 688 undetected ticks and 1062 false cleans. Generalised:
+  *a silent sensor optimises every observable metric*, so any regime that
+  rewards a dashboard selects for silence. This is doctrine-shaped —
+  candidate for `BUILD-DISCIPLINE.md` alongside pattern 14 — but it must
+  go through `sim/prereg.py` first, and `prereg.py` refuses to backdate.
+  Do NOT promote it to a finding on the strength of this row.
+
+  [batch] Also unfiled in realisateur: `bin/silence-audit.sh` and
+  `bin/install-silence-audit.sh` remain staged-only on
+  `staging/silence-audit` (`39d64e0`, pushed, upstream clean), uninstalled
+  and unwired by design. The install script is dry-run by default, names
+  what it retires, and gates on three tests. Nothing dispatches from that
+  branch, which is intentional — but it means the artifact has no reader,
+  and that is pattern 2 with a longer fuse.
