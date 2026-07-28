@@ -1076,7 +1076,29 @@ Asked for: before committing, the watcher refuses (and says so loudly, leaving t
 
 Note the asymmetry that makes this worth doing: the watcher exists so a human's uncommitted edits are never lost. Refusing on these two signatures does not lose anything -- the edits stay in the working tree, exactly where the human left them.
 
-PROPOSAL 2 -- machine-append must not anchor on a "## " that lives inside prose.
+PROPOSAL 2 -- **DONE 2026-07-27, paced cycle.** machine-append must not
+anchor on a "## " that lives inside prose. Built `bin/blockers-append.sh`
+-- the first shared implementation of the BLOCKERS.md append; previously
+every project hand-rolled its own insertion logic, which is exactly how
+ec89b84 happened. Uses the identical whole-line, fence-aware anchor rules
+as `bin/blockers-freshness-check.sh` (same awk shape, so reader and
+writer cannot disagree about where a section starts/ends): appends to an
+existing `## <PROJECT_KEY>` section if present, else creates one before
+`## Recently resolved`; refuses outright (exit 1, untouched) if the file
+fails the same zero-sections parse-failure check the reader uses.
+Documented in BLOCKERS.md's own header as the required entrypoint, so
+future per-project jobs call it instead of reinventing the anchor.
+Verified offline against three fixtures: (1) a file whose header prose
+contains the literal string "## Recently resolved" inside a sentence
+(the exact ec89b84 shape) -- append lands in the correct existing
+section, header untouched, no duplicate heading created; (2) creating a
+brand-new project section, correctly inserted before the real "##
+Recently resolved" heading; (3) a corrupted fixture with zero project
+headings in a >500-byte active section -- refused, exit 1, file
+untouched. Also re-ran against a scratch copy of the real BLOCKERS.md
+(diff showed only the intended one-line append). `bash -n` clean;
+shellcheck not installed on this host. Original ask text preserved below
+for the record.
 
 Live exhibit: ec89b84, "BLOCKERS.md: machine-append a chezz section (chezz nightly 2026-07-25)". It inserted the ## chezz section INSIDE the header paragraph's own sentence, because that sentence contains the literal string `## Recently resolved` -- the header is explaining to the reader where resolved entries go. The append anchored on that occurrence.
 

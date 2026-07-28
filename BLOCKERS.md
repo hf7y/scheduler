@@ -42,6 +42,20 @@ Each project's heading must be exactly `## <PROJECT_KEY>` (matches
 run's own `collect-feedback.sh --section` call matches against, so it
 only ever sees its own section, never another project's.
 
+**Use `bin/blockers-append.sh <PROJECT_KEY> <text>` for every
+machine-append, don't hand-roll the insertion.** (2026-07-27, paced
+cycle, after ec89b84: chezz's own ad-hoc append anchored on the first
+line containing `"## "`, which was inside this header's own prose
+naming `## Recently resolved`, and truncated the header into a fake
+duplicate heading. No shared writer existed, so every project reinvented
+the anchor logic — this script is that shared implementation, using the
+same whole-line, fence-aware anchor rules as `bin/blockers-freshness-check.sh`
+so the two scripts can never disagree about where a section starts or
+ends. It appends to an existing `## <PROJECT_KEY>` section if one exists
+in the active part of the file, creates a new one before `## Recently
+resolved` otherwise, and refuses outright (exit 1, file untouched) if the
+file fails the same zero-sections parse-failure check the reader uses.)
+
 ## chezz
 
 - **Four design forks are the only thing holding otherwise-ready backlog
