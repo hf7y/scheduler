@@ -65,7 +65,7 @@ tomorrow," or anything that reshapes the engine every job depends on.
 
 1. Commit each finished change with a clear message (imperative subject +
    a why). Leave everything on the `nightly/<date>` branch — do not merge.
-2. Write `~/reports/scheduler/$(date +%Y-%m-%d).md` and update
+2. Write `~/reports/scheduler/$(date +%Y-%m-%dT%H%M).md` and update
    `~/reports/scheduler/LATEST.md` to match, a 30-second read covering:
    **what you changed and why**, **how you verified it**, **what you
    deliberately deferred (and why)**, and **any open questions**.
