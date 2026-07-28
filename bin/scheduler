@@ -2257,6 +2257,32 @@ cmd_sweep() {
     fi
   fi
 
+  # Tenth pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
+  # built 2026-07-28 -- FOCUS.md step 1b). Answers "how do we make a
+  # built-but-unwired check fail noisily?", which static analysis cannot: a
+  # call site inside a branch that never executes greps identically to a live
+  # one. Every check touches a witness file as its first act; this pass reads
+  # them back. Same dead-man-switch shape as the EXPIRY_DAYS pass above,
+  # applied to checks instead of jobs.
+  #
+  # LAST on purpose: the passes above have already invoked the other checks
+  # this run, so each of them has just refreshed its own witness and a wired
+  # check can never be reported stale by the sweep that ran it.
+  if [ -x "$SCHED_ROOT/bin/check-witness-lint.sh" ]; then
+    local witness_out witness_rc
+    witness_out="$("$SCHED_ROOT/bin/check-witness-lint.sh" 2>&1)"
+    witness_rc=$?
+    if [ "$witness_rc" -eq 3 ]; then
+      echo "== [check-witness] cannot read the witnesses -- check is BLIND =="
+      echo "$witness_out" | sed 's/^/  /'
+    elif [ "$witness_rc" -ne 0 ]; then
+      echo "== [check-witness] a check exists that nothing is running =="
+      echo "$witness_out" | sed 's/^/  /'
+    fi
+  else
+    echo "== [check-witness] MISSING or not executable -- a wired check vanished =="
+  fi
+
   echo
   if [ "$clone_found" = "1" ]; then
     echo "swept every registered project + scheduler itself + every job's dedicated clone."

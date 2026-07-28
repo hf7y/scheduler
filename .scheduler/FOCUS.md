@@ -449,6 +449,33 @@ smooth over the parts they don't yet follow.** Concretely, in order:
      won't reflect a reply left only in `LATEST.md`. A documentation/
      audit-trail gap, not an operational one — fine to leave queued
      behind higher-value work, not urgent.
+     - **UNPARKED 2026-07-28 (paced cycle): it stopped being hypothetical
+       and destroyed a report.** This cycle ran `cp <today>.md LATEST.md`
+       to refresh the pointer. `LATEST.md` was a symlink to
+       `2026-07-27-paced.md`, so `cp` **followed it** and wrote today's
+       report over yesterday's. `~/reports/` is not a git repo and has no
+       backup, so the tail of that file is permanently gone; the head was
+       reconstructed from session context and the file now carries a
+       reconstruction banner saying exactly what was lost. Nothing
+       operational broke (the commits are the durable record) — but the
+       cost analysis above, "a documentation/audit-trail gap," was right
+       about the category and wrong about the size: the failure mode is
+       not "a reply is missing from the archive," it is **silent
+       destruction of an arbitrary past report by an ordinary write to
+       `LATEST.md`.**
+       The fix is one line and belongs to whoever writes the pointer, not
+       to the reader: **never `cp` onto `LATEST.md`** — write the dated
+       file, then `ln -sfn <dated> LATEST.md.tmp && mv -T LATEST.md.tmp
+       LATEST.md` (atomic, and can't be followed). Better, per this
+       repo's own "generate, don't type" rule: this is a convention an
+       author has to remember, i.e. a latent bug, so the durable version
+       is a tiny `bin/publish-report.sh <project> <file>` that both
+       `/nightly-batch` and `lib/sweep-loop-common.sh` call. NOT built
+       this cycle — it writes outside this repo's worktree (into
+       `~/reports/`) and the instruction that would have to change lives
+       under `.claude/`, which unattended runs are hard-refused on.
+       Queued here with the incident attached so the next interactive
+       session has both.
 2. **DONE 2026-07-24 paced cycle: `scheduler explain` (`-e`).** Prints a
    plain-English "here's what happens when you do X" walkthrough covering
    paced vs. cron dispatch, what a run actually does (fresh clone, reads
@@ -971,8 +998,15 @@ drift, and anything re-copied over one re-enters it and gets reported by
 
 **`~/.local/share` (state, not config):** `scheduler-registry/` (per-project
 `.lock`/`.active`/`.interactive`), `scheduler-glance/seen.tsv`,
-`scheduler-paced-runner/`, `scheduler-token-usage/`, and one `<job>/` dir
-per registered job (log, expiry stamp, deferral counter, dedicated clone).
+`scheduler-paced-runner/`, `scheduler-token-usage/`,
+`scheduler-checks/<check>.lastrun` (runtime witnesses, added 2026-07-28 —
+written by `lib/check-witness.sh`, read by `bin/check-witness-lint.sh`;
+pure state, safe to delete, the next `sweep` re-creates one per wired
+check), and one `<job>/` dir per registered job (log, expiry stamp,
+deferral counter, dedicated clone).
+**Not yet live** — created on first run of the merged code, so it needs a
+`notify-senechal` line at merge, not now (nothing outside this worktree
+has changed).
 
 **Not scheduler's, listed so nobody re-owns them by mistake:** the
 `~/.claude/settings.json` SessionStart/SessionEnd hooks and the
@@ -1136,8 +1170,41 @@ human's own dotfiles.
   same commit; the renderer prints the bold span instead of line 1. The
   retired prose paragraph was deleted, not left beside its replacement.
 
-  **Step 1b (queued, answers "how do we make a built-but-unwired check
-  fail noisily?" — human question, 2026-07-28).** Static analysis cannot
+  **Step 1b is DONE (2026-07-28, paced cycle).** Built exactly as
+  specified below: `lib/check-witness.sh` (the one source for the witness
+  dir + `check_witness`, called as the first act of
+  `blockers-freshness-check.sh`, `deploy-drift-check.sh`,
+  `questions-lint.sh` and of the reader itself) and
+  `bin/check-witness-lint.sh` (`NEVER RUN` / `STALE`, exit 0/1/3), wired
+  into `scheduler sweep` as its **tenth and last** pass — last on purpose,
+  so the passes that invoke the other checks have already refreshed their
+  witnesses and a wired check cannot be reported stale by the sweep that
+  just ran it. Grace period `CHECK_WITNESS_STALE_DAYS`, default 2 (sweep
+  runs every 15 minutes; 2 days survives a machine being off for a
+  weekend without crying wolf). **What it retires:** the interim `else`
+  branch described at the end of this entry stays (it catches a *deleted*
+  check, which a witness cannot), but the standing assumption that
+  "grep for the script name" answers *is this wired* — it does not, and
+  this entry said so. Doctrine written up in
+  `docs/offline-first-checks.md`, new section, so other projects
+  accumulating `bin/*-check.sh` inherit it.
+  Verified here (no `--apply`, live crontab untouched): all three reader
+  states (`NEVER RUN` on a fresh witness dir, clean after the checks
+  actually run, `STALE` against witnesses backdated 5 and 9 days) plus
+  every BLIND path (unreadable witness dir, absent `lib/`, no `bin/`,
+  glob matching nothing) — each exiting 0/1/3 as documented; all four
+  branches of the new sweep pass exercised by running the block's own
+  bytes out of `bin/scheduler` against fabricated roots (findings,
+  silent-when-clean, BLIND header, `a wired check vanished`); the three
+  modified checks diffed **byte-for-byte** against their `HEAD` versions
+  for identical output and exit code, so adding the witness changed
+  nothing about what they report; re-run under a stripped
+  `env -i`/`env -u SSH_AUTH_SOCK` cron-like environment (identical);
+  `bash -n` clean on all six files. `shellcheck` is not installed on this
+  host.
+
+  **Step 1b as specified (kept for the record) — answers "how do we make
+  a built-but-unwired check fail noisily?" — human question, 2026-07-28.** Static analysis cannot
   answer it: grepping for a script's name proves it is *mentioned*, and a
   call site inside a branch that never executes greps identically to a
   live one. What proves wiring is a RUNTIME WITNESS. Build: every check

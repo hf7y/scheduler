@@ -33,6 +33,17 @@ set -uo pipefail
 
 SCHED_ROOT="${SCHED_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
+# Runtime witness -- record that this check actually RAN, so a
+# built-but-unwired check fails loud in `scheduler sweep` instead of looking
+# clean (lib/check-witness.sh + bin/check-witness-lint.sh, 2026-07-28).
+# First act, before any early exit: a check that came back BLIND still ran.
+# Guarded, and never fatal -- bookkeeping must not be able to break a check.
+if [ -r "$SCHED_ROOT/lib/check-witness.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$SCHED_ROOT/lib/check-witness.sh"
+  check_witness "$(basename "${BASH_SOURCE[0]}")"
+fi
+
 findings=0
 blind=0
 scanned=0
