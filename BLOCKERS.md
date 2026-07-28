@@ -44,6 +44,32 @@ only ever sees its own section, never another project's.
 
 ## chezz
 
+
+- **PRIVATE KEY at rest in OCF at rest in OCF `authorized_keys`** (agent-appended 2026-07-28)
+
+Found while restricting the chezz deploy key. `~/.ssh/authorized_keys` on
+`tsunami.ocf.berkeley.edu` (user `pine`) has a full
+`-----BEGIN RSA PRIVATE KEY-----` block occupying lines 1-51; the 7 real
+public keys follow it. Verified 2026-07-28 via
+`ssh ocf 'grep -n "BEGIN\|END" ~/.ssh/authorized_keys'` -- markers at lines
+1 and 51. The key body was NOT read.
+
+Not an active breach: `authorized_keys` is 0600, `~/.ssh` is 0700, and the
+home dir is 0700 (verified same command run, `ls -ld`). But it is private
+key material at rest on a shared university host, in the one file whose
+entire purpose is to hold PUBLIC material -- so it is one `chmod`, one
+support process, or one backup away from exposure, and nothing about the
+filename would make a reviewer look twice.
+
+Needs a human: identify which key it is and rotate it, then delete lines
+1-51. Nobody but Zach knows what that key opens, so an agent must not
+guess or remove it unilaterally -- if it is still in use somewhere,
+deleting it without rotating just moves the outage around.
+
+File mtime was 2026-07-28 10:45, i.e. the same day, though that is also
+when `ssh-copy-id` appended the chezz key, so mtime does not date the
+paste.
+
 - **The `questions/chezz.md` symlink points at a checkout that goes stale on
   every push — this is why no QUESTIONS.md answer has ever round-tripped**
   (filed 2026-07-27 late run, chezz nightly, machine-append; witness:
@@ -101,6 +127,18 @@ only ever sees its own section, never another project's.
     two regression-pinned). The four design forks + balance-delegation
     question are now the ONLY things holding queued work, unchanged,
     still waiting on you.
+  - **RESOLVED 2026-07-28 (interactive session, machine-append; witness:
+    chezz `3cf830e` = Zach's `> ` replies, folded in by `efb9695`+`6e9afa5`).
+    All four forks are answered, plus the balance-delegation question.**
+    (1) King->Queen: NEITHER offered option -- royal progression, the King
+    absorbing movement from neutral pieces found on fodder floors; Classic
+    stays always-king. (2) pawn-hang-on-spawn: "No. Never." -- may spawn
+    under threat only if defended; the "stand in the open" logic was never
+    Zach's, it was an inference. (3) move-hint: park with stubs unless the
+    black-engine-piggyback hypothesis is real. (4) Chezz Classic: nightly
+    MAY work the branch; over-cap ports are kept, not merged, and announced
+    loudly in the HTML. Balance delegation: YES, with regression pins, and
+    documented in its own research lane. Nothing here is waiting on Zach.
 - **Gemini sprite pipeline needs your explicit sign-off -- no unattended
   run may add it on its own** (filed 2026-07-25 ~21:00, chezz nightly,
   machine-append; witness: tracker report 2026-07-17T07:25:16.315Z +
@@ -139,6 +177,17 @@ only ever sees its own section, never another project's.
     only remaining step. Tracker report 2026-07-17T07:25:16.315Z stays
     open for exactly this and says so.
 
+  - **RESOLVED 2026-07-28 (interactive session, machine-append; witness:
+    `assets/pieces/b-pawn.png` committed in chezz `9bfd8e8`, rendering as an
+    `<img>` per test/piece-sprites.spec.mjs).** Sign-off given 2026-07-27 in
+    this file; the pipeline has now produced a real sprite end to end (API
+    call -> palette snap -> postprocess -> PNG -> wired into index1.html).
+    Zach further directed that unattended nightly runs MAY reach it. The
+    cost/attack-surface concern that motivated the gate is now handled in
+    code, not by asking: tools/gemini-budget.mjs refuses before the network
+    on a per-run (18) and per-month (60) cap, fails closed on a corrupt
+    ledger, and keeps its ledger outside the repo so a clone reset cannot
+    wipe or publish it. Nothing here is waiting on Zach.
 - **2026-07-22 15:09 `scheduler -i` (general-scaffold convergence):
   RESOLVED in-repo 2026-07-25 -- nothing needed your scope-widening
   after all** (chezz nightly, machine-append; witness: chezz commit
@@ -852,28 +901,3 @@ happened yet for any of them.
   teeth), or (c) something else. Route to `/ideate` or a scheduler
   steward pass to pick the shape — not a straight build.
   > Route to `/ideate` or scheduler steward pass for decision — shape (a/b/c) deferred to structured design session.
-
-### chezz -- PRIVATE KEY at rest in OCF authorized_keys (agent-appended 2026-07-28)
-
-Found while restricting the chezz deploy key. `~/.ssh/authorized_keys` on
-`tsunami.ocf.berkeley.edu` (user `pine`) has a full
-`-----BEGIN RSA PRIVATE KEY-----` block occupying lines 1-51; the 7 real
-public keys follow it. Verified 2026-07-28 via
-`ssh ocf 'grep -n "BEGIN\|END" ~/.ssh/authorized_keys'` -- markers at lines
-1 and 51. The key body was NOT read.
-
-Not an active breach: `authorized_keys` is 0600, `~/.ssh` is 0700, and the
-home dir is 0700 (verified same command run, `ls -ld`). But it is private
-key material at rest on a shared university host, in the one file whose
-entire purpose is to hold PUBLIC material -- so it is one `chmod`, one
-support process, or one backup away from exposure, and nothing about the
-filename would make a reviewer look twice.
-
-Needs a human: identify which key it is and rotate it, then delete lines
-1-51. Nobody but Zach knows what that key opens, so an agent must not
-guess or remove it unilaterally -- if it is still in use somewhere,
-deleting it without rotating just moves the outage around.
-
-File mtime was 2026-07-28 10:45, i.e. the same day, though that is also
-when `ssh-copy-id` appended the chezz key, so mtime does not date the
-paste.
