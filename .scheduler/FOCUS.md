@@ -1077,6 +1077,40 @@ human's own dotfiles.
 
 - **2026-07-28 01:01 (via `scheduler -i`):** ENGINE BUG, top-ranked finding of the 2026-07-28 human-directed /ideate deep-dive into dexter + svc-vaporwave. 'scheduler status' ACTIVELY MISREPORTS both svc-vaporwave projects, and it misreports them in the direction of alarm. VERIFIED TONIGHT by running it: 'scheduler status aedile' prints 'last scheduled run (aedile-nightly-batch) -- no log yet at /home/zach/.local/share/aedile-nightly-batch/sweep.log', i.e. never run. 'scheduler status vkv-inventory' prints '=== FAILED 2026-07-20T01:41:23-05:00 (1148s) === WARNING: local commit made but NOT pushed to origin'. Both readings are false. Read from the account that actually runs them, aedile has succeeded every night through 2026-07-27 (svc-vaporwave ~/.local/share/aedile-nightly-batch/run.log, last '==== done 2026-07-27T03:05:35-05:00 ====', pushed 148833a, PR #5) and vkv-inventory has succeeded 07-24/25/26/27 (sweep.log, last '=== done 2026-07-27T04:04:41-05:00 (219s) ===', pushed 2ce02f6). ROOT CAUSE, mechanical and one line: bin/scheduler resolves every run-state path against $HOME -- PACED_LOG, REGISTRY_DIR, the expiry scan at line ~1742 ('for stamp in $HOME/.local/share/*/expires_at'), the stranded-clone scan at ~1769 and ~2012 ('for repo in $HOME/.local/share/*/repo'), and the per-job sweep.log read. schedule/aedile.conf and schedule/vkv-inventory.conf both already declare CRON_ACCOUNT="svc-vaporwave" and an absolute BATCH_SCRIPT under /home/svc-vaporwave -- the conf KNOWS the job runs elsewhere, and the status reader ignores it. WHY THIS IS THE WORST SHAPE, in the ecosystem's own terms: it is BUILD-DISCIPLINE pattern 14 exactly ('a sensor reports a negative it never checked for', fails toward alarm, alarm routed to the scarcest organ) and it is worse than the 2026-07-27 steward-survey instance, because a stale FAILED is not merely absent data -- a blank would be honest. It is also Conway's law biting: the sensor is $HOME-shaped because the organism was one-account-shaped, and the ecosystem grew a second account without the perception layer growing a channel to it. And it has been KNOWN and unfixed for 8 days: svc-vaporwave's own aedile wrapper header, written 2026-07-20, says 'Open question, not yet resolved: whether zach's scheduler glance command should also surface this account's reports. Flagged, not solved here.' PROPOSED FIX, yours to improve: when a project's conf sets CRON_ACCOUNT to something other than the invoking user, resolve that job's state paths under that account's home and read them via 'sudo -n -u <acct>' (zach already has '(svc-vaporwave) NOPASSWD: ALL' in sudoers, verified tonight via 'sudo -l'). NON-NEGOTIABLE per tonight's earlier drops: if the cross-account read is not possible, the status line must say BLIND/NOT-PROBEABLE naming the domain it could not read -- it must never fall back to reading the local $HOME path and printing that as the job's state, which is the exact defect. Same fix applies to 'scheduler sweep' expiry and stranded-clone scans, which today silently cover only half the ecosystem's jobs.
 
+  - **PARTLY DONE 2026-07-28 (paced cycle) — `scheduler status`'s last-run
+    block is fixed; `scheduler sweep`'s scans are NOT yet.** `bin/scheduler`
+    gained four helpers (`state_account`/`state_home`/`state_run` +
+    `state_exists`/`state_cat`/`state_readable`): a project whose conf sets
+    `CRON_ACCOUNT` to another user has its run state resolved under THAT
+    account's home and read via `sudo -n -u <acct>` (`-n`, so an unattended
+    caller can never hang on a password prompt). If that read fails the line
+    prints **BLIND**, naming the account and the path it could not read, and
+    makes no claim about whether the job ran — it never falls back to
+    `$HOME`'s path, which is the defect itself. Also fixed alongside, because
+    without it aedile still read as never-run: the marker regexes now accept
+    both dialects (`===+`), and `run.log` is read when `sweep.log` is absent
+    (aedile's older wrapper writes the former).
+    Verified by running it: `scheduler status aedile` now prints
+    `==== done 2026-07-28T03:04:30-05:00 ====` instead of "no log yet", and
+    `scheduler status vkv-inventory` prints its real current state instead of
+    replaying 2026-07-20's FAILED. Local-account projects (chezz, scheduler)
+    print byte-identical output to before. The BLIND path was exercised for
+    real against a fabricated conf with `CRON_ACCOUNT="daemon"` (no sudo
+    rule): it printed BLIND naming `/usr/sbin/.local/share/...` and did not
+    substitute `$HOME`. Missing-log and empty-`BATCH_JOB_NAME` paths also
+    exercised. `bash -n` clean (`shellcheck` is still not installed on this
+    host — see the 2026-07-28 report).
+    **Surfaced by the fix, needs a human:** vkv-inventory's dead-man switch
+    tripped 2026-07-27T20:51 and its 2026-07-28 04:00 run was `skipped
+    (expired)` — nothing had been able to see that from this account.
+    Renew with `rm /home/svc-vaporwave/.local/share/vkv-inventory-nightly-batch/expires_at`.
+    **Still open:** the same treatment for `cmd_sweep`'s expiry scan
+    (`$HOME/.local/share/*/expires_at`) and both stranded-clone scans
+    (`$HOME/.local/share/*/repo`), which still cover only this account's
+    jobs. Those are glob scans rather than per-project lookups, so they need
+    a different shape (enumerate confs with `CRON_ACCOUNT`, scan each such
+    home too) — deliberately deferred to keep this cycle one verified change.
+
 - **2026-07-28 (`/ideate`, human-directed): the four readability findings
   become MECHANISMS, not conventions. "Make mechanisms everywhere you can
   based on this lesson."**
