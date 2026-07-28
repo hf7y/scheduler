@@ -216,6 +216,34 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   default), which prints its own revert line.
   > (answer inline here — enable cron logging, or leave it off deliberately)
 
+  - **RETRACTED 2026-07-28 (realisateur `/ideate`, Zach-directed to run
+    it): the premise is false — do NOT run this as a silence fix.** Zach
+    approved this; I probed before executing and the justification does
+    not hold. `bin/decide.sh` option 3 argues *"journalctl -t CRON is
+    empty, so NOTHING independently witnesses that a job ran."* Both
+    halves are wrong. `journalctl -t CRON --since "2 days ago"` returns
+    **3812 lines**, and `grep -c CRON /var/log/syslog` returns **1624**,
+    including 6 `(svc-vaporwave) CMD` entries — the cross-account case
+    the audit most wanted a witness for. The reason is
+    `/etc/rsyslog.d/50-default.conf:9`, `*.*;auth,authpriv.none
+    -/var/log/syslog`, which already matches `cron.*`; line 10 would add
+    a **dedicated file, not a new sensor**. An independent witness to
+    every cron dispatch has existed all along, in two places.
+    What uncommenting line 10 actually buys is separation and retention
+    (`/var/log/syslog` rotates weekly ×4, and `cron.log` is already
+    listed in `/etc/logrotate.d/rsyslog`) — a real but ordinary
+    convenience, not "the deepest silence in the ecosystem." It should be
+    judged on that, and it is no longer urgent. Also note the residual
+    claim that IS true and unchanged by this: a job whose dispatch never
+    happened at all logs nothing — but that is equally true with
+    `cron.log` enabled, so option 3 never addressed it.
+    `# verified 2026-07-28 via journalctl -t CRON --since "2 days ago" | wc -l; grep -c CRON /var/log/syslog; grep -n cron /etc/rsyslog.d/50-default.conf`
+    **Third instance of the probe-survey-headline pattern**: the loudest
+    finding in an audit was the wrong one, and the number in its headline
+    had not been re-derived. Nothing was changed on the machine; no
+    `notify-senechal` was needed because no machine-wide config was
+    touched.
+
 - **2026-07-28 (scheduler `/cloture`): `bin/decide.sh` offers seven
   remediations from the overnight audit and I am deliberately not running
   any of them — which do you want?** They are yours to judge, not mine to
