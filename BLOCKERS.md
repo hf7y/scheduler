@@ -456,6 +456,10 @@ happened yet for any of them.
   that fits the handset. What does need to happen is solving the 3-pin.
   Zach has not yet looked at the 3-pin design write-up.
 
+
+- **2026-07-28 (realisateur `/cloture`): crt is enabled on dexter and has dispatched nothing since 2026-07-25 — is that acceptable pacing, or is it stuck?** Only you can settle this, because it needs a probe ON dexter and no key from mandark reaches it. First-hand evidence from your own shell tonight: the runner is alive (5-min ticks, continuous 16:40→18:15), the gate reads `http_code=200 ... 23% used vs burn-line 23% (on-pace)` — legitimately pacing, not broken — yet `~/.local/share/crt-nightly-batch/` is dated entirely 07-25. Realisateur's predicted cause (the old 338 `http_code=401` HOLDs) was **falsified**; auth is fine. Two candidates it could NOT resolve from here: a 0-byte `sweep.lock` from 07-25 20:10 next to a log that stops at 20:37 (stale or held? needs `fuser`/`flock` on dexter), and an `expires_at` stamped 07-25 01:14 that puts the dead-man expiry near 2026-08-01 — after which crt gains a second, masking reason not to run. Recorded in crt `c43fa77`; acceptance case filed to scheduler `b42b81f`.
+  > (answer inline here — is 3 days of on-pace HOLD expected for a single-participant host, or should dexter's gate/weighting be looked at?)
+
 ## vkv-inventory
 
 - **2026-07-28 (scheduler `/cloture`): the nightly's dead-man switch
@@ -624,6 +628,10 @@ happened yet for any of them.
     calls still await you. Bug fixed in `bin/collect-feedback.sh`
     (scheduler `bb5c762`): a bare `>` line is now kept as an un-answered
     slot, same as the `(answer inline here)` placeholder.
+
+
+- **2026-07-28 (realisateur `/cloture`): three copies of `silence-audit.sh` now exist, and the staging worktree holds uncommitted work that disagrees with main. Which is authoritative?** Surfaced only because `closeout-lint` reported the worktrees **BLIND** and this session hand-checked them rather than reading BLIND as clean. State: `realisateur/main` has the full 394-line script *and* check 12 wired (`bd33d3f`); `ecosim` has its own migrated copy (the intended new owner); and `realisateur-staging-silence-audit` carries **uncommitted** edits that gut the script to 14 lines and wire check 12 differently — i.e. a second, unfinished answer to a question main already answered. Nothing was committed, discarded, or pushed there: it is not this session's work, and discarding uncommitted work is not a closing act. Note ecosim's own FOCUS.md already carries "retire the two source worktrees" as an *active* item, so a reader exists — but it will hit this WIP when it gets there.
+  > (answer inline here — is the staging WIP superseded by `bd33d3f` and safe to discard, or does it contain something main lacks?)
 
 ## bibliothecaire
 
