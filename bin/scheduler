@@ -917,6 +917,47 @@ cmd_commit_file() {
   if [ -z "$(git -C "$repo" status --porcelain -- "$path" 2>/dev/null)" ]; then
     return 0
   fi
+  # --- multi-writer files go through the atomic guard, not bare git ---------
+  # FOCUS.md / QUESTIONS.md / BLOCKERS.md are written by independent systems
+  # (this tool, the vim auto-commit hook, nightly-batch, and interactive
+  # sessions) with no coordination between them. Five divergences in three
+  # days (realisateur, home-assistant, scheduler, bibliothecaire, wtul), most
+  # of them "clean" -- different sections, silent merge, nobody notices until
+  # someone re-probes. The fetch/ff/commit/push below is exactly the bare
+  # sequence that loses those races; `focus-commit` (realisateur-owned, on
+  # PATH) is the same operation made indivisible: stage exactly the named
+  # file, rebase on rejection, and VERIFY the rebase did not change what the
+  # commit means. Everything that is not one of these three files stays on
+  # the path below -- it is safe for single-writer state.
+  case "$(basename "$path")" in
+    FOCUS.md|QUESTIONS.md|BLOCKERS.md)
+      local rel fc_msgfile fc_rc
+      if ! command -v focus-commit >/dev/null 2>&1; then
+        # A missing guard is a finding, not an excuse to hand-roll the racy
+        # sequence anyway. Keep the edit (commit locally, no push -- an
+        # unpushed commit is recoverable; a lost race is not) and say so.
+        echo "WARNING: focus-commit is NOT on PATH -- refusing to auto-push a multi-writer file ($path) with the bare git sequence it exists to replace." >&2
+        [ -n "$msg" ] || msg="Human edit via scheduler: $(basename "$path") ($(date '+%Y-%m-%dT%H:%M'))"
+        if git -C "$repo" add -- "$path" && git -C "$repo" commit -q -m "$msg" -- "$path"; then
+          echo "  committed locally in $repo but NOT pushed. Install realisateur's focus-commit shim, then: focus-commit \"$repo\" <msgfile> \"$path\"" >&2
+        else
+          echo "  (auto-commit failed -- left as an uncommitted edit at $path)" >&2
+        fi
+        return 0
+      fi
+      rel="$(git -C "$repo" ls-files --full-name -- "$path" 2>/dev/null | head -1)"
+      [ -n "$rel" ] || rel="$(realpath --relative-to="$repo" -- "$path" 2>/dev/null)" || rel="$path"
+      [ -n "$msg" ] || msg="Human edit via scheduler: $(basename "$path") ($(date '+%Y-%m-%dT%H:%M'))"
+      fc_msgfile="$(mktemp)" || { echo "(mktemp failed -- left as an uncommitted edit at $path)" >&2; return 0; }
+      printf '%s\n' "$msg" >"$fc_msgfile"
+      focus-commit "$repo" "$fc_msgfile" "$rel"; fc_rc=$?
+      rm -f "$fc_msgfile"
+      if [ "$fc_rc" -ne 0 ]; then
+        echo "WARNING: focus-commit exited $fc_rc for $path (reason above) -- the edit is NOT on origin. A scheduled run resets its clone --hard to origin, so it stays invisible to dispatch until this is resolved by hand." >&2
+      fi
+      return 0
+      ;;
+  esac
   # Freshness check BEFORE committing -- the actual fix for "do I need to
   # git fetch && git status by hand before every edit" (2026-07-20): no,
   # the tool checks instead. Doesn't block the commit (the file content is
