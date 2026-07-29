@@ -79,3 +79,79 @@ resolve_paced_conf() {
   fi
   return 0
 }
+
+# paced_membership_set <repo-root>
+#   Sets PACED_MEMBERS -- the space-delimited union of participant names
+#   across EVERY host's rotation file (schedule/_paced.conf and every
+#   schedule/_paced.<host>.conf), and PACED_MEMBERS_SRC naming the files it
+#   read. Returns 1 when no rotation file exists at all, and on that path
+#   PACED_MEMBERS is left as the empty marker " " on purpose -- same reason
+#   resolve_paced_conf blanks PACED_CONF.
+#
+# WHY A UNION RATHER THAN THIS HOST'S FILE, and it is the whole point of the
+# function. There are two DIFFERENT questions a caller can be asking, and
+# before 2026-07-29 bin/sync-crontab.sh answered both from `_paced.conf`:
+#
+#   "does the paced system own this project's Tier 2?"   -> membership, UNION
+#   "does it dispatch HERE, as this account, right now?" -> resolve_paced_conf
+#
+# The first is what decides whether to install a FIXED nightly cron line.
+# Answering it per-host is wrong in BOTH directions: a project in mandark's
+# rotation but not dexter's would get a fixed line installed on dexter --
+# a second dispatcher for a project the other host's runner already
+# dispatches, which is the cross-host double dispatch the crt and wtul
+# blocks in the rotation files exist to prevent. And a project in dexter's
+# rotation but not mandark's (today: `scheduler` itself, whose _paced.conf
+# line was commented out by 58d6495 when mandark self-dev went dark) had its
+# fixed line ARMED by that very act -- `sync-crontab.sh --apply` would have
+# re-installed an auto-staggered nightly scheduler-dev-cycle.sh, restoring
+# mandark as a second writer of scheduler's own git history one --apply after
+# the decision to stop being one. Reproduced in a sandbox before the fix.
+#
+# One host means one thing (resolve_paced_conf). "Somebody's runner owns
+# this" is an ecosystem-wide fact, so it reads ecosystem-wide.
+#
+# The union direction is also the SAFE one for a crontab writer: it is a
+# superset of what the old hardcoded read produced, so switching to it can
+# only ever suppress a line that used to be emitted -- it can never arm a
+# cron line that was not there before.
+paced_membership_set() {
+  local repo_root="${1:-}"
+  PACED_MEMBERS=" "
+  if [ -z "$repo_root" ]; then
+    PACED_MEMBERS_SRC="NONE -- paced_membership_set called with no repo root"
+    return 1
+  fi
+  local -a files=()
+  local f
+  # Explicit PACED_CONF wins outright, same override resolve_paced_conf
+  # honors, so a test can point every consumer at one file at once.
+  if [ -n "${PACED_CONF:-}" ]; then
+    files=("$PACED_CONF")
+  else
+    shopt -s nullglob
+    for f in "$repo_root"/schedule/_paced.conf "$repo_root"/schedule/_paced.*.conf; do
+      [ -f "$f" ] && files+=("$f")
+    done
+    shopt -u nullglob
+  fi
+  if [ "${#files[@]}" -eq 0 ]; then
+    PACED_MEMBERS_SRC="NONE -- no schedule/_paced*.conf under $repo_root/schedule"
+    return 1
+  fi
+  local pname
+  for f in "${files[@]}"; do
+    while IFS='|' read -r pname _; do
+      # A COMMENTED-OUT line is not a participant -- `#scheduler|1|3|...`
+      # means the rotation no longer owns it, which is exactly the
+      # documented rollback path back to a fixed nightly cron line.
+      case "$pname" in ''|\#*) continue ;; esac
+      pname="${pname// /}"
+      [ -n "$pname" ] || continue
+      case "$PACED_MEMBERS" in *" $pname "*) continue ;; esac
+      PACED_MEMBERS+="$pname "
+    done < "$f"
+  done
+  PACED_MEMBERS_SRC="union of ${files[*]}"
+  return 0
+}
