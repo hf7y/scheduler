@@ -1187,6 +1187,27 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 02:31 (via `scheduler -i`):** CORRECTION to the weight-zeroing stop verb filed minutes ago (6877476). Zach, 2026-07-29, verbatim: "no weights remove. realisateur comes back on next and assigns weights to the ecosystem". DO NOT BUILD THE STASH.
+
+WHAT CHANGES. 6877476 called reversibility "the hard requirement" and said zeroing a weight destroys the prior value, so prior weights must be stashed somewhere a resume can read them. That requirement is WITHDRAWN. The verb REMOVES weights. Nothing is preserved, because nothing needs to be: weights are realisateur's to assign -- that is already the standing division (docs/priority-weight.md; realisateur's /ideate has the weight field as explicitly its own knob, distinct from scheduler's engine). After a stop, realisateur's next pass assigns weights to the ecosystem fresh.
+
+WHY THIS IS BETTER THAN THE STASH, and it is not merely simpler. A stashed weight is a FROZEN JUDGMENT restored blind. The weights that existed at 02:00 on 2026-07-29 encode a pre-migration ecosystem -- crt at 3 on a host that had never dispatched, bibliothecaire raised to 2 hours earlier for a research request, scheduler at 3 on the host it is being moved off. Restoring those after a migration would reinstate a set of priorities chosen for a world that no longer exists, and it would look like continuity rather than staleness. Re-deriving them is the correct operation, and the organ that derives them already exists.
+
+So `stop` does not imply `resume` after all. It implies: stop, then a realisateur pass. That is a cleaner seam -- scheduler owns dispatch mechanics, realisateur owns what deserves to run. The verb stops at its own boundary instead of reaching across it to restore someone else's judgment.
+
+REQUIREMENTS, revised:
+- Loop the host's own rotation file, remove weights. Same host resolution the runner uses.
+- COMMIT it, so the stop is git-visible and auditable -- unchanged, and still most of the point.
+- FAIL LOUD on a rotation it cannot parse -- unchanged. A stop that silently zeroes nothing is the worst outcome for this verb.
+- NO stash, NO sidecar, NO prior-value comment, NO `resume` verb. If a future session finds itself writing one, this decision is why it should stop.
+- The stopped state should be legible as "awaiting reweight" rather than "broken", so realisateur's next pass knows it is being asked to assign rather than to restore.
+
+STILL UNSOLVED, unchanged from 6877476: in-flight work (tonight's runner outlived its crontab removal by 52 minutes walking a list it had already read), and cross-host delivery (still git-propagated, still cannot reach a host whose runner is skipping PULL because it is busy).
+
+CONSEQUENCE FOR THE PLAY, and this is the part that is not about the verb: realisateur is NEXT. Zach's sequencing -- scheduler bootstraps, then "realisateur comes back on next and assigns weights to the ecosystem" -- names the second participant in the self-extending rotation. B4 armed scheduler on dexter (f8609d0); realisateur follows it, and its first act is the reweight. Recorded in realisateur's own FOCUS.
+
+OPEN, and deliberately not assumed: THE PLAY's milestone override (realisateur M1.5) has the identical stash-and-restore shape -- amend a project's stability milestone to the bootstrap bar, restore it after. 6877476 flagged the two as one synchronicity. If "do not stash, re-derive" is the right answer for weights, it may be the right answer for milestones too -- but Zach said weights, and a stability milestone is a project's own declared bar rather than realisateur's judgment about it, so the argument does not obviously transfer. Flagged, not decided.
+
 - **2026-07-29 02:29 (via `scheduler -i`):** PROPOSAL, Zach-directed 2026-07-29 via realisateur /ideate, verbatim: "scheduler front door. for loop sets weights to zero bin/scheduler". This is the concrete shape of the `scheduler stop` verb proposed earlier tonight (958e748) and it is better than what was proposed there, for a reason worth stating.
 
 THE SHAPE. A loop in bin/scheduler that walks the participants of a rotation file and sets their weights to zero. That is it. Zach did this by hand tonight -- `crt|0|0`, `wtul|0|0` in _paced.dexter.conf -- and the instruction is that the hand action becomes the verb.
