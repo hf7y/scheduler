@@ -1187,6 +1187,15 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 22:24 (via `scheduler -i`):** we are about to unleash the dexter migration. realisateur is open now actively managing the
+  chezz move as proof of the switch to github issues. /ideate now we must orchestrate the entire
+  move. this should happen very precisely and via scheduler itself. the first thing here is
+  that all scheduled jobs must stop and quotas be suspended. we're going to use scheduler's own
+  tools to automate the move via orchestration, deciding which agents move what, from which
+  host, entriely through scheduler. this is dogfooding, and very important data for a more
+  intelligent scheduler philosophy that's not simply about fair round robin turns. /ideate
+LETS GOOOclaudeclaude!
+
 - **2026-07-28 (realisateur session, Zach-directed cleanup):** the run
   ledger cannot tell "expired and STILL expired" from "expired but since
   RENEWED", and it reported the second as the first for most of a day.
