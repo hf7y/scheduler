@@ -68,6 +68,25 @@
 
 set -uo pipefail
 
+# Runtime witness (lib/check-witness.sh + bin/check-witness-lint.sh). Sourced
+# here, CALLED inside freeze_check() below -- deliberately, because this file
+# is sourceable as well as runnable, and being sourced is not the same as
+# having been consulted. The witness must mean "a caller asked whether
+# dispatch is frozen", which is exactly the moment freeze_check() runs.
+#
+# Added 2026-07-29: without it, check-witness-lint reported freeze-check.sh
+# "NEVER RUN" indefinitely, while ~/.local/share/scheduler-paced-runner/run.log
+# showed it refusing realisateur by name at 11:30 the same day. A lint that
+# permanently cries wolf about the one abort handle teaches its reader to
+# skip its findings, which is worse than not having it.
+# Guarded and never fatal, per that lib's own contract -- bookkeeping must
+# not be able to break the mechanism that stops a bad run.
+_FREEZE_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+if [ -n "${_FREEZE_SELF_DIR:-}" ] && [ -r "$_FREEZE_SELF_DIR/../lib/check-witness.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$_FREEZE_SELF_DIR/../lib/check-witness.sh"
+fi
+
 _freeze_file() {
   local here
   here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -76,6 +95,9 @@ _freeze_file() {
 
 freeze_check() {
   local f reason proj exempt
+  # FIRST act, before every early return: a freeze check that came back
+  # "not frozen" still ran, and that is what this witness is about.
+  command -v check_witness >/dev/null 2>&1 && check_witness freeze-check.sh
   proj="${1:-}"
   f="$(_freeze_file)"
 
