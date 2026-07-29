@@ -562,6 +562,23 @@ happened yet for any of them.
 
 - **2026-07-28 (agent-appended, from an interactive session ON dexter): dexter has NONE of the ecosystem guard commands, and crt's own senechal hook is silently blind there.** Witness, run on dexter tonight: `command -v notify-senechal check-project-busy focus-commit silence-audit` → all four **MISSING**. Separately, `command -v jq` → missing, and `crt/bin/crt-senechal-guard.sh:25` piped its payload through `jq ... 2>/dev/null` then `[ -z "$cmd" ] && exit 0` — so on any host without jq the hook reminded about nothing, forever, while looking installed and healthy. That is the exact failure the hook exists to prevent, turned on itself. **Consequence, concrete and already incurred:** this session wired potato's brain to dexter and made five machine-scoped changes — `Host potato` in dexter's `~/.ssh/config`, a forced-command entry in dexter's `~/.ssh/authorized_keys`, `~/.local/bin/crt-brain-shell`, a `potato-claude` tmux session, and `Port 2223` in potato's `~/.ssh/config` — and **none could be filed with senechal**, nor did anything warn about it. Per CLAUDE.md a missing guard is a finding, not an inconvenience, so it is filed rather than worked around. Fixed in crt `f5bc6f6`: the hook now announces its own blindness on stderr instead of exiting 0. **NOT fixed, needs a human on dexter:** installing jq (`sudo apt install jq`, needs sudo this session does not have unattended) and installing realisateur's four ecosystem commands onto dexter. Until then every machine-scoped change made on dexter — by anyone, for any project — goes unfiled and unannounced, and dexter is now the ecosystem's default execution host, so that is the common case rather than an edge one.
   > (answer inline here — who installs realisateur's commands on dexter, and should the five changes above be filed retroactively once they exist?)
+  >
+  > **UPDATE 2026-07-28 (realisateur `/cloture`, machine-append) — HALF DONE,
+  > and the remaining half is no longer human-only.** `jq` is INSTALLED on
+  > dexter (Zach, this session; verified `jq-1.8.1` at `/usr/bin/jq`), so
+  > crt's senechal hook can parse again. The four ecosystem commands are
+  > still MISSING (re-probed tonight: `notify-senechal`,
+  > `check-project-busy`, `focus-commit`, `silence-audit` — all absent).
+  > **What changed is the "needs a human on dexter" premise:** that was
+  > true only because no key from mandark authenticated there, which was
+  > itself a misdiagnosis — dexter's WSL2 sshd listens on **2223**, not 22,
+  > and the `mandark-to-dexter-gardien` key was always valid for it.
+  > mandark's `~/.ssh/config` is corrected (senechal `ac49741`) and
+  > `ssh dexter` now works unattended, so realisateur's
+  > `bin/install-shims.sh` can be run against dexter from here without a
+  > human sitting on that box. Not done this session: `/cloture` reports
+  > and routes, it does not build. This is now a work item with a live
+  > path, not a blocked one — it needs an owner, not access.
 
 ## vkv-inventory
 
