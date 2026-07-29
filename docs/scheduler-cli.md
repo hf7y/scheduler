@@ -104,6 +104,36 @@ only when they have something to say (see FOOTER LINES).
   `nightly/<date>`/`paced/<date>` cycle nobody merged. Read-only:
   merging stays a human action.
 
+### The run ledger (always printed, sprint step 3 — 2026-07-28)
+
+Unlike the footer lines above, this block prints **every time, including
+when everything is fine.** A surface that only appears when something is
+wrong cannot be told apart from a surface that is broken.
+
+- Each row's verdict comes from that job's **own run log**
+  (`~/.local/share/<job>/sweep.log`, or the older `run.log` dialect), not
+  from the `LAST RUN` column above — that column is
+  `~/reports/<p>/LATEST.md`'s mtime, which is a proxy for the last
+  *success*, because a failed run writes no report.
+- Verdicts: `ok` `FAILED` `skipped` `running` `nolog` `nojob`, and
+  `BLIND` for a `CRON_ACCOUNT` job whose state this account cannot read
+  (it names the account and path rather than reading `$HOME`'s and
+  reporting that as the job's state). A record older than 5 days is
+  prefixed `stale-` and says so: an orphaned job's old FAILED is not
+  evidence of an outage, and rendering it as one is how a sensor earns
+  being ignored.
+- Only non-`ok` rows are listed; the count of clean jobs is always
+  printed, so "nothing listed" and "nothing checked" cannot look alike.
+- A standing **`BLIND:`** line states the one thing nothing on disk
+  records — whether a dispatch was *due* and did not fire. It is
+  unconditional on purpose; dropping it on a quiet night would read as
+  "nothing was missed."
+- **last actual dispatch** — how long since the paced runner last
+  reported a `DONE` line, or `BLIND` if its log is missing.
+
+`bin/unprinted-facts.sh` is the measurement this block was designed
+against: which facts the machinery records and which views print them.
+
 ## DATA SOURCES / FILES
 
 - `schedule/*.conf` — the project registry (one conf per project;
