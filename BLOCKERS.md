@@ -939,6 +939,40 @@ happened yet for any of them.
 
 ## realisateur
 
+- **2026-07-29 (realisateur `/cloture`): raise `--max-turns` for
+  `scheduler-dev-cycle.sh`, now that there is a measurement instead of a
+  guess?** THE PLAY run 3's bootstrap turn hit the 60-turn ceiling on four of
+  five hand-fires and never met its bar (tick never installed, realisateur
+  never registered). You answered this same question on 2026-07-29 as "narrow
+  the turn, don't raise the ceiling" — and the turn WAS narrowed, to a single
+  call ("install the tick, register realisateur, stop"), and it still was not
+  enough. So this is a re-ask on evidence, not a re-litigation of preference.
+  The evidence is the first per-cycle transcript (`e37ef8c` added them; before
+  that a max-turns cycle left exactly ONE line of evidence anywhere).
+  `# verified 2026-07-29 via: grep -o '"name":"[A-Za-z_]*"' ~/.local/share/scheduler-paced-dev/transcripts/20260729T162058.jsonl | sort | uniq -c`
+  380 events: `Bash=60  Edit=12  Read=4  Write=1` against `--max-turns 60`.
+  Every turn went to Bash, and the calls are varied and disciplined —
+  `bash -n`, shellcheck, the full 12-witness suite, `git stash` to diff
+  previews before/after, six lint scripts — plus a new
+  `tests/symlink-farm-witness.sh` and a real fix (`d3a4944`, which caught a
+  documented-but-never-implemented opt-out in realisateur's own `ea25677`).
+  **That is not thrashing; it is careful work that ran out of room.**
+  The cause looks structural rather than per-task: the bootstrap brief's own
+  standing constraints — re-probe rather than quote, a witness rather than an
+  exit code, fail loud — make every action cost several Bash turns, so 60
+  turns buys very little action after verification. Narrowing the bar further
+  cannot fix that, because the verification cost attaches to each step rather
+  than to the number of steps.
+  Three shapes, and the third is not obviously wrong: (a) raise the ceiling —
+  realisateur's own `BATCH_MAX_TURNS` was 120 before the migration;
+  (b) accept multi-cycle completion as normal and let the NOT-DONE
+  re-dispatch path carry it, which is exactly what `bin/verdict.sh` was built
+  for — but nothing auto-dispatches while run 3's crontabs are empty, so today
+  that means a human re-fires each time; (c) relax the verification discipline
+  for bootstrap turns specifically, trading the thing that makes these runs
+  trustworthy for throughput.
+  > (answer inline here)
+
 - **2026-07-28 (realisateur `/cloture`): does "a guard that fails safe but
   never clears is an outage with better manners than an outage" become a
   `BUILD-DISCIPLINE.md` pattern, or stay a one-off?** Surfaced by
