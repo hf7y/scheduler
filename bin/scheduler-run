@@ -33,7 +33,7 @@ esac
 # paced runner, deliberately: M1(a) requires the freeze be honoured at DISPATCH
 # by each consumer, "not merely honored by the runner, or a directly-invoked
 # wrapper bypasses it". This is the path a hand-run or cron-run job takes.
-if ! "$SCHED_ROOT/bin/freeze-check.sh"; then
+if ! "$SCHED_ROOT/bin/freeze-check.sh" "$PROJECT"; then
   echo "scheduler-run: refusing to run $PROJECT $TIER_ARG -- dispatch is FROZEN" >&2
   exit 3
 fi
