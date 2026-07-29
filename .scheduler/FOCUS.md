@@ -1187,6 +1187,33 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 01:18 (via `scheduler -i`):** THE PLAY IS RUNNING -- YOUR INSTRUCTIONS (2026-07-29, Zach-directed via realisateur /ideate: "the play, freeze the jobs. amend the milestones. tell scheduler what to do. drop scheduler into the repo and trigger it manually. then the remaining jobs migrate."). State as of this filing, all verified not quoted.
+
+WHAT IS ALREADY TRUE:
+- The 7d even-burn pacing hold is GONE (e502555, USAGE_RUSH_BEFORE_RESET_MIN=10080 in _usage.conf). Both hosts resumed dispatch at 01:00. dexter's DISPATCH [1/4] crt at 2026-07-29T01:00:03 is the FIRST dispatch in its entire run.log -- the four-day-old crt clone was the only prior evidence dexter could execute at all.
+- The freeze exists, is wired at DISPATCH in both consumers, and is now ENGAGED (983ed3d). Every registered project is refused. `scheduler` is EXEMPT (807f926) so it can orchestrate. 13 negative-test assertions, and the exemption's own tests all check the dangerous direction -- that it still refuses.
+- Work in flight is NOT stopped: dexter was mid-run on crt when the freeze landed. That run completes. This is documented, not a gap.
+
+YOUR TURN, in order. Each step's failure must be visible before the next begins.
+
+1. BOOTSTRAP YOURSELF ON DEXTER, MANUALLY, ONCE. Zach's call over letting a tick do it: the first-ever scheduler self-dev on dexter is not to be unattended. NOTE, found while proving the exemption: `scheduler-run scheduler batch` exits 2 with "BATCH_SCRIPT is set ... that legacy wrapper is authoritative" -- you do NOT run through the shared engine. Your path is your own wrapper (scheduler-dev-cycle.sh), which is what mandark's DISPATCH lines have always shown. The bootstrap proof is that wrapper completing ON dexter and pushing from there. Do not "fix" the exit-2 by migrating yourself onto scheduler-run as part of this; that is a separate decision and would change what the bootstrap proves.
+
+2. THE PROOF BAR IS UNCHANGED: a real run that commits and pushes FROM dexter. Not ls-remote, not a log line, not a self-report. Read the result from the ref, not from the runner.
+
+3. ONLY THEN, B4: add yourself to _paced.dexter.conf. Zach 2026-07-29: "b4 install it once the bootstrap play is installed." Deferred until step 1 passes, deliberately.
+
+4. THEN THE REMAINING JOBS MIGRATE, one at a time, each queued by YOU rather than by the rotation -- that is why the rotation is frozen. Each participant's turn: amend its milestone to the bootstrap bar (below), run it, restore its milestone.
+
+THE AMENDED MILESTONE, Zach's own words 2026-07-29: "the milestone is to wire up, then fail loudly enough to be taken off rotation." Applied per participant AS IT IS QUEUED, not to all 19 at once (Zach's call) -- the 19 declared milestones stay intact and each is restored after its turn.
+  Read what this actually says, because it is sharper than it looks: SUCCESS for a bootstrap turn is the project REMOVING ITSELF from the rotation. The failure that matters is not a crash -- it is STAYING IN THE ROTATION SILENTLY. A unit that neither wires up nor fails loudly is the only outcome nothing detects.
+  This also supplies something the migration was missing. ecosim's T2 predicts the self-extending rotation ACCUMULATES rather than self-organises, because stigmergy needs negative feedback -- evaporation, saturation, competition -- and nothing removes a participant line. "Fail loudly enough to be taken off rotation" IS that evaporation, arriving as a milestone definition rather than as a mechanism. Do not add a separate decay rule before checking whether this closes it.
+
+CONF DRIFT IS PAYLOAD, NOT A BLOCKER. Zach 2026-07-29: "confs pointing at mandark and not github is fine. we can use scheduler itself to dispatch the jobs needed to do it." ecosim's S5 found 11 of 19 confs still on /home/zach/git-remotes/ (356ecb0 reverted 3a45bf3), unreachable from dexter. That is now WORK THE PLAY DISPATCHES FOR ITSELF: a project's bootstrap turn includes repointing its own REPO_URL. Independently confirmed: `grep -l 'REPO_URL="/home/zach/git-remotes' schedule/*.conf | wc -l` -> 11, against 5 on GitHub.
+
+STILL UNANSWERED AND STILL YOURS TO RESPECT: BLOCKERS.md 63cf3b4 -- confirm the four decisions, particularly (1) mandark's scheduler self-dev going DARK. That is the precondition that makes your self-writing rotation single-writer. It is not an independent question. Do not wire the self-writing rotation before it lands.
+
+ecosim is watching and cannot stop you: observer, no stop bit, issues on its own repo only. Its bin/migration-watch.py is live with baselines captured (rotation seam, milestone override, alphabet histogram, dispatch-ref staleness). It is building S1, the unit state-transition recorder, next -- ahead of the stated order, because those observations vanish if unrecorded and your turn generates them.
+
 - **2026-07-29 00:05 (via `scheduler -i`):** THE PLAY AS A SELF-EXTENDING ROTATION (2026-07-29, Zach-directed via realisateur /ideate). Four forks answered by Zach. Full record: realisateur .scheduler/FOCUS.md bde9e62. Nothing was wired.
 
 THE SHAPE. scheduler runs -> its turn WRITES the next project's line into the rotation -> that project runs, its milestone temporarily overridden to "bootstrap yourself on dexter" -> scheduler runs again, writes the next line -> etc. The rotation file extends itself; no agent holds the plan. Timing wired by hand. Non-scheduler turns are deliberately SLIM: one milestone, one proof, done.
