@@ -2830,7 +2830,30 @@ cmd_sweep() {
     fi
   fi
 
-  # Tenth pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
+  # Tenth pass: one project, two dispatchers (bin/rotation-lint.sh, built
+  # 2026-07-29). The host split gives each machine its own
+  # schedule/_paced.<host>.conf, so moving a project between hosts is a
+  # two-file edit -- enable here, park there -- and until this pass the only
+  # thing holding the two halves together was the editor remembering both.
+  # A project enabled in two rotations is dispatched by two machines into one
+  # git history with no shared lock. Offline, read-only, zero `claude` cost,
+  # like every pass above; exit 3 is BLIND, not clean.
+  if [ -x "$SCHED_ROOT/bin/rotation-lint.sh" ]; then
+    local rotlint_out rotlint_rc
+    rotlint_out="$("$SCHED_ROOT/bin/rotation-lint.sh" 2>&1)"
+    rotlint_rc=$?
+    if [ "$rotlint_rc" -eq 3 ]; then
+      echo "== [rotation-lint] cannot read any schedule/_paced*.conf -- check is BLIND =="
+      echo "$rotlint_out" | sed 's/^/  /'
+    elif [ "$rotlint_rc" -ne 0 ]; then
+      echo "== [rotation-lint] a project is enabled in more than one rotation =="
+      echo "$rotlint_out" | sed 's/^/  /'
+    fi
+  else
+    echo "== [rotation-lint] MISSING or not executable -- a wired check vanished =="
+  fi
+
+  # Eleventh pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
   # built 2026-07-28 -- FOCUS.md step 1b). Answers "how do we make a
   # built-but-unwired check fail noisily?", which static analysis cannot: a
   # call site inside a branch that never executes greps identically to a live
