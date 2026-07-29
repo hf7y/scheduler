@@ -52,7 +52,19 @@ REPORTS_ROOT="$HOME/reports"
 source "$SCHED_ROOT/lib/autonomy-merge.sh"
 EDITOR="${EDITOR:-vim}"
 PACED_LOG="$HOME/.local/share/scheduler-paced-runner/run.log"
-PACED_CONF="$SCHED_ROOT/schedule/_paced.conf"
+# WHICH rotation file, resolved per host by the SAME rule the runner uses --
+# see lib/paced-conf.sh for the rule and for the dexter bug that made a shared
+# resolver necessary (this was a hardcoded `_paced.conf` until 2026-07-29, so
+# `next`/`run`/`weight`/`-p` answered about mandark's rotation on dexter, and
+# `weight <p> <n>` wrote into it).
+# shellcheck disable=SC1091
+source "$SCHED_ROOT/lib/paced-conf.sh"
+if ! resolve_paced_conf "$SCHED_ROOT"; then
+  echo "scheduler: $PACED_CONF_SRC" >&2
+  echo "scheduler: this host has no rotation file, so 'what runs here' has no answer --" >&2
+  echo "scheduler: refusing rather than reporting an empty rotation as a quiet one." >&2
+  exit 1
+fi
 PACED_PTR="$HOME/.local/share/scheduler-paced-runner/rotation.idx"
 
 # load_paced_pool -- parses PACED_CONF the exact same way
@@ -60,6 +72,9 @@ PACED_PTR="$HOME/.local/share/scheduler-paced-runner/rotation.idx"
 # defaults to 1, repeated N times in the pool for a weight-N participant)
 # so `scheduler next`/`run`/`weight` stay in lockstep with what the real
 # runner will actually do -- no second source of truth for this parsing.
+# Lockstep on WHICH FILE is a separate guarantee and used to be missing
+# entirely: see lib/paced-conf.sh, which now resolves PACED_CONF above, and
+# tests/paced-conf-witness.sh, which fails if the runner's copy drifts.
 # Populates the global arrays POOL_NAMES/POOL_CMDS.
 load_paced_pool() {
   POOL_NAMES=(); POOL_CMDS=()
@@ -89,7 +104,7 @@ load_paced_pool() {
   [ "${#POOL_NAMES[@]}" -gt 0 ]
 }
 
-# paced_conf_line <proj> -- raw schedule/_paced.conf line for a project, or
+# paced_conf_line <proj> -- raw $PACED_CONF line for a project, or
 # empty + nonzero exit if it isn't a paced participant (enabled or not).
 paced_conf_line() {
   grep -E "^${1}\|" "$PACED_CONF" 2>/dev/null
@@ -177,28 +192,36 @@ usage: scheduler [command] [project]
   report [project], -r  open a project's latest report (LATEST.md)
   next [n], -n           what usage-paced-runner.sh will actually dispatch
                          next, in real rotation order (reads its rotation
-                         pointer + this session's _paced.conf weights --
-                         same round-robin math the runner itself uses, no
-                         new state). Defaults to the next 8 slots.
+                         pointer + THIS HOST's rotation-file weights --
+                         same round-robin math, and the same host-scoped
+                         file, the runner itself uses; no new state).
+                         Defaults to the next 8 slots.
   run <project>          dispatch one project's paced wrapper right now,
                          bypassing usage-gate.sh (each wrapper is already
                          self-contained: own flock + logging). Works even
-                         if the project is currently disabled in
-                         _paced.conf -- runs it once, doesn't re-enable it.
+                         if the project is currently disabled in this
+                         host's rotation -- runs it once, doesn't re-enable
+                         it.
   overview <project>, -o
                          one screen: that project's `## Stability
                          milestone` checklist straight out of FOCUS.md (if
                          it has one). For git/questions/blockers detail see
                          `scheduler status <project>`.
-  weight <project> [n]  show (no n) or set (with n) a project's
-                         schedule/_paced.conf pace weight. Setting it also
+  weight <project> [n]  show (no n) or set (with n) a project's pace weight
+                         in THIS HOST's rotation file
+                         (schedule/_paced.<host>.conf if it exists, else
+                         schedule/_paced.conf). Setting it also
                          drops a `.idea` note in realisateur's inbox so its
                          next pass knows a human overrode its last-set
                          value (see docs/priority-weight.md -- the number
                          itself is realisateur's judgment call, this
                          command only edits + flags, never silently).
-  paced, -p              open schedule/_paced.conf directly (enable/disable
-                         participants, reorder round-robin tie-breaks)
+  paced, -p              open THIS HOST's rotation file directly
+                         (enable/disable participants, reorder round-robin
+                         tie-breaks). A host with its own
+                         schedule/_paced.<host>.conf gets that file, not the
+                         shared one -- editing the shared file there would
+                         change what the OTHER host runs.
   pacing [show] [-h]     usage-paced-runner.sh's tick interval + max
                          dispatches/tick, the live usage-gate.sh verdict, and
                          a check that every installed ~/.local/bin script is
@@ -1620,7 +1643,7 @@ cmd_next() {
     printf '  %2d. %s\n' "$i" "${POOL_NAMES[$idx]}"
   done
   echo
-  echo "(rotation pool size $n, incl. weight-repeats -- see schedule/_paced.conf/scheduler weight;"
+  echo "(rotation pool size $n, incl. weight-repeats -- from $PACED_CONF [$PACED_CONF_SRC];"
   echo " last actually dispatched pool slot: $last -- see ~/.local/share/scheduler-paced-runner/run.log)"
 }
 
@@ -1651,7 +1674,7 @@ cmd_run() {
   cmd="${rest%%#*}"
   cmd="$(printf '%s' "$cmd" | sed -e 's/[[:space:]]*$//')"
   if [ "${enabled// /}" != "1" ]; then
-    echo "NOTE: $proj is disabled (enabled=0) in _paced.conf -- running it once anyway;"
+    echo "NOTE: $proj is disabled (enabled=0) in $PACED_CONF -- running it once anyway;"
     echo "it stays out of the automatic rotation until you re-enable it there."
   fi
   echo "scheduler run: dispatching $proj -> $cmd (bypassing usage-gate.sh, one cycle, right now)"
@@ -1737,8 +1760,11 @@ cmd_weight() {
     local ts idea_file
     ts="$(date +%Y%m%d-%H%M%S)"
     idea_file="$repo_path/weight-override-${proj}-${ts}.idea"
-    printf 'Human set %s pace weight %s -> %s directly in _paced.conf via `scheduler weight` on %s. FYI, not a request to revert it -- just flagging the override so your next pass has the full picture instead of assuming its own last-set value still holds.\n' \
-      "$proj" "$cur_weight" "$newval" "$(date '+%Y-%m-%d %H:%M')" > "$idea_file"
+    # Name the FILE, not just "_paced.conf": with per-host rotations a weight
+    # override applies to one host only, and "which host" is the first thing
+    # realisateur's next pass needs in order to read the number correctly.
+    printf 'Human set %s pace weight %s -> %s directly in %s (%s) via `scheduler weight` on %s. FYI, not a request to revert it -- just flagging the override so your next pass has the full picture instead of assuming its own last-set value still holds.\n' \
+      "$proj" "$cur_weight" "$newval" "$PACED_CONF" "$PACED_CONF_SRC" "$(date '+%Y-%m-%d %H:%M')" > "$idea_file"
     echo "flagged for realisateur: $idea_file"
   fi
 }

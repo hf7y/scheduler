@@ -148,6 +148,17 @@ fi
 # before, which is what mandark still does today: this change is a no-op there
 # until someone adds a _paced.mandark.conf.
 #   List registered hosts:  ls schedule/_paced.*.conf
+#
+# This block is deliberately INLINE rather than sourced from
+# lib/paced-conf.sh, which holds the same rule for bin/scheduler: this script
+# is the live */5 dispatcher for the whole ecosystem and resolves its conf
+# before it has established anything it could safely source from, so a
+# `source` here is a new way for all dispatch to die at once. The agreement
+# between the two copies is MECHANIZED instead -- tests/paced-conf-witness.sh
+# extracts this block by the two markers below and asserts it resolves
+# identically to the library for the same inputs. If you move or rename the
+# markers, that witness fails loud rather than silently testing nothing.
+# >>> paced conf resolution
 LEGACY_PACED_CONF="/home/zach/Documents/Project Archive/scheduler/schedule/_paced.conf"
 PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -n "${PACED_CONF:-}" ]; then
@@ -163,6 +174,7 @@ else
   PACED_CONF="$LEGACY_PACED_CONF"
   PACED_CONF_SRC="legacy absolute path (repo not found from $SELF_DIR)"
 fi
+# <<< paced conf resolution
 
 # --- load enabled participants -------------------------------------------------
 # Format: name|enabled|command, with an OPTIONAL weight inserted as a third
