@@ -324,6 +324,52 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   > (answer inline here — which numbers, if any)
 >>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
+
+- **2026-07-28 (realisateur `/cloture`, filed by the sprint session):
+  BLOCKERS.md itself is currently committed WITH four unresolved vim
+  3-way-merge conflict blocks, and one of them contains YOUR OWN ANSWER.**
+  Commit `44d6927` ("scheduler sweep: adopted dirty BLOCKERS.md",
+  2026-07-28T19:00, authored as you) adopted this file mid-merge and
+  pushed it. Markers at lines 48/49/75, 113/114/252, 275/277/279,
+  308/309/325 (`/tmp/vRwBLh8/5` is vim's merge temp). Three blocks have an
+  empty first side; **the block at 275 does not** — line 276 is
+  `> See below. We changed this.`, an answer of yours, sitting inside the
+  conflict. A naive "take the repo side" resolution DELETES it. Nothing is
+  lost yet: both sides are in git at `44d6927`. **Deliberately not
+  resolved by the filing session** — it is your file and one side is your
+  in-flight answer, so choosing between them is yours. This is also the
+  strongest evidence yet for the adoption question already open in
+  realisateur's `.scheduler/QUESTIONS.md`: the watcher no longer just
+  misattributes work, it has now committed and pushed structural
+  corruption into the file you answer decisions in.
+  > (answer inline here — resolve it yourself, or say "you resolve it,
+  >  keep both sides" and a session will)
+
+- **2026-07-28 (same session): items (1) and (6) of the overnight-audit
+  remediation question above are no longer hypothetical — both switches
+  are TRIPPED right now.** The new run ledger in `scheduler` noargs
+  (`fab5c8d`) surfaced it on its first run: `aedile` has been no-opping
+  since 2026-07-27T11:43 and `vkv-inventory` since 2026-07-27T20:51, both
+  `skipped (expired ...)`. The existing "expired jobs" footer could not
+  see either, because it globs `$HOME` only and both jobs run as
+  `svc-vaporwave`. Renew with
+  `rm ~svc-vaporwave/.local/share/<job>/expires_at` (the next run
+  re-stamps; bumping EXPIRY_DAYS alone does NOT renew). Not done by the
+  filing session: renewing someone else's dead-man switch is the decision
+  the switch exists to force.
+  > (answer inline here — renew both, renew one, or let them stay expired)
+
+- **2026-07-28 (same session): the deployed paced runner stops pulling new
+  code whenever its repo has ANY dirty file, untracked included — and a
+  vim swap file from `scheduler -b` is enough.** 33 `PULL skip` lines in
+  `~/.local/share/scheduler-paced-runner/run.log`; one fired for ~15
+  minutes tonight because you had `BLOCKERS.md` open. The one-line
+  narrowing is `git status --porcelain --untracked-files=no`, but that is
+  a real policy change to the dispatcher (an untracked path CAN still
+  block a fast-forward), so it is yours rather than mine.
+  > (answer inline here — narrow it to tracked changes, or leave it
+  >  strict)
+
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
