@@ -1,0 +1,36 @@
+# RUN MARKER -- what run is in progress, readable by both hosts.
+#
+# Written by realisateur 2026-07-29 at ecosim's request (RUN2-SENSOR-
+# COORDINATION drop, item 4: "anything that says run 2 starts now in a place
+# both hosts can read"). It was the cheapest item on that list and the one
+# that improves every hypothesis at once: run 1's unit timings had to be
+# reconstructed from a runner log whose DISPATCH lines were paired with the
+# wrong DONE lines twice, and every duration in that dataset depends on
+# knowing when the run began.
+#
+# This file is DATA, not a control. Nothing gates on it, nothing halts on it.
+# Compare schedule/FREEZE, which IS a control -- do not conflate them.
+#
+# Format: KEY=VALUE, one per line, parseable with cut -d= -f2.
+
+RUN=2
+RUN_STARTED_AT=2026-07-29T10:14:57-05:00
+RUN_STARTED_EPOCH=1785338097
+RUN_STARTED_ON=mandark
+RUN_STARTED_BY=realisateur
+BASE_COMMIT=9735e7a
+
+# What this run is: THE PLAY, re-run. scheduler installs the schedule system
+# on dexter and registers exactly two participants (scheduler, realisateur).
+# Every further participant arrives as a request from realisateur, which
+# stamps each one via realisateur/bin/stamp-agent.sh before it comes online.
+#
+# The premise under test: a project's FOCUS.md is enough to direct the agent
+# that runs it. Both bootstrap FOCUS.md files were stripped to briefs for
+# this run (scheduler 4455 -> 43 lines, realisateur 2517 -> 46). Prior
+# contents are recoverable via git log -p; nothing was lost.
+#
+# PREVIOUS RUN: run 1, the night of 2026-07-28/29. Its results are in
+# bibliothecaire briefs/dexter-migration-results-2026-07-29.md and as issues
+# on hf7y/ecosim. One unit moved; the strongest findings were about the
+# instruments rather than the ecosystem.
