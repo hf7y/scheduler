@@ -103,9 +103,11 @@ paste.
   work, so it isn't being guessed at from chezz.
   interact via scheduler's docs. scheduler -i scheduler "..." or also 
   scheduler -i realisateur "..." if warranted.
-> new decision is to move the entire ecosystem over to github issues. thanks
-> chezz for being first to the suggestion. the most philosophically mature
-> project with an end user focus.
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+>> new decision is to move the entire ecosystem over to github issues. thanks
+>> chezz for being first to the suggestion. the most philosophically mature
+>> project with an end user focus.
 
 - **Four design forks are the only thing holding otherwise-ready backlog
   work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
@@ -845,8 +847,10 @@ happened yet for any of them.
   posture is report-don't-build, and the parallel row above is explicitly
   gated on a prereg pass that refuses to backdate — so promoting this one
   by hand would jump a queue that exists on purpose.
-  > (answer inline here — promote it, route it through `sim/prereg.py`
-  >  like the silent-sensor row, or leave it as a one-off)
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — promote it, route it through `sim/prereg.py`
+  >>  like the silent-sensor row, or leave it as a one-off)
 
 - **2026-07-28 (scheduler `/cloture`): `closeout-lint`'s durability check
   is worktree-blind — does it grow to see linked worktrees, or do we
@@ -869,18 +873,20 @@ happened yet for any of them.
   scope and that is written down so the silence is intentional.
   Recommendation is (b): it is the cheaper change and it is the one the
   night's data argues for.
-  > (answer inline here — a/b/c)
-  > **ANSWERED 2026-07-28 (Zach, interactive): (b).** BUILT and pushed,
-  > `cf1a1a9` in realisateur. Section A now emits
-  > `BLIND [worktrees] <project>: N linked worktree(s) NOT examined below`,
-  > naming each worktree path and its branch, counted separately from FLAG
-  > and printed in the summary so it cannot read as a clean run. Placed
-  > BEFORE the `$HOURS` age gate — a registered repo's HEAD can be stale
-  > while a worktree branch is minutes fresh, and the gate would otherwise
-  > hide exactly this case (test A9). 24/24 in
-  > `bin/tests/closeout-lint.test.sh`, including two negative cases and one
-  > asserting BLIND is not a FLAG. Run against the real ecosystem it now
-  > names both live realisateur worktrees. This block is closable.
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — a/b/c)
+  >> **ANSWERED 2026-07-28 (Zach, interactive): (b).** BUILT and pushed,
+  >> `cf1a1a9` in realisateur. Section A now emits
+  >> `BLIND [worktrees] <project>: N linked worktree(s) NOT examined below`,
+  >> naming each worktree path and its branch, counted separately from FLAG
+  >> and printed in the summary so it cannot read as a clean run. Placed
+  >> BEFORE the `$HOURS` age gate — a registered repo's HEAD can be stale
+  >> while a worktree branch is minutes fresh, and the gate would otherwise
+  >> hide exactly this case (test A9). 24/24 in
+  >> `bin/tests/closeout-lint.test.sh`, including two negative cases and one
+  >> asserting BLIND is not a FLAG. Run against the real ecosystem it now
+  >> names both live realisateur worktrees. This block is closable.
 
 - **2026-07-27 (realisateur `/ideate`, machine-append): `wtul`'s
   unattended run edited realisateur's live `bin/notify-senechal.sh` and
@@ -949,10 +955,14 @@ happened yet for any of them.
 
 
 - **2026-07-28 (realisateur `/cloture`): three copies of `silence-audit.sh` now exist, and the staging worktree holds uncommitted work that disagrees with main. Which is authoritative?** Surfaced only because `closeout-lint` reported the worktrees **BLIND** and this session hand-checked them rather than reading BLIND as clean. State: `realisateur/main` has the full 394-line script *and* check 12 wired (`bd33d3f`); `ecosim` has its own migrated copy (the intended new owner); and `realisateur-staging-silence-audit` carries **uncommitted** edits that gut the script to 14 lines and wire check 12 differently — i.e. a second, unfinished answer to a question main already answered. Nothing was committed, discarded, or pushed there: it is not this session's work, and discarding uncommitted work is not a closing act. Note ecosim's own FOCUS.md already carries "retire the two source worktrees" as an *active* item, so a reader exists — but it will hit this WIP when it gets there.
-  > (answer inline here — is the staging WIP superseded by `bd33d3f` and safe to discard, or does it contain something main lacks?)
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — is the staging WIP superseded by `bd33d3f` and safe to discard, or does it contain something main lacks?)
 
 - **2026-07-29 (realisateur `/cloture`, machine-append): four migration decisions were taken on my best judgment during a 60s no-response window and are awaiting your confirmation — the first one is a real supersession and is the one to check.** You asked for THE PLAY to be revised ("scheduler bootstraps the rest, the agents are neurotically overthinking it"), I filed four `AskUserQuestion` forks, and you were away. Each decision below was derived from something already written down rather than invented, and each is reversible. Recorded: realisateur `dd11360`, scheduler `eb94ba0`. (1) **Scheduler moves FIRST and mandark's scheduler self-dev goes DARK** — supersedes tonight's own DECIDED line "scheduler's own move is deferred until the others land and there is evidence". It resolves the two-hosts-one-history hazard by decree rather than by ordering, which is a genuine change and is NOT strictly forced by what you said. (2) M1(b), the readiness probe, retired before being built. (3) M1(a), the freeze file, survives as the abort handle. (4) ecosim observes with no stop bit.
-  > (answer inline here — confirm all four, or name which to revert. Only (1) changes an existing decision.)
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — confirm all four, or name which to revert. Only (1) changes an existing decision.)
 
 - **2026-07-29 (realisateur `/cloture`, machine-append): "it installs itself on the machine" — does the self-install write dexter's crontab, or is the `*/5` paced-runner already there the whole install surface?** Not settled by your framing and it decides what the bootstrap actually does on arrival. Related and still unreplicated on dexter: the `*/15` sweep backstop and the daily `30 6` weight-audit are mandark-only, so "all projects moved" would leave the reactive backstop watching an empty house (ecosim brief §6.6, re-probed and still current 2026-07-28 23:35).
   > (answer inline here)
