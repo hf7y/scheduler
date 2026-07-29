@@ -418,7 +418,14 @@ for conf in "${CONF_FILES[@]}"; do
   # the file (a symlink, not a copy, so either path edits the same file).
   # PROJECT_REPO_PATH is optional -- a project with no local working copy
   # in this exact shape just doesn't get one.
-  if [ -n "${PROJECT_REPO_PATH:-}" ]; then
+  #
+  # ANSWER_CHANNEL="issues" (2026-07-28) suppresses the symlink entirely.
+  # Leaving one in place for a migrated project is worse than having none:
+  # it is a file that LOOKS like the answer surface, sits in the same
+  # directory as every other project's real one, and silently is not where
+  # anyone reads or writes any more. The staleness this migration exists to
+  # escape would come straight back wearing the old file's name.
+  if [ -n "${PROJECT_REPO_PATH:-}" ] && [ "${ANSWER_CHANNEL:-file}" != "issues" ]; then
     # Self-contained-folder model: a migrated project sets
     # SCHEDULER_SUBDIR=".scheduler" -- a TOP-LEVEL dir, deliberately OUTSIDE
     # .claude/ -- so its FOCUS/QUESTIONS group under one folder it owns.

@@ -122,7 +122,16 @@ usage: scheduler [command] [project]
                          digest -- then opens the tidied file as usual
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
   questions [project] [n], -q
-                         open a project's QUESTIONS.md; with a number, jump
+                         for a project whose conf sets ANSWER_CHANNEL="issues",
+                         render every open `question`-labelled GitHub issue
+                         into ONE buffer shaped like QUESTIONS.md, open it in
+                         $EDITOR, and post each filled `> ` slot as a comment
+                         (+ the `answered` label) on save. The buffer is
+                         rendered fresh from the API and deleted on exit --
+                         nothing about it persists on disk, which is the whole
+                         point: the old symlinked file went stale on every
+                         push and the round trip never closed.
+                         Otherwise: open a project's QUESTIONS.md; with a number, jump
                          vim straight to that bullet instead of opening at
                          the top of the file. With no project, print the
                          questions overview: every project with any open
@@ -656,6 +665,253 @@ resolve_questions_path() {
   echo "$repo_path/${subdir:-.claude}/QUESTIONS.md"
 }
 
+# --- the GitHub-issues answer channel ----------------------------------
+#
+# Built 2026-07-28 (human-directed: "move the full chezz over to test the
+# github issues pipeline"). Replaces, per project, the file channel whose
+# failure is on record in BLOCKERS.md: `questions/<p>.md` is a symlink
+# into a local mandark working copy, so it goes one commit stale on every
+# push and the round trip never closed. The premise expires anyway under
+# "dexter is the default execution host" -- a project with no mandark
+# checkout has no answer surface at all.
+#
+# THE RULE THAT MATTERS, and the reason this is not just a nicer file: the
+# buffer is rendered fresh from the API on every invocation and DELETED on
+# exit. A view, not a file. Anything that persists question state on disk
+# re-creates the staleness class being escaped -- so there is deliberately
+# no cache of question BODIES here, only of the integer count (see
+# issues_counts, which the glance calls once per project per run).
+#
+# Semantics carried over from the file channel, now as labels:
+#   agents file with `--label question`; a human answer is a COMMENT (never
+#   a body edit, so the ask survives verbatim and history is free) plus the
+#   `answered` label; the nightly reads label:question,answered, acts, and
+#   CLOSES the issue -- the same "removes the block once it has acted"
+#   contract the file channel had.
+#
+# Per BUILD-DISCIPLINE this must FAIL LOUD if `gh` errors. A questions
+# command that silently renders an empty buffer is indistinguishable from
+# "no questions", which is precisely the failure being retired.
+
+# Which channel a project's questions live in: "issues" or "file".
+# Opt-in per project via ANSWER_CHANNEL in schedule/<proj>.conf. Default
+# is "file" -- this migrates one project at a time, deliberately, because
+# `hf7y/chezz` is PUBLIC and world-readable questions are fine for chezz
+# and NOT automatically fine ecosystem-wide.
+answer_channel() {
+  local ch
+  ch="$(conf_field "$1" ANSWER_CHANNEL 2>/dev/null)" || true
+  case "$ch" in
+    issues) echo "issues" ;;
+    ""|file) echo "file" ;;
+    *) echo "scheduler: $1: unknown ANSWER_CHANNEL '$ch' (want: issues|file)" >&2; return 1 ;;
+  esac
+}
+
+# owner/repo for `gh --repo`, derived from the conf's existing REPO_URL
+# rather than retyped as a second field -- one source, per BUILD-DISCIPLINE.
+# Handles both the ssh-alias form chezz uses
+# (git@github-chezz-deploy:hf7y/chezz.git) and an https remote.
+gh_repo_slug() {
+  local proj="$1" url slug
+  url="$(conf_field "$proj" REPO_URL 2>/dev/null)" || true
+  if [ -z "$url" ]; then
+    echo "scheduler: $proj has ANSWER_CHANNEL=issues but no REPO_URL in its conf" >&2
+    return 1
+  fi
+  slug="${url##*:}"          # ssh alias form -> owner/repo.git
+  slug="${slug##*github.com/}"  # https form  -> owner/repo.git
+  slug="${slug%.git}"
+  slug="${slug#/}"
+  case "$slug" in
+    */*) printf '%s\n' "$slug" ;;
+    *) echo "scheduler: $proj: could not derive an owner/repo from REPO_URL='$url'" >&2; return 1 ;;
+  esac
+}
+
+# Fail loud and EARLY, with the actual fix in the message. Every issues
+# path calls this before its first API call, so a dead credential is a
+# stop, never an empty buffer.
+require_gh() {
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "scheduler: \`gh\` is not installed, and this project's answer channel is GitHub issues." >&2
+    echo "  This is a stop, not something to route around -- install gh, or set ANSWER_CHANNEL=file." >&2
+    return 1
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "scheduler: \`gh\` is not authenticated. Run: gh auth login -h github.com" >&2
+    echo "  (Note \`gh auth status\` can show one FAILING account alongside a working one --" >&2
+    echo "  read the whole output before concluding the credential is dead. That misreading" >&2
+    echo "  cost this ecosystem a phantom blocker for two days, 2026-07-26..28.)" >&2
+    return 1
+  fi
+}
+
+# unanswered/total for the glance + `scheduler -q` overview, from the API.
+#
+# The 5-minute cache here is ONLY over the two integers, and exists because
+# the bare `scheduler` glance calls this once per project and an
+# unconditional network round trip would make the ecosystem's most-typed
+# command wait on GitHub. The answer BUFFER is never cached -- see the
+# header note. A stale count costs you a slightly wrong number in a
+# summary view; a stale buffer costs you a lost answer.
+issues_counts() {
+  local proj="$1" slug cache out
+  slug="$(gh_repo_slug "$proj")" || { echo "0 0"; return 0; }
+  cache="${XDG_CACHE_HOME:-$HOME/.cache}/scheduler/questions-count-$proj"
+  if [ -f "$cache" ] && [ "$(( $(date +%s) - $(stat -c %Y "$cache" 2>/dev/null || echo 0) ))" -lt 300 ]; then
+    cat "$cache"; return 0
+  fi
+  out="$(gh issue list --repo "$slug" --label question --state open \
+          --limit 200 --json number,labels 2>/dev/null \
+        | jq -r '[.[] | select([.labels[].name] | index("answered") | not)] | length,
+                 (length)' 2>/dev/null | paste -sd' ')" || true
+  case "$out" in
+    [0-9]*' '[0-9]*) ;;
+    *) echo "0 0"; return 0 ;;
+  esac
+  mkdir -p "$(dirname "$cache")"
+  printf '%s\n' "$out" > "$cache"
+  printf '%s\n' "$out"
+}
+
+# The two labels carry the semantics the file channel encoded in prose.
+# `gh label create` is idempotent-by-flag, not by nature -- without
+# --force it exits non-zero when the label already exists, which is the
+# normal case, so that specific failure is the success path here.
+ensure_gh_labels() {
+  local slug="$1"
+  gh label create question --repo "$slug" --color FBCA04 \
+    --description "Open question for the human; scheduler -q renders these" >/dev/null 2>&1 || true
+  gh label create answered --repo "$slug" --color 0E8A16 \
+    --description "Human has answered; this project's next run acts, then closes" >/dev/null 2>&1 || true
+}
+
+# `scheduler -q <proj>` for an issues-channel project: render every open
+# question into ONE buffer shaped like the QUESTIONS.md the fingers know,
+# open $EDITOR on it, post each filled `> ` slot as a comment, delete the
+# buffer. No merge logic is needed anywhere: there is never a second
+# writer to the same bytes, and the worst case is a duplicate comment.
+QBUF=""   # deliberately GLOBAL, not local to cmd_questions_issues: the EXIT
+          # trap below fires after the function's locals are out of scope, so
+          # a `local buf` made the trap expand an unset name -- under `set -u`
+          # that aborts the trap and the buffer SURVIVES on disk, which is the
+          # one thing this whole design exists to prevent. Caught by running
+          # it and then looking for /tmp/scheduler-questions-*, 2026-07-28 --
+          # exit status alone said success.
+cmd_questions_issues() {
+  local proj="$1" slug json count
+  require_gh || exit 1
+  slug="$(gh_repo_slug "$proj")" || exit 1
+
+  # FAIL LOUD: capture the failure instead of letting an API error become
+  # an empty buffer that reads as "no questions".
+  if ! json="$(gh issue list --repo "$slug" --label question --state open \
+                 --limit 200 --json number,title,body,labels,comments 2>&1)"; then
+    echo "scheduler: gh issue list FAILED against $slug -- refusing to render an empty buffer," >&2
+    echo "  because an empty buffer is indistinguishable from 'no open questions'." >&2
+    printf '%s\n' "$json" >&2
+    exit 1
+  fi
+
+  count="$(printf '%s' "$json" | jq 'length')"
+  if [ "$count" -eq 0 ]; then
+    echo "no open questions for $proj (channel: GitHub issues, $slug)"
+    exit 0
+  fi
+
+  QBUF="$(mktemp -t "scheduler-questions-$proj.XXXXXX.md")"
+  # Rendered fresh, deleted on ANY exit including a crash or ^C -- the
+  # whole point of a view rather than a file.
+  trap 'rm -f "${QBUF:-}"' EXIT INT TERM
+
+  {
+    printf '# Questions for %s — GitHub issues (%s)\n\n' "$proj" "$slug"
+    printf 'Answer under each question on lines starting with `> `.\n'
+    printf 'On save+exit each non-empty answer is posted as a COMMENT on its issue\n'
+    printf 'and the issue is labelled `answered`. Empty slots are skipped.\n\n'
+    printf 'This buffer is rendered fresh from the API and DELETED on exit.\n'
+    printf 'Editing anything other than a `> ` line changes nothing.\n'
+  } > "$QBUF"
+
+  printf '%s' "$json" | jq -r '
+    sort_by(.number)[] |
+    "\n<!-- scheduler:issue \(.number) -->\n" +
+    "## #\(.number) — \(.title)\n" +
+    (if ([.labels[].name] | index("answered")) then "_(already labelled `answered` — a further comment just adds to the thread)_\n" else "" end) +
+    "\n" + ((.body // "") | rtrimstr("\n")) + "\n" +
+    ((.comments // []) | map("\n---\n**\(.author.login // "?") commented:**\n\n" + ((.body // "") | rtrimstr("\n")) + "\n") | join("")) +
+    "\n### answer\n> \n"
+  ' >> "$QBUF"
+
+  local before after
+  before="$(sha1sum "$QBUF" | cut -d" " -f1)"
+  "${EDITOR:-vi}" "$QBUF"
+  after="$(sha1sum "$QBUF" | cut -d" " -f1)"
+  if [ "$before" = "$after" ]; then
+    echo "no edits — nothing posted."
+    exit 0
+  fi
+
+  # Parse: for each issue anchor, the answer is every `>` line after that
+  # block's `### answer` marker. Emits NUL-free "<number><TAB><text>" with
+  # newlines encoded, because an answer is legitimately multi-line.
+  local parsed posted=0 failed=0
+  parsed="$(awk '
+    function flush() {
+      if (num != "" && ans != "") { gsub(/\n+$/, "", ans); if (ans != "") printf "%s\t%s\n", num, ans }
+      num=""; ans=""; inans=0
+    }
+    /^<!-- scheduler:issue [0-9]+ -->$/ { flush(); num=$3; next }
+    /^### answer[ \t]*$/ { inans=1; next }
+    inans && /^[ \t]*>/ {
+      line=$0; sub(/^[ \t]*>[ \t]?/, "", line)
+      if (line ~ /[^ \t]/) ans = ans line "\\n"
+      next
+    }
+    END { flush() }
+  ' "$QBUF")"
+
+  if [ -z "$parsed" ]; then
+    echo "no answers filled in — nothing posted."
+    exit 0
+  fi
+
+  ensure_gh_labels "$slug"
+  local num text cf
+  while IFS=$'\t' read -r num text; do
+    [ -n "$num" ] || continue
+    cf="$(mktemp)"
+    printf '%b\n' "$text" > "$cf"
+    if gh issue comment "$num" --repo "$slug" --body-file "$cf" >/dev/null 2>&1 \
+       && gh issue edit "$num" --repo "$slug" --add-label answered >/dev/null 2>&1; then
+      echo "posted: #$num answered"
+      posted=$(( posted + 1 ))
+    else
+      echo "FAILED to post the answer to #$num -- it is NOT recorded. Your text:" >&2
+      printf '  %b\n' "$text" >&2
+      failed=$(( failed + 1 ))
+    fi
+    rm -f "$cf"
+  done <<< "$parsed"
+
+  rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/scheduler/questions-count-$proj"
+  echo
+  echo "$posted answer(s) posted to $slug; $proj's next run reads label:question,answered."
+  [ "$failed" -eq 0 ] || exit 1
+}
+
+# Single entry point both summary views use, so they cannot disagree about
+# what counts as an open question for a project on either channel.
+project_questions_counts() {
+  local proj="$1"
+  if [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
+    issues_counts "$proj"
+  else
+    questions_counts "$SCHED_ROOT/questions/$proj.md"
+  fi
+}
+
 # cmd_ask -- the ONE way an open question gets into a QUESTIONS.md.
 #
 # Built 2026-07-28 (human-directed, /ideate). This exists because the
@@ -710,9 +966,6 @@ cmd_ask() {
     exit 1
   fi
 
-  local qpath
-  qpath="$(resolve_questions_path "$proj")" || exit 1
-
   local today id via
   today="$(date '+%Y-%m-%d')"
   id="q-$(printf '%s%s' "$today" "$text" | sha1sum | cut -c1-6)"
@@ -722,6 +975,50 @@ cmd_ask() {
   fi
 
   local entry="- **${text}**  \`${id}\` ${today}, via ${via}"
+
+  # Issues channel: the question IS the issue title, for the same reason
+  # the generated file entry puts it first -- the title is what every
+  # summary view (gh issue list, the notification mail, this tool) prints.
+  # The stamped id/date/provenance move to the body, where they stay
+  # greppable without crowding the line you actually read.
+  if [ "$(answer_channel "$proj")" = "issues" ]; then
+    require_gh || exit 1
+    local slug url body
+    slug="$(gh_repo_slug "$proj")" || exit 1
+    # `gh issue create --label question` HARD FAILS on a repo where that
+    # label does not exist yet -- which is every repo the first time it is
+    # migrated. Creating them here makes the first `ask` on a new project
+    # work instead of erroring on a detail nobody would guess.
+    ensure_gh_labels "$slug"
+    body="$(printf '%s\n' \
+      "$text" \
+      "" \
+      "---" \
+      "\`$id\` · filed $today · via $via" \
+      "" \
+      "Answer by commenting on this issue (\`scheduler -q $proj\` renders every" \
+      "open question into one buffer and posts your replies as comments), or" \
+      "just reply here. Adding the \`answered\` label is what tells $proj's next" \
+      "run to act; it closes this issue once it has.")"
+    # --body-file, not --body: a question containing a backtick or \$( is a
+    # question, not a command. Same reason CLAUDE.md requires `git commit -F`.
+    local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
+    if ! url="$(gh issue create --repo "$slug" --title "$text" \
+                  --label question --body-file "$bf" 2>&1)"; then
+      rm -f "$bf"
+      echo "scheduler ask: gh issue create FAILED against $slug -- nothing was recorded." >&2
+      printf '%s\n' "$url" >&2
+      exit 1
+    fi
+    rm -f "$bf"
+    echo "filed as a GitHub issue on $slug (label: question)"
+    echo "  $text"
+    printf '  %s\n' "$url"
+    return 0
+  fi
+
+  local qpath
+  qpath="$(resolve_questions_path "$proj")" || exit 1
 
   if [ ! -f "$qpath" ]; then
     mkdir -p "$(dirname "$qpath")"
@@ -1504,7 +1801,7 @@ cmd_questions_list() {
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
     local qu qa
-    read -r qu qa <<<"$(questions_counts "$qfile")"
+    read -r qu qa <<<"$(project_questions_counts "$proj")"
     local total=$(( qu + qa ))
     if [ "$total" -eq 0 ]; then
       quiet="$quiet $proj"
@@ -1608,8 +1905,10 @@ cmd_glance() {
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
     local qlabel="-"
-    if [ -f "$qfile" ]; then
-      read -r q_unanswered q_answered <<<"$(questions_counts "$qfile")"
+    # An issues-channel project has no local file to gate on -- gating the
+    # count on one is exactly how it would silently render "-" forever.
+    if [ -f "$qfile" ] || [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
+      read -r q_unanswered q_answered <<<"$(project_questions_counts "$proj")"
       local q_total=$(( q_unanswered + q_answered ))
       local q_star=""
       if [ "$q_total" -gt 0 ] 2>/dev/null; then
@@ -2919,6 +3218,12 @@ case "${1:-}" in
     # you actually open the file.
     if [ -z "${2:-}" ]; then cmd_questions_list; exit 0; fi
     mark_seen "$2"
+    # Same command, same fingers: a project whose answer channel is GitHub
+    # issues gets the rendered-fresh buffer instead of the stale symlink.
+    if [ "$(answer_channel "$2")" = "issues" ]; then
+      cmd_questions_issues "$2"
+      exit $?
+    fi
     if [ -n "${3:-}" ]; then
       cmd_questions_jump "$2" "$3"
     else
