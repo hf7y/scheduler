@@ -1394,3 +1394,48 @@ happened yet for any of them.
   teeth), or (c) something else. Route to `/ideate` or a scheduler
   steward pass to pick the shape — not a straight build.
   > Route to `/ideate` or scheduler steward pass for decision — shape (a/b/c) deferred to structured design session.
+
+---
+
+## 2026-07-29 — Zach's answers to the three bootstrap decisions (appended, nothing above rewritten)
+
+Given verbally in an interactive realisateur session (the same session that
+built `stamp-agent.sh` and stripped the two bootstrap FOCUS.md files). Recorded
+here by machine under the append-only policy: the original entries and their
+`> (answer inline here)` slots are left exactly as they were, because
+overwriting a human-owned queue is the failure this policy exists to prevent.
+Referenced from https://github.com/hf7y/scheduler/issues/2.
+
+**(1) Release the freeze — and in what order?** NOT ANSWERED DIRECTLY, and
+deliberately left engaged. Zach's instruction was "prepare to run the play
+again", which makes this moot for now: the freeze should hold until the re-run
+is ready to start. Also worth re-deriving before release — dexter's usage gate
+returned `http_code=401` on 333 of 481 recorded verdicts and has been failing
+unbroken since 06:00 this date, so releasing un-refuses 9 mandark participants
+into an ecosystem whose second host cannot currently dispatch.
+
+**(2) Milestone override — stash-and-restore, or re-derive?** ANSWERED:
+*neither*. "We can recover the old milestones etc. from the git after the
+move." The bootstrap strips them; git is the stash. This resolves the shape
+concern recorded in `4653530` — nobody has to decide whether re-deriving a
+project's own declared bar is realisateur's call, because nothing is being
+re-derived from judgment. It is being read back from history. M1.5 is
+unblocked.
+
+**(3) 60-turn ceiling — raise it, or narrow the turn?** ANSWERED: narrow the
+turn, which the issue itself already called "closer to what the rotation
+actually needs." Zach's framing: "Scheduler should install the schedule system
+and register realisateur and scheduler into it." That is the entire turn.
+`--max-turns` is untouched. Now enforced rather than remembered — scheduler's
+new bootstrap FOCUS.md states it as a standing constraint ("You do not add
+participants three through N") and names realisateur as the only source of
+further participants.
+
+**The design these three answers serve, recorded because it is new:**
+realisateur is the brain and directs scheduler through the front door to bring
+the remaining agents online one at a time; scheduler and realisateur carry
+stamped bootstrap philosophies; realisateur stamps every subsequent agent as it
+arrives. The premise under test is that a FOCUS.md is enough to direct the
+agent that runs it — which only holds while it stays a brief, hence the strip
+(scheduler 4455 -> 43 lines, realisateur 2517 -> 46) and hence
+`realisateur/bin/stamp-agent.sh --check` as the mechanism rather than a rule.
