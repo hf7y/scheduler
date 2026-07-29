@@ -45,6 +45,8 @@ only ever sees its own section, never another project's.
 ## chezz
 
 
+<<<<<<< /tmp/vRwBLh8/5
+=======
 - **PRIVATE KEY at rest in OCF at rest in OCF `authorized_keys`** (agent-appended 2026-07-28)
 
 Found while restricting the chezz deploy key. `~/.ssh/authorized_keys` on
@@ -70,6 +72,7 @@ File mtime was 2026-07-28 10:45, i.e. the same day, though that is also
 when `ssh-copy-id` appended the chezz key, so mtime does not date the
 paste.
 
+>>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 - **The `questions/chezz.md` symlink points at a checkout that goes stale on
   every push — this is why no QUESTIONS.md answer has ever round-tripped**
   (filed 2026-07-27 late run, chezz nightly, machine-append; witness:
@@ -103,7 +106,12 @@ paste.
   work, so it isn't being guessed at from chezz.
   interact via scheduler's docs. scheduler -i scheduler "..." or also 
   scheduler -i realisateur "..." if warranted.
+> new decision is to move the entire ecosystem over to github issues. thanks
+> chezz for being first to the suggestion. the most philosophically mature
+> project with an end user focus.
 
+<<<<<<< /tmp/vRwBLh8/5
+=======
 - **Four design forks are the only thing holding otherwise-ready backlog
   work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
   machine-append; witness: `questions/chezz.md` read this run + tracker
@@ -241,6 +249,7 @@ paste.
     editing. If "handled" was meant to cover all ten, nothing in chezz's
     reach confirms or refutes that -- worth a look before this entry gets
     moved to `## Recently resolved`.
+>>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
 ## scheduler
 
@@ -263,7 +272,11 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   unattended run should do on its own initiative. Ready to run in
   `realisateur-research-ecosim/bin/decide.sh` option 3 (dry-run by
   default), which prints its own revert line.
+<<<<<<< /tmp/vRwBLh8/5
+> See below. We changed this.
+=======
   > (answer inline here — enable cron logging, or leave it off deliberately)
+>>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
   - **RETRACTED 2026-07-28 (realisateur `/ideate`, Zach-directed to run
     it): the premise is false — do NOT run this as a silence fix.** Zach
@@ -292,6 +305,8 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
     had not been re-derived. Nothing was changed on the machine; no
     `notify-senechal` was needed because no machine-wide config was
     touched.
+<<<<<<< /tmp/vRwBLh8/5
+=======
 
 - **2026-07-28 (scheduler `/cloture`): `bin/decide.sh` offers seven
   remediations from the overnight audit and I am deliberately not running
@@ -307,6 +322,7 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   Lives on branch `research/ecosystem-cybernetics` at `29c90ab`, unwired
   on purpose.
   > (answer inline here — which numbers, if any)
+>>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
@@ -320,6 +336,12 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   `repo` scope ONLY (current token also carries `admin:org`, broader than
   needed — worth trimming on rotation even if not urgent today), then
   `echo <new-token> | gh auth login --with-token`.
+> This may primarily be something owed to senechal. The question then is,
+> does aedile have access to senechal on mandark. Probably not. So cross
+> host senechal is the way. Notify senechal by aedile clears this. Also
+> dexter gh access to senechal might have been overlooked. Senechal owns
+> the gaps. Aedile, drop this off at the senechal front door to wash
+> your hands of this.
 
 ## wtul
 - **Migrate wtul onto the `.scheduler/` subdir layout — NOT DONE, filed
