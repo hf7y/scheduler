@@ -285,9 +285,17 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
   # at dispatch time, not once at the top of the tick: a freeze that lands
   # mid-tick must stop the remaining participants, not just the next tick.
   # freeze-check exits 1 (frozen) or 2 (unreadable = frozen); both refuse.
-  if ! "$SELF_DIR/freeze-check.sh" 2>>"$LOG"; then
+  #
+  # CONTINUE, not BREAK: the freeze supports per-project EXEMPT lines, so a
+  # refused participant must not stop the loop before an exempt one later in
+  # the rotation is reached. Breaking here would silently make exemptions
+  # depend on rotation order -- the orchestrator would be exempt on paper and
+  # unreachable in practice. Slot is consumed, matching the SKIP paths above,
+  # so a frozen rotation ends its tick rather than spinning.
+  if ! "$SELF_DIR/freeze-check.sh" "$name" 2>>"$LOG"; then
     log "FROZEN -- refusing to dispatch $name (see schedule/FREEZE; release: git rm it)"
-    break
+    dispatched=$((dispatched + 1))
+    continue
   fi
 
   log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF)"
