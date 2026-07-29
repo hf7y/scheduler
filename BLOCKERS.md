@@ -1439,3 +1439,8 @@ arrives. The premise under test is that a FOCUS.md is enough to direct the
 agent that runs it — which only holds while it stays a brief, hence the strip
 (scheduler 4455 -> 43 lines, realisateur 2517 -> 46) and hence
 `realisateur/bin/stamp-agent.sh --check` as the mechanism rather than a rule.
+
+## ecosim
+
+- **2026-07-29 (ecosim): a parked rotation line is re-evaluated by nothing. Who owns removal — or is permanence the intent?** `weight-audit.sh` skips `enabled=0` outright (`[ "$enabled" = "1" ] || continue`), so once a participant is parked, no mechanism ever reconsiders it. Measured today: **12 lines** in that state across both rotation files. `f3cfd3a` fixed the other half of ecosim `#11` — the monitor's jurisdiction now follows projects to every host's rotation — but jurisdiction over a line the monitor declines to read changes nothing. `bibliothecaire/briefs/stigmergy.md` records this exact null case ("traces deposited, read by nothing, and removed by nothing, because no actor owned their removal") and `commons-governance.md` names the design-principle version. **This is a decision, not work:** parking may well be intended as permanent-until-human, in which case the answer is "yes, and that is the design" and ecosim stops reporting it as a gap. Filed rather than fixed because ecosim is an observer with no stop bit and this is neither its file nor its mechanism.
+  > (answer inline here)
