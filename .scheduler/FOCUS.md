@@ -1187,6 +1187,28 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 01:49 (via `scheduler -i`):** QUESTIONS.md CONTRACT AMENDMENT -- the fourth unregulated interface (human->system instruction). Filed by realisateur /ideate 2026-07-29, Zach-directed, four AskUserQuestion decisions. Owner: scheduler (canonical text lives in examples/QUESTIONS.md.template and embedded in bin/scheduler).
+
+WHY. UNIVERSE.md names Zach twice -- source of all disturbance, scarcest organ. Both are about RATE. Neither is about ACCURACY. The contract currently says a `> ` reply is "authoritative, same standing as FOCUS.md", full stop. There is admission control for ideas (park-by-default) and NONE for instructions. Three exhibits: (1) 2026-07-27 bibliothecaire -- Zach asked to unpark a project that was never parked, six sensors green; the false premise BECAME the finding, by instinct not mechanism. (2) groc-mangr, current -- Zach answered "Yes merge. Always merge." about feature/receipt-ocr, which had already merged four days earlier in 6e74864; a literal reading of the contract would have acted on a dead premise. (3) Same answer -- "Always merge" is a STANDING POLICY filed in a ONE-OFF ANSWER SLOT, a channel not built to carry it, so it would be either lost or silently obeyed forever unratified.
+
+Ashby form: bad proprioception (UNIVERSE.md's third interface, already conceded) -> bad human mental model -> confident human instruction -> faithful execution. "The human decides" is precisely the doctrine that makes a false-premise instruction unstoppable, because no point in the loop is authorized to say "the thing you are deciding about is not true."
+
+THE FOUR RULES (Zach's own selections this session):
+
+A. ANSWERS ARE DIRECTION, NOT INSTRUCTION. A `> ` reply states standing intent. Whoever acts re-derives the concrete action from CURRENT state, never from the state the question described. The question is context for the reply, not a specification of the act. This is what makes answer staleness a non-problem by construction rather than by expiry timer.
+
+B. RE-PROBE THE PREMISE BEFORE ACTING. An instruction carries claims about system state; re-probe them like any other claim (BUILD-DISCIPLINE's "re-probed, not quoted" -- the rule already exists and has simply never been pointed at the human). If the premise holds, act. If it is false, SPLIT BY REVERSIBILITY: reversible corrected action (commit, branch, file edit) -> act on intent and flag the correction plainly; irreversible (message to a person, real money, unbacked delete) -> stop and surface. The switch reuses FOCUS.md's existing stop-and-wait bar rather than inventing a second one.
+
+C. EXTRACT THE STANDING DIRECTION, SILENTLY. If a reply generalizes past its question, fold the generalization into FOCUS.md as a standing decision -- quoted, dated -- WITHOUT asking. Consistent with rule A (the generalization IS the payload) and it passes the reversibility switch, since a FOCUS.md entry is git revert-able.
+
+D. NO CLEAN-CHECK REPORTS. A re-probe that confirms the human was right produces NO output. Grounded in ecosim's registered finding that adding fallible monitors is worse than adding none (wasted attention 0.54 vs 0.29, trust 0.46 vs 0.82) because the output is spent out of the scarcest organ. "I checked and you were right" is a cost with zero information.
+
+ALSO WORTH STATING IN THE CONTRACT: the channel rule is ONE-DIRECTIONAL. UNIVERSE.md's three timescales require unmixing; Law 1's corollary says Zach's four-streams-in-one-breath intake is the system working. Those only cohere if unmixing is an OUTBOUND obligation -- agents must separate operations/obligation/identity when speaking TO Zach; Zach may mix freely when speaking to agents. Stated explicitly because an agent could otherwise read the channel rule as license to ask him to pre-sort, which the corollary forbids.
+
+SCOPE OF THE ROLLOUT (not done here, deliberately): the amended text needs to reach examples/QUESTIONS.md.template, the copy embedded in bin/scheduler, and 13 already-distributed project copies (.scheduler/ or legacy .claude/): realisateur, senechal, secretaire, bibliothecaire, ecosim, abletim, quatre-vingt-douze, realisateur-research-ecosim, gardien, vim-arcade, nine-speakers, groc-mangr, sequestria. That fan-out is mechanical build work and belongs to a nightly pass, not to an /ideate session.
+
+NOT FILED AS DOCTRINE PROSE, deliberately. Zach chose "amend the contract" over "new UNIVERSE.md section" and over "new sibling doctrine file" -- Law 3 (retirement pressure) says a fifth doctrine surface is never free, and this ecosystem's own line is that prose decays and enforcement does not. The rules above bind where they are read.
+
 - **2026-07-29 01:18 (via `scheduler -i`):** THE PLAY IS RUNNING -- YOUR INSTRUCTIONS (2026-07-29, Zach-directed via realisateur /ideate: "the play, freeze the jobs. amend the milestones. tell scheduler what to do. drop scheduler into the repo and trigger it manually. then the remaining jobs migrate."). State as of this filing, all verified not quoted.
 
 WHAT IS ALREADY TRUE:
