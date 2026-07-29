@@ -94,6 +94,32 @@ Two real gaps, closed the same day as everything above:
   without action. See `examples/QUESTIONS.md.template` for the exact
   format both tiers write and the user answers in.
 
+  **Amended 2026-07-29 (Zach-directed, four decisions) — how an answer
+  BINDS, not just how it is formatted.** Until then a `> ` reply was the
+  only input to this system with no admission control at all: ideas are
+  parked by default and machine-state claims are re-probed rather than
+  quoted, but an answer was simply obeyed. The failure that names the gap
+  is a question asked from a STALE PREMISE — a correct reply directing
+  action at a world that no longer exists (a project described as parked
+  that was never parked; a branch described as unmerged that had merged
+  four days earlier). Four rules, canonical text in
+  `examples/QUESTIONS.md.template`, bound where they are read (the header
+  `scheduler ask` writes into a fresh QUESTIONS.md, and
+  `examples/nightly-batch.md.template`'s answer-processing step):
+  **A** an answer is direction, not instruction — re-derive the action
+  from current state, which is what makes staleness a non-problem by
+  construction instead of by expiry timer; **B** re-probe the premise,
+  and if it is false split by reversibility (reversible → act on the
+  intent and flag the correction; irreversible → stop and surface);
+  **C** fold a reply that generalizes past its question into `FOCUS.md`
+  as a quoted, dated standing decision, silently; **D** a re-probe that
+  confirms the user was right produces NO output — a fallible monitor
+  that reports its clean checks costs more attention than no monitor.
+  Deliberately an amendment to this contract rather than a new doctrine
+  file: a fifth prose surface is never free, and rules bind where they
+  are read. The 13 already-distributed project copies still carry the
+  un-amended text; that fan-out is tracked in `.scheduler/FOCUS.md`.
+
 Both are documented in `examples/bug-sweep.md.template` and
 `examples/nightly-batch.md.template` (and `examples/QUESTIONS.md.template`
 for the file itself) and are live in vkv-inventory's real command files.

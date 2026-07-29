@@ -1089,6 +1089,23 @@ cmd_ask() {
       echo "the question comes first because that is the part summary views show."
       echo "\`bin/questions-lint.sh\` FLAGs hand-written entries in \`scheduler sweep\`."
       echo
+      echo "Answer inline, on a new line starting with \`> \` directly under the"
+      echo "question. How an answer binds (rules A-D, 2026-07-29 -- full text in"
+      echo "scheduler's \`examples/QUESTIONS.md.template\`):"
+      echo
+      echo "- **A. Direction, not instruction.** A reply states standing intent;"
+      echo "  whoever acts re-derives the concrete action from CURRENT state, not"
+      echo "  from the state the question described. So a reply never goes stale."
+      echo "- **B. Re-probe the premise.** An instruction carries state claims;"
+      echo "  re-probe them. Premise false + action reversible -> act on the intent"
+      echo "  and flag the correction. Premise false + action irreversible -> stop"
+      echo "  and surface."
+      echo "- **C. Extract standing direction silently.** A reply that generalizes"
+      echo "  past its question is folded into FOCUS.md, quoted and dated, without"
+      echo "  asking first."
+      echo "- **D. No clean-check reports.** A re-probe that confirms the human was"
+      echo "  right produces no output at all."
+      echo
       echo "## Open"
       echo
       echo "$entry"
