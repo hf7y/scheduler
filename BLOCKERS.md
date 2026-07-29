@@ -1082,6 +1082,16 @@ happened yet for any of them.
   > (answer inline here)
 
 
+- **2026-07-29 (realisateur `/cloture`, machine-append): the freeze may now be released — do you want it released, and when?** `schedule/FREEZE` has done its job: it kept every project except `scheduler@dexter` refused while scheduler bootstrapped. Since `58d6495` darkened mandark's scheduler line, single-writer no longer depends on it, so releasing is safe in the way it was not four hours ago. But releasing un-refuses **9 enabled participants on mandark** at once, into an ecosystem whose weights you have said realisateur should re-derive first (`4653530`). Order matters and it is yours to choose.
+  > (answer inline here — release now / release after realisateur's reweight / leave engaged until the migration finishes)
+
+- **2026-07-29 (realisateur `/cloture`, machine-append): does the milestone override stash-and-restore, or re-derive?** You killed the weight stash — *"no weights remove. realisateur comes back on next and assigns weights"* — and M1.5's milestone override has the identical shape: amend a project's stability milestone to the bootstrap bar, restore it after. **I deliberately did not resolve this by analogy** (`4653530`): a weight is realisateur's judgment about a project, but a stability milestone is the *project's own declared bar*, so "re-derive it" may not be realisateur's call to make. Blocks M1.5, which is otherwise buildable.
+  > (answer inline here)
+
+- **2026-07-29 (realisateur `/cloture`, machine-append): scheduler's self-dev cycles keep hitting the 60-turn ceiling — raise it, or narrow the turn?** Three cycles tonight: one produced 2 commits then hit the ceiling, one produced none, one produced 1 commit. All printed `cycle FAILED`. For THE PLAY this matters because scheduler's turn is supposed to *also* add the next participant to the rotation (`562960a`), and a turn that never reaches that step stalls the self-extending rotation while every log line reads as an ordinary failure. Two fixes and they are not equivalent: raise `--max-turns`, or scope scheduler's migration turn to "add the next participant" and leave open-ended self-dev to a different turn. The second is closer to what the play needs.
+  > (answer inline here)
+
+
 ## bibliothecaire
 
 - **Three of seven themes are blocked on primary texts behind a library
