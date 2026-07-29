@@ -1187,6 +1187,91 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 23:26 (via `scheduler -i`):** THE PLAY — scheduler-orchestrated dexter migration. Vision, milestone chain, sprint, blockers. Written 2026-07-28 ~00:15 by realisateur /ideate at Zach's direction ("we need to run the play. Big vision. Milestone. Sprint. Blockers."). Nothing here was built; this is the plan and the decisions behind it.
+
+=== 1. VISION ===
+
+The ecosystem EXECUTES on dexter. mandark becomes a workstation — human checkouts, interactive sessions, the place Zach reads and answers — and stops being an execution host. The migration itself is run BY scheduler, on scheduler's own dispatch, as dogfooding: the data about which unit moved when, what blocked it, and how long it sat blocked is the point, not a side effect. Zach's stated purpose, verbatim: "very important data for a more intelligent scheduler philosophy that's not simply about fair round robin turns."
+
+The end state has host assignment as a DECLARED property of a project rather than a hand-maintained per-host file — but that specific shape is NOT yet decided (see OPEN below), and the milestone chain deliberately does not depend on it until M4.
+
+DECIDED, each with the date and where it lives:
+- dexter is the DEFAULT execution host; move everything that can move; a project stays on mandark only for a stated reason (2026-07-28, Zach, supersedes pin-by-need).
+- CREDENTIAL PATH: url."https://github.com/".insteadOf "git@github.com:" on BOTH hosts, plus gh auth setup-git on mandark. Applied and verified 30/30 URLs from both hosts (9b6b188). Per-repo minimal-scope deploy keys are RETIRED as the standing pattern — refuted by MaxAuthTries=6 against ~19 serial keys (ecosim's brief; filed unsourced to bibliothecaire fa21cd0).
+- BRANCH MODEL: migrate on main. gh-issues-answer-channel merged to main tonight (9e24290); both hosts now sit on 9e24290, clean and identical, and mandark's runner has stopped logging PULL WARNING -- diverged.
+- WAVE 1 IS A READINESS SPREAD, not a batch: chezz (already credentialed on dexter) + one project needing only the credential rewrite (ecosim or bibliothecaire) + gardien (needing a conf fix). Deliberately heterogeneous so the readiness-gated dispatch data has more than one class in it. Zach's call 2026-07-28; explicitly chosen over both "chezz alone" and "all nine at once".
+- FREEZE is a git-tracked file both hosts read and refuse loudly on (Zach 2026-07-28), not hand-commented crontabs and not mass enabled=0.
+- REPO_URL gets FIELD SEPARATION regardless of whether 3a45bf3 is re-applied (Zach chose "both" 2026-07-28, queued 6b40cca).
+- scheduler's OWN move is deferred until the others land and there is evidence (Zach 2026-07-28).
+
+OPEN, and the chain is built so neither blocks before M4:
+- Does "scheduler builds dexter's schedule via git" mean _paced.*.conf become GENERATED artifacts with host assignment as a HOST= field on each project's conf, or the narrower reading (scheduler merely installed and current on dexter, _paced.dexter.conf still hand-maintained)? Filed 7fccdc1 q1, unanswered.
+- Must the freeze reach svc-vaporwave's fixed-cron jobs (aedile 03:00, vkv-inventory 04:00), or may it declare them out of scope loudly? Filed 7fccdc1 q2, unanswered. This one gates M1's definition of done.
+
+=== 2. THE DESIGN PATTERN — borrowed, not invented ===
+
+Zach pointed at bibliothecaire/bin/quote-stream.py "for inspiration" and it is the right model for how scheduler should orchestrate this. Its governing idea, in its own words: "The agent is a *selector*, never an author." It is handed a catalogue of already-verified quote ids, returns ids only, and every id is looked up in a trusted store — the quote text written out comes from that file, NOT from the model. An id the model invents is a hard error: nothing is appended and the exit status is nonzero. "That is the honesty policy mechanised rather than trusted."
+
+Applied to the migration, this is the whole orchestration design:
+- The agent SELECTS which unit to move next from a catalogue of units a PROBE has marked ready. It does not decide readiness and cannot assert it.
+- Readiness comes from a probe store on disk, not from model judgment. A unit the agent names that is not in the store is a hard error, not a warning.
+- Exit status 0 only if the move actually completed and was verified — the same "0 only if the requested number was appended" bar.
+- Low-token by construction: the agent sees a compact catalogue, not the repo.
+
+Why this specifically, and not a generic runbook: it is the direct answer to tonight's sensor-variety failure. The readiness gate that reported 19/19 READY did so because its symbols came from a pipeline whose exit status could only be 0. Under the selector pattern the symbols come from a probe STORE that is written by something whose only job is to distinguish, and the agent is structurally unable to overwrite them with an opinion. Do not re-derive this; it is already solved one directory over.
+
+=== 3. MILESTONE CHAIN ===
+
+M0 — ONE HOST, ONE TRUTH. [DONE 2026-07-28 ~00:10, this session]
+Both hosts run identical scheduler code from one ref, and every project's remote resolves from both.
+  - 3a45bf3's armed outage reverted (356ecb0), verified from both hosts.
+  - Credential rewrite applied both hosts, 30/30 verified (9b6b188), senechal notified (a1a8b1e, 9afefd3).
+  - dexter unstalled — was 2 behind with a dirty _paced.dexter.conf blocking every PULL (11340e9, 891586b).
+  - Branch merged to main; both hosts at 9e24290, clean (e135d18, 02b4283, 9e24290).
+  - Five stranded QUESTIONS.md commits resolved: three pushed, two found already pushed (02b4283).
+This milestone is REACHED. Its witness is that mandark's runner no longer logs a divergence warning and dexter's rotation reads slots=4 :: crt crt crt wtul.
+
+M1 — THE FREEZE AND THE PROBE EXIST, AND BOTH FAIL LOUD. [current, not started]
+The two mechanisms every later step depends on, built before anything moves.
+  (a) A git-tracked freeze file both hosts' runners, the sweep tick, and scheduler-run check and REFUSE LOUDLY on. Checked at DISPATCH time by each consumer, not merely honored by the runner, or a directly-invoked wrapper bypasses it. Must STATE what it does not cover.
+  (b) A readiness probe that writes a store, built on the selector pattern above, WITH A NEGATIVE TEST — a known-unreachable remote that must produce BLOCKED. Non-negotiable: tonight's probe passed 19/19 because nothing ever asserted it could fail.
+Done when: the freeze demonstrably stops a real tick on both hosts and says so, and the probe's negative test is a named test that fails when removed.
+
+M2 — WAVE 1 MOVES, INSTRUMENTED. [next, not started]
+chezz + one credential-rewrite-only project + gardien, moved end-to-end, with per-unit state transitions recorded (blocked -> ready -> moved -> verified), the block reason, and wall-clock in each state.
+Each move is: provision/verify -> live-verify git ls-remote FROM dexter (the crt bar) -> translate the wrapper from ~/.local/bin/<proj>-*-loop.sh to bin/scheduler-run <proj> batch -> paired participant edit (drop in _paced.conf, add in _paced.dexter.conf, same change) -> ONE real verified run.
+Done when: three projects run on dexter, mandark dispatches none of them, and the instrumentation file has three complete unit records.
+
+M3 — THE REST DRAIN; MANDARK HOLDS NO EXECUTION. [later, undecided in scope]
+The remaining live mandark projects follow, dispatch order chosen by readiness rather than round-robin. Requires the M2 data to justify the dispatch change — that is the whole experiment.
+
+M4 — HOST ASSIGNMENT IS DECLARED. [not queued]
+_paced.*.conf become generated; HOST= lives on each project's conf; the two-writer invariant dissolves rather than being obeyed. Blocked on the open question above. scheduler's own move is decided here, with evidence, not before.
+
+=== 4. SPRINT — the next six moves, ordered so each failure is visible before the next begins ===
+
+S1. Build the freeze file + loud refusal + the explicit not-covered statement. (M1a)
+S2. Build the readiness probe on the selector pattern, with its negative test. (M1b)
+S3. gardien's REPO_URL: a ONE-LINE conf change, and the human step is now unnecessary. The insteadOf rewrite already makes git@github.com:hf7y/gardien.git resolve from mandark — verified this session. Zach was provisioning a github-gardien-deploy alias on mandark for this; he should NOT bother, it is retired by the credential fix. gardien is the last conf still pointing at a mandark-local bare path.
+S4. Move chezz end-to-end, fully instrumented. First real exercise of S1+S2.
+S5. Move the other two of wave 1 (one credential-rewrite-only + gardien), using the S4 record as the template.
+S6. REPO_URL field separation: add GITHUB_REPO="owner/repo" for gh_repo_slug(), demote slug-derivation-from-REPO_URL to a fallback. Unblocks GitHub-issues blocker #6 without requiring any project's clone URL to be a GitHub URL — crt and abletim are the standing proof the two facts differ.
+
+NOT IN THIS SPRINT, deliberately: scheduler's own move (M4), the generated-_paced redesign (blocked on the open question), and the three already-filed defects below, which are prerequisites rather than sprint items.
+
+=== 5. BLOCKERS — current milestone (M1) only ===
+
+HUMAN-ONLY:
+- The freeze's svc-vaporwave scope (7fccdc1 q2). M1a cannot be called done without an answer, because "all scheduled jobs must stop" is either true or the freeze must say which jobs it does not stop. This is the one blocker that actually gates the current step.
+
+BUILDABLE NOW, and all three degrade specifically WHEN THE MIGRATION SUCCEEDS — which is the worst time to find them:
+- THE UNPUSHED SWEEPER (8c94eff). Five occurrences on 2026-07-28 across five repos, all QUESTIONS.md adoptions, all committed-and-not-pushed. Refuted hypothesis: it is NOT credentials — realisateur's origin is a local bare repo with no SSH at all and it still did not push, while interactive -i writes to the same repo pushed fine. The fault is in the sweep -> cmd_commit_file path. Under a git-coordinated freeze this is coordination over a known-broken channel.
+- FF-ONLY PULL OF THE HUMAN-FACING CHECKOUT (filed 14:54). focus/<proj>.md and questions/<proj>.md symlink into a local checkout nothing refreshes. Becomes load-bearing the moment execution leaves the host holding Zach's checkout — i.e. the moment M2 succeeds.
+- STATUS GOES DARK ON MOVE (filed 14:13, recommendation (a)). A moved project's last-run state stops being written on mandark, and scheduler status keeps printing the stale record as if current — crt did this for four days unnoticed. Under move-everything this becomes the default. Recommendation (a) — print "runs on dexter — last-run state not visible from here" — should land BEFORE M2, or the migration's own progress is unobservable from the host running it. In the sensor-variety vocabulary this is an added OUTPUT SYMBOL, which is exactly what the ecosim thesis says is the only thing that adds regulator variety.
+
+=== 6. WHAT WOULD FALSIFY THE DOGFOODING PREMISE ===
+Recorded now so it cannot be rationalised later. The premise is that readiness-gated dispatch beats round-robin for heterogeneous units. It is WRONG if, after wave 1, the units turn out to be homogeneous in practice — if every move takes the same shape and the same time, round-robin loses nothing and the instrumentation was overhead. Wave 1 was deliberately chosen as a readiness SPREAD to test exactly this. If the three records come back materially identical, say so and drop the dispatch change rather than keeping it because it was the stated goal.
+
 - **2026-07-28 23:16 (via `scheduler -i`):** CREDENTIAL PATH DECIDED AND APPLIED (Zach-directed, 2026-07-28 ~23:20, realisateur /ideate). This REVERSES the per-repo-deploy-key decision taken ~2h earlier the same session, on the strength of an argument that did not exist when the first decision was made.
 
 WHAT WAS APPLIED, on BOTH hosts, and verified rather than assumed:
