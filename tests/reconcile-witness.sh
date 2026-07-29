@@ -4,7 +4,15 @@
 # Runs against throwaway git repos, never the real scheduler checkout.
 set -uo pipefail
 
-SRC="/home/zach/Documents/Project Archive/scheduler/bin/scheduler-dev-cycle.sh"
+# Resolve the script under test relative to THIS file, like every other
+# witness here does. It used to be a hardcoded absolute path into mandark's
+# checkout, which failed two different ways: on a host that has no such path
+# (dexter) the whole witness aborted, and on a host that DOES have one it
+# read that OTHER checkout's bytes -- so a change made in a worktree was
+# "verified" against an unmodified copy of the code. A false pass is worse
+# than the abort; both are fixed by testing the tree the test ships in.
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/scheduler-dev-cycle.sh"
+[ -f "$SRC" ] || { echo "script under test not found: $SRC"; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
