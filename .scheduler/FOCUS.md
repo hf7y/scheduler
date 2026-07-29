@@ -1187,6 +1187,44 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 (realisateur session, Zach-directed cleanup):** the run
+  ledger cannot tell "expired and STILL expired" from "expired but since
+  RENEWED", and it reported the second as the first for most of a day.
+  Live case, this session: the ledger listed `aedile` (`skipped (expired
+  2026-07-27T11:43:53)`) and `vkv-inventory` (`skipped (expired
+  2026-07-27T20:51:32)`) as tripped dead-man switches needing a human
+  decision. Both had ALREADY been renewed. Verified via
+  `sudo -n -u svc-vaporwave` this session: **neither
+  `~svc-vaporwave/.local/share/{aedile,vkv-inventory}-nightly-batch/expires_at`
+  exists**, and per `lib/deadman-switch.sh:67` a missing stamp is exactly
+  what renewal looks like — the next run re-stamps `now+7d` and proceeds.
+  Both crontab lines are also still live under that account (`0 3` and
+  `0 4`, verified via `sudo -n -u svc-vaporwave crontab -l`), so
+  sync-crontab had not pruned them. Nothing was blocked; nothing needed
+  deciding.
+  # verified 2026-07-28 via sudo -n -u svc-vaporwave ls ~/.local/share/{aedile,vkv-inventory}-nightly-batch/; sudo -n -u svc-vaporwave crontab -l
+
+  The cause is structural, not a bad reading: `last_run_verdict` renders a
+  row from **the last run record only**, and a renewal leaves no run
+  record — it is the *absence* of a file. So the ledger keeps asserting a
+  tripped switch until the next dispatch happens to overwrite it, which
+  for a nightly job is up to 24h of a stale alarm on the one surface built
+  to make absence legible. This is the absence-surface's own blind spot
+  (`fab5c8d`), and it is the same shape as the `stale-` prefix fix at
+  `bin/scheduler:1941` — a row whose *record* is real but whose *claim* is
+  no longer true.
+
+  Fix is cheap and in-repo: when a row's verdict is `skipped (expired …)`,
+  stat the `expires_at` file before printing. Absent -> the switch has
+  been renewed, so say `renewed, awaiting next dispatch`, not `skipped`.
+  Present and still in the past -> the alarm is genuine, print it as now.
+  That makes the ledger read state instead of only history, for the one
+  verdict where history goes stale silently.
+
+  Fourth instance of the probe-survey-headline pattern: the loudest item
+  on a hand-off list was the one whose premise had decayed, and it was
+  filed as a decision for Zach that no longer existed.
+
 - **2026-07-28 18:37 (via `scheduler -i`):** ACCEPTANCE CASE for the absence-surface milestone filed earlier today (e05016e) -- and it is a REAL one, observed first-hand on dexter this evening by Zach at realisateur's /cloture, not a constructed fixture. Filed through the front door; nothing was hand-edited in your repo.
 
 WHAT WAS OBSERVED, from dexter's own shell. crt is `crt|1|3|` in schedule/_paced.dexter.conf and has been since 2026-07-24. dexter's usage-paced-runner is alive and ticking every 5 minutes -- the log is continuous from 16:40 to 18:15 on 07-28. Every line reads: `HOLD (gate rc=1) verdict=HOLD binding=7d ceiling=0.85 min_slack=0.02 http_code=200 rush=False ... # HOLD -- 7d window 23% used vs burn-line 23% (on-pace)`. And yet ~/.local/share/crt-nightly-batch/ on dexter is dated entirely 2026-07-25: sweep.log last written 20:37, expires_at and last_heartbeat both 01:14, repo/ 20:35.
