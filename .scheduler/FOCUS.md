@@ -9,63 +9,27 @@
 
 ## What this project is
 
-**scheduler is metabolism.** It turns quota into cycles and cycles into commits. It is *pure mechanism* by standing doctrine (2026-07-22, realisateur/UNIVERSE.md): **it enforces weights, it never sets them.**
-
-The judgment of WHAT deserves turns is not yours. It belongs to realisateur, and reaches you through your own front door (`scheduler -i`, `scheduler ask`) like any other request.
+**scheduler is metabolism.** It turns quota into cycles and cycles into commits. It is *pure mechanism* by standing doctrine (2026-07-22, realisateur/UNIVERSE.md): **it enforces weights, it never sets them.** The judgment of WHAT deserves turns is not yours — it belongs to realisateur, and reaches you through your own front door like any other request.
 
 ## The bar for this bootstrap
 
-**Install the schedule system on this host, and register exactly two participants into it: `scheduler` and `realisateur`.**
-
-Done means the rotation file exists, both lines are in it, and a dispatch has actually fired for each with a run-log line to show it. Not "the code is written."
+**Install the schedule system on this host, then register `realisateur` into the rotation. That is the entire turn.** There is no crontab to inherit: it was emptied deliberately before this run, so bringing dispatch back up from `schedule/_runner.conf` is step one and not an assumption. Done means the tick line is installed, `realisateur` is in this host's rotation file, and a dispatch has actually fired with a run-log line to show it.
 
 Done means a WITNESS, not code existing: a command that ran, a log line,
 a commit on the ref the consumer reads. Not "it is written."
 
 ## Current focus
 
-Status re-probed 2026-07-29 12:00 by the paced cycle that runs *on* this
-rotation. Every line carries the command it was probed with. Do not quote
-these forward — re-run them.
-
-- [x] **Install the schedule system on dexter from this repo's own tree.**
-      `~/.local/bin/usage-gate.sh` and `usage-paced-runner.sh` are symlinks
-      into `/home/zach/scheduler/bin/` — same `origin` as this checkout, and
-      its `main` is an ancestor of this branch, so the live tree *is* this
-      repo and is not drifted. Ticking every ~30 min.
-      `# verified 2026-07-29 via: ls -l ~/.local/bin/usage-*.sh ;`
-      `#   git -C /home/zach/scheduler remote -v ; git merge-base --is-ancestor`
-
-- [x] **Register scheduler into the rotation and witness one real dispatch.**
-      `scheduler|1|3` is in `_paced.dexter.conf`, and the witness is real,
-      repeated and dated: DISPATCH/DONE pairs at 10:00→10:11 (`rc=0`),
-      10:30→10:43 (`rc=1`, max-turns; the 11:00 reconcile merged its two
-      orphaned commits), 11:00→11:10 (`rc=0`). It is what is running now.
-      `# verified 2026-07-29 via: grep -E 'DISPATCH .*scheduler|DONE scheduler'`
-      `#   ~/.local/share/scheduler-paced-runner/run.log`
-
-- [ ] **Register realisateur into the rotation and witness one real dispatch.**
-      REGISTERED; DISPATCH BLOCKED BY A CONTROL, not missing. `realisateur|1|`
-      is in the conf and the rotation genuinely reaches it — the 11:30 tick
-      selected it and `schedule/FREEZE` refused it *by name*. That is a
-      stronger witness than an unexercised line: the registration is live and
-      load-bearing. Releasing FREEZE is BLOCKERS.md decision (1), answered
-      "deliberately left engaged", and is not scheduler's call. Adding
-      realisateur to `EXEMPT:` to manufacture a witness would fake the bar.
-      `# verified 2026-07-29 via: bin/freeze-check.sh realisateur -> rc=1 ;`
-      `#   grep realisateur ~/.local/share/scheduler-paced-runner/run.log`
-
-- [ ] **Stop — every further participant arrives as a request from
-      realisateur.** HOLDING, and tested rather than untested: `wtul`'s
-      un-park preconditions (steps 1–4) all cleared on 2026-07-29, so the
-      only thing keeping it `|0|` on both hosts is this constraint. A cleared
-      blocker left deliberately unacted-on is the constraint working.
+- **Install the tick.** Derive it from `schedule/_runner.conf` and install it with `bin/sync-crontab.sh --apply`. Do not hand-write a crontab line — this host's crontab was hand-installed on 2026-07-24 and has drifted from every conf since. Witness: `crontab -l` shows a line whose text you did not type.
+- **Register realisateur** into this host's rotation file (`schedule/_paced.<host>.conf`). One line. Witness: a `DISPATCH ... realisateur` in `~/.local/share/scheduler-paced-runner/run.log`.
+- **Write your verdict before you run out of room.** `bin/verdict.sh` — `CONTINUE` if the bar is unmet and reachable, `DONE` if met, `IMPOSSIBLE` if you have found a reason it cannot be met from here. An absent verdict means truncated, not failed, and you will simply be dispatched again. Claiming `IMPOSSIBLE` slows the whole ecosystem down, so claim it only with the probe that proves it.
+- **Then stop.** You do not add participants three through N. Every further participant arrives as a request from realisateur, which stamps it first. If you find yourself registering a third project, you have exceeded the turn.
 
 ## Standing constraints
 
-- **Your turn is narrow.** It is install-and-register, not open-ended self-development. Work you find goes through the front door; you do not just do it.
-- **You do not add participants three through N.** realisateur decides who comes online and in what order, and asks you. Adding one on your own initiative is the failure this bootstrap exists to prevent.
-- **You enforce weights, you never set them.** A weight you invented is realisateur's judgment forged.
+- **You are mechanism, not judgment.** You never set a weight, never pick what deserves turns, never decide which project comes online next. Those arrive through the front door.
+- **A control is not data.** `schedule/FREEZE` gates dispatch; `schedule/RUN-MARKER` only records it. Never gate on the marker, never treat the freeze as a note.
+- **The milestone is the merge.** This branch is done when it merges to `main` — not when the work looks finished on the branch.
 
 ## Standing constraints (ecosystem-wide)
 
