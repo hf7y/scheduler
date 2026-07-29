@@ -422,6 +422,37 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
 > your hands of this.
 
 ## wtul
+- **CORRECTION (agent-appended 2026-07-28 ~22:50, realisateur `/ideate`):
+  wtul's dexter-move blocker is DEAD — both the human step and the
+  live-verify step now pass.** `schedule/_paced.dexter.conf`'s wtul block
+  states step 3 is `[BLOCKED -- HUMAN, needs repo admin]` because "`gh` is
+  not installed on dexter at all (`gh: command not found`, checked
+  2026-07-25), so there is no authenticated path to `gh repo deploy-key
+  add` from here." Both halves of that are now false. Witness, run this
+  session over ssh from mandark:
+  `ssh dexter 'which gh'` → `/usr/bin/gh`; `ssh dexter 'gh auth status'` →
+  logged in to github.com as `hf7y`, active account, token scopes
+  `'admin:public_key', 'gist', 'read:org', 'repo'`. And step 4 (the crt
+  bar — `git ls-remote` live-verified FROM dexter) PASSES:
+  `git@github-wtul-deploy:hf7y/wtul.git` returns refs from dexter, rc=0,
+  so the deploy key was provisioned at some point after 2026-07-25 and
+  nothing recorded it. Per wtul's own un-park checklist, only step 5
+  remains (flip `_paced.dexter.conf` to 1 AND drop `_paced.conf`'s wtul
+  line to 0 in the SAME change).
+  **Deliberately NOT flipped here**, for two reasons: `_paced.dexter.conf`
+  is dexter-owned ("dexter writes ONLY this file") and hand-editing it
+  from mandark is the exact invariant this repo relies on; and that file
+  is currently DIRTY and 2 commits behind on dexter (uncommitted 23-line
+  comment deletion plus a `# Zach note. Scheduler may move to dexter
+  eventually 260728` line), so any edit from here would collide with
+  unversioned human intent. Resolve dexter's checkout first — that is
+  step 0 of the migration sequence filed this session via
+  `scheduler -i scheduler`.
+  This entry is a correction, not a new blocker: the wider point is that a
+  blocker went stale for an unknown number of days and only a re-probe
+  found it, which is the failure mode BUILD-DISCIPLINE's "re-probed, not
+  quoted" row exists for.
+
 - **Migrate wtul onto the `.scheduler/` subdir layout — NOT DONE, filed
   for an async pass, not completed live** (decided 2026-07-24; a partial
   `git mv` was started and reverted clean that session rather than left
