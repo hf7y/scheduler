@@ -1187,6 +1187,24 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 00:05 (via `scheduler -i`):** THE PLAY AS A SELF-EXTENDING ROTATION (2026-07-29, Zach-directed via realisateur /ideate). Four forks answered by Zach. Full record: realisateur .scheduler/FOCUS.md bde9e62. Nothing was wired.
+
+THE SHAPE. scheduler runs -> its turn WRITES the next project's line into the rotation -> that project runs, its milestone temporarily overridden to "bootstrap yourself on dexter" -> scheduler runs again, writes the next line -> etc. The rotation file extends itself; no agent holds the plan. Timing wired by hand. Non-scheduler turns are deliberately SLIM: one milestone, one proof, done.
+
+ZACH'S DECISIONS:
+1. Scheduler's turn WRITES the next rotation line. Chosen over hand-edited slots and over hand-edit-then-self-write-after-wave-1. Highest data value; makes the two-writer hazard live rather than theoretical.
+2. A project's stability milestone is TEMPORARILY OVERRIDDEN with the bootstrap milestone and RESTORED afterward. Chosen over tracking bootstrap outside the milestone system and over replacing all 19 declared milestones. Keeps milestone-audit honest (one Current line) but REQUIRES A STASH MECHANISM THAT DOES NOT EXIST YET -- new milestone M1.5, realisateur's to build since STABILITY-MILESTONES.md is its system.
+3. ecosim observes via GitHub issues on ITS OWN repo, one issue per migration unit. Not cross-repo. Zero new permissions; accepted cost is no feedback loop to the observed project.
+4. Session scope: design + brief + ecosim onboarding only. No rotation wiring.
+
+THE COUPLING, AND IT IS THE POINT OF THIS FILING. "Scheduler's turn writes the next rotation line" is single-writer ONLY BECAUSE of last session's decision that mandark's scheduler self-dev goes DARK, leaving dexter the sole host that auto-commits scheduler's own history. That decision is still awaiting Zach's confirmation at BLOCKERS.md 63cf3b4. If he reverses it, this design becomes two hosts auto-committing to one scheduler history -- the divergence that already bit this repo -- now on the file that governs dispatch. TREAT 63cf3b4 AS A PRECONDITION OF WIRING THE SELF-WRITING ROTATION, not as an independent open question. Do not wire it before that answer lands.
+
+BUILT (Zach-approved exception): ecosim onboarded to the GitHub-issues lane, 40d7c3d. ANSWER_CHANNEL="issues" (second project after the chezz pilot), labels question/answered/observation/hypothesis on hf7y/ecosim, and REPO_URL repointed from /home/zach/git-remotes/ecosim.git to git@github.com:hf7y/ecosim.git. Verified live: `scheduler questions ecosim` -> "channel: GitHub issues, hf7y/ecosim".
+
+A DEFECT THIS SURFACED, AND A SENSOR THE ECOSYSTEM DOES NOT HAVE. ecosim's REPO_URL pointed dispatch at a local bare sitting at 2129a13 while GitHub was at db3f660 -- FIVE COMMITS BEHIND, and missing ecosim's own BRIEF-dexter-migration.md. Its nightly was cloning a ref that did not contain its own work. Ancestor, not diverged. This is the same conf-drift class ecosim's own brief section 5 catalogued for gardien. Two of 19 confs found by accident; SEVENTEEN ARE UNAUDITED. A project whose dispatch clones a stale ref looks perfectly healthy in every survey -- steward-survey has symbols for LIVE, DARK and NOT PROBEABLE but none for "registered, enabled, checkout fine, dispatch ref stale". Proposal for scheduler: an offline check comparing `git ls-remote <REPO_URL>` against the project's GitHub counterpart, reporting equal/ancestor/diverged per project. Queued in realisateur bde9e62 as a [batch] row; filing here because the missing symbol is in scheduler's own survey surface.
+
+M1 IS UNCHANGED and still the only surviving pre-move mechanism: the freeze file, checked at DISPATCH time by each consumer, stating what it does not cover. Its scope question (7fccdc1 q2, svc-vaporwave's fixed-cron aedile 03:00 / vkv-inventory 04:00) remains unanswered and gates its definition of done, not its start.
+
 - **2026-07-28 23:39 (via `scheduler -i`):** THE PLAY REVISED (2026-07-28, Zach-directed via realisateur /ideate; supersedes three DECIDED lines in the 23:26 THE PLAY entry). Full rationale + witnesses: realisateur .scheduler/FOCUS.md dd11360.
 
 Zach's framing: the ecosystem moves to dexter, scheduler moves FIRST and bootstraps the rest, creds are already set up, "the agents are neurotically overthinking it." Drop scheduler in, run it, it installs itself. The first schedule runs each agent, which takes turns verifying its credentials and proving it's wired up.
