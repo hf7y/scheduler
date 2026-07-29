@@ -290,12 +290,49 @@ HARD RULES (infrastructure, not an app):
 
 Commit each finished change with a clear message. Then append a section for THIS cycle to $REPORT (create if absent) and refresh the LATEST.md pointer by running: bin/publish-report.sh $PROJECT_KEY $(basename "$REPORT") -- do NOT 'cp' onto LATEST.md, it is a symlink and cp follows it straight into a past report (that destroyed 2026-07-27's report). A change not committed on $BRANCH didn't happen."
 
+  # PER-CYCLE TRANSCRIPT (2026-07-29). Until this existed, a cycle that hit
+  # --max-turns left EXACTLY ONE line of evidence: "Error: Reached max turns
+  # (60)". Not a gap at the margins -- a total one. `claude -p` with the default
+  # text output format prints only the FINAL result, so on the max-turns path
+  # there is no final result and it prints nothing; intermediate tool calls are
+  # never emitted in any case. The body is already wrapped in
+  # `{ ... } >> "$LOG" 2>&1`, so this was never a missing redirect. There was
+  # simply nothing to redirect.
+  #
+  # WHY IT MATTERED, concretely: on 2026-07-29 THE PLAY's bootstrap turn failed
+  # four times, three on max-turns, once burning 60 turns and 12 minutes for
+  # ZERO commits. "60 turns is too few for this bar" and "the agent is thrashing
+  # and would fail at any ceiling" demand OPPOSITE fixes -- raise the ceiling
+  # vs. shrink the bar -- and nothing recorded anywhere could tell them apart.
+  # Retrying blind burns quota and learns nothing.
+  #
+  # stream-json goes to its own FILE, not into run.log: `scheduler status`
+  # slices run.log for the ====-delimited last-run record, and tens of thousands
+  # of JSON lines per cycle would swamp the signal it reads. run.log keeps the
+  # summary and NAMES the transcript; the transcript holds the turns.
+  # --verbose is required by stream-json in print mode.
+  TRANSCRIPT_DIR="$STATE_DIR/transcripts"
+  mkdir -p "$TRANSCRIPT_DIR" 2>/dev/null || true
+  TRANSCRIPT="$TRANSCRIPT_DIR/$(date +%Y%m%dT%H%M%S).jsonl"
+
   if [ "${SCHED_DRYRUN:-0}" = "1" ]; then
     echo "DRYRUN: skipping claude invocation"; STATUS="dryrun"
-  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS"; then
+  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" \
+         --output-format stream-json --verbose > "$TRANSCRIPT" 2>&1; then
     STATUS="done"
   else
     STATUS="FAILED"
+  fi
+
+  if [ -s "$TRANSCRIPT" ]; then
+    # Name it in run.log with enough shape to decide whether to open it. The
+    # tool-name histogram is the thrash/insufficiency discriminator: 60 turns of
+    # varied edits reads very differently from 60 turns re-reading one file.
+    echo "transcript: $TRANSCRIPT ($(wc -l < "$TRANSCRIPT") events; tools: $(grep -o '"name":"[A-Za-z_]*"' "$TRANSCRIPT" 2>/dev/null | sed 's/.*:"//;s/"//' | sort | uniq -c | sort -rn | head -6 | awk '{printf "%s=%s ", $2, $1}'))"
+  elif [ "${SCHED_DRYRUN:-0}" != "1" ]; then
+    # An empty transcript on a real cycle means the invocation produced nothing
+    # at all -- said out loud, not left as a silent 0-byte file.
+    echo "transcript: EMPTY ($TRANSCRIPT) -- claude produced no output; that is itself the finding"
   fi
 
   AFTER_SHA="$(git rev-parse HEAD)"
