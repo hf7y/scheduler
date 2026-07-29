@@ -139,6 +139,17 @@ against: which facts the machinery records and which views print them.
 - `schedule/*.conf` — the project registry (one conf per project;
   `_paced.conf`/`_runner.conf`/`_paced.<host>.conf` are engine config,
   not projects).
+- **The rotation this host runs** — `schedule/_paced.<short-hostname>.conf`
+  if that file exists, otherwise the shared `schedule/_paced.conf`. Every
+  rotation-facing command (`next`, `run`, `weight`, `paced`/`-p`) resolves
+  it through `lib/paced-conf.sh`, the same rule `bin/usage-paced-runner.sh`
+  applies when it actually dispatches — so what `scheduler` reports and
+  what runs here are the same file, on any host. `scheduler next` prints
+  the resolved path and why it was chosen. **This was broken until
+  2026-07-29**: these commands hardcoded the shared file, so on `dexter`
+  (which owns `_paced.dexter.conf`) they described — and `weight <p> <n>`
+  *wrote into* — `mandark`'s rotation. Set `PACED_CONF` to override, or
+  `PACED_HOST` to ask what another host would resolve.
 - `focus/<project>.md`, `questions/<project>.md` — symlinks into each
   project's own scheduler-owned files (usually `.scheduler/` or
   `.claude/` in that project's repo).
