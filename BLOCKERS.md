@@ -598,6 +598,30 @@ happened yet for any of them.
 
 ## realisateur
 
+- **2026-07-28 (realisateur `/cloture`): does "a guard that fails safe but
+  never clears is an outage with better manners than an outage" become a
+  `BUILD-DISCIPLINE.md` pattern, or stay a one-off?** Surfaced by
+  `fb485e0` in `scheduler` (your untracked-files decision this session).
+  The paced runner's PULL gate was bare `git status --porcelain`, so a
+  single untracked scratch file pinned a dispatcher host's *deployed*
+  code at whatever commit it sat on — indefinitely, announced only by a
+  `*/5` log line nobody reads. **The guard was never wrong by its own
+  logic**: it never once pulled over a dirty tree, so it scored perfectly
+  on the only thing it measured, while the failure it caused was
+  invisible to it. That is the same shape as the silent-sensor row
+  already parked in this repo's Backlog awaiting `sim/prereg.py` — *a
+  silent sensor optimises every observable metric* — but arrived at from
+  the opposite direction: not a sensor that fails toward OK, a guard that
+  succeeds toward stuck. Two independent arrivals at one shape is usually
+  when something is doctrine rather than an anecdote.
+  Deliberately NOT promoted by the session that found it: editing
+  `BUILD-DISCIPLINE.md` changes what the ecosystem believes, `/cloture`'s
+  posture is report-don't-build, and the parallel row above is explicitly
+  gated on a prereg pass that refuses to backdate — so promoting this one
+  by hand would jump a queue that exists on purpose.
+  > (answer inline here — promote it, route it through `sim/prereg.py`
+  >  like the silent-sensor row, or leave it as a one-off)
+
 - **2026-07-28 (scheduler `/cloture`): `closeout-lint`'s durability check
   is worktree-blind — does it grow to see linked worktrees, or do we
   accept that research/staging branches are outside its remit?** Witness,
