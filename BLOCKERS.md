@@ -247,6 +247,41 @@ paste.
 
 ## scheduler
 
+- **2026-07-28 (realisateur `/cloture`, machine-append): the usage gate can
+  STARVE a host that holds a single participant -- dexter has dispatched
+  nothing for 3 days while reporting itself on-pace. Which way do you want
+  it to break?** Witness, read first-hand on dexter this session:
+  `~/.local/share/scheduler-paced-runner/run.log` shows a clean 5-minute
+  tick, continuous, with every single tick since 2026-07-25 20:10 returning
+  `HOLD (gate rc=1) ... binding=7d ... # HOLD -- 7d window 24% used vs
+  burn-line 24% (on-pace)`. `rotation.idx` has not moved since 07-25 20:10.
+  The gate needs `min_slack=0.02` of headroom BELOW the burn-line to
+  dispatch; usage tracks the burn-line almost exactly because mandark's
+  ~15-participant fleet consumes the shared budget at the pace the
+  burn-line describes. So dexter's lone participant (`crt`) can never win a
+  slot, and the log says "on-pace" the whole time -- the surface reports
+  health while the host does no work. This is the second time in three days
+  a crt silence was misread from that HOLD line (realisateur's 2026-07-28
+  filing called it "legitimately pacing, not broken"; it is pacing
+  correctly and starving simultaneously, and both readings were partly
+  right). Note this is NOT what stopped crt originally -- that was a hard
+  `You've hit your monthly spend limit` failure on 07-25 20:37, filed to
+  crt as `68b3a4f`. This is why it has not RESUMED, and it will not resume
+  on its own. Deadline that makes it concrete: crt's dead-man `expires_at`
+  is 2026-08-01T01:14, after which a second, masking reason not to run
+  appears on top of this one. Options, none of them obviously right:
+  (a) give a host with no dispatch in N hours a floor -- one slot
+  regardless of slack, so a quiet host cannot be starved by a busy one;
+  (b) make slack per-host rather than global, so dexter's own consumption
+  is what it must fit under; (c) treat "on-pace HOLD for > 24h" as a
+  reportable condition rather than a healthy one, and fix nothing else --
+  the gate is arguably behaving correctly and the real defect is that
+  nothing ever said so out loud; (d) accept it and move participants to
+  dexter in bulk (the default-host policy) so it is no longer a
+  single-participant host, which dissolves this case without changing the
+  gate.
+  > (answer inline here -- and note (c) is compatible with any of the others)
+
 _No open human-owned blockers as of 2026-07-27 (`/ideate` sweep). Both
 prior entries were answered and moved to Recently resolved; four standing
 questions were answered in the same pass and are queued as decisions in
