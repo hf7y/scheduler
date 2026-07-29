@@ -1187,6 +1187,31 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 02:29 (via `scheduler -i`):** PROPOSAL, Zach-directed 2026-07-29 via realisateur /ideate, verbatim: "scheduler front door. for loop sets weights to zero bin/scheduler". This is the concrete shape of the `scheduler stop` verb proposed earlier tonight (958e748) and it is better than what was proposed there, for a reason worth stating.
+
+THE SHAPE. A loop in bin/scheduler that walks the participants of a rotation file and sets their weights to zero. That is it. Zach did this by hand tonight -- `crt|0|0`, `wtul|0|0` in _paced.dexter.conf -- and the instruction is that the hand action becomes the verb.
+
+WHY THIS BEATS THE EARLIER PROPOSAL. 958e748 proposed a stop built on schedule/FREEZE. But the freeze is a SIDE FILE: a second surface, with its own delivery, its own exemption grammar, and its own failure modes -- three of which were discovered in the four hours since it was built (cannot reach a busy host; bare exemptions unfroze mandark's self-dev; gates dispatch but not in-flight work). Zeroing weights uses the file scheduler ALREADY READS to decide what runs. No new surface. The rotation says what it is going to do, and stopping is saying something different in the same place.
+
+This is the difference between adding a mechanism and using the one that exists -- BUILD-DISCIPLINE pattern 3 avoided rather than committed.
+
+WHAT IT MUST DO, offered as requirements rather than an implementation:
+- Operate on the HOST'S OWN rotation file (_paced.conf / _paced.<host>.conf), the same resolution the runner uses. One host means one thing.
+- Be REVERSIBLE, and this is the hard requirement: zeroing a weight DESTROYS the prior weight unless it is stashed first. `crt|1|3` -> `crt|0|0` has lost the 3. A stop you cannot undo without a human remembering "crt was 3, wtul was 1" is a worse stop than the freeze, which is a single `git rm`. Record prior weights where the resume path can read them -- a comment on the line, a sidecar, or the commit itself; that is a design call, not a detail.
+- Therefore imply a RESUME. `scheduler stop` and `scheduler resume` are one mechanism.
+- COMMIT the change, so the stop is git-visible and auditable. This is most of the point: tonight's hand-stop is invisible to scheduler's own records and to ecosim's sensors (pattern 19).
+- FAIL LOUD on a rotation file it cannot parse. A stop that silently zeroes nothing is the worst possible outcome for this verb specifically.
+
+SYNCHRONICITY WORTH NAMING, because two mechanisms now need the same missing piece. THE PLAY's milestone override (Zach 2026-07-29: each project's milestone is temporarily amended to the bootstrap bar and RESTORED afterward -- realisateur M1.5, bde9e62) needs to stash a project's real stability milestone and put it back. This verb needs to stash a participant's real weight and put it back. Same shape, same failure if omitted: the original value is destroyed by the temporary one and nobody notices until restore time, when it is gone. Whatever solves one should probably solve both, and if they are solved separately they should at least be solved the same way.
+
+WHAT IT DOES NOT SOLVE, stated so it is not assumed:
+- IN-FLIGHT WORK. Zeroing weights stops the NEXT dispatch. Tonight's runner survived its crontab removal by 52 MINUTES because PACED_MAX_PER_TICK=16 had it walking the rotation repeatedly; a runner already mid-tick will keep dispatching from the list it already read. Whether the loop should also signal live runners is the open question, and it is the same one the freeze failed to answer.
+- DELIVERY TO ANOTHER HOST. Still git-propagated, so it still cannot reach a host whose runner is skipping PULL because it is busy. Immediate on the local host, eventually-consistent elsewhere. This is honest rather than fatal -- a stop that works instantly where it is typed is most of what was wanted tonight.
+
+RELATIONSHIP TO THE FREEZE: complementary, not redundant, and worth deciding deliberately. The freeze gates AT DISPATCH TIME per project and supports host-scoped exemptions (`EXEMPT: scheduler@dexter`) -- that is what let scheduler orchestrate while everything else was refused. Zeroing weights changes WHAT THE ROTATION CONTAINS. The play currently depends on the freeze's exemption grammar, so this verb should not be built as a replacement for it without deciding what happens to that dependency.
+
+NOT BUILT. Filed through the front door per realisateur's rule against hand-editing scheduler's engine.
+
 - **2026-07-29 01:56 (via `scheduler -i`):** PROPOSAL: `scheduler stop` -- the verb whose absence caused tonight's worst failure. Filed 2026-07-29 from realisateur /ideate, Zach-directed: "the failure here is that we should have used scheduler itself to stop the work." Recorded as BUILD-DISCIPLINE pattern 19 (realisateur e6c1a87).
 
 WHAT HAPPENED. The dexter migration's stated purpose was "we need to run the play, via scheduler, for science." Stopping dexter was then done entirely OUTSIDE scheduler: dexter's crontab hand-edited, mandark's */15 sweep backstop hand-commented, and finally the paced runner (pid 117607) and a live crt job killed by pid. Every step worked. None went through you.
