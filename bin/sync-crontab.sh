@@ -238,10 +238,39 @@ batch_slot_time() {
 # each project's BATCH_* config stays intact, so deleting _runner.conf restores
 # the old fixed-time behaviour on the next sync. SWEEP (bug-sweep) tiers are
 # never suppressed.
+#
+# HOST-SCOPED SINCE 2026-07-29, and this was a live defect, not a tidy-up.
+# The tick meta was read from ONE shared file while the rotation it dispatches
+# has been per-host (_paced.<host>.conf) since 2026-07-24. So on dexter,
+# `--apply` would have installed MANDARK's cadence:
+#
+#   */5 PACED_MAX_PER_TICK=16 USAGE_CEILING=0.99 usage-paced-runner.sh
+#
+# where dexter had been deliberately running */30 with PACED_MAX_PER_TICK=1 --
+# a 6x rate increase on the host that shares one account budget with the other,
+# installed silently by a command whose whole job is to make the crontab match
+# the confs. That is why dexter's crontab was HAND-WRITTEN on 2026-07-24 and
+# why its own header called host-scoping "an open item": the generator could
+# not express what that host needed, so a human bypassed the generator. A
+# config surface a host cannot use is a config surface that host routes around.
+#
+# Resolution is SHARED-THEN-HOST, sourced in that order, so the host file
+# overrides PER FIELD and only needs to state what differs -- the same
+# precedence _usage.conf documents for the pacing knobs. A host file may also
+# blank a field (RUNNER_CRON="") to opt out of a tick the shared file arms;
+# dexter has never run the sweep tick that _sweep.conf would install.
 RUNNER_JOB=""; RUNNER_CMD=""; RUNNER_CRON=""; RUNNER_ENV=""; PACED_SUPPRESS_BATCH=0
+RUNNER_CONF_SRC="none"
+SYNC_HOST="${SYNC_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -f "$SCHEDULE_DIR/_runner.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_runner.conf"
+  RUNNER_CONF_SRC="_runner.conf"
+fi
+if [ -f "$SCHEDULE_DIR/_runner.$SYNC_HOST.conf" ]; then
+  # shellcheck disable=SC1091
+  source "$SCHEDULE_DIR/_runner.$SYNC_HOST.conf"
+  RUNNER_CONF_SRC="${RUNNER_CONF_SRC} + _runner.$SYNC_HOST.conf (host override)"
 fi
 
 # --- Sweep tick meta (optional) ------------------------------------------------
@@ -249,10 +278,21 @@ fi
 # `scheduler sweep` -- deliberately separate from the usage-paced dispatch
 # above (sweep is pure git/bash, zero API cost, so gating it behind
 # usage-gate.sh would protect a budget it never touches).
+#
+# Host-scoped on the same shared-then-host rule as _runner.conf above, and for
+# the same reason: dexter has never run this tick, and a shared-only read would
+# install one there on the first --apply.
 SWEEP_TICK_JOB=""; SWEEP_TICK_CMD=""; SWEEP_TICK_CRON=""
+SWEEP_CONF_SRC="none"
 if [ -f "$SCHEDULE_DIR/_sweep.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_sweep.conf"
+  SWEEP_CONF_SRC="_sweep.conf"
+fi
+if [ -f "$SCHEDULE_DIR/_sweep.$SYNC_HOST.conf" ]; then
+  # shellcheck disable=SC1091
+  source "$SCHEDULE_DIR/_sweep.$SYNC_HOST.conf"
+  SWEEP_CONF_SRC="${SWEEP_CONF_SRC} + _sweep.$SYNC_HOST.conf (host override)"
 fi
 PACED_SET=" "          # listed in ANY host's rotation -> the runner owns Tier 2
 PACED_ENABLED_SET=" "  # listed AND enabled in THIS host's rotation -> dispatches here

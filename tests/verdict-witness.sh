@@ -76,6 +76,10 @@ TMP="$(mktemp -d)"; log="$(run_tick silent-fail)"
 grep -q 'outcome=NOT-DONE' <<<"$log" && ok "classified NOT-DONE" || { bad "expected outcome=NOT-DONE"; echo "$log" | tail -5; }
 grep -q 'GAVE-UP' <<<"$log" && bad "silence was treated as giving up -- the exact inversion this guards" || ok "did not report GAVE-UP"
 stamped && bad "expires_at stamped on a merely-truncated run (metabolism reduced on progress)" || ok "metabolism untouched"
+# Silence must be NAMED, not just tolerated -- otherwise "never reports" and
+# "said keep going" read identically in the log forever. This was the first
+# live case: scheduler on dexter, 2026-07-29, max-turns with no verdict.
+grep -q 'NO-VERDICT alpha' <<<"$log" && ok "absent verdict logged as NO-VERDICT" || { bad "silent run not distinguished from CONTINUE in the log"; echo "$log" | tail -5; }
 rm -rf "$TMP"
 
 echo "case 2 -- explicit IMPOSSIBLE must be GAVE-UP, and MUST brake"
@@ -90,6 +94,7 @@ echo "case 3 -- explicit DONE must be DONE, and must NOT brake"
 TMP="$(mktemp -d)"; log="$(run_tick done)"
 grep -q 'outcome=DONE' <<<"$log" && ok "classified DONE" || { bad "expected outcome=DONE"; echo "$log" | tail -5; }
 stamped && bad "expires_at stamped on success" || ok "metabolism untouched"
+grep -q 'NO-VERDICT' <<<"$log" && bad "NO-VERDICT logged for a run that DID write one" || ok "no spurious NO-VERDICT when a verdict exists"
 rm -rf "$TMP"
 
 echo "case 4 -- a PREVIOUS run's verdict must not be read as this run's"

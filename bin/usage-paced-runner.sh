@@ -327,6 +327,23 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
   outcome="$("$SELF_DIR/verdict.sh" classify "$name" "$rc" 2>/dev/null)"; vrc=$?
   log "DONE $name rc=$rc outcome=${outcome:-NOT-DONE} ($(( $(date +%s) - start ))s)"
 
+  # Say when a verdict was never written, distinctly from CONTINUE. Both
+  # classify as NOT-DONE and both re-dispatch, so this changes NOTHING about
+  # control flow -- it only stops the two being indistinguishable in the log.
+  #
+  # WHY IT MATTERS: an agent whose brief asks for a verdict and never writes
+  # one is a real condition, and the first live run of this mechanism
+  # (2026-07-29, scheduler on dexter) was exactly that -- max-turns with no
+  # verdict. Silence is deliberately NOT a brake, which is the whole asymmetry
+  # in bin/verdict.sh, so the only way silence becomes visible is by being
+  # named. Otherwise "the agent never reports" and "the agent said keep going"
+  # read identically forever.
+  # Asked via `verdict.sh get` (exit 1 == no verdict recorded) rather than by
+  # rebuilding the state path here -- one owner of that layout, not two.
+  if ! "$SELF_DIR/verdict.sh" get "$name" >/dev/null 2>&1; then
+    log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). Treated as NOT-DONE and re-dispatched; metabolism untouched."
+  fi
+
   if [ "$vrc" -eq 3 ]; then
     # GAVE-UP: the agent itself said IMPOSSIBLE, with a reason. This is the
     # ONLY path that reduces metabolism -- reached by an explicit claim, never
