@@ -1077,6 +1077,21 @@ happened yet for any of them.
   was pushed; origin/main is still `3c70d5d`.
   > (answer inline here — drop / correct+push / leave)
 
+## groc-mangr
+
+- **groc-mangr sits `enabled=0` for a reason that is now false — re-enable, and at what weight?**
+  (filed 2026-07-29 by realisateur `/ideate`, Zach-directed session.) `_paced.conf`
+  parks groc-mangr with the literal reason "no stability milestone declared."
+  Zach declared the bar himself on 2026-07-28 (the behavioural-counterfactual one:
+  "Zach buys groceries before he otherwise would have"), so the stated reason no
+  longer holds and nothing in the ecosystem escalates a stale park — a green-adjacent
+  silence, the shape named as false-LIVE's sibling. Re-enabling is a stated decision,
+  not something an agent flips silently, which is why it is here. One argument against
+  a high weight regardless of the answer: that milestone's final checkbox is
+  `(waiting: Zach)` by construction, so unattended dispatch cannot close it no matter
+  how many turns it gets.
+  > (answer inline here — re-enable at weight N / leave parked and fix the stated reason / leave as is)
+
 ## Recently resolved
 
 - **scheduler: symlink-deployed scripts go live pre-commit — GATE IT**
