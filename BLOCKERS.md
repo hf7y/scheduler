@@ -312,6 +312,28 @@ paste.
   through the same function pushes fine.
   > (answer inline here — push these five now, or leave them for the fix)
 
+  **RESOLVED 2026-07-28 ~23:55 by Zach ("push those stranded sweeper commits").
+  Pushed, and the count above was wrong — it was THREE, not five.**
+  Re-probed before pushing rather than trusting the list: chezz `3cf830e` and
+  realisateur `30f1caa` were already at 0 unpushed, having been hand-pushed
+  earlier today exactly as the 14:55 FOCUS entry records. Listing them as
+  currently stranded conflated *occurred today* with *still stranded*, which is
+  the same quote-don't-reprobe error this entry exists to document. The three
+  genuinely stranded, now pushed and verified at 0 unpushed each:
+  `abletim 27ba382..b97cea0`, `groc-mangr 06bcf38..4d21c5f`,
+  `home-assistant f41b3cf..e0ac276`.
+  Contents were read before pushing, not pushed blind: all three are Zach's own
+  `> ` answers. Two are directly load-bearing for work in flight — abletim's
+  *"We're moving all projects to dexter. Very soon"* and its Ableton
+  Suite/Max8 answer, and groc-mangr's OCR-merge answer that assigns the OCR
+  pipeline an owner-selection rule and asks for a bibliothecaire consult. Those
+  had been invisible to their own nightlies since 20:00 and 21:00.
+  **`aedile` is NOT resolved and was deliberately left alone:** its
+  `.scheduler/QUESTIONS.md` is *dirty*, not committed-and-unpushed — a different
+  state needing a decision about committing someone else's uncommitted work in a
+  repo co-owned with Tyler. Revert any of the three: `git -C <path> push --force
+  <sha-before>`, shas above.
+
 - **ARMED, NOT YET FIRED: commit `3a45bf3` (22:01:06 tonight) leaves 15 of 19
   projects unable to clone their own source, from EITHER host** (agent-appended
   2026-07-28 ~23:00, realisateur `/ideate`, Zach-directed dexter-migration
