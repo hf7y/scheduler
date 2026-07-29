@@ -389,6 +389,60 @@ validate_cron() {
   [ "$field_count" -eq 5 ]
 }
 
+# Is the command word of a META cron line (the RUNNER tick, the SWEEP tick)
+# actually runnable on THIS host? $1 = the full command string from the conf
+# (e.g. "/home/zach/.local/bin/scheduler sweep"). Echoes the reason and
+# returns 1 when it is not; returns 0 silently when it is.
+#
+# WHY THIS EXISTS (2026-07-29, found by re-probing rather than reading):
+# every PER-PROJECT line already goes through resolve_cmd, which refuses a
+# <TIER>_SCRIPT that is absent or non-executable. The two META tiers were the
+# exception -- they validated only that the conf fields were non-empty and
+# that the cron expression had 5 fields, never that the command exists. On
+# dexter that gap was live: `/home/zach/.local/bin/scheduler` has never been
+# installed (only usage-gate.sh and usage-paced-runner.sh are, symlinked
+# 2026-07-24), so `bin/sync-crontab.sh --apply` would cheerfully install
+# `*/15 * * * * /home/zach/.local/bin/scheduler sweep` -- a tick that fails
+# with "command not found" every 15 minutes into a mail spool nobody reads.
+# A generated crontab that is dead on arrival is the exit-0 no-op this
+# project's own discipline calls worse than a crash.
+#
+# Same verdict as resolve_cmd's: the line is OMITTED and counted as an ERROR,
+# not emitted with a warning. Install the command, then re-run.
+meta_cmd_unrunnable() {
+  local cmdline="$1" word
+  # The command WORD -- cron lines run through `sh -c`, so this is the first
+  # whitespace-separated token. Meta lines carry no leading VAR=val
+  # assignments (RUNNER_ENV is prepended separately, after this check).
+  word="${cmdline%%[[:space:]]*}"
+  if [ -z "$word" ]; then
+    echo "command string is empty"
+    return 1
+  fi
+  case "$word" in
+    */*)
+      # Absolute/relative path: exact, and the case both shipped confs use.
+      # -x follows symlinks, so a DANGLING symlink fails here too, which is
+      # the failure mode a bare `-e` on the link would miss.
+      if [ ! -x "$word" ]; then
+        echo "$word does not exist or isn't executable"
+        return 1
+      fi
+      ;;
+    *)
+      # Bare name: resolved against cron's PATH at run time, which is the
+      # PATH= line in the crontab and not necessarily this shell's. Checked
+      # on a best-effort basis, and the message says so rather than claiming
+      # more certainty than it has.
+      if ! command -v "$word" >/dev/null 2>&1; then
+        echo "$word is not on this shell's PATH (bare name -- cron resolves it against the crontab's own PATH, so check that too)"
+        return 1
+      fi
+      ;;
+  esac
+  return 0
+}
+
 # Resolve the command cron should run for one tier, honoring backwards
 # compatibility. $1=tier label (SWEEP|BATCH), $2=<TIER>_SCRIPT value,
 # $3=<TIER>_PROMPT value, $4=scheduler-run subcommand (sweep|batch). Echoes
@@ -617,6 +671,9 @@ if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
   elif ! validate_cron "$RUNNER_CRON"; then
     echo "ERROR [runner]: RUNNER_CRON='$RUNNER_CRON' isn't a valid 5-field cron expression -- runner tick omitted" >&2
     ERRORS=$((ERRORS + 1))
+  elif ! runner_why=$(meta_cmd_unrunnable "$RUNNER_CMD"); then
+    echo "ERROR [runner]: RUNNER_CMD -- $runner_why -- runner tick omitted" >&2
+    ERRORS=$((ERRORS + 1))
   else
     # RUNNER_ENV is optional -- "VAR=val VAR2=val2" prepended verbatim
     # before the command (cron lines run through /bin/sh -c, so plain
@@ -635,6 +692,9 @@ if [ -n "$SWEEP_TICK_JOB" ] || [ -n "$SWEEP_TICK_CMD" ] || [ -n "$SWEEP_TICK_CRO
     ERRORS=$((ERRORS + 1))
   elif ! validate_cron "$SWEEP_TICK_CRON"; then
     echo "ERROR [sweep]: SWEEP_TICK_CRON='$SWEEP_TICK_CRON' isn't a valid 5-field cron expression -- sweep tick omitted" >&2
+    ERRORS=$((ERRORS + 1))
+  elif ! sweep_why=$(meta_cmd_unrunnable "$SWEEP_TICK_CMD"); then
+    echo "ERROR [sweep]: SWEEP_TICK_CMD -- $sweep_why -- sweep tick omitted" >&2
     ERRORS=$((ERRORS + 1))
   else
     add_managed_line "$LOCAL_ACCOUNT" "$SWEEP_TICK_CRON $SWEEP_TICK_CMD # scheduler:$SWEEP_TICK_JOB:SWEEP (reactive backstop)"
