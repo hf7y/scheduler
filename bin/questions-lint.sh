@@ -76,7 +76,27 @@ lint_file() {
       }
       claim_open = 0
     }
-    BEGIN { infence = 0; n = 0; claim_open = 0; dead = 0 }
+    BEGIN { infence = 0; n = 0; claim_open = 0; dead = 0; pre = 0 }
+    # Pass 1 (same file, read twice): does this file have ANY `## ` section
+    # heading outside a fence? Everything above the first one is HEADER
+    # PROSE -- the how-to-answer contract -- not entries, and linting it as
+    # entries is a false finding per bullet, per project, forever. Found
+    # 2026-07-29 the moment that header grew `- **A. ...**`-shaped rule
+    # bullets: 4 findings on a file with exactly one real question.
+    # DELIBERATELY conditional on a heading EXISTING: a legacy hand-written
+    # file with entries and no headings at all still gets linted from line
+    # 1, because going quiet on precisely the hand-written files this check
+    # exists to catch would be a fail-open. The residual miss is an entry
+    # typed ABOVE the first heading in a file that has one; `scheduler ask`
+    # cannot produce that shape (it inserts under `## Open`, or appends a
+    # new `## Open` section), so the trade is 4 certain false findings
+    # against one unlikely true one.
+    NR == FNR {
+      if ($0 ~ /^```/) { infence = !infence; next }
+      if (!infence && $0 ~ /^## /) hashead = 1
+      next
+    }
+    FNR == 1 { infence = 0; pre = hashead }
     /^```/ { infence = !infence; next }
     infence { next }
     # A `## Consumed` / `## Recently resolved` ledger is ARCHIVE. Its
@@ -85,9 +105,11 @@ lint_file() {
     # would have trained the reader to ignore this check (2026-07-28).
     /^## / {
       flushclaim()
+      pre = 0
       dead = (tolower($0) ~ /consumed|resolved|archive/) ? 1 : 0
       next
     }
+    pre { next }
     dead { next }
     /^- \*\*/ {
       flushclaim()
@@ -120,7 +142,7 @@ lint_file() {
     claim_open && tolower($0) ~ /symlink|copies|installed|crontab|enabled=|reachable|expired|deploy key/ { claim_state = 1 }
     claim_open && tolower($0) ~ /verified [0-9]{4}-[0-9]{2}-[0-9]{2}|verified live|verified from|verified by running|verified against|re-probed/ { claim_stamped = 1 }
     END { flushclaim(); printf "__ENTRIES__%d\n", n }
-  ' "$f")" || {
+  ' "$f" "$f")" || {
     echo "BLIND: $label -- awk failed to parse ($f)"
     blind=1
     return 0

@@ -52,6 +52,27 @@ Once you have acted on an answered question, remove that question+answer
 block -- git history and tonight's report keep the record. Leave
 unanswered questions untouched; never re-ask or duplicate one.
 
+**How an answer binds (rules A-D, 2026-07-29 -- QUESTIONS.md's own header
+carries the same text).** An answer is authoritative *and* re-derived, not
+replayed:
+- **A. Direction, not instruction.** The reply states standing intent.
+  Re-derive the concrete action from CURRENT state, never from the state
+  the question described. A question can be asked from a stale premise, so
+  a correct reply can still point at a world that no longer exists.
+- **B. Re-probe the premise before acting.** The instruction carries
+  claims about system state -- check them like any other claim. Premise
+  holds: act. Premise false and the corrected action is REVERSIBLE (a
+  commit, a branch, a file edit): act on the intent and flag the
+  correction plainly in the report. Premise false and the action is
+  IRREVERSIBLE (a message to a person, real money, an unbacked delete):
+  stop and surface, per FOCUS.md's existing bar.
+- **C. Extract the standing direction, silently.** A reply that
+  generalizes past its question ("always merge") gets folded into
+  `FOCUS.md` as a quoted, dated standing decision without asking first.
+- **D. No clean-check reports.** A re-probe that confirms the user was
+  right produces NO output -- not in the report, not in QUESTIONS.md.
+  "I checked and you were right" is a cost with zero information.
+
 ## 2. Re-verify anything a previous run touched, from scratch
 
 Do not trust a prior run's own claims about what works -- run the
