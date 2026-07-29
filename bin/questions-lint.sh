@@ -51,7 +51,28 @@ entries=0
 
 lint_file() {
   local f="$1" label="$2"
-  [ -f "$f" ] || return 0
+  # Callers reach here only because the farm glob MATCHED, so a path that
+  # is not a readable regular file is a wiring failure, never an absence.
+  # This used to be `[ -f "$f" ] || return 0` -- a silent skip, and the
+  # exact fail-open this file's own header forbids (see Exit, above): a
+  # registered project whose QUESTIONS.md had moved or been deleted left a
+  # dangling symlink that matched the glob, was dropped without a word,
+  # and was not counted in `scanned` -- so the run still printed
+  # "0 finding(s)" and exited 0. The project read as CLEAN because it had
+  # become unreadable. Found 2026-07-29; reproduced with a two-link farm
+  # (one live, one dangling), which reported "0 finding(s) ... in 1
+  # file(s)", rc=0, and never named the dead one.
+  if [ ! -e "$f" ]; then
+    echo "BLIND: $label -- farm entry points at nothing ($f -> $(readlink "$f" 2>/dev/null || echo '?'))"
+    echo "  (a registered project whose QUESTIONS.md is unreachable is NOT a clean project)"
+    blind=1
+    return 0
+  fi
+  if [ ! -f "$f" ]; then
+    echo "BLIND: $label -- not a regular file ($f)"
+    blind=1
+    return 0
+  fi
   if [ ! -r "$f" ]; then
     echo "BLIND: $label -- exists but is not readable ($f)"
     blind=1
