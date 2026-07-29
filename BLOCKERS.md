@@ -247,6 +247,71 @@ paste.
 
 ## scheduler
 
+- **THREE DECISIONS from the 2026-07-28 dexter-migration session, each
+  `> `-answerable, none guessed at** (agent-appended ~23:40, realisateur
+  `/ideate`, Zach-directed). Filed here rather than left in the summary because
+  each blocks a build that is otherwise ready to start.
+
+  1. **Does "scheduler builds dexter's schedule via git" mean the `_paced.*.conf`
+     files become GENERATED artifacts, with host assignment moving to a `HOST=`
+     field on each project's own conf?** That reading dissolves the two-writer
+     invariant instead of violating it (nobody hand-writes either file, so the
+     hosts cannot conflict) and structurally ends the doctrine-decay problem this
+     repo has hit twice. But it is a much larger build than the narrower reading
+     — scheduler merely installed and current on dexter, `_paced.dexter.conf`
+     still hand-maintained there. Recorded as inference, not decided, in
+     `01e1bee`.
+     > (answer inline here — generated-with-HOST-field, or the narrower reading)
+
+  2. **Does the freeze switch have to reach `svc-vaporwave`'s two fixed-cron jobs
+     (aedile 03:00, vkv-inventory 04:00), or may it declare them out of scope?**
+     Your stated precondition was "all scheduled jobs must stop." A git-tracked
+     freeze file reaches both hosts' paced runners and neither of those two —
+     they run under a different user, on fixed cron, outside the paced system. A
+     freeze that silently misses two live jobs while reporting success is worse
+     than one that refuses to claim completeness.
+     > (answer inline here — extend into those wrappers, or state the gap loudly)
+
+  3. **What is the actual move list?** "Move everything that can move" plus the
+     credential fix now makes 16 of 19 technically movable. Currently live on
+     mandark: chezz, chezz-sweep, home-assistant, realisateur, gardien, senechal,
+     quatre-vingt-douze, bibliothecaire, ecosim. scheduler is deferred by your
+     own decision 4; crt and wtul already run on dexter; aedile and vkv-inventory
+     are svc-vaporwave and a separate question; the remaining 7 are parked.
+     > (answer inline here — all nine, a subset, or a stated order)
+
+- **THREE MORE WITNESSES tonight for the unpushed-sweeper defect (`8c94eff`),
+  taking it from 2 occurrences to 5 in one day** (agent-appended 2026-07-28
+  ~23:40, realisateur `/ideate`; witness: `closeout-lint` FLAGs plus
+  `git log @{u}..HEAD` in each repo, run this session).
+
+  | repo | sha | time |
+  |---|---|---|
+  | groc-mangr | `4d21c5f` | 20:00 |
+  | home-assistant | `e0ac276` | 20:15 |
+  | abletim | `b97cea0` | 21:00 |
+
+  All three carry the identical message signature — *"scheduler sweep: adopted
+  dirty .../QUESTIONS.md (reactive backstop — author unknown, possibly a live
+  session not yet auto-committed)"* — matching chezz `3cf830e` (10:15) and
+  realisateur `30f1caa` (14:45). **Committed, never pushed.** `aedile` is a
+  fourth, still dirty rather than committed (`M aedile/.scheduler/QUESTIONS.md`).
+
+  Why this is the harmful shape and not just untidiness: every one of these is a
+  **QUESTIONS.md adoption**, i.e. human answers. A project whose run resets a
+  dedicated clone `--hard` to origin cannot see a commit that never left the
+  local checkout — which is exactly how seven of your chezz answers stayed
+  invisible for a day on 2026-07-27. Five repos are currently in that state.
+
+  **Deliberately NOT pushed by this session.** `CLAUDE.md`'s push permission
+  covers this repo; these are four other repos' commits, and pushing unreviewed
+  autocommits across project boundaries at session close is not a call an agent
+  should make silently. One command per repo if you want them landed:
+  `git -C <path> push`. The real fix remains the filed one — find why the sweep's
+  `cmd_commit_file` path commits without pushing when the interactive `-i` path
+  through the same function pushes fine.
+  > (answer inline here — push these five now, or leave them for the fix)
+
 - **ARMED, NOT YET FIRED: commit `3a45bf3` (22:01:06 tonight) leaves 15 of 19
   projects unable to clone their own source, from EITHER host** (agent-appended
   2026-07-28 ~23:00, realisateur `/ideate`, Zach-directed dexter-migration
