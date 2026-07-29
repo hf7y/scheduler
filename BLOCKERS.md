@@ -247,6 +247,62 @@ paste.
 
 ## scheduler
 
+- **ARMED, NOT YET FIRED: commit `3a45bf3` (22:01:06 tonight) leaves 15 of 19
+  projects unable to clone their own source, from EITHER host** (agent-appended
+  2026-07-28 ~23:00, realisateur `/ideate`, Zach-directed dexter-migration
+  session). **Needs a human decision tonight — before the usage gate next says
+  GO.**
+
+  `3a45bf3 "REPO_URL: point all 15 projects to GitHub"` repointed 15 projects at
+  plain `git@github.com:hf7y/*.git`. Neither mandark nor dexter has a generic
+  GitHub identity — both have only per-repo SSH aliases. Witness, `git ls-remote
+  --heads` run against every `schedule/*.conf` `REPO_URL`, on BOTH hosts this
+  session:
+
+  | | reachable | blocked |
+  |---|---|---|
+  | dexter | chezz, wtul | 17 |
+  | mandark | chezz, wtul, gardien, home-assistant | 15 |
+
+  All 15 fail identically: `git@github.com: Permission denied (publickey)`.
+  (`gardien` passes on mandark only because its `REPO_URL` is still the local
+  bare path `/home/zach/git-remotes/gardien.git`; `home-assistant` passes on
+  mandark only because the `github-ha-deploy` alias exists there and not on
+  dexter.)
+
+  **Why nothing has broken yet, and why that is not reassuring:**
+  `usage-gate.sh` has returned `HOLD` (on-pace, 26–27% of the 7d window) on every
+  5-minute tick since 22:01 — verified in
+  `~/.local/share/scheduler-paced-runner/run.log`. No project has dispatched, so
+  nothing has failed. The first `GO` fires this 15 times. The quiet is the
+  governor doing its job for unrelated reasons, not a sign the change is safe.
+
+  **Nothing detected this.** `scheduler` status at 22:25, plus `ecosystem-survey`,
+  `milestone-audit`, `steward-survey` and `hygiene-lint` — all run AFTER the
+  commit landed — reported a healthy ecosystem. `steward-survey` printed
+  `10 live / 9 dark` with confident per-project detail about projects that cannot
+  clone. No survey has an output symbol for "registered, enabled, local checkout
+  fine, declared remote unreachable from the host that would execute it", so that
+  state renders as `LIVE`. Filed to ecosim as a case study for its sensor-variety
+  thesis (`.scheduler/inbox/2026-07-28-dexter-migration-sensor-variety-case.md`).
+
+  **Three ways out, Zach's call — deliberately NOT chosen or applied here:**
+  1. `git revert 3a45bf3` — fastest, restores the previously-working remotes,
+     costs nothing but the migration prep that commit was doing.
+  2. Provision per-repo deploy keys (the standing minimal-scope precedent, and
+     the option chosen for the migration itself tonight). `gh` is installed and
+     authenticated on dexter as `hf7y` with `repo` + `admin:public_key` scopes, so
+     this is scriptable there — but it is 15 repos × 2 hosts, not a quick fix.
+  3. Give each host one account-wide GitHub key — unblocks everything in one step,
+     at the cost of the per-repo scoping this ecosystem has held to throughout.
+
+  Whichever is chosen, the live-verify bar applies (`git ls-remote` FROM the host
+  that will execute, per the crt precedent) — and note that a probe written for
+  this WILL silently pass everything if it pipes `git ls-remote` into anything:
+  `$?` becomes the pipe's last stage. That happened to this session's own first
+  probe, which reported all 19 READY. Any such gate needs a negative test.
+
+
 - **2026-07-28 (realisateur `/cloture`, machine-append): the usage gate can
   STARVE a host that holds a single participant -- dexter has dispatched
   nothing for 3 days while reporting itself on-pace. Which way do you want
