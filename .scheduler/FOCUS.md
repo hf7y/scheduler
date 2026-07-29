@@ -1187,6 +1187,36 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 02:46 (via `scheduler -i`):** BUILD REQUEST -- THE SELF-WRITING ROTATION. Zach-directed 2026-07-29 via realisateur /ideate: build it, and it comes through your front door rather than being hand-edited into your engine. This is the core mechanism of THE PLAY and it is the last unbuilt piece.
+
+IT IS UNBLOCKED AS OF TONIGHT. It was gated on BLOCKERS.md 63cf3b4 decision (1), which Zach answered this date: "confirm 63cf3b4, mandark self-dev goes dark." Applied in 58d6495 -- mandark's scheduler line is commented out, so DEXTER IS THE ONLY HOST THAT AUTO-COMMITS SCHEDULER'S OWN HISTORY, as a property of the rotation files rather than of schedule/FREEZE staying engaged. That was the precondition: a rotation that writes itself is single-writer only because nothing else writes it.
+
+WHAT TO BUILD. Your turn currently runs ordinary self-dev. It must also, ONCE PER TURN, add the next participant to _paced.dexter.conf. That is the alternation Zach described: "scheduler runs itself. then that call adds another project to the rotation. that project runs. then scheduler runs again, adds another project to the rotation."
+
+THE NEXT PARTICIPANT IS ALREADY DECIDED: realisateur. Zach 2026-07-29, "realisateur comes back on next and assigns weights to the ecosystem" (recorded realisateur 4653530). Do not choose it yourself this turn -- take it as given, and design the selection for the turns after.
+
+HARD CONSTRAINTS, each with the failure it prevents:
+
+1. ONE PARTICIPANT PER TURN, and idempotent. dexter's crontab carries PACED_MAX_PER_TICK=16 and the rotation currently holds only `scheduler|1|3`, so ONE TICK CAN DISPATCH YOUR TURN UP TO 16 TIMES BACK TO BACK. A turn that adds a participant unconditionally would add sixteen. Adding an already-present participant must be a no-op that says so, not a duplicate line.
+
+2. THE PAIRED EDIT IS ONE COMMIT. Adding to _paced.dexter.conf and dropping from _paced.conf must land together. Both rotation files already document this as the "DO NOT LAND THIS ALONE" hazard: split, and the project runs NOWHERE. This is the single most damaging thing this mechanism can do wrong.
+
+3. THE MOVED PROJECT MUST BE REACHABLE FROM DEXTER FIRST, OR THE TURN MUST SAY IT IS NOT. 11 of 19 confs still point at /home/zach/git-remotes/ (356ecb0 reverted 3a45bf3) and are unclonable from dexter -- realisateur's own conf among them. Zach's ruling: this is payload, not a blocker ("we can use scheduler itself to dispatch the jobs needed to do it"), so REPOINTING A PROJECT'S REPO_URL IS PART OF ITS BOOTSTRAP TURN. But a participant added while still unreachable will fail every dispatch, so the add and the repoint belong to the same turn or the add must not happen.
+
+4. THE MILESTONE AMENDMENT IS PER PARTICIPANT, AS QUEUED. Zach's bar, verbatim: "the milestone is to wire up, then fail loudly enough to be taken off rotation." Read it carefully: SUCCESS IS THE PROJECT REMOVING ITSELF FROM THE ROTATION. The failure that matters is not a crash, it is STAYING IN THE ROTATION SILENTLY -- a unit that neither wires up nor fails loudly is the only outcome nothing detects. Note this is also the evaporation ecosim's T2 says the rotation lacks: stigmergy needs negative feedback or a system "merely accumulates", and nothing currently removes a participant line. Do not add a separate decay rule before checking whether this milestone closes it.
+
+5. EVERY TRANSITION MUST BE LEGIBLE TO AN OBSERVER THAT READS ONLY FILES AND LOGS. ecosim instruments this migration and cannot see anything that happens off-channel; tonight's entire hand-stop is already invisible to it (BUILD-DISCIPLINE pattern 19, realisateur e6c1a87). If your turn adds a participant, the log line and the commit are the observation. "Added realisateur" and "declined to add realisateur because X" must be different symbols.
+
+6. FAIL LOUD, AND DO NOT SELF-CERTIFY. A turn that intends to add a participant and does not must exit non-zero and say why. Tonight two consecutive cycles hit `Error: Reached max turns (60)` and printed `cycle FAILED` for two different world-states -- one with 2 good commits, one with none. Do not inherit that collision into this mechanism.
+
+WHAT NOT TO DO:
+- Do not add participants to _paced.conf (mandark). The migration moves work OFF mandark.
+- Do not touch schedule/FREEZE. It currently carries `EXEMPT: scheduler@dexter`, which is what lets you run while every other project is refused. Releasing it is a human decision and is now safe but not automatic.
+- Do not re-enable mandark self-dev, and do not restore the weight that was removed from its scheduler line. Weights are realisateur's to assign; it reweights the ecosystem fresh ("no weights remove", Zach 2026-07-29).
+- Do not migrate yourself onto scheduler-run as part of this. `scheduler-run scheduler batch` exits 2 by design because BATCH_SCRIPT is authoritative for your tier; that is correct and is a separate decision.
+
+STATE YOU CAN VERIFY RATHER THAN TRUST: you bootstrapped yourself on dexter tonight -- d62e961, 46f51ae, merged 5bde4d5, authored "Dexter Pine", pushed FROM dexter and confirmed from mandark off the ref. B4 armed you in _paced.dexter.conf (f8609d0). dexter's cron is back on as of this filing. The rotation reads scheduler|1|3 with crt and wtul parked at 0|0.
+
 - **2026-07-29 02:31 (via `scheduler -i`):** CORRECTION to the weight-zeroing stop verb filed minutes ago (6877476). Zach, 2026-07-29, verbatim: "no weights remove. realisateur comes back on next and assigns weights to the ecosystem". DO NOT BUILD THE STASH.
 
 WHAT CHANGES. 6877476 called reversibility "the hard requirement" and said zeroing a weight destroys the prior value, so prior weights must be stashed somewhere a resume can read them. That requirement is WITHDRAWN. The verb REMOVES weights. Nothing is preserved, because nothing needs to be: weights are realisateur's to assign -- that is already the standing division (docs/priority-weight.md; realisateur's /ideate has the weight field as explicitly its own knob, distinct from scheduler's engine). After a stop, realisateur's next pass assigns weights to the ecosystem fresh.
