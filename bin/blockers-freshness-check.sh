@@ -28,7 +28,19 @@ set -uo pipefail
 
 # Overridable so the parse paths can be exercised against fixture files
 # offline (same scratch-SCHED_ROOT convention bin/scheduler's tests use).
-SCHED_ROOT="${SCHED_ROOT:-/home/zach/Documents/Project Archive/scheduler}"
+#
+# SELF-LOCATING since 2026-07-29. The default used to be mandark's absolute
+# path, and on dexter -- where /home/zach/Documents does not exist at all --
+# that made this check DEAD, not merely unconfigured: BLOCKERS_FILE pointed
+# nowhere so it exited 2 on every invocation, and the `source` of
+# lib/check-witness.sh below it also failed, so it left no witness either and
+# bin/check-witness-lint.sh reported it "NEVER RUN" while `scheduler sweep`
+# was in fact calling it every 15 minutes. Same bug, same host, same fix as
+# bin/scheduler's own SCHED_ROOT block (see tests/sched-root-witness.sh for
+# the exit-0-no-op that one paid for); this sibling was just missed.
+# Its only caller sets SCHED_ROOT but does not EXPORT it, so inheriting it
+# was never an option -- the default is the whole resolution.
+SCHED_ROOT="${SCHED_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # Runtime witness -- record that this check actually RAN, so a
 # built-but-unwired check fails loud in `scheduler sweep` instead of looking

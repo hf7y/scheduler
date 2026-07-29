@@ -1657,3 +1657,44 @@ bibliothecaire now owns philosophy" — bibliothecaire is now the owner of
 that standing question, not scheduler. Filed as a cross-project routing
 note in `BLOCKERS.md`'s `## bibliothecaire` section, same pattern as any
 other cross-project route.
+
+## 2026-07-29 (paced cycle, dexter) — the SCHED_ROOT straggler sweep: two checks that were dead on this host, and a dead one wearing a live one's costume
+
+`bin/scheduler`'s SCHED_ROOT was made self-locating earlier this same day,
+with `tests/sched-root-witness.sh` written to hold it there. That fix was
+applied to the entry point and to `bin/scheduler-dev-cycle.sh` (2026-07-24)
+and **stopped there**. Two siblings kept mandark's absolute path
+`/home/zach/Documents/Project Archive/scheduler`, which does not exist on
+dexter — `/home/zach/Documents` does not exist here at all.
+
+Both were dead, not merely misconfigured, and both were re-probed rather
+than reasoned about:
+
+- **`bin/blockers-freshness-check.sh`** exited 2 (`FATAL: … not found`) on
+  every invocation. `scheduler sweep`'s sixth pass calls it every 15
+  minutes, and its caller sets `SCHED_ROOT` but never **exports** it, so
+  inheritance was never available — the default *was* the resolution. The
+  `source` of `lib/check-witness.sh` sits below the same variable, so it
+  also wrote no witness: `bin/check-witness-lint.sh` reported it
+  `NEVER RUN` while it was in fact being called ~96 times a day. One root
+  cause, two symptoms that looked unrelated.
+- **`bin/token-usage.sh`** globbed `$SCHED_ROOT/schedule/*.conf`, matched
+  nothing, and printed a table with no project rows (plus an `awk` fatal on
+  stderr). "No projects are spending anything" and "I cannot find the
+  repo" rendered the same — the exit-0 no-op shape again. It now refuses
+  loudly if `$SCHED_ROOT/schedule` is absent.
+
+**A third defect fell out of the first**, and it is the one worth
+remembering: the sweep pass special-cased only exit 3 as BLIND, so exit 2
+— *the check is dead* — was printed to the reader under
+`== [blockers-freshness] stale BLOCKERS.md entries found ==`. A check that
+could not run was reported as a check that had run and found something.
+Exit 2 now joins exit 3 in the BLIND arm. Verified by lifting the branch
+out of `bin/scheduler` and driving it with stub checks at rc=0/1/2/3.
+
+**Not touched, deliberately:** `bin/overnight-dev.sh:30` still hardcodes
+the same path. It is mandark-era Tier 2, is not installed on dexter, is
+referenced by no `schedule/*.conf`, and appears nowhere in
+`bin/sync-crontab.sh`'s preview for this host — so it is a dispatcher that
+does not dispatch here, and changing a dispatcher to fix a path nothing
+reads is a worse trade than leaving it named in a report.

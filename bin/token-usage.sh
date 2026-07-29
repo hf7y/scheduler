@@ -35,7 +35,19 @@
 # tokens, turn count, session count -- one row per project per run).
 set -uo pipefail
 
-SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
+# Self-locating since 2026-07-29, and overridable, for the same reason
+# bin/scheduler and bin/blockers-freshness-check.sh are: this was mandark's
+# absolute path, so on dexter the `schedule/*.conf` globs below matched
+# nothing and the per-project table came back EMPTY -- "no projects" and "I
+# cannot find the repo" rendered identically, which is the exit-0 no-op this
+# repo's build discipline forbids. $USAGE_GATE pointed nowhere too.
+SCHED_ROOT="${SCHED_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# Refuse loudly rather than reporting an unreadable world as an idle one.
+if [ ! -d "$SCHED_ROOT/schedule" ]; then
+  echo "token-usage.sh: cannot locate the scheduler checkout -- tried SCHED_ROOT=$SCHED_ROOT" >&2
+  echo "token-usage.sh: re-run with SCHED_ROOT=<path to the scheduler repo>." >&2
+  exit 1
+fi
 CLAUDE_PROJECTS="$HOME/.claude/projects"
 HIST_DIR="$HOME/.local/share/scheduler-token-usage"
 HIST_FILE="$HIST_DIR/history.tsv"
