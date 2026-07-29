@@ -145,8 +145,22 @@ against: which facts the machinery records and which views print them.
   it through `lib/paced-conf.sh`, the same rule `bin/usage-paced-runner.sh`
   applies when it actually dispatches — so what `scheduler` reports and
   what runs here are the same file, on any host. `scheduler next` prints
-  the resolved path and why it was chosen. **This was broken until
-  2026-07-29**: these commands hardcoded the shared file, so on `dexter`
+  the resolved path and why it was chosen.
+- **Which projects the paced system OWNS** — a *different* question, and
+  deliberately not the same answer. `bin/sync-crontab.sh` suppresses a
+  project's fixed nightly `BATCH` cron line when that project is listed in
+  **any** host's rotation (`lib/paced-conf.sh`'s `paced_membership_set`,
+  the union across `_paced.conf` and every `_paced.<host>.conf`), because a
+  fixed line for a project *another* host's runner dispatches is
+  cross-host double dispatch. "Does it dispatch *here*, as this account,
+  right now?" stays host-resolved — that is what the foreign-`CRON_ACCOUNT`
+  guard checks. **This was broken until 2026-07-29**: `sync-crontab.sh`
+  read only the shared file, so commenting out mandark's `scheduler|1|3`
+  line to make its self-dev dark *armed* an auto-staggered nightly
+  `scheduler-dev-cycle.sh` for the next `--apply`. See
+  `tests/sync-crontab-paced-witness.sh`.
+- **This was broken until 2026-07-29** (the CLI half): these commands
+  hardcoded the shared file, so on `dexter`
   (which owns `_paced.dexter.conf`) they described — and `weight <p> <n>`
   *wrote into* — `mandark`'s rotation. Set `PACED_CONF` to override, or
   `PACED_HOST` to ask what another host would resolve.
