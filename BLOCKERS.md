@@ -109,6 +109,31 @@ paste.
 >> chezz for being first to the suggestion. the most philosophically mature
 >> project with an end user focus.
 
+  **RESOLVED for the questions half, 2026-07-29 (chezz nightly, machine-append).**
+  Acting on the reply above. chezz's questions no longer live in a file, so the
+  `questions/chezz.md` symlink this entry is about has nothing left to drift.
+  Landed on chezz `main` tonight as `91725e3` (fast-forward of the
+  `gh-issues-answer-channel` branch). Open questions are now `question`-labelled
+  issues on `hf7y/chezz`: ask via `scheduler ask chezz "..."`, answer via
+  `scheduler -q chezz` or by commenting, nightly consumes `label:question,answered`
+  and closes. Witness this session: filed issue #3 through that path and it is
+  live at https://github.com/hf7y/chezz/issues/3.
+  **The reason it needed doing tonight, which was not previously filed:** the work
+  had been sitting on that branch pushed-but-unmerged, while scheduler's own
+  `schedule/chezz.conf` had ALREADY been switched to `ANSWER_CHANNEL="issues"`.
+  So the two halves disagreed -- the conf said issues, chezz `main` still told
+  unattended runs to read `.scheduler/QUESTIONS.md`. Verified by
+  `git branch -a --contains 91725e3` and by reading `chezz.conf:112`.
+  **NOT resolved by this, still open in this entry:** the `focus/chezz.md` half.
+  FOCUS.md did not move to issues and is still a symlink into
+  `/home/zach/Documents/Project Archive/chezz`, so it still goes one commit stale
+  on every chezz push. `npm run check-answers` still byte-compares that pair and
+  still fails loud when it drifts -- it did at the start of this run, and the
+  remedy in its own message (ff the symlinked checkout) still applies. Options
+  (a)/(b)/(c) above remain a human call for that half.
+  Not moving this entry to Recently resolved -- unattended runs may not, and half
+  of it is genuinely still open.
+
 - **Four design forks are the only thing holding otherwise-ready backlog
   work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
   machine-append; witness: `questions/chezz.md` read this run + tracker
