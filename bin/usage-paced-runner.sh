@@ -96,15 +96,36 @@ log() { echo "$(date -Is) $*" >> "$LOG"; }
 # commits origin doesn't) is left exactly as found, for a human/session pull
 # to sort out, same as the mandark/dexter divergence QUESTIONS.md already
 # flagged the same day this was built.
+#
+# DECISION 2026-07-28 (Zach, explicit): an UNTRACKED file does not block the
+# pull. The gate is `--untracked-files=no` -- only TRACKED modifications hold
+# the tick back. Rationale: an untracked file cannot be clobbered by a
+# fast-forward that doesn't mention it, git itself refuses the ff if it WOULD
+# clobber one (handled in the else branch below), and the old gate meant a
+# single stray scratch file silently froze deployed code on a host at whatever
+# commit it happened to be at -- indefinitely, with only a */5 log line nobody
+# reads. That is a bigger hazard than the one it guarded against.
+# REVISIT TRIGGER: if a real blind alley is ever traced back to not knowing
+# about an untracked file on a dispatcher host -- e.g. debugging behavior that
+# turns out to come from an uncommitted script sitting beside the tracked one
+# -- this decision is the thing to reopen. File it here and flip the gate back
+# to a bare `status --porcelain`.
 if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
-    log "PULL skip -- $REPO_ROOT has uncommitted changes"
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    log "PULL skip -- $REPO_ROOT has uncommitted changes to TRACKED files"
   elif ! timeout 20 git -C "$REPO_ROOT" fetch --quiet origin main 2>>"$LOG"; then
     log "PULL skip -- fetch failed or timed out (network/auth?)"
   elif git -C "$REPO_ROOT" merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
     : # already up to date (or ahead) -- nothing to log every 5 minutes
   elif git -C "$REPO_ROOT" merge --ff-only origin/main --quiet 2>>"$LOG"; then
     log "PULL fast-forwarded to $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  elif git -C "$REPO_ROOT" merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
+    # A fast-forward WAS possible by ancestry, so the merge refused for a
+    # working-tree reason -- almost always "untracked working tree files would
+    # be overwritten by merge". Name that specifically: it is the one case the
+    # untracked-files decision above deliberately lets reach git, and a
+    # "diverged" message here would be a lie that costs an hour to unpick.
+    log "PULL BLOCKED -- ff-only refused despite clean ancestry; an untracked file in $REPO_ROOT likely collides with an incoming tracked file (see merge error above). Code here is STALE until a human moves it."
   else
     log "PULL WARNING -- $REPO_ROOT diverged from origin/main, code here may be stale (needs a human/session merge, not auto-resolved)"
   fi
