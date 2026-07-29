@@ -1187,6 +1187,23 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 23:09 (via `scheduler -i`):** ROOT CAUSE of tonight's armed outage, and it is a design defect rather than a mistake: REPO_URL HAS TWO CONSUMERS WITH INCOMPATIBLE REQUIREMENTS, and 3a45bf3 served one by breaking the other.
+
+WHAT HAPPENED. schedule/BLOCKERS.md's [batch] GitHub-issues-rollout brief lists blocker #6 as 'missing REPO_URL', resolved by adding/redirecting REPO_URL across 15 projects so that gh_repo_slug() can resolve the owner/repo pair for 'scheduler ask <project>' to file issues. That is a legitimate need and the commit did satisfy it. But dispatch uses the SAME field to CLONE. Pointing 13 projects at plain git@github.com:hf7y/*.git gave the issues feature a parseable slug and simultaneously gave the runner a URL that NEITHER HOST CAN READ -- verified by git ls-remote from both mandark and dexter: 15 of 19 failed with an identical publickey refusal, because neither host has a generic GitHub identity, only a handful of per-repo aliases.
+
+THE TWO REQUIREMENTS ARE GENUINELY DIFFERENT AND CANNOT BE MET BY ONE STRING:
+- gh_repo_slug() needs OWNER/REPO. It wants a canonical GitHub identity and does not care whether the local host can authenticate.
+- dispatch needs a CLONEABLE URL from the executing host. It wants whatever actually works there -- an SSH alias, a LAN path, a bare repo -- and does not care about GitHub identity. crt and abletim legitimately use ssh://mandark-lan/... and are reachable only from dexter; chezz and wtul use per-repo aliases that exist on both hosts.
+A per-repo alias like git@github-chezz-deploy:hf7y/chezz.git happens to satisfy BOTH only because the slug survives the alias substitution. That is a coincidence of string shape, not a property anyone designed, and it is why the conflict stayed invisible until a commit optimised for the slug half.
+
+THE FIX, and it is small: SEPARATE THE FIELDS. Keep REPO_URL as the cloneable remote for the host that executes, and add a distinct field -- GITHUB_REPO="hf7y/ecosim" or similar -- that gh_repo_slug() reads. Deriving the slug from REPO_URL should then be at most a FALLBACK when the dedicated field is absent, never the primary path. This unblocks the GitHub-issues rollout WITHOUT requiring every project's clone URL to become a GitHub URL, which is the requirement that caused the outage and which the ecosystem cannot currently satisfy anyway (provisioning generic GitHub identity on two hosts is a real credential decision, not a config edit).
+
+WHY THIS MATTERS BEYOND TONIGHT. The rollout brief says both draft PRs (hf7y/scheduler#1, hf7y/chezz#2) 'can merge now'. If blocker #6 is re-resolved the same way after this revert, the outage returns -- and next time it may land when the usage gate is saying GO rather than HOLD. The revert (356ecb0) bought time; it did not resolve blocker #6, and blocker #6 should NOT be re-closed by repointing REPO_URL again.
+
+A THIRD THING 3a45bf3 DID that nobody flagged and the revert also fixed: schedule/scheduler.conf WAS A SYMLINK to ../.scheduler/schedule.conf -- the single-source-of-truth mechanism, and the documented reference for the per-project folder model every other project is migrating onto. The commit replaced it with a regular file containing a full copy (mode change 120000 -> 100644). Two copies of one config that can silently drift, i.e. exactly the 'config read from one source, not retyped per file' row. Nothing failed, which is why it went unnoticed in a commit whose stat line showed '78 insertions' and read as additive. Worth a guard: a check that flags any tracked symlink under schedule/ that becomes a regular file.
+
+STATUS: reverted and verified this session (356ecb0), re-probed from both hosts afterward -- 14 of 16 reachable on mandark, and the two exceptions (crt, abletim) are ssh://mandark-lan/... which correctly resolve from dexter, rc=0. main never carried 3a45bf3; the outage was live only through the working tree that bin/usage-paced-runner.sh actually reads, which is this branch.
+
 - **2026-07-28 22:49 (via `scheduler -i`):** DEXTER MIGRATION — ORCHESTRATION DESIGN, four decisions taken interactively by Zach 2026-07-28 ~22:45 via realisateur /ideate, plus a probed readiness matrix that reframes the work. This is the spec; nothing was built this session.
 
 === WHAT WAS PROBED (all re-probed live 2026-07-28 22:39-22:50, not quoted) ===
