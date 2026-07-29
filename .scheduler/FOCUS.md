@@ -1187,6 +1187,27 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 02:56 (via `scheduler -i`):** FINDING + PROPOSAL: the usage gate is the ecosystem's metabolic regulator and it has NO SLOW SETTING -- only "pace" and "don't pace". Surfaced 2026-07-29 when Zach asked to "slow scheduler metabolism to lower usage pressure, aim to run the bootstrap over 6 hours" and the gate turned out to be the wrong instrument for it despite being exactly the right organ.
+
+THE OBSERVATION. bin/usage-gate.sh regulates by QUOTA against an even-burn line. Its knobs are USAGE_CEILING, USAGE_MIN_SLACK, USAGE_RUSH_BEFORE_RESET_MIN, USAGE_PROBE_MODEL. In practice tonight it offered two states and nothing between:
+  - Pacing ON (rush at its 120-minute default): both hosts HELD continuously. mandark's last dispatch was 17h earlier and dexter had dispatched ZERO jobs ever, while the gate read "29% used vs burn-line 27% (on-pace)". Being marginally above an even-burn line is sufficient to hold indefinitely, and interactive sessions drawing on the same weekly quota keep it there.
+  - Pacing OFF (USAGE_RUSH_BEFORE_RESET_MIN=10080, the full 7d window, applied in e502555): dispatch resumes immediately and runs flat out. Both hosts dispatched within five minutes.
+There is no knob that says "run, but slowly". The gate answers WHETHER to dispatch, never HOW OFTEN.
+
+WHY THIS MATTERS BEYOND TONIGHT. realisateur filed BUILD-DISCIPLINE pattern 18 (e6c1a87 area, d19d75b) after Zach's diagnosis: "the usage gate was actually helpful and we missed it because it's called usage gate, not slow down metabolism". The name understates it -- it is the only thing bounding how fast the whole system consumes itself. But having correctly identified the metabolic regulator, we then could not USE it to set a metabolic rate, because rate is not among its outputs. A regulator with the right domain and the wrong output alphabet.
+
+WHAT WAS DONE INSTEAD, and it is a workaround, not a fix. dexter's crontab was retimed: `*/5 PACED_MAX_PER_TICK=16` -> `*/30 PACED_MAX_PER_TICK=1`. Expected ~12 cycles over 6h at ~11 min each, ~37% duty cycle. This is a CLOCK throttle living in a crontab, which means: it is per-host, it is invisible to anything reading the repo, it is not derived from any conf, and it does not appear in the gate's verdict line where every other pacing decision is reported. senechal was notified because it is machine config.
+
+THE PROPOSAL. Give the gate a rate dimension, so pacing intent lives in schedule/_usage.conf with the other knobs and is reported in the verdict line like they are. Shape deliberately unspecified -- a minimum interval between dispatches, a target dispatches-per-hour, or a duty-cycle ceiling are all plausible and the choice is yours. The requirements are:
+  - It belongs in _usage.conf (or _usage.<host>.conf), which already exists as "the ONE persistent place to set them" and is read live with no crontab edit and no --apply.
+  - It must appear in the verdict line with its resolved value and source, exactly as ceiling/min_slack/rush_min already do (knobs=ceiling:_usage.conf,...). A pacing decision that does not print is one nobody can audit.
+  - It must be per-host capable, since mandark and dexter share one weekly budget and already have different ceilings.
+  - RUN/HOLD stays the alphabet; this adds a reason, not a verdict.
+
+WHY NOT JUST USE THE CRONTAB. Because the crontab is generated from confs by bin/sync-crontab.sh for mandark, and dexter's is hand-maintained precisely because that script is not host-scoped yet (documented in dexter's own crontab header). A pacing rate encoded in a hand-maintained crontab on one host is a fact about the ecosystem that lives nowhere the ecosystem can read. Tonight that is acceptable and reversible; as a permanent home it is the "writer and reader disagree about location" pattern waiting to happen.
+
+NOT BUILT -- filed through the front door per realisateur's rule against hand-editing your engine. The crontab retime is live now and is the thing this would replace.
+
 - **2026-07-29 02:46 (via `scheduler -i`):** BUILD REQUEST -- THE SELF-WRITING ROTATION. Zach-directed 2026-07-29 via realisateur /ideate: build it, and it comes through your front door rather than being hand-edited into your engine. This is the core mechanism of THE PLAY and it is the last unbuilt piece.
 
 IT IS UNBLOCKED AS OF TONIGHT. It was gated on BLOCKERS.md 63cf3b4 decision (1), which Zach answered this date: "confirm 63cf3b4, mandark self-dev goes dark." Applied in 58d6495 -- mandark's scheduler line is commented out, so DEXTER IS THE ONLY HOST THAT AUTO-COMMITS SCHEDULER'S OWN HISTORY, as a property of the rotation files rather than of schedule/FREEZE staying engaged. That was the precondition: a rotation that writes itself is single-writer only because nothing else writes it.
