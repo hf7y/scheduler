@@ -45,8 +45,6 @@ only ever sees its own section, never another project's.
 ## chezz
 
 
-<<<<<<< /tmp/vRwBLh8/5
-=======
 - **PRIVATE KEY at rest in OCF at rest in OCF `authorized_keys`** (agent-appended 2026-07-28)
 
 Found while restricting the chezz deploy key. `~/.ssh/authorized_keys` on
@@ -72,7 +70,6 @@ File mtime was 2026-07-28 10:45, i.e. the same day, though that is also
 when `ssh-copy-id` appended the chezz key, so mtime does not date the
 paste.
 
->>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 - **The `questions/chezz.md` symlink points at a checkout that goes stale on
   every push — this is why no QUESTIONS.md answer has ever round-tripped**
   (filed 2026-07-27 late run, chezz nightly, machine-append; witness:
@@ -110,8 +107,6 @@ paste.
 > chezz for being first to the suggestion. the most philosophically mature
 > project with an end user focus.
 
-<<<<<<< /tmp/vRwBLh8/5
-=======
 - **Four design forks are the only thing holding otherwise-ready backlog
   work -- all waiting on you** (filed 2026-07-25 ~21:00, chezz nightly,
   machine-append; witness: `questions/chezz.md` read this run + tracker
@@ -249,7 +244,6 @@ paste.
     editing. If "handled" was meant to cover all ten, nothing in chezz's
     reach confirms or refutes that -- worth a look before this entry gets
     moved to `## Recently resolved`.
->>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
 ## scheduler
 
@@ -272,11 +266,7 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   unattended run should do on its own initiative. Ready to run in
   `realisateur-research-ecosim/bin/decide.sh` option 3 (dry-run by
   default), which prints its own revert line.
-<<<<<<< /tmp/vRwBLh8/5
-> See below. We changed this.
-=======
-  > (answer inline here — enable cron logging, or leave it off deliberately)
->>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
+  > See below. We changed this.
 
   - **RETRACTED 2026-07-28 (realisateur `/ideate`, Zach-directed to run
     it): the premise is false — do NOT run this as a silence fix.** Zach
@@ -305,8 +295,6 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
     had not been re-derived. Nothing was changed on the machine; no
     `notify-senechal` was needed because no machine-wide config was
     touched.
-<<<<<<< /tmp/vRwBLh8/5
-=======
 
 - **2026-07-28 (scheduler `/cloture`): `bin/decide.sh` offers seven
   remediations from the overnight audit and I am deliberately not running
@@ -322,7 +310,6 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   Lives on branch `research/ecosystem-cybernetics` at `29c90ab`, unwired
   on purpose.
   > (answer inline here — which numbers, if any)
->>>>>>> /home/zach/Documents/Project Archive/scheduler/BLOCKERS.md
 
 
 - **2026-07-28 (realisateur `/cloture`, filed by the sprint session):
@@ -342,8 +329,18 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   realisateur's `.scheduler/QUESTIONS.md`: the watcher no longer just
   misattributes work, it has now committed and pushed structural
   corruption into the file you answer decisions in.
-  > (answer inline here — resolve it yourself, or say "you resolve it,
-  >  keep both sides" and a session will)
+  > RESOLVED 2026-07-28 by Zach ("can you merge for me first please").
+  > A session resolved all four blocks: the three empty-first-side blocks
+  > kept the repo side verbatim (nothing dropped); the block at 275 kept
+  > YOUR line `> See below. We changed this.` and dropped only the
+  > superseded empty placeholder
+  > `> (answer inline here — enable cron logging, or leave it off
+  > deliberately)`, which your answer answers. That placeholder is the
+  > ONLY text removed from this file. Both original sides remain in git at
+  > `44d6927` if you disagree with the choice.
+  > The adoption question this evidences stays open in realisateur's
+  > `.scheduler/QUESTIONS.md` — resolving the damage does not answer why
+  > the watcher pushed it.
 
 - **2026-07-28 (same session): items (1) and (6) of the overnight-audit
   remediation question above are no longer hypothetical — both switches
