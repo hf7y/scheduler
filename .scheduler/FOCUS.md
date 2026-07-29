@@ -1187,6 +1187,28 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-28 23:39 (via `scheduler -i`):** THE PLAY REVISED (2026-07-28, Zach-directed via realisateur /ideate; supersedes three DECIDED lines in the 23:26 THE PLAY entry). Full rationale + witnesses: realisateur .scheduler/FOCUS.md dd11360.
+
+Zach's framing: the ecosystem moves to dexter, scheduler moves FIRST and bootstraps the rest, creds are already set up, "the agents are neurotically overthinking it." Drop scheduler in, run it, it installs itself. The first schedule runs each agent, which takes turns verifying its credentials and proving it's wired up.
+
+SUPERSEDED:
+1. "scheduler's OWN move is deferred until the others land and there is evidence" -> scheduler moves FIRST. It is the bootstrap. The two-writer hazard is resolved by decree instead of by ordering: dexter becomes the only host that auto-commits scheduler's own history; mandark keeps the human checkout, interactive/read-only. This is derived from THE PLAY's own vision line ("mandark becomes a workstation ... stops being an execution host"), not invented. What got passed over: the evidence-first rationale. Why: the bootstrap IS the evidence-generating run.
+2. M1(b), the readiness probe with a negative test, is RETIRED BEFORE BEING BUILT. Replaced by self-verification-on-first-turn. Argument, in ecosim's own vocabulary: the 19/19-READY failure was a central probe asserting readiness for 19 projects it could not see execute. A real run has strictly more output symbols than any probe of a run. M1(b) is a sensor built to avoid running the experiment.
+3. M1 no longer gates all movement. The first schedule is the test.
+
+RETAINED:
+- M1(a), the freeze file, SURVIVES and is now the ONLY M1 mechanism. It is not a predictor, it is the abort handle -- the only thing that stops a bad first schedule already in flight. git revert handles a landed bad commit; it does not stop a running tick.
+- Proof bar per agent = A REAL RUN THAT COMMITS AND PUSHES FROM DEXTER (the crt bar, already M2's standard). NOT ls-remote-plus-witness-line. Agent-authored prose self-report is explicitly REJECTED and recorded as rejected.
+- The quote-stream.py selector pattern still governs, but its subject changes: the agent selects nothing: it runs and the run's exit status is the symbol.
+
+CONSEQUENCE FOR AN OPEN QUESTION: 7fccdc1 q2 (must the freeze reach svc-vaporwave's fixed-cron aedile 03:00 / vkv-inventory 04:00 jobs, or may it declare them out of scope loudly?) got MORE load-bearing tonight, not less -- the freeze is now the only surviving M1 mechanism. Still unanswered.
+
+STALENESS FINDING, re-probed 2026-07-28 23:35 via ssh dexter: ecosim's BRIEF-dexter-migration.md is expired in two of three findings. Its §3 ("dexter's scheduler is stalled right now, and silently") is FALSE -- ~/scheduler is at "## main...origin/main" clean and run.log logs "23:30:02 PULL fast-forwarded to 6e8636a". Its §2 fix is ALREADY APPLIED and persisted (git config --global --get url.https://github.com/.insteadOf -> git@github.com:). The brief was 40 minutes old. Do not plan against it without re-probing.
+
+STILL OPEN, not settled by this revision: "it installs itself on the machine" -- does the self-install write dexter's crontab, or assume the */5 usage-paced-runner.sh tick already present is the whole install surface? The sweep backstop (*/15) and weight-audit (30 6) ticks remain mandark-only and unreplicated.
+
+STATUS: all decisions above were taken on best judgment during a 60s no-response window on an AskUserQuestion to Zach. Each is reversible and awaits his confirmation. Nothing was built; no host was touched.
+
 - **2026-07-28 23:26 (via `scheduler -i`):** THE PLAY — scheduler-orchestrated dexter migration. Vision, milestone chain, sprint, blockers. Written 2026-07-28 ~00:15 by realisateur /ideate at Zach's direction ("we need to run the play. Big vision. Milestone. Sprint. Blockers."). Nothing here was built; this is the plan and the decisions behind it.
 
 === 1. VISION ===
