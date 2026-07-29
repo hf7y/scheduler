@@ -1,0 +1,22 @@
+# DISPATCH FREEZE -- engaged 2026-07-29, Zach-directed via realisateur /ideate
+# ("the play, freeze the jobs ... then the remaining jobs migrate").
+#
+# Read by bin/freeze-check.sh, which is called at DISPATCH time by
+# bin/usage-paced-runner.sh (per participant) and bin/scheduler-run.
+# Both hosts pick this file up on their next pull, within ~5 minutes.
+#
+# RELEASE:  git rm schedule/FREEZE && commit && push
+#
+# NOT COVERED, and this is stated every time the freeze refuses:
+#   - svc-vaporwave's fixed-cron jobs (aedile 03:00, vkv-inventory 04:00).
+#     Declared in scope by Zach 2026-07-29; NOT mechanically enforced, because
+#     that crontab is under a second account, needs sudo, and has never been
+#     read by this ecosystem. A freeze does not stop them.
+#   - work already in flight. This stops the NEXT dispatch, not a running job.
+#     dexter was mid-run on `crt` when this landed; that run completes.
+
+THE PLAY: participants are frozen while scheduler bootstraps itself onto dexter.
+Each project's bootstrap turn is queued by scheduler, not by the rotation, so
+ordinary paced dispatch must not run underneath the migration.
+
+EXEMPT: scheduler
