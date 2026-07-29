@@ -753,33 +753,121 @@ happened yet for any of them.
   nothing consumes it as a work queue (crt's `/nightly-batch` scope is
   `.claude/FOCUS.md`'s batch-tagged items only); this cross-reference
   stays so a future read doesn't re-surface it as if still homeless.
-> The scap/stl steps are resolved for now. I have a printed prototype
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+>> The scap/stl steps are resolved for now. I have a printed prototype
   that fits the handset. What does need to happen is solving the 3-pin.
   Zach has not yet looked at the 3-pin design write-up.
+  >> **ACTED ON 2026-07-29 (crt nightly-batch).** Read as: the caliper/CAD
+  >> half of this entry is retired by your own prototype, and the only live
+  >> thread is the 3-pin wiring decision. Found the actual reason you have
+  >> not looked at the write-up: **it is not a document, it is a 90-line
+  >> section appended to the bottom of `HOOKSWITCH.md`** (landed `9cc07a1`,
+  >> 2026-07-24, ranked-backlog item 7) — a file you have no reason to open,
+  >> and it was never surfaced into `.claude/QUESTIONS.md`, which is the only
+  >> place this project actually asks you things. The deliverable was written
+  >> and then filed where nobody reads. That is a routing failure, not a
+  >> missing writeup, and it is the same shape as this entry's own "mis-filed
+  >> in BLOCKERS.md where nothing consumes it" note three lines up.
+  >> Fixed this run: the fork is now a short, one-word-answerable question in
+  >> crt's `.claude/QUESTIONS.md` with a `> ` reply slot, pointing at the full
+  >> tradeoffs. The three options, so you have them here too — (1) hard-kill
+  >> the audio line electrically, (2) software mute, which is what
+  >> `hookswitch-listen.sh` already does today, (3) read the switch on Pi GPIO
+  >> instead of the USB HID encoder. 2 and 3 are not rivals — 3 is how 2 gets
+  >> its signal — and 1 can be layered underneath either later. So the real
+  >> question is only "keep the USB encoder, or move to GPIO," plus "do you
+  >> want the physical guarantee eventually." No hardware needed to answer.
 
 
 - **2026-07-28 (realisateur `/cloture`): crt is enabled on dexter and has dispatched nothing since 2026-07-25 — is that acceptable pacing, or is it stuck?** Only you can settle this, because it needs a probe ON dexter and no key from mandark reaches it. First-hand evidence from your own shell tonight: the runner is alive (5-min ticks, continuous 16:40→18:15), the gate reads `http_code=200 ... 23% used vs burn-line 23% (on-pace)` — legitimately pacing, not broken — yet `~/.local/share/crt-nightly-batch/` is dated entirely 07-25. Realisateur's predicted cause (the old 338 `http_code=401` HOLDs) was **falsified**; auth is fine. Two candidates it could NOT resolve from here: a 0-byte `sweep.lock` from 07-25 20:10 next to a log that stops at 20:37 (stale or held? needs `fuser`/`flock` on dexter), and an `expires_at` stamped 07-25 01:14 that puts the dead-man expiry near 2026-08-01 — after which crt gains a second, masking reason not to run. Recorded in crt `c43fa77`; acceptance case filed to scheduler `b42b81f`.
-  > (answer inline here — is 3 days of on-pace HOLD expected for a single-participant host, or should dexter's gate/weighting be looked at?)
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — is 3 days of on-pace HOLD expected for a single-participant host, or should dexter's gate/weighting be looked at?)
 
 - **2026-07-28 (agent-appended, from an interactive session ON dexter): dexter has NONE of the ecosystem guard commands, and crt's own senechal hook is silently blind there.** Witness, run on dexter tonight: `command -v notify-senechal check-project-busy focus-commit silence-audit` → all four **MISSING**. Separately, `command -v jq` → missing, and `crt/bin/crt-senechal-guard.sh:25` piped its payload through `jq ... 2>/dev/null` then `[ -z "$cmd" ] && exit 0` — so on any host without jq the hook reminded about nothing, forever, while looking installed and healthy. That is the exact failure the hook exists to prevent, turned on itself. **Consequence, concrete and already incurred:** this session wired potato's brain to dexter and made five machine-scoped changes — `Host potato` in dexter's `~/.ssh/config`, a forced-command entry in dexter's `~/.ssh/authorized_keys`, `~/.local/bin/crt-brain-shell`, a `potato-claude` tmux session, and `Port 2223` in potato's `~/.ssh/config` — and **none could be filed with senechal**, nor did anything warn about it. Per CLAUDE.md a missing guard is a finding, not an inconvenience, so it is filed rather than worked around. Fixed in crt `f5bc6f6`: the hook now announces its own blindness on stderr instead of exiting 0. **NOT fixed, needs a human on dexter:** installing jq (`sudo apt install jq`, needs sudo this session does not have unattended) and installing realisateur's four ecosystem commands onto dexter. Until then every machine-scoped change made on dexter — by anyone, for any project — goes unfiled and unannounced, and dexter is now the ecosystem's default execution host, so that is the common case rather than an edge one.
-  > (answer inline here — who installs realisateur's commands on dexter, and should the five changes above be filed retroactively once they exist?)
-  >
-  > **UPDATE 2026-07-28 (realisateur `/cloture`, machine-append) — HALF DONE,
-  > and the remaining half is no longer human-only.** `jq` is INSTALLED on
-  > dexter (Zach, this session; verified `jq-1.8.1` at `/usr/bin/jq`), so
-  > crt's senechal hook can parse again. The four ecosystem commands are
-  > still MISSING (re-probed tonight: `notify-senechal`,
-  > `check-project-busy`, `focus-commit`, `silence-audit` — all absent).
-  > **What changed is the "needs a human on dexter" premise:** that was
-  > true only because no key from mandark authenticated there, which was
-  > itself a misdiagnosis — dexter's WSL2 sshd listens on **2223**, not 22,
-  > and the `mandark-to-dexter-gardien` key was always valid for it.
-  > mandark's `~/.ssh/config` is corrected (senechal `ac49741`) and
-  > `ssh dexter` now works unattended, so realisateur's
-  > `bin/install-shims.sh` can be run against dexter from here without a
-  > human sitting on that box. Not done this session: `/cloture` reports
-  > and routes, it does not build. This is now a work item with a live
-  > path, not a blocked one — it needs an owner, not access.
+>> _[consumed 2026-07-29 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — who installs realisateur's commands on dexter, and should the five changes above be filed retroactively once they exist?)
+  >>
+  >> **UPDATE 2026-07-28 (realisateur `/cloture`, machine-append) — HALF DONE,
+  >> and the remaining half is no longer human-only.** `jq` is INSTALLED on
+  >> dexter (Zach, this session; verified `jq-1.8.1` at `/usr/bin/jq`), so
+  >> crt's senechal hook can parse again. The four ecosystem commands are
+  >> still MISSING (re-probed tonight: `notify-senechal`,
+  >> `check-project-busy`, `focus-commit`, `silence-audit` — all absent).
+  >> **What changed is the "needs a human on dexter" premise:** that was
+  >> true only because no key from mandark authenticated there, which was
+  >> itself a misdiagnosis — dexter's WSL2 sshd listens on **2223**, not 22,
+  >> and the `mandark-to-dexter-gardien` key was always valid for it.
+  >> mandark's `~/.ssh/config` is corrected (senechal `ac49741`) and
+  >> `ssh dexter` now works unattended, so realisateur's
+  >> `bin/install-shims.sh` can be run against dexter from here without a
+  >> human sitting on that box. Not done this session: `/cloture` reports
+  >> and routes, it does not build. This is now a work item with a live
+  >> path, not a blocked one — it needs an owner, not access.
+  >>
+  >> **RE-PROBED 2026-07-29 (crt nightly-batch, running ON dexter — this run's
+  >> own shell, first-hand, not inferred).** `jq` confirmed present
+  >> (`/usr/bin/jq`) and crt's senechal hook parses again — the hook fired
+  >> correctly four times during this run. The four ecosystem commands are
+  >> **still MISSING**; witness, run this session:
+  >> `for c in notify-senechal check-project-busy focus-commit silence-audit;
+  >> do command -v "$c" || echo MISSING; done` → 4× MISSING. `~/.local/bin`
+  >> on dexter holds only `claude`, `crt-brain-shell`, `node`, `npm`, `npx`,
+  >> `usage-gate.sh`, `usage-paced-runner.sh`.
+  >> **Concretely incurred again tonight, which is the point:** this run had
+  >> to write to scheduler's `BLOCKERS.md` (this append) without
+  >> `check-project-busy`, and files its own machine-scoped findings without
+  >> `notify-senechal`. Per CLAUDE.md that is reported loudly rather than
+  >> worked around — the append below was made under the file's own
+  >> machine-append policy and deliberately NOT committed, so the ~:30
+  >> autocommit watcher picks it up instead of this run racing a file that
+  >> was already `M` with human replies in flight.
+  >> Still needs an owner to run realisateur's `bin/install-shims.sh`
+  >> against dexter. crt is not that owner and is not claiming it — crt's
+  >> standing here is only as the project that keeps paying the cost.
+
+- **2026-07-29 (crt nightly-batch, ON dexter): the "3 days of on-pace HOLD"
+  question above is ANSWERED and already FIXED — by Zach, hours before this
+  run, and this run is itself the witness.** Answering the inline
+  `(is 3 days of on-pace HOLD expected for a single-participant host...)`
+  slot so it is not left open.
+  **It was not expected and not acceptable — it was a deadlock.** Read
+  first-hand from `~/.local/share/scheduler-paced-runner/run.log` on dexter:
+  **465 HOLD lines and, until 01:00 tonight, zero RUN / zero DISPATCH in the
+  log's entire history.** dexter had never dispatched anything, ever. The
+  mechanism is `usage-gate.sh:237` — `if slack < min_slack and not rush:
+  reasons.append("on-pace")`. A host running exactly one participant that is
+  being held cannot spend, so it can never fall *below* the even-burn line it
+  is held against, while interactive sessions on the shared account keep
+  drawing the same weekly quota. "On-pace" was therefore a stable fixed
+  point, not a pacing state it would grow out of.
+  **The fix, already landed:** scheduler `e502555` (`_usage.conf`:
+  `USAGE_RUSH_BEFORE_RESET_MIN=10080`, the full 7d window, Zach-directed via
+  realisateur `/ideate`) makes `rush` always true so "on-pace" is never a
+  hold reason; `ceiling` and `rejected` still block, which is why it is safe.
+  **The witness is one second wide.** From this host's run.log:
+  `01:00:02 PULL fast-forwarded to e502555` → `01:00:03 RUN verdict=RUN ...
+  rush=True knobs=...,rush_min:_usage.conf` → `01:00:03 DISPATCH [1/4] crt`.
+  The commit landed and the next tick dispatched. This run exists because of
+  it. No change to crt's weight is needed; the weighting was never the
+  problem.
+  **Two loose ends from the entry above, settled:**
+  (a) `sweep.lock` — RED HERRING, confirmed again. It is a 0-byte file; a
+  `flock` is advisory on the fd, so a leftover file never blocks. Tonight's
+  run took the lock without incident (`flock -n` → HELD, `fuser` → this
+  run's own PIDs). Stop citing it.
+  (b) `expires_at` — **REAL, LIVE, AND STILL UNRESOLVED.**
+  `2026-08-01T01:14:14-05:00`, and tonight's successful dispatch did **not**
+  refresh it (mtime still 2026-07-25 01:14 after the run started). Per
+  `scheduler:3014` the stamp is re-written only when the file is *missing*,
+  so crt goes dark again on 2026-08-01 for a second, unrelated reason unless
+  someone runs `rm ~/.local/share/crt-nightly-batch/expires_at` on dexter.
+  **This run deliberately did not renew it.** An unattended job clearing its
+  own dead-man switch is precisely the failure the switch exists to catch, so
+  it is surfaced rather than silently reset. Needs Zach, one command, before
+  Saturday.
 
 ## vkv-inventory
 
