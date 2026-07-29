@@ -1187,6 +1187,25 @@ human's own dotfiles.
 
 ## Backlog (the intake — add a line to propose an idea)
 
+- **2026-07-29 01:56 (via `scheduler -i`):** PROPOSAL: `scheduler stop` -- the verb whose absence caused tonight's worst failure. Filed 2026-07-29 from realisateur /ideate, Zach-directed: "the failure here is that we should have used scheduler itself to stop the work." Recorded as BUILD-DISCIPLINE pattern 19 (realisateur e6c1a87).
+
+WHAT HAPPENED. The dexter migration's stated purpose was "we need to run the play, via scheduler, for science." Stopping dexter was then done entirely OUTSIDE scheduler: dexter's crontab hand-edited, mandark's */15 sweep backstop hand-commented, and finally the paced runner (pid 117607) and a live crt job killed by pid. Every step worked. None went through you.
+
+THE EVIDENCE THAT THIS IS YOUR GAP, NOT A PROCESS COMPLAINT:
+1. Your run.log on dexter records `DISPATCH [0/4] crt` at 01:47:23 and NO termination. From your own records that job simply stopped existing. `scheduler status` would report from that log.
+2. The freeze -- your native stop -- was engaged at 983ed3d and NEVER REACHED DEXTER. It propagates by git pull; the runner skips PULL while a job runs; dexter was continuously busy. The mechanism designed to stop a runaway host cannot reach a runaway host.
+3. The in-flight runner SURVIVED THE CRONTAB EDIT BY 52 MINUTES. It started at 01:00:01 with PACED_MAX_PER_TICK=16 and kept walking its rotation -- [1/4] crt, [2/4] crt, [3/4] wtul, [0/4] crt, wrapping -- long after its schedule was removed. Removing a schedule never stops what the schedule already started. This is the strongest argument for the verb and we found it by not having it: the bypass produced a PARTIAL stop that looked complete, and it looked complete for nearly an hour.
+
+WHAT `scheduler stop` SHOULD DO, offered as a shape and not a spec:
+- Engage the freeze (the existing git-tracked schedule/FREEZE, bin/freeze-check.sh, 17 negative-test assertions, host-scoped EXEMPT lines already supported).
+- SIGNAL IN-FLIGHT RUNNERS AND JOBS, which the freeze structurally cannot: the freeze is checked at dispatch, so it is a no-op against work already running. This is the half that does not exist in any form today.
+- RECORD THE STOP IN run.log, so the system's own history shows an interruption rather than an absence. A killed job and a vanished job are currently the same symbol -- a null-discriminator in the dispatch record itself.
+- Work on a BUSY host. Delivery cannot depend on a git pull, for the reason in (2). This is the hard part and it is the actual design question; do not solve it by removing the pull-skip guard, which correctly prevents swapping code under a running job.
+
+ALSO WORTH A VERB, same root: `scheduler stop` implies `scheduler resume`, and neither should require a human to remember which crontab lines were commented out on which host. Tonight's disabled lines carry markers (#DISABLED-2026-07-29-zach-stop-dexter#, #DISABLED-2026-07-29-zach-stop-sweep-backstop#) precisely because nothing else records them.
+
+NOT BUILT. This is a proposal through your front door, per realisateur's own rule against hand-editing your engine. The freeze and its host-scoped exemptions (e92a493, 807f926, 769cdcc, 6bed73f) were built at Zach's explicit direction and are already yours; this is the next thing and it is not started.
+
 - **2026-07-29 01:49 (via `scheduler -i`):** QUESTIONS.md CONTRACT AMENDMENT -- the fourth unregulated interface (human->system instruction). Filed by realisateur /ideate 2026-07-29, Zach-directed, four AskUserQuestion decisions. Owner: scheduler (canonical text lives in examples/QUESTIONS.md.template and embedded in bin/scheduler).
 
 WHY. UNIVERSE.md names Zach twice -- source of all disturbance, scarcest organ. Both are about RATE. Neither is about ACCURACY. The contract currently says a `> ` reply is "authoritative, same standing as FOCUS.md", full stop. There is admission control for ideas (park-by-default) and NONE for instructions. Three exhibits: (1) 2026-07-27 bibliothecaire -- Zach asked to unpark a project that was never parked, six sensors green; the false premise BECAME the finding, by instinct not mechanism. (2) groc-mangr, current -- Zach answered "Yes merge. Always merge." about feature/receipt-ocr, which had already merged four days earlier in 6e74864; a literal reading of the contract would have acted on a dead premise. (3) Same answer -- "Always merge" is a STANDING POLICY filed in a ONE-OFF ANSWER SLOT, a channel not built to carry it, so it would be either lost or silently obeyed forever unratified.
