@@ -19,4 +19,4 @@ THE PLAY: participants are frozen while scheduler bootstraps itself onto dexter.
 Each project's bootstrap turn is queued by scheduler, not by the rotation, so
 ordinary paced dispatch must not run underneath the migration.
 
-EXEMPT: scheduler
+EXEMPT: scheduler@dexter

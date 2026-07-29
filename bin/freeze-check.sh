@@ -36,6 +36,18 @@
 #              Callers pass their project as $1. A caller that passes NOTHING
 #              is never exempt -- absence of a name is not a match.
 #
+#              HOST-SCOPED FORM: `EXEMPT: scheduler@dexter` exempts a project
+#              on ONE host only. Added 2026-07-29 within an hour of the plain
+#              form, because the plain form was actively dangerous here: a bare
+#              `EXEMPT: scheduler` unfroze mandark's scheduler self-dev at the
+#              same moment dexter was to be bootstrapped by hand -- and
+#              scheduler-dev-cycle.sh "merges into local main AND PUSHES TO
+#              ORIGIN IMMEDIATELY, same cycle". Two hosts pushing one scheduler
+#              history is the divergence the whole migration ordering exists to
+#              avoid, and the exemption had quietly re-created it.
+#              Host is $PACED_HOST if set, else `hostname -s` -- the same
+#              resolution usage-gate.sh uses, so one host means one thing.
+#
 # TO RELEASE:  git rm schedule/FREEZE, commit, push.
 #
 # WHAT THIS DOES NOT COVER -- stated here because M1(a) requires it to, and
@@ -79,9 +91,13 @@ FROZEN: an abort handle that fails open is not an abort handle.\n' "$f" >&2
   # accidentally exempts "scheduler-run" or a project whose name contains it.
   if [ -n "$proj" ]; then
     exempt="$(grep -E '^[[:space:]]*EXEMPT:' "$f" 2>/dev/null | sed -E 's/^[[:space:]]*EXEMPT:[[:space:]]*//')"
+    local host
+    host="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
     for e in $exempt; do
-      if [ "$e" = "$proj" ]; then
-        printf 'FROZEN, but %s is EXEMPT in %s -- proceeding.\n' "$proj" "$f" >&2
+      # bare name = every host; name@host = that host only
+      if [ "$e" = "$proj" ] || [ "$e" = "$proj@$host" ]; then
+        printf 'FROZEN, but %s is EXEMPT in %s (host=%s, rule=%s) -- proceeding.\n' \
+          "$proj" "$f" "$host" "$e" >&2
         return 0
       fi
     done
@@ -154,7 +170,24 @@ if [ "${1:-}" = "--selftest" ]; then
   freeze_check wtul >/dev/null 2>&1
   [ $? -eq 1 ] || { echo "FAIL: unlisted project must be refused when others are exempt"; fails=$((fails+1)); }
 
-  if [ "$fails" -eq 0 ]; then echo "ok -- 13 assertions, 0 failure(s)"; else
+  # --- host-scoped exemptions. Every assertion checks that the OTHER host
+  # stays frozen, because that is the direction that caused the incident.
+  printf 'wave 1\nEXEMPT: scheduler@dexter\n' > "$SCHEDULER_FREEZE_FILE"
+
+  PACED_HOST=dexter freeze_check scheduler >/dev/null 2>&1
+  [ $? -eq 0 ] || { echo "FAIL: scheduler@dexter must be exempt ON dexter"; fails=$((fails+1)); }
+
+  PACED_HOST=mandark freeze_check scheduler >/dev/null 2>&1
+  [ $? -eq 1 ] || { echo "FAIL: scheduler@dexter must NOT exempt scheduler on mandark"; fails=$((fails+1)); }
+
+  PACED_HOST=dexter freeze_check crt >/dev/null 2>&1
+  [ $? -eq 1 ] || { echo "FAIL: host-scoped rule must not exempt a different project"; fails=$((fails+1)); }
+
+  printf 'wave 1\nEXEMPT: scheduler\n' > "$SCHEDULER_FREEZE_FILE"
+  PACED_HOST=mandark freeze_check scheduler >/dev/null 2>&1
+  [ $? -eq 0 ] || { echo "FAIL: BARE name must still exempt on every host"; fails=$((fails+1)); }
+
+  if [ "$fails" -eq 0 ]; then echo "ok -- 17 assertions, 0 failure(s)"; else
     echo "$fails failure(s)"; exit 1; fi
   exit 0
 fi
