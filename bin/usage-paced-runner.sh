@@ -281,6 +281,15 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
     fi
   fi
 
+  # Migration abort handle (2026-07-29, M1(a)). Checked HERE, per-participant
+  # at dispatch time, not once at the top of the tick: a freeze that lands
+  # mid-tick must stop the remaining participants, not just the next tick.
+  # freeze-check exits 1 (frozen) or 2 (unreadable = frozen); both refuse.
+  if ! "$SELF_DIR/freeze-check.sh" 2>>"$LOG"; then
+    log "FROZEN -- refusing to dispatch $name (see schedule/FREEZE; release: git rm it)"
+    break
+  fi
+
   log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF)"
   start=$(date +%s)
   # shellcheck disable=SC2086

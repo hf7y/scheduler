@@ -29,6 +29,15 @@ case "$TIER_ARG" in
   *) echo "scheduler-run: tier must be 'sweep' or 'batch', got '$TIER_ARG'" >&2; exit 2 ;;
 esac
 
+# Migration abort handle (2026-07-29, M1(a)). Checked HERE as well as in the
+# paced runner, deliberately: M1(a) requires the freeze be honoured at DISPATCH
+# by each consumer, "not merely honored by the runner, or a directly-invoked
+# wrapper bypasses it". This is the path a hand-run or cron-run job takes.
+if ! "$SCHED_ROOT/bin/freeze-check.sh"; then
+  echo "scheduler-run: refusing to run $PROJECT $TIER_ARG -- dispatch is FROZEN" >&2
+  exit 3
+fi
+
 CONF="$SCHED_ROOT/schedule/$PROJECT.conf"
 [ -f "$CONF" ] || { echo "scheduler-run: no such conf: $CONF" >&2; exit 2; }
 # shellcheck disable=SC1090
