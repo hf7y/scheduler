@@ -310,11 +310,49 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
     continue
   fi
 
+  # Consume any prior verdict BEFORE dispatching, so this run's outcome can
+  # never be read off the last run's file. Same lesson as expires_at: a stale
+  # stamp that reads as current is worse than no stamp.
+  "$SELF_DIR/verdict.sh" clear "$name" >/dev/null 2>&1 || true
+
   log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF)"
   start=$(date +%s)
   # shellcheck disable=SC2086
   if $cmd; then rc=0; else rc=$?; fi
-  log "DONE $name rc=$rc ($(( $(date +%s) - start ))s)"
+
+  # NOT-DONE vs GAVE-UP. `rc` alone cannot tell them apart -- rc=1 is both
+  # "hit --max-turns with work left" and "concluded it cannot be done", and
+  # those want opposite responses. See bin/verdict.sh's header for the full
+  # argument; the rule is that ABSENCE of a verdict is never GAVE-UP.
+  outcome="$("$SELF_DIR/verdict.sh" classify "$name" "$rc" 2>/dev/null)"; vrc=$?
+  log "DONE $name rc=$rc outcome=${outcome:-NOT-DONE} ($(( $(date +%s) - start ))s)"
+
+  if [ "$vrc" -eq 3 ]; then
+    # GAVE-UP: the agent itself said IMPOSSIBLE, with a reason. This is the
+    # ONLY path that reduces metabolism -- reached by an explicit claim, never
+    # by silence. Braking reuses the EXISTING dead-man switch rather than
+    # adding a second parallel mechanism: stamp expires_at in the past and
+    # this same runner's expiry check (above) stops dispatching it next tick,
+    # logs why, and prints the one-command renewal.
+    vreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2-)"
+    log "GAVE-UP $name -- ${vreason:-no reason recorded}"
+    if [ -n "${job_state:-}" ] && mkdir -p "$job_state" 2>/dev/null; then
+      date -Is > "$job_state/expires_at"
+      log "METABOLISM $name -- dead-man switch stamped expired at $job_state/expires_at (renew: rm it)"
+    else
+      log "METABOLISM $name -- COULD NOT stamp expires_at (job_state=${job_state:-<unset>}); it will keep dispatching"
+    fi
+    # File it where a human and realisateur both read. A brake nobody is told
+    # about is an outage that looks like calm.
+    if command -v scheduler >/dev/null 2>&1; then
+      if scheduler -i realisateur "GAVE-UP: $name declared IMPOSSIBLE on $PACED_HOST -- ${vreason:-no reason recorded}. Metabolism reduced (expires_at stamped). Renew: rm ${job_state:-<unset>}/expires_at" >/dev/null 2>&1; then
+        log "FILED $name's give-up to realisateur's inbox"
+      else
+        log "FILED FAILED -- could not file $name's give-up to realisateur; it exists in this log only"
+      fi
+    fi
+  fi
+
   dispatched=$((dispatched + 1))
 done
 
