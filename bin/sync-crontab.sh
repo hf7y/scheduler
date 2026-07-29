@@ -259,18 +259,31 @@ batch_slot_time() {
 # precedence _usage.conf documents for the pacing knobs. A host file may also
 # blank a field (RUNNER_CRON="") to opt out of a tick the shared file arms;
 # dexter has never run the sweep tick that _sweep.conf would install.
+#
+# OPT-OUT IS DETECTED BY COMPARISON, NOT BY EMPTINESS (fixed 2026-07-29 --
+# the sentence above described a mechanism this script did not implement,
+# and schedule/_sweep.dexter.conf was already relying on it). An empty CRON
+# is ambiguous on its own: it is EITHER "this host opted out" OR "the shared
+# conf is incomplete", and the emit blocks below rightly treat the second as
+# a hard ERROR. So the shared file's value is captured BEFORE the host file
+# is sourced, and only the transition non-empty -> empty counts as an opt-out.
+# That keeps the incomplete-conf error loud (a shared file that never set a
+# CRON still errors, host file or not) while letting a host turn a tick off.
 RUNNER_JOB=""; RUNNER_CMD=""; RUNNER_CRON=""; RUNNER_ENV=""; PACED_SUPPRESS_BATCH=0
 RUNNER_CONF_SRC="none"
+RUNNER_OPTOUT=0
 SYNC_HOST="${SYNC_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -f "$SCHEDULE_DIR/_runner.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_runner.conf"
   RUNNER_CONF_SRC="_runner.conf"
 fi
+RUNNER_CRON_SHARED="$RUNNER_CRON"
 if [ -f "$SCHEDULE_DIR/_runner.$SYNC_HOST.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_runner.$SYNC_HOST.conf"
   RUNNER_CONF_SRC="${RUNNER_CONF_SRC} + _runner.$SYNC_HOST.conf (host override)"
+  [ -n "$RUNNER_CRON_SHARED" ] && [ -z "$RUNNER_CRON" ] && RUNNER_OPTOUT=1
 fi
 
 # --- Sweep tick meta (optional) ------------------------------------------------
@@ -284,15 +297,20 @@ fi
 # install one there on the first --apply.
 SWEEP_TICK_JOB=""; SWEEP_TICK_CMD=""; SWEEP_TICK_CRON=""
 SWEEP_CONF_SRC="none"
+SWEEP_OPTOUT=0
 if [ -f "$SCHEDULE_DIR/_sweep.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_sweep.conf"
   SWEEP_CONF_SRC="_sweep.conf"
 fi
+SWEEP_TICK_CRON_SHARED="$SWEEP_TICK_CRON"
 if [ -f "$SCHEDULE_DIR/_sweep.$SYNC_HOST.conf" ]; then
   # shellcheck disable=SC1091
   source "$SCHEDULE_DIR/_sweep.$SYNC_HOST.conf"
   SWEEP_CONF_SRC="${SWEEP_CONF_SRC} + _sweep.$SYNC_HOST.conf (host override)"
+  # Same shared-then-host opt-out rule as the runner block above; see there
+  # for why emptiness alone is not enough to tell opt-out from misconfig.
+  [ -n "$SWEEP_TICK_CRON_SHARED" ] && [ -z "$SWEEP_TICK_CRON" ] && SWEEP_OPTOUT=1
 fi
 PACED_SET=" "          # listed in ANY host's rotation -> the runner owns Tier 2
 PACED_ENABLED_SET=" "  # listed AND enabled in THIS host's rotation -> dispatches here
@@ -665,7 +683,12 @@ fi
 # Emit the single usage-paced dispatcher tick (if schedule/_runner.conf set it).
 # This one line replaces the fixed nightly BATCH lines suppressed above.
 if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
-  if [ -z "$RUNNER_JOB" ] || [ -z "$RUNNER_CMD" ] || [ -z "$RUNNER_CRON" ]; then
+  if [ "$RUNNER_OPTOUT" -eq 1 ]; then
+    # Deliberate, and said out loud rather than silently omitted: a tick this
+    # host does not run is a real difference from every other host, and the
+    # only place it is visible is right here.
+    echo "note [runner]: _runner.$SYNC_HOST.conf blanks RUNNER_CRON -- this host opts OUT of the runner tick _runner.conf arms" >&2
+  elif [ -z "$RUNNER_JOB" ] || [ -z "$RUNNER_CMD" ] || [ -z "$RUNNER_CRON" ]; then
     echo "ERROR [runner]: _runner.conf needs RUNNER_JOB, RUNNER_CMD and RUNNER_CRON all set -- runner tick omitted" >&2
     ERRORS=$((ERRORS + 1))
   elif ! validate_cron "$RUNNER_CRON"; then
@@ -687,7 +710,9 @@ fi
 # Emit the sweep tick (if schedule/_sweep.conf set it) -- independent of
 # and not suppressed/affected by anything above.
 if [ -n "$SWEEP_TICK_JOB" ] || [ -n "$SWEEP_TICK_CMD" ] || [ -n "$SWEEP_TICK_CRON" ]; then
-  if [ -z "$SWEEP_TICK_JOB" ] || [ -z "$SWEEP_TICK_CMD" ] || [ -z "$SWEEP_TICK_CRON" ]; then
+  if [ "$SWEEP_OPTOUT" -eq 1 ]; then
+    echo "note [sweep]: _sweep.$SYNC_HOST.conf blanks SWEEP_TICK_CRON -- this host opts OUT of the sweep tick _sweep.conf arms" >&2
+  elif [ -z "$SWEEP_TICK_JOB" ] || [ -z "$SWEEP_TICK_CMD" ] || [ -z "$SWEEP_TICK_CRON" ]; then
     echo "ERROR [sweep]: _sweep.conf needs SWEEP_TICK_JOB, SWEEP_TICK_CMD and SWEEP_TICK_CRON all set -- sweep tick omitted" >&2
     ERRORS=$((ERRORS + 1))
   elif ! validate_cron "$SWEEP_TICK_CRON"; then

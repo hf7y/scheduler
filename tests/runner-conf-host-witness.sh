@@ -17,6 +17,9 @@
 #   1. host file overrides the shared one
 #   2. it overrides PER FIELD -- unstated fields keep the shared value
 #   3. a host file can BLANK a field to opt out of a tick (SWEEP_TICK_CRON="")
+#      -- and, since 2026-07-29, that the REAL SCRIPT accepts that opt-out
+#      cleanly instead of refusing it (cases 8-9; see case 8's own note for
+#      why asserting the missing line was not enough)
 #   4. with no host file, behaviour is EXACTLY the old shared-only behaviour
 #      (so adding this mechanism cannot have changed any other host)
 #   5. the real committed dexter files reproduce dexter's actual pre-run-3
@@ -106,6 +109,101 @@ esac
 case "$got" in
   *"PACED_MAX_PER_TICK=16"*) bad "script preview for dexter carries mandark's MAX_PER_TICK=16" ;;
   *)                         ok "script preview for dexter does not carry mandark's cap" ;;
+esac
+
+echo "case 8 -- the opt-out is a NOTE, not an ERROR (the defect case 3 missed)"
+# WHY THIS EXISTS, 2026-07-29. Case 3 above asserted opt-out against this
+# file's LOCAL `resolve()` model, and case 7 asserted only that no sweep line
+# appears in the script's stdout. Both passed while the real script was
+# REFUSING dexter's opt-out: `_sweep.conf` sets JOB and CMD, the host file
+# blanks only CRON, and the emit block's "all three or none" guard read that
+# as an incomplete conf -- `ERROR [sweep]: ... sweep tick omitted`, ERRORS+1,
+# `exit 1`. The tick was absent for the wrong reason, and step one of
+# .scheduler/FOCUS.md's bootstrap bar (`sync-crontab.sh --apply` on dexter)
+# reported failure while doing exactly the right thing.
+#
+# So: assert the MANNER, not just the outcome. An assertion that only checks
+# a line is missing cannot tell a clean opt-out from a refusal.
+err="$(SYNC_HOST=dexter timeout 60 "$SYNC" 2>&1 >/dev/null)"; rc=$?
+[ "$rc" -eq 0 ] && ok "script preview for dexter exits 0" || bad "script preview for dexter exits $rc -- an opt-out is not an error"
+case "$err" in
+  *"ERROR [sweep]"*) bad "opt-out still reported as ERROR [sweep]" ;;
+  *)                 ok "no ERROR [sweep] for an opted-out host" ;;
+esac
+case "$err" in
+  *"note [sweep]"*"opts OUT"*) ok "opt-out is announced, not silently dropped" ;;
+  *)                           bad "opt-out is silent -- nothing says why this host has no sweep tick" ;;
+esac
+
+echo "case 9 -- an INCOMPLETE shared conf still ERRORS (the fix must not fail open)"
+# The whole risk of accepting an empty CRON is that "this host opted out" and
+# "somebody forgot to set the cron" look identical. They are told apart by the
+# SHARED value: only non-empty -> empty counts as an opt-out. These two cases
+# pin that down, against the real script in a synthetic checkout.
+#
+# The checkout is symlinks into this repo's bin/ and lib/, with its own
+# schedule/ -- sync-crontab.sh derives SCHED_DIR from `dirname $BASH_SOURCE`,
+# which is the LINK's directory, so this runs the real script against fake
+# config without copying it (a copy is the version that silently goes stale).
+FAKE="$TMP/fake"
+mkdir -p "$FAKE/bin" "$FAKE/schedule"
+ln -s "$SYNC" "$FAKE/bin/sync-crontab.sh"
+ln -s "$ROOT/lib" "$FAKE/lib"
+# One project conf is required or the script exits 0 at "no schedule/*.conf
+# entries yet" before it ever reaches the tick blocks. CRON_HOST pins it to a
+# host that is never used below, so it is skipped and contributes no lines and
+# no errors of its own -- the tick tiers are the only thing under test here.
+printf 'CRON_HOST="nosuchhost"\n' > "$FAKE/schedule/dummy.conf"
+run_fake() { SYNC_HOST="$1" timeout 60 bash "$FAKE/bin/sync-crontab.sh" 2>&1 >/dev/null; }
+
+# 9a: JOB+CMD set, CRON never set anywhere, NO host file -> incomplete.
+cat > "$FAKE/schedule/_sweep.conf" <<'EOF'
+SWEEP_TICK_JOB="fake-sweep"
+SWEEP_TICK_CMD="/bin/true"
+EOF
+out="$(run_fake charlie)"
+case "$out" in
+  *"ERROR [sweep]"*) ok "9a: shared conf missing CRON still errors" ;;
+  *)                 bad "9a: incomplete shared conf accepted silently -- fail-open" ;;
+esac
+
+# 9b: same incomplete shared conf, but a host file that touches something
+# ELSE. The host file's mere existence must not launder the missing CRON.
+printf 'SWEEP_TICK_JOB="fake-sweep-charlie"\n' > "$FAKE/schedule/_sweep.charlie.conf"
+out="$(run_fake charlie)"
+case "$out" in
+  *"ERROR [sweep]"*) ok "9b: a host file does not launder a missing shared CRON" ;;
+  *)                 bad "9b: host file's existence suppressed the incomplete-conf error -- fail-open" ;;
+esac
+
+# 9c: shared conf ARMS the tick, host file blanks it -> the real opt-out.
+cat > "$FAKE/schedule/_sweep.conf" <<'EOF'
+SWEEP_TICK_JOB="fake-sweep"
+SWEEP_TICK_CMD="/bin/true"
+SWEEP_TICK_CRON="*/15 * * * *"
+EOF
+printf 'SWEEP_TICK_CRON=""\n' > "$FAKE/schedule/_sweep.charlie.conf"
+out="$(run_fake charlie)"
+case "$out" in
+  *"ERROR [sweep]"*)           bad "9c: a genuine opt-out is still refused" ;;
+  *"note [sweep]"*"opts OUT"*) ok "9c: armed-then-blanked is an opt-out" ;;
+  *)                           bad "9c: opt-out neither errored nor announced: ${out:-<nothing>}" ;;
+esac
+
+# 9d: the same rule for the RUNNER tier, so the two ticks cannot drift into
+# one accepting an opt-out the other refuses. No host does this today; that
+# is precisely why it needs a test rather than a reader.
+cat > "$FAKE/schedule/_runner.conf" <<'EOF'
+RUNNER_JOB="fake-runner"
+RUNNER_CMD="/bin/true"
+RUNNER_CRON="*/5 * * * *"
+EOF
+printf 'RUNNER_CRON=""\n' > "$FAKE/schedule/_runner.charlie.conf"
+out="$(run_fake charlie)"
+case "$out" in
+  *"ERROR [runner]"*)           bad "9d: runner tier refuses an opt-out the sweep tier accepts" ;;
+  *"note [runner]"*"opts OUT"*) ok "9d: runner tier honours the same opt-out rule" ;;
+  *)                            bad "9d: runner opt-out neither errored nor announced: ${out:-<nothing>}" ;;
 esac
 
 echo
