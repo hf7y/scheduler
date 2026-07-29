@@ -9,7 +9,44 @@
 # this is a first cut of.
 set -uo pipefail
 
-SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
+# >>> SCHED_ROOT resolution (tests/sched-root-witness.sh extracts this block
+# by these two markers -- if you move or rename them, that witness fails loud
+# rather than silently testing nothing).
+# Resolve the checkout this script belongs to in three steps, in the same
+# order and by the same marker file bin/scheduler-dev-cycle.sh already uses
+# (see its header, ~line 36): an explicit override, then self-location, then
+# mandark's original absolute path for a copied-not-symlinked install.
+#
+# This was a bare hardcoded path until 2026-07-29. On a host that does not
+# have that path -- dexter, where /home/zach/Documents does not exist at all
+# -- every one of the 50+ SCHED_ROOT reads below resolved to nothing, the
+# `source` on the next line failed, and the glance printed an EMPTY project
+# table and exited 0. "Nothing needs you" and "I cannot find the repo" looked
+# identical, which is the exit-0 no-op this repo's build discipline forbids.
+#
+# Identified as a repo by .git PLUS a file only this repo has, so a stray
+# parent git repo can never be mistaken for the scheduler checkout. `.git` is
+# a FILE, not a directory, in a worktree -- hence -e rather than -d.
+SELF_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)"
+[ -n "$SELF_REAL" ] || SELF_REAL="${BASH_SOURCE[0]}"
+SELF_REPO="$(cd "$(dirname "$SELF_REAL")/.." 2>/dev/null && pwd)"
+: "${SELF_REPO:=}"
+if [ -z "${SCHED_ROOT:-}" ]; then
+  if [ -n "$SELF_REPO" ] && [ -e "$SELF_REPO/.git" ] && [ -f "$SELF_REPO/bin/usage-paced-runner.sh" ]; then
+    SCHED_ROOT="$SELF_REPO"
+  else
+    SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
+  fi
+fi
+# Refuse loudly rather than rendering an unreadable world as an empty, clean
+# one. This is the half that makes the bug above impossible, not just fixed.
+if [ ! -f "$SCHED_ROOT/bin/usage-paced-runner.sh" ]; then
+  echo "scheduler: cannot locate the scheduler checkout -- tried SCHED_ROOT=$SCHED_ROOT" >&2
+  echo "scheduler: an empty glance here would mean 'I cannot read the repo', not 'nothing needs you'." >&2
+  echo "scheduler: re-run with SCHED_ROOT=<path to the scheduler repo>." >&2
+  exit 1
+fi
+# <<< SCHED_ROOT resolution
 REPORTS_ROOT="$HOME/reports"
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/autonomy-merge.sh"
