@@ -967,6 +967,18 @@ happened yet for any of them.
 
 ## realisateur
 
+- **2026-07-30 (bashify pass):** realisateur's own sensors fail the contract
+  every other project was just held to — `bin/ecosystem-survey.sh
+  --not-a-real-flag` and `bin/check-project-busy.sh` both **exit 0** and run
+  anyway, which is the exit-0 no-op `BUILD-DISCIPLINE.md` forbids, sitting in
+  the tools that audit everyone else. Fixing the flag handling is easy; the
+  decision is whether these sensors should now be **held to the bashified
+  contract** (reject unknown flags, document exit codes, declare a cost
+  position) — which would make realisateur's own tooling the first thing
+  actually converted rather than merely renamed. Do they?
+  > (answer inline here)
+
+
 - **2026-07-29 (front-door `/cloture`): does `closeout-lint` check B apply to
   realisateur's own `.scheduler/FOCUS.md`, when that file's bootstrap stamp and Law 3
   forbid exactly what the check asks for?** Check B FLAGs `[no-record]` unless
