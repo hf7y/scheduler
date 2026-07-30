@@ -9,7 +9,35 @@ removed automatically (see `docs/feedback-tags.md`) — the blocker
 description itself is a different mechanism entirely: nothing scans for
 a RESOLVED/RETRACTED marker and prunes it automatically, so it stays in
 its project's active section until a human (or an `/ideate` pass)
-actually moves it down into `## Recently resolved` or deletes it. Doing
+actually moves it down into `## front-door
+
+- **2026-07-29 (front-door `/cloture`): who owns `~/.hermes/.env`, and should
+  front-door's live edit to it be reverted and reshipped as a senechal remedy script?**
+  To make WhatsApp notification work, front-door edited `~/.hermes/.env`, changing
+  `WHATSAPP_HOME_CHANNEL` from the display name `Hermes Baudin` to the account's own
+  JID — `hermes whatsapp` had written a display name where a JID belongs, and the
+  Baileys bridge threw `Cannot destructure property 'user' of 'jidDecode(...)'` on
+  every send. The fix is correct and verified end to end, and the original is backed up
+  at `~/.hermes/.env.bak.frontdoor`. Two reasons it still needs your call: hermes has
+  no project directory under `~/Documents/Projects`, so there is no owner to hand it
+  to; and senechal's own authority rules would have shipped a config change as
+  `remedies/<concern>.sh` for you to `enable`, not as a live edit. Filed with senechal
+  as part of the footprint (`829be49`). Options: (a) accept the edit and record hermes
+  as front-door-adjacent config front-door owns; (b) revert and reship as a remedy
+  script; (c) name a different owner for hermes.
+  `# verified 2026-07-29 via: grep WHATSAPP_HOME_CHANNEL ~/.hermes/.env; hermes send --to whatsapp (delivered)`
+  > (answer inline here)
+
+- **2026-07-29 (front-door `/cloture`): connect the GitHub account to claude.ai, or stay
+  on GitHub Actions for scheduled agents?** A `/schedule` cloud routine for the
+  front-door doorkeeper was refused with HTTP 401 "Connect your GitHub account before
+  saving a routine that uses a GitHub repository." Actions already covers the scheduled
+  clock with no connection and no setup, so nothing is blocked — the only thing the
+  cloud routine adds is surviving a sleeping laptop while still being able to open a PR.
+  Not urgent; recorded so the 401 is not rediscovered.
+  > (answer inline here)
+
+## Recently resolved` or deletes it. Doing
 that sweep is part of `/ideate`'s own triage, not a side effect of
 anything else running — an entry marked resolved a week ago and never
 moved is a sign that sweep hasn't happened, not a bug.
@@ -938,6 +966,21 @@ happened yet for any of them.
   interim flag.)*
 
 ## realisateur
+
+- **2026-07-29 (front-door `/cloture`): does `closeout-lint` check B apply to
+  realisateur's own `.scheduler/FOCUS.md`, when that file's bootstrap stamp and Law 3
+  forbid exactly what the check asks for?** Check B FLAGs `[no-record]` unless
+  realisateur's FOCUS.md carries an entry dated today citing a sha. But the stamp
+  (written by `bin/stamp-agent.sh`, 2026-07-29) says "Do not append session history
+  here", and Law 3 says "the next agent to append session residue here has broken it."
+  A closing session that satisfies the lint breaks the law, and one that respects the
+  law FLAGs the lint. This session chose the law and filed its record in front-door's
+  own FOCUS.md (`46e2d67`) instead. Options as I see them: (a) check B should skip a
+  repo whose FOCUS.md carries a bootstrap stamp; (b) check B should look for the record
+  in the repo the session actually worked in, not realisateur's; (c) the stamp should
+  carve out a one-line dated pointer as not-residue.
+  `# verified 2026-07-29 via: closeout-lint (FLAG [no-record]) + head -40 realisateur/.scheduler/FOCUS.md`
+  > (answer inline here)
 
 - **2026-07-29 (realisateur `/cloture`): raise `--max-turns` for
   `scheduler-dev-cycle.sh`, now that there is a measurement instead of a
