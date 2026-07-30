@@ -26,7 +26,10 @@ actually moves it down into `## front-door
   as front-door-adjacent config front-door owns; (b) revert and reship as a remedy
   script; (c) name a different owner for hermes.
   `# verified 2026-07-29 via: grep WHATSAPP_HOME_CHANNEL ~/.hermes/.env; hermes send --to whatsapp (delivered)`
-  > (answer inline here)
+> senechal shall own this. yes it should be a senechal remedy script hermes, obsidian,
+> etc. are system wide with many callers and "senechal owns the gaps." the trigger to
+> revisit would be three programs running on either of these utilities. that may justify
+> creating a service around them to maintain them.
 
 - **2026-07-29 (front-door `/cloture`): connect the GitHub account to claude.ai, or stay
   on GitHub Actions for scheduled agents?** A `/schedule` cloud routine for the
@@ -35,7 +38,10 @@ actually moves it down into `## front-door
   clock with no connection and no setup, so nothing is blocked — the only thing the
   cloud routine adds is surviving a sleeping laptop while still being able to open a PR.
   Not urgent; recorded so the 401 is not rediscovered.
-  > (answer inline here)
+> the answer is to connect to claude.ai with github actions so I can learn how to do it.
+> but if github can perform the work with its own native agent system then I would also
+> prefer not to use API cost and stick with subscription usage i.e. what runs locally.
+> prefer scheduled jobs on always-on dexter to API cost.
 
 ## Recently resolved` or deletes it. Doing
 that sweep is part of `/ideate`'s own triage, not a side effect of
@@ -316,7 +322,10 @@ paste.
      — scheduler merely installed and current on dexter, `_paced.dexter.conf`
      still hand-maintained there. Recorded as inference, not decided, in
      `01e1bee`.
-     > (answer inline here — generated-with-HOST-field, or the narrower reading)
+> Yes. This is ultimately the way. or more precisely, scheduler is a bashified
+> utility and one of its abilities is to write these conf files on a machine.
+> something like realisateur might call on the "mete" command, scheduler's
+> bash verb self, to do exactly what's stated above.
 
   2. **Does the freeze switch have to reach `svc-vaporwave`'s two fixed-cron jobs
      (aedile 03:00, vkv-inventory 04:00), or may it declare them out of scope?**
@@ -325,7 +334,10 @@ paste.
      they run under a different user, on fixed cron, outside the paced system. A
      freeze that silently misses two live jobs while reporting success is worse
      than one that refuses to claim completeness.
-     > (answer inline here — extend into those wrappers, or state the gap loudly)
+> They're out of scope, but really, scheduler is getting simpified (see above).
+> we can keep the freeze switch as a legacy feature if we document it. But the
+> proper way to freeze would be something like mete -pA 0 or something. set the
+> pace to 0 for all. 
 
   3. **What is the actual move list?** "Move everything that can move" plus the
      credential fix now makes 16 of 19 technically movable. Currently live on
@@ -333,7 +345,8 @@ paste.
      quatre-vingt-douze, bibliothecaire, ecosim. scheduler is deferred by your
      own decision 4; crt and wtul already run on dexter; aedile and vkv-inventory
      are svc-vaporwave and a separate question; the remaining 7 are parked.
-     > (answer inline here — all nine, a subset, or a stated order)
+> The move has been indefinitely suspended. Self-dev indefinitely suspended
+> pending new agent to project topology insights. See basheur.
 
 - **THREE MORE WITNESSES tonight for the unpushed-sweeper defect (`8c94eff`),
   taking it from 2 occurrences to 5 in one day** (agent-appended 2026-07-28
@@ -478,7 +491,13 @@ paste.
   dexter in bulk (the default-host policy) so it is no longer a
   single-participant host, which dissolves this case without changing the
   gate.
-  > (answer inline here -- and note (c) is compatible with any of the others)
+> The insight learned from bibliothecaire somewhere is that the usage gate
+> lacks a mechanism for knowing if the usage was worth it. Part of the
+> philosophical paradigm shift behind the current system-wide freeze. New
+> agent topology introduces efficiency measure. realisateur or it's future
+> equivalent will need to actively manage scheduling assignments or some
+> other more Hayekian system of agent self-regulator (taxes, fees) will
+> need to be installed to dampen wasted activity.
 
 _No open human-owned blockers as of 2026-07-27 (`/ideate` sweep). Both
 prior entries were answered and moved to Recently resolved; four standing
@@ -811,12 +830,13 @@ happened yet for any of them.
 - **2026-07-28 (realisateur `/cloture`): crt is enabled on dexter and has dispatched nothing since 2026-07-25 — is that acceptable pacing, or is it stuck?** Only you can settle this, because it needs a probe ON dexter and no key from mandark reaches it. First-hand evidence from your own shell tonight: the runner is alive (5-min ticks, continuous 16:40→18:15), the gate reads `http_code=200 ... 23% used vs burn-line 23% (on-pace)` — legitimately pacing, not broken — yet `~/.local/share/crt-nightly-batch/` is dated entirely 07-25. Realisateur's predicted cause (the old 338 `http_code=401` HOLDs) was **falsified**; auth is fine. Two candidates it could NOT resolve from here: a 0-byte `sweep.lock` from 07-25 20:10 next to a log that stops at 20:37 (stale or held? needs `fuser`/`flock` on dexter), and an `expires_at` stamped 07-25 01:14 that puts the dead-man expiry near 2026-08-01 — after which crt gains a second, masking reason not to run. Recorded in crt `c43fa77`; acceptance case filed to scheduler `b42b81f`.
 >> _[consumed 2026-07-29 -- read by a run; this entry is
 >> still OPEN until something deletes it]_
-  >> (answer inline here — is 3 days of on-pace HOLD expected for a single-participant host, or should dexter's gate/weighting be looked at?)
+> Keep it held until we finish the universe-wide redesign.
 
 - **2026-07-28 (agent-appended, from an interactive session ON dexter): dexter has NONE of the ecosystem guard commands, and crt's own senechal hook is silently blind there.** Witness, run on dexter tonight: `command -v notify-senechal check-project-busy focus-commit silence-audit` → all four **MISSING**. Separately, `command -v jq` → missing, and `crt/bin/crt-senechal-guard.sh:25` piped its payload through `jq ... 2>/dev/null` then `[ -z "$cmd" ] && exit 0` — so on any host without jq the hook reminded about nothing, forever, while looking installed and healthy. That is the exact failure the hook exists to prevent, turned on itself. **Consequence, concrete and already incurred:** this session wired potato's brain to dexter and made five machine-scoped changes — `Host potato` in dexter's `~/.ssh/config`, a forced-command entry in dexter's `~/.ssh/authorized_keys`, `~/.local/bin/crt-brain-shell`, a `potato-claude` tmux session, and `Port 2223` in potato's `~/.ssh/config` — and **none could be filed with senechal**, nor did anything warn about it. Per CLAUDE.md a missing guard is a finding, not an inconvenience, so it is filed rather than worked around. Fixed in crt `f5bc6f6`: the hook now announces its own blindness on stderr instead of exiting 0. **NOT fixed, needs a human on dexter:** installing jq (`sudo apt install jq`, needs sudo this session does not have unattended) and installing realisateur's four ecosystem commands onto dexter. Until then every machine-scoped change made on dexter — by anyone, for any project — goes unfiled and unannounced, and dexter is now the ecosystem's default execution host, so that is the common case rather than an edge one.
 >> _[consumed 2026-07-29 -- read by a run; this entry is
 >> still OPEN until something deletes it]_
-  >> (answer inline here — who installs realisateur's commands on dexter, and should the five changes above be filed retroactively once they exist?)
+> It's going to be an interactive session installing much of the tooling as a new bashified
+> non-AI utility. 
   >>
   >> **UPDATE 2026-07-28 (realisateur `/cloture`, machine-append) — HALF DONE,
   >> and the remaining half is no longer human-only.** `jq` is INSTALLED on
@@ -896,6 +916,7 @@ happened yet for any of them.
   own dead-man switch is precisely the failure the switch exists to catch, so
   it is surfaced rather than silently reset. Needs Zach, one command, before
   Saturday.
+> Leave them blocked. Quiet is fine while we handle this meta-design.
 
 ## vkv-inventory
 
