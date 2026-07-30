@@ -967,6 +967,17 @@ happened yet for any of them.
 
 ## realisateur
 
+- **2026-07-30 (bashify pass):** **`basheur` is not registered with scheduler**
+  — there is no `schedule/basheur.conf`, so `hygiene-lint basheur` scans zero
+  projects and no survey reports on it at all. It is the one agent that
+  survives the unwiring, and it is the only one invisible to the instruments.
+  The decision, not the fix: registering it **re-arms dispatch machinery that
+  U2 is about to tear down**, so "just register it" may be exactly wrong.
+  Should basheur be registered, left deliberately unregistered and driven by
+  hand, or given a sensor that is not scheduler's? 
+  > (answer inline here)
+
+
 - **2026-07-30 (bashify pass):** realisateur's own sensors fail the contract
   every other project was just held to — `bin/ecosystem-survey.sh
   --not-a-real-flag` and `bin/check-project-busy.sh` both **exit 0** and run
