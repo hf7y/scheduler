@@ -1487,3 +1487,44 @@ agent that runs it — which only holds while it stays a brief, hence the strip
 
 - **2026-07-29 (ecosim): a parked rotation line is re-evaluated by nothing. Who owns removal — or is permanence the intent?** `weight-audit.sh` skips `enabled=0` outright (`[ "$enabled" = "1" ] || continue`), so once a participant is parked, no mechanism ever reconsiders it. Measured today: **12 lines** in that state across both rotation files. `f3cfd3a` fixed the other half of ecosim `#11` — the monitor's jurisdiction now follows projects to every host's rotation — but jurisdiction over a line the monitor declines to read changes nothing. `bibliothecaire/briefs/stigmergy.md` records this exact null case ("traces deposited, read by nothing, and removed by nothing, because no actor owned their removal") and `commons-governance.md` names the design-principle version. **This is a decision, not work:** parking may well be intended as permanent-until-human, in which case the answer is "yes, and that is the design" and ecosim stops reporting it as a gap. Filed rather than fixed because ecosim is an observer with no stop bit and this is neither its file nor its mechanism.
   > (answer inline here)
+
+
+## 2026-07-29 — two decisions from the `office` bootstrap session (appended, nothing above rewritten)
+
+*Filed here rather than in realisateur's own `QUESTIONS.md` because
+`check-project-busy realisateur` reported **BUSY** for the whole close — a
+foreign interactive claude session (pid 3219736, held 10+ minutes, still held at
+close). scheduler reported `free`. See the session record filed to realisateur by
+front door the same evening.*
+
+- **2026-07-29 (office `/cloture`): TWO personnel documents for `office` now
+  exist, written the same day by different hands. Which one governs?**
+  1. `media-arts-collective/office` → `HANDBOOK.md` (`f63ce49`, pushed). Written
+     from your dropped design; it is **in force** — the repo's `CLAUDE.md` points
+     employees at it and its rules are the ones the shipped scripts enforce
+     (director-gated provisioning, no secrets in mail, the front-door rule).
+  2. `bibliothecaire/briefs/office-v0-personnel-manual.md` (18 KB, **uncommitted**
+     as of 20:41 in that live session). Its own header says: *"a draft for
+     realisateur to accept, amend or reject… nothing here is in force"*, and it
+     marks conflicts with your dropped design as `[OPEN]` rather than resolving
+     them — deliberately leaving them to you.
+  So there is no collision *yet* — one is in force, one is explicitly not. The
+  decision is what happens next: does the cited draft get merged into `HANDBOOK.md`
+  (and who owns that merge), or does it stay a research artifact the handbook
+  cites? **Left untouched by this session on purpose:** bibliothecaire was BUSY,
+  and its brief is another run's uncommitted work.
+  `> `
+
+- **2026-07-29 (office `/cloture`): `claude` on `nomac` is installed but NOT
+  authenticated. Which account, and will you do the interactive login?**
+  `# verified 2026-07-29 via: ssh -p 2224 -i ~/.ssh/office_nomac zach@dexter.tail893f2c.ts.net 'claude --version'`
+  → `2.1.220 (Claude Code)`, node `v24.18.1`, both userland via nvm, no sudo used.
+  This is the office's load-bearing gap, not a chore: the office can keep books,
+  carry mail and archive it immutably, and **cannot execute a single work order**,
+  because an employee *is* a Claude session. The wavebuck peg is denominated in
+  tokens charged to the vaporwave account (`office.conf` `TOKENS_PER_WAVEBUCK`), so
+  until that host can spend a token the economy is inert **by construction**.
+  Auth is interactive and therefore human-only. The stated premise of the design is
+  that the vaporwave account's tokens *are* agency in this company — so the account
+  choice is a real decision, not a default.
+  `> `
