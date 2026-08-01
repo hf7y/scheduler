@@ -1657,3 +1657,32 @@ gate is already built and waiting.
   neither enforced nor followed, which is the worst of the three states. Tighten
   the guard, or relax the rule to match practice.
   `> `
+
+## 2026-08-01 — the `ausculte` unification stopped at a refused gate (appended, nothing above rewritten)
+
+*Filed by realisateur. One decision, and it is blocked because the dogmatic
+path says a refusal is a finding to report rather than an obstacle to work
+around. Full record: realisateur `1de1384`, vault `7a7382e`.*
+
+- **`bashify amend` refuses senechal's `ausculte` page at exit 7, on two
+  gates that are the gate's own defects. Override, or fix `bashify` first?**
+  The work is done and measured: the edit takes that page from **3 of 9 rows
+  to 8 of 9**, adds the `silence` subcommand you approved, renames
+  `project-unwired` to `parked` per your call, and translates a legacy
+  dialect the gate itself ruled illegal (it refuses any page documenting exit
+  code 1). It also fixed a real defect on the way: `dead-config` returned 2 —
+  "usage error, the caller is wrong" per the page — while its own header
+  defines 2 as *could-not-check*, i.e. a BLIND reading wearing the
+  caller-is-wrong code.
+  The two failing gates cannot be satisfied by editing the page: SURFACE
+  cannot express a hyphenated subcommand (five of seven of senechal's are),
+  and CALLERS counts prose mentions as invocations, so documenting the move
+  raised the count rather than clearing it. Detail and the proposed fixes:
+  realisateur `.scheduler/QUESTIONS.md` `8682909`.
+  **State right now:** ecosim's duplicate `ausculte` is removed (`5b4819f`),
+  PATH resolves to senechal's, senechal-verbs is clean and unmodified, and
+  **`ausculte silence` and `parked` are therefore NOT live**. No capability
+  was lost — `silence-audit` remains on PATH under its own name. The patch is
+  preserved at `~/.claude/jobs/0a07bee3/tmp/ausculte-unification.patch` and
+  re-applies in one command.
+  `> `
