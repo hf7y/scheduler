@@ -1703,3 +1703,45 @@ around. Full record: realisateur `1de1384`, vault `7a7382e`.*
   9 and it scores 8 — which is pre-existing on main and means a contract whose
   verify does not pass is still reported MECHANIZED. That is Law 4's
   territory and is its own decision.
+
+## 2026-08-01 — three decisions from the overnight bashification pass (appended, nothing above rewritten)
+
+> **1. `bashify emit`'s purge guard was unsatisfiable. Keep the narrowing, or drop it?**
+> Filed as its own commit on realisateur `eaef4b4`, **draft PR #4, unmerged**,
+> so dropping it costs one revert. The guard greps the emitted branch for
+> `agent`; the branch always contains the `lib/verb.sh` the generator itself
+> writes, whose mentions of the word ARE the documentation of `--summon`.
+> Passing meant deleting the explanation of the mechanism, so `emit` exited 5
+> for **every project, on every run** — while `bashify list` reported it
+> MECHANIZED. The narrowing is bounded three ways: exactly one path, only the
+> generic English word and never a vendor name, and only when that file is
+> byte-identical to the skel just copied. With it, a freshly emitted verb
+> scores 9 of 9 on `bashify check`. Without it, `emit` produces nothing.
+>
+> (answer inline here)
+
+> **2. Five repositories are provably removable. Run the script, or not yet?**
+> `~/Documents/Projects/REMOVE-RECOVERABLE-REPOS.sh` (regenerate any time with
+> `fauche script`) removes **crt, front-door, groc-mangr, nine-speakers,
+> sequestria**. Each was checked for: every branch on origin, clean tree, no
+> outside worktree depending on it, prose consigned to the vault. Verified a
+> second time by a different method — `git rev-list --branches --not
+> --remotes` returns 0 for all five. Nothing has been deleted; running it is
+> your act. Note crt and sequestria are **parked project repos**, and
+> WAITING-ROOM.md says parking keeps every byte — so this is the decision that
+> changes that promise from "on disk" to "one clone away".
+>
+> (answer inline here)
+
+> **3. An AGENT-backed contract can report a refusal as success. Whose fix?**
+> A refused `verb-page` summon printed "REFUSED — exit 7" as prose on
+> **stdout** and exited **0**. basheur scored it a kept promise; the refusal
+> text was one `cp` from being committed as a man page. `bashify check` caught
+> it at exit 6; nothing in the contract store did. Same shape as the killed
+> `consign-prose` summon of 2026-07-31: **the price is paid either way and the
+> accounting cannot tell.** The fix — basheur checking an output's shape
+> before returning 0 — is basheur's, but it touches the one metric the project
+> falsifies itself with, so it is asked rather than assumed. Recorded at
+> gardien `b269f5d`.
+>
+> (answer inline here)
