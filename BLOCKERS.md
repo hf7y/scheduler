@@ -1745,3 +1745,27 @@ around. Full record: realisateur `1de1384`, vault `7a7382e`.*
 > gardien `b269f5d`.
 >
 > (answer inline here)
+
+## 2026-08-01 — decision 2 answered by Zach, same session (appended, nothing above rewritten)
+
+**"fauche it."** Decision 2 above is ANSWERED: the five repositories were
+removed. `crt`, `front-door`, `groc-mangr`, `nine-speakers`, `sequestria`
+— **~1.1 GB freed**, essentially all of it crt.
+
+Re-verified immediately before deletion, by a method different from the one
+`fauche` uses: `git rev-list --count --branches --not --remotes` returned 0
+for all five, and `git ls-remote --heads origin` reached every remote and
+found 2–3 branches on each. The scheduler's `focus/`/`questions/` symlinks
+were swept afterwards and **nothing dangled** — they had gone with the confs
+when these projects were unregistered at parking.
+
+Record: gardien `0d1f074`, consigned to the vault under `gardien-garde/`.
+
+**This changes a written promise.** `WAITING-ROOM.md` says parking keeps
+every byte on disk. For these five that is now false, deliberately: the
+prose is in the vault, the branches are on origin, the bytes are one clone
+away. WAITING-ROOM.md itself is **not yet edited** to say so — that is the
+one thing this reap leaves outstanding.
+
+Decisions 1 (the `bashify emit` purge-guard narrowing, draft PR #4) and 3
+(basheur scoring a refusal as success) remain open.
