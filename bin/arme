@@ -236,7 +236,11 @@ EOF
     printf '%s\n%s\n' "$rest" "$block" | sed '/^$/{x;/./d;x}' | crontab -
     rc=$?
     [ "$rc" = 0 ] || verb_broke "crontab refused the new table (exit $rc); nothing changed"
-    printf 'arme: armed %s monitor(s).\n' "$("$0" list | grep -c .)"
+    # `jobs`, not `list`. While list still enumerated the register this read
+    # correctly; after the two were split it counted this verb's OWN
+    # subcommands and reported "armed 5 monitor(s)" over a single armed job.
+    # A count wrong in a reassuring direction is worse than no count.
+    printf 'arme: armed %s monitor(s).\n' "$("$0" jobs | grep -c .)"
     printf 'arme: the scheduler-managed block was copied through untouched.\n'
     printf 'arme: verify with `crontab -l`, and tell the estate with notify-senechal.\n'
     ;;
