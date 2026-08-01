@@ -56,10 +56,33 @@ follow.
 .SS How "never spends" is established
 It is established or refused, never assumed.
 .B check
-reads the named command and returns one of three verdicts: it names a model
-runner and is refused outright; it is an obvious leaf \- readable, naming no
-model runner, handing control to nothing \- and passes; or it is
-.BR UNVERIFIED .
+reads every entry and reports one verdict per line, from a closed set:
+.TP
+.B PARKED
+declared with enabled=0. It stays visible rather than vanishing, because an
+entry nobody can see is one nobody reconsiders.
+.TP
+.B BADCRON
+the schedule is not five fields, so it never fires.
+.TP
+.B NOTFOUND
+the command is not executable.
+.TP
+.B SPENDS
+the command names a model runner. Refused outright.
+.TP
+.B FREE
+an obvious leaf: readable, naming no model runner, handing control to nothing.
+.TP
+.B UNVERIFIED
+anything else, including a command that hands off to another program.
+.PP
+Only
+.BR PARKED ,
+.B FREE
+and an attested
+.B UNVERIFIED
+permit arming; every other verdict refuses.
 .PP
 .B UNVERIFIED is not a pass.
 Static reading cannot settle this question, and behaving as though it could is
