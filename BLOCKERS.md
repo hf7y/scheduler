@@ -1615,3 +1615,45 @@ front door the same evening.*
   that the vaporwave account's tokens *are* agency in this company — so the account
   choice is a real decision, not a default.
   `> `
+
+## 2026-07-31 — bibliothecaire is reaped; four decisions it could not take itself (appended, nothing above rewritten)
+
+Filed by realisateur's `/cloture`. The project is now agentless: unregistered
+(`scheduler 7d01ec2`, `c9000f2`), 41 documents consigned to the Obsidian vault
+and removed from its tree (`bibliothecaire cfbba6f`), three verbs at 9 of 9 on
+PATH. Its own reaping test scores **13 of 15**; the two failing rows and two
+adjacent findings are below. All four are decisions, not work — the work they
+gate is already built and waiting.
+
+- **bibliothecaire — the mandark footprint needs root, and nothing here has it.**
+  `sudo smb/install-intake-share.sh --uninstall` removes the `bibintake` share;
+  the `bibscan` account is separate and deliberately not auto-deleted by that
+  script. Measured this session and it retires a standing caveat: **all 555
+  files under `/home/zach/bibliothecaire-intake` are owned by `zach:zach`, not
+  `bibscan`** — so the "may still own unreaped scans" warning that has guarded
+  that account since 2026-07-27 is empirically false. Removing the account is
+  safe on that count.
+  `> `
+
+- **bibliothecaire — where do 1.4 GB of scans live now?** The intake tree holds
+  206 accepted scans, 204 work files and 136 published page-92 extracts, outside
+  any git repository. It is what `verse` operates on, so it cannot simply go with
+  the footprint. Nothing was deleted pending this.
+  `> `
+
+- **gardien — no snapshot is provable, so `verse reap` cannot delete anything.**
+  Measured 2026-07-31: no dated directory under the backup route carries
+  `.gardien-snapshot-complete`, so `verse proof` exits 5 and the reap gate holds
+  shut. That is the correct direction to fail in, and it is also why the 1.4 GB
+  above cannot shrink by itself. Filed against gardien because the missing
+  snapshot is gardien's, not the library's. See `gardien 3d81f63`.
+  `> `
+
+- **realisateur — a subagent pushed `main` twice today, and the rule says it must
+  not.** CLAUDE.md's subagent rule ("commits to a branch; it does not push
+  `main`") was written after a prior incident. A background agent pushed
+  `basheur` `3e8b5bc` and `29ad187` directly to `main` this session. Both are
+  good changes and I would keep them; the point is the boundary is currently
+  neither enforced nor followed, which is the worst of the three states. Tighten
+  the guard, or relax the rule to match practice.
+  `> `
