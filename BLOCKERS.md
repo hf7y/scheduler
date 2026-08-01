@@ -1686,3 +1686,20 @@ around. Full record: realisateur `1de1384`, vault `7a7382e`.*
   preserved at `~/.claude/jobs/0a07bee3/tmp/ausculte-unification.patch` and
   re-applies in one command.
   `> `
+
+  **RESOLVED 2026-08-01, same session, by Zach's direction: "fix the two gate
+  defects in bashify via bashify amend."** Not overridden — the gate was
+  repaired and then re-run, and it allowed the amendment on its own.
+  realisateur PR #3 (branch `worktree-bashify-gates`) fixes three parser
+  defects: SURFACE could not express a hyphenated subcommand; CALLERS counted
+  a markdown backtick as command substitution, which made the gate
+  unsatisfiable; and a latent one found while fixing the second — the line
+  kept its `<lineno>:` prefix, so `^` could never match and a bare invocation
+  at the start of a line was invisible. `bashify amend` then moved from exit
+  7 to **exit 0, all four gates passed**, and the amendment landed as senechal
+  `5276bbb`. `ausculte silence` and `ausculte parked` are live.
+  **Still open and named rather than folded in:** `bashify`'s own
+  `test/verify-check.sh` fails 1 of 5 — it asserts bashify's page scores 9 of
+  9 and it scores 8 — which is pre-existing on main and means a contract whose
+  verify does not pass is still reported MECHANIZED. That is Law 4's
+  territory and is its own decision.
