@@ -27,7 +27,7 @@
 set -uo pipefail
 
 JOB_NAME="scheduler-overnight-dev"
-SCHED_REPO="/home/zach/Documents/Project Archive/scheduler"
+SCHED_REPO="/home/zach/Documents/Projects/scheduler"
 STATE_DIR="$HOME/.local/share/$JOB_NAME"
 LOG="$STATE_DIR/run.log"
 LOCK="$STATE_DIR/run.lock"

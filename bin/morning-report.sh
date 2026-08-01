@@ -217,4 +217,4 @@ if [ "$WRITE_DIGEST" -eq 1 ]; then
 fi
 
 # To print automatically on every new shell, add this line to ~/.bashrc:
-#   bash "/home/zach/Documents/Project Archive/scheduler/bin/morning-report.sh"
+#   bash "/home/zach/Documents/Projects/scheduler/bin/morning-report.sh"

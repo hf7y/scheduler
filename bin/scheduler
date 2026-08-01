@@ -35,7 +35,7 @@ if [ -z "${SCHED_ROOT:-}" ]; then
   if [ -n "$SELF_REPO" ] && [ -e "$SELF_REPO/.git" ] && [ -f "$SELF_REPO/bin/usage-paced-runner.sh" ]; then
     SCHED_ROOT="$SELF_REPO"
   else
-    SCHED_ROOT="/home/zach/Documents/Project Archive/scheduler"
+    SCHED_ROOT="/home/zach/Documents/Projects/scheduler"
   fi
 fi
 # Refuse loudly rather than rendering an unreadable world as an empty, clean
@@ -712,7 +712,7 @@ is_git_repo() {
 # ran `scheduler ask scheduler "..."`. scheduler's own .scheduler/schedule.conf
 # still carries mandark's PROJECT_REPO_PATH, and /home/zach/Documents does not
 # exist on dexter at all -- so the command reported
-#   created: /home/zach/Documents/Project Archive/scheduler/.scheduler/QUESTIONS.md
+#   created: /home/zach/Documents/Projects/scheduler/.scheduler/QUESTIONS.md
 # and cheerfully built all four directories to say it. The question was
 # recorded into a phantom checkout, outside every repo, on a run whose own
 # rules forbid writing outside its worktree. It exited 0.

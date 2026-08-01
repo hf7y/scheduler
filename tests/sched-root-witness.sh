@@ -36,7 +36,7 @@ grep -q 'exit 1' "$BLOCK" \
 # depending on where the suite runs. Neutralise exactly that one constant to a
 # guaranteed-absent path, and prove the substitution landed rather than
 # assuming it: an unmatched sed here would silently re-host-couple the test.
-FALLBACK='/home/zach/Documents/Project Archive/scheduler'
+FALLBACK='/home/zach/Documents/Projects/scheduler'
 grep -qF "\"$FALLBACK\"" "$BLOCK" \
   || { echo "FAIL: the documented fallback constant is gone from the block"; exit 1; }
 NOBLOCK="$TMP/block-nofallback.sh"

@@ -80,7 +80,7 @@ emit_error() { [ "$QUIET" = "1" ] && echo "ERROR" || echo "verdict=ERROR reason=
 # (see bin/deploy-drift-check.sh), so repo-relative lookup can and does fail
 # -- hence the legacy absolute fallback, same constant convention
 # bin/usage-paced-runner.sh and bin/token-usage.sh already use.
-LEGACY_SCHED_DIR="/home/zach/Documents/Project Archive/scheduler/schedule"
+LEGACY_SCHED_DIR="/home/zach/Documents/Projects/scheduler/schedule"
 SELF_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)"
 [ -n "$SELF_REAL" ] || SELF_REAL="${BASH_SOURCE[0]}"
 SELF_DIR="$(cd "$(dirname "$SELF_REAL")" 2>/dev/null && pwd)" || SELF_DIR=""

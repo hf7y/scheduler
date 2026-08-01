@@ -159,7 +159,7 @@ fi
 # identically to the library for the same inputs. If you move or rename the
 # markers, that witness fails loud rather than silently testing nothing.
 # >>> paced conf resolution
-LEGACY_PACED_CONF="/home/zach/Documents/Project Archive/scheduler/schedule/_paced.conf"
+LEGACY_PACED_CONF="/home/zach/Documents/Projects/scheduler/schedule/_paced.conf"
 PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -n "${PACED_CONF:-}" ]; then
   PACED_CONF_SRC="explicit PACED_CONF"

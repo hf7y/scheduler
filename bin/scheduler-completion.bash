@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Bash tab-completion for bin/scheduler. Source this from your shell rc:
-#   source "/home/zach/Documents/Project Archive/scheduler/bin/scheduler-completion.bash"
+#   source "/home/zach/Documents/Projects/scheduler/bin/scheduler-completion.bash"
 # Purely mechanical (FOCUS.md 2026-07-22 backlog item, flagged "no design
 # work needed, just didn't fit this pass") -- reuses the same
 # schedule/*.conf glob `projects()` in bin/scheduler already uses, so the
 # completion list can never drift out of sync with the real registry.
 
 _scheduler_projects() {
-  local sched_root="/home/zach/Documents/Project Archive/scheduler"
+  local sched_root="/home/zach/Documents/Projects/scheduler"
   local conf b
   for conf in "$sched_root"/schedule/*.conf; do
     [ -e "$conf" ] || continue

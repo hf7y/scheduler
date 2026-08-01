@@ -28,7 +28,7 @@ set -uo pipefail
 JOB_NAME="scheduler-paced-dev"
 
 # SCHED_REPO used to be hardcoded to mandark's checkout
-# ("/home/zach/Documents/Project Archive/scheduler"), which is the only thing
+# ("/home/zach/Documents/Projects/scheduler"), which is the only thing
 # that tied this script to one machine -- and it lives INSIDE the repo it
 # operates on, so the location is derivable instead. Made host-agnostic
 # 2026-07-24 during dexter's bring-up (see DESIGN-NOTES.md for why this
@@ -48,7 +48,7 @@ if [ -z "${SCHED_REPO:-}" ]; then
   if [ -n "$SELF_REPO" ] && [ -e "$SELF_REPO/.git" ] && [ -f "$SELF_REPO/bin/usage-paced-runner.sh" ]; then
     SCHED_REPO="$SELF_REPO"
   else
-    SCHED_REPO="/home/zach/Documents/Project Archive/scheduler"
+    SCHED_REPO="/home/zach/Documents/Projects/scheduler"
   fi
 fi
 
