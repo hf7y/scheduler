@@ -25,6 +25,36 @@
 # being true -- exactly the failure class the stability milestone names. A
 # symlink install cannot drift; a copy can, and did.
 #
+# THE DECLARED SET, added 2026-08-02 -- and the reason is this script itself.
+# Everything below USED to iterate "per file in this repo's bin/ that ALSO
+# EXISTS in $DEPLOY_DIR" -- the intersection. A file that SHOULD be installed
+# and simply is not was never iterated over, so absence could not be reported;
+# only a DANGLING symlink was caught, never an ABSENT one. With no overlap at
+# all the summary printed "nothing in $DEPLOY_DIR shares a name with this
+# repo's bin/ -- nothing to check" and exited 0. That is an exit-0 no-op inside
+# the guard built to catch deploy problems, and it is the outage in the header
+# above one level up: on a BARE host this check reported clean.
+#
+# DEXTER-MIGRATION-NOTES-20260729.md states the rule this now keeps:
+#   check the DECLARED set, never the intersection, or absence reports clean.
+#
+# The declaration is DERIVED, not typed. This repo already says which of its
+# scripts must exist at an installed path, because its own config names them:
+#   schedule/_sweep.conf     SWEEP_TICK_CMD=".../.local/bin/scheduler sweep"
+#   schedule/_runner.conf    RUNNER_CMD=".../.local/bin/usage-paced-runner.sh"
+#   .scheduler/schedule.conf BATCH_SCRIPT=".../.local/bin/scheduler-dev-cycle.sh"
+# A config assignment naming $DEPLOY_DIR/<name> IS the declaration that <name>
+# must be installed -- that is exactly what made the July outage possible,
+# since sync-crontab.sh will happily write a cron line pointing at a path
+# nothing ever created. Comment lines are excluded: several configs discuss
+# installed paths in prose, and dexter's deliberately use repo paths instead,
+# so a commented example is not a declaration.
+#
+# Checks, per DECLARED install:
+#   ABSENT  declared by config, not installed at all -- the case the
+#           intersection could not see, and the one that takes dispatch down
+#   NOSRC   declared, but this repo has no bin/<name> to install from
+#
 # Checks, per file in this repo's bin/ that also exists in $DEPLOY_DIR:
 #   OK      symlink into a checkout -- tracks whatever it points at
 #   DRIFT   copy whose content differs from $DEPLOY_REF (names the commit
@@ -128,6 +158,69 @@ matching_commit() {
 flagged=0
 checked=0
 
+# ---------------------------------------------------------- the declared set --
+# Every non-comment config assignment naming $DEPLOY_DIR/<name>. Derived from
+# the repo on every run, so it cannot go stale the way a typed list does, and
+# so a config that starts naming a new installed path is covered the moment it
+# is committed rather than the next time somebody remembers this file.
+DEPLOY_DIR_RE="$(printf '%s' "$DEPLOY_DIR" | sed 's/[][\.*^$(){}?+|\\]/\\&/g')"
+
+declared_names() {
+  local f hit
+  for f in "$REPO_ROOT"/schedule/*.conf "$REPO_ROOT"/.scheduler/*.conf; do
+    [ -f "$f" ] || continue
+    # Strip comments FIRST, then match. A commented example is not a
+    # declaration -- schedule/_paced.dexter.conf discusses installed wrappers
+    # at length precisely to say it does NOT use them.
+    sed 's/#.*//' "$f" 2>/dev/null \
+      | grep -oE "$DEPLOY_DIR_RE/[A-Za-z0-9._-]+"
+  done | while read -r hit; do
+    [ -n "$hit" ] || continue
+    printf '%s\n' "${hit#"$DEPLOY_DIR"/}"
+  done | sort -u
+}
+
+mapfile -t DECLARED < <(declared_names)
+
+echo
+echo "-- declared installs (config names them at $DEPLOY_DIR; absence is a finding) --"
+if [ "${#DECLARED[@]}" -eq 0 ]; then
+  # Not "clean". Zero declarations means the derivation found nothing, which is
+  # a discovery failure wearing the same face as a healthy host -- the very
+  # confusion this section was added to end.
+  echo "  NONE -- no config assignment names a path under $DEPLOY_DIR."
+  echo "  That is a DERIVATION failure, not a clean host: sync-crontab.sh writes"
+  echo "  cron lines from these configs, so at least one installed path is expected."
+  flagged=$((flagged + 1))
+else
+  for name in "${DECLARED[@]}"; do
+    live="$DEPLOY_DIR/$name"
+    src="$REPO_ROOT/bin/$name"
+    if [ -e "$live" ] || [ -L "$live" ]; then
+      echo "  declared  $name (installed; content checked below)"
+      continue
+    fi
+    if [ ! -e "$src" ]; then
+      echo
+      echo "NOSRC $name"
+      echo "  - config names $live, but this repo has no bin/$name to install from"
+      echo "  - nothing can fix this by symlink; the config or the repo is wrong"
+      flagged=$((flagged + 1))
+      continue
+    fi
+    # THE CASE THE INTERSECTION COULD NOT SEE.
+    echo
+    echo "ABSENT $name"
+    echo "  - config names $live, and NOTHING IS INSTALLED THERE"
+    echo "  - a cron line generated from that config would fail every tick"
+    echo "  - fix: ln -sfn '$LINK_ROOT/bin/$name' '$live'"
+    flagged=$((flagged + 1))
+  done
+fi
+
+echo
+echo "-- installed files that share a name with this repo's bin/ ------------"
+
 for src in "$REPO_ROOT"/bin/*; do
   [ -f "$src" ] || continue
   name="$(basename "$src")"
@@ -200,9 +293,13 @@ for src in "$REPO_ROOT"/bin/*; do
 done
 
 echo
-echo "== summary: $flagged/$checked installed file(s) flagged =="
-if [ "$checked" = "0" ]; then
-  echo "(nothing in $DEPLOY_DIR shares a name with this repo's bin/ -- nothing to check)"
+echo "== summary: ${#DECLARED[@]} declared install(s), $checked installed file(s) compared, $flagged flagged =="
+if [ "$checked" = "0" ] && [ "${#DECLARED[@]}" -gt 0 ]; then
+  # Deliberately no longer the whole story, and no longer exit 0. This line used
+  # to read "nothing to check" and return clean, which is what let a bare host
+  # -- every declared path missing -- pass the deploy checker.
+  echo "(nothing in $DEPLOY_DIR shares a name with this repo's bin/, so no CONTENT"
+  echo " was compared; the declared-install section above is the check that matters)"
 fi
 [ "$flagged" -gt 0 ] && exit 1
 exit 0
