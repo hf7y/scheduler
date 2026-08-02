@@ -109,9 +109,11 @@ _valid_cron() {
 # engine from $BASH_SOURCE at runtime. A follower chasing literal paths finds
 # nothing and reports FREE with full confidence.
 #
-# So the only verdicts are: SPENDS (a model runner is named, anywhere in what
-# could be read), FREE (an obvious leaf -- readable, naming no model runner,
-# and handing control to nothing), and UNVERIFIED (everything else).
+# So the verdicts are: SPENDS (the INVOCATION asks to spend -- refused, and
+# un-attestable), MIXED (the binary can spend but this invocation does not --
+# attestable, and WARNED on every check), FREE (an obvious leaf -- readable,
+# naming no model runner, handing control to nothing), and UNVERIFIED
+# (everything else).
 # UNVERIFIED IS NOT A PASS. It is cleared by an ATTESTATION in the register's
 # fifth field: a human sentence saying why this job cannot spend. The gate
 # then holds a signed claim instead of a guess, and the claim is in git.
@@ -121,7 +123,29 @@ _spend_risk() {
   [ -x "$bin" ] || { echo "NOTFOUND"; return; }
   [ -r "$bin" ] || { echo "UNVERIFIED"; return; }
   if ! head -c 2 "$bin" 2>/dev/null | grep -q '#!'; then echo "UNVERIFIED"; return; fi
-  if grep -qE '\bclaude\b|anthropic' "$bin" 2>/dev/null; then echo "SPENDS"; return; fi
+  # THE INVOCATION, NOT THE BINARY (Zach, 2026-08-01: "c but throw a warning").
+  #
+  # Judging the binary alone refused a job that provably cannot spend:
+  # `garde media run --all-pending` copies and md5-verifies, does not accept
+  # --summon, and reaches no model -- but garde's source matches /claude/ in
+  # the COMMENT documenting what its --summon flag costs. A tool with one
+  # paying subcommand was therefore un-armable for all of its free ones, and
+  # the refusal was un-attestable, so the only way out was to keep such jobs
+  # outside the register that exists to list them. An unlistable job is worse
+  # than a warned one.
+  #
+  # What is still refused OUTRIGHT, and cannot be attested away: an invocation
+  # that itself asks to spend. --summon is the ecosystem's one cost sigil, so
+  # its presence in the command line is decisive regardless of what the binary
+  # looks like.
+  if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])--summon([[:space:]]|$)|\bclaude\b|anthropic'; then
+    echo "SPENDS"; return
+  fi
+  # The binary CAN spend, but this invocation does not ask it to. Not refused,
+  # not waved through: MIXED demands the same attestation UNVERIFIED does, and
+  # warns on every check so the register never quietly forgets that a paying
+  # path exists a flag away.
+  if grep -qE '\bclaude\b|anthropic' "$bin" 2>/dev/null; then echo "MIXED"; return; fi
   # Any handing-off of control at all makes this not a leaf: exec, source,
   # command substitution, eval, or a path to another program.
   if grep -qE '(^|[^A-Za-z_])(exec|eval|source)[[:space:]]|^[[:space:]]*\.[[:space:]]|\$\(|`|/home/|/usr/(local/)?bin/' \
@@ -162,6 +186,7 @@ case "$cmd" in
   check)
     [ -f "$CONF" ] || verb_gap "no register at $CONF; nothing is armed and nothing declares it should be"
     n=0; bad=0
+    warned=0
     while IFS= read -r e; do
       [ -n "$e" ] || continue
       name="$(_field "$e" 1)"; on="$(_field "$e" 2)"
@@ -176,7 +201,18 @@ case "$cmd" in
         NOTFOUND)
           printf 'NOTFOUND   %-22s %s is not executable\n' "$name" "$(printf '%s' "$cmdline" | awk '{print $1}')"; bad=1 ;;
         SPENDS)
-          printf 'SPENDS     %-22s names the model runner -- this belongs to dose, not arme\n' "$name"; bad=1 ;;
+          printf 'SPENDS     %-22s the INVOCATION asks to spend (--summon or a model runner) -- this belongs to dose, not arme\n' "$name"; bad=1 ;;
+        MIXED)
+          # Attested exactly as UNVERIFIED is -- the difference is the warning,
+          # which is printed every run rather than once at arming time.
+          if [ "${#attest}" -ge 16 ]; then
+            printf 'WARN       %-22s %s\n' "$name" "$attest"
+            printf '           %-22s the binary CAN spend (%s names a model runner); this invocation does not. Re-read the attestation if either changes.\n' \
+              '' "$(printf '%s' "$cmdline" | awk '{print $1}')"
+            warned=$((warned + 1))
+          else
+            printf 'MIXED      %-22s binary can spend but this invocation does not; add a 5th field attesting why\n' "$name"; bad=1
+          fi ;;
         UNREADABLE)
           printf 'UNREADABLE %-22s cannot be read, so "never spends" is unverified\n' "$name"; bad=1 ;;
         UNVERIFIED)
@@ -201,7 +237,14 @@ EOF
       printf 'arme: a monitor is armed on a checked claim or not at all.\n'
       exit 7
     fi
-    printf 'arme: %s entr(y/ies) checked; every armed one is free to run.\n' "$n"
+    if [ "${warned:-0}" != 0 ]; then
+      # Loud on every run, not once at arming time. A tool that gains a paying
+      # subcommand later does not re-announce itself, so the register has to.
+      printf 'arme: %s entr(y/ies) checked; %s armed on an attestation that its binary CAN spend.\n' "$n" "$warned"
+      printf 'arme: those are armed, not refused -- but re-read their 5th field whenever the tool changes.\n'
+    else
+      printf 'arme: %s entr(y/ies) checked; every armed one is free to run.\n' "$n"
+    fi
     ;;
 
   plan)
