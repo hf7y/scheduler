@@ -213,6 +213,104 @@ else
   bad "SWEEP emitter does not call meta_cmd_unrunnable -- not wired in"
 fi
 
+echo "== a repo-relative meta command resolves against the repo (bare-host bootstrap)"
+# THE BUG THESE RETIRE: both shipped meta confs named a path OUTSIDE the repo
+# that nothing in the repo creates, so a fresh clone omitted the runner tick --
+# and since it is the only agent-dispatching line, that is a TOTAL DISPATCH
+# OUTAGE reported as one stderr line by a command that exits 0.
+#
+# The fixture repo has bin/ copied from the tree under test, so this path is
+# real here for the same reason it is real on a bare host: the repo ships it.
+write_runner "bin/usage-paced-runner.sh"
+write_sweep "$GOOD"
+run_sync
+if emits_runner; then
+  ok "a repo-relative RUNNER_CMD is accepted -- a fresh clone can dispatch"
+else
+  bad "a repo-relative RUNNER_CMD was refused -- a bare host still cannot bootstrap"
+fi
+# The emitted line must carry the RESOLVED absolute path: cron has no notion of
+# "the repo", so a relative word reaching the crontab fails on every tick.
+if printf '%s\n' "$OUT" | grep -q "$REPO/bin/usage-paced-runner.sh # scheduler:fixture-paced-runner:RUNNER"; then
+  ok "the emitted crontab line carries the resolved absolute path"
+else
+  bad "the emitted line lacks the resolved path -- cron cannot run a repo-relative word"
+fi
+
+# Resolution must not become a way for anything at all to pass.
+write_runner "bin/definitely-not-shipped.sh"
+run_sync
+if emits_runner; then
+  bad "a repo-relative path that does not exist was still emitted -- resolve is masking the check"
+else
+  ok "a repo-relative path that does not exist is still refused"
+fi
+
+echo "== resolution must not silently change which binary runs"
+# A BARE NAME is a deliberate PATH lookup, not a path. Rewriting `scheduler`
+# into $REPO/scheduler would change which binary the tick invokes -- the
+# opposite of the bug being fixed, and invisible until it ran.
+write_runner "true"
+run_sync
+if emits_runner && ! printf '%s\n' "$OUT" | grep -q "$REPO/true"; then
+  ok "a bare command name is left alone for cron's PATH to resolve"
+else
+  bad "a bare command name was rewritten into a repo path -- changes which binary runs"
+fi
+write_runner "$GOOD"
+run_sync
+if printf '%s\n' "$OUT" | grep -q "$GOOD # scheduler:fixture-paced-runner:RUNNER"; then
+  ok "an absolute RUNNER_CMD is passed through unchanged"
+else
+  bad "an absolute RUNNER_CMD was rewritten -- absolute must mean absolute"
+fi
+
+echo "== the resolver is wired into the emitters, not merely defined"
+if grep -q 'meta_cmd_resolve "\$RUNNER_CMD"' "$SYNC"; then
+  ok "RUNNER emitter calls meta_cmd_resolve"
+else
+  bad "RUNNER emitter does not call meta_cmd_resolve -- not wired in"
+fi
+if grep -q 'meta_cmd_resolve "\$SWEEP_TICK_CMD"' "$SYNC"; then
+  ok "SWEEP emitter calls meta_cmd_resolve"
+else
+  bad "SWEEP emitter does not call meta_cmd_resolve -- not wired in"
+fi
+
+echo "== the SHIPPED confs are themselves bare-host-clonable"
+# The mechanism is worth nothing if the confs this repo actually ships still
+# name a path outside it. Checked against the REAL schedule/, not the fixture.
+for f in _runner.conf _sweep.conf; do
+  v="$(grep -hE '^(RUNNER_CMD|SWEEP_TICK_CMD)=' "$ROOT/schedule/$f" | cut -d'"' -f2)"
+  case "$v" in
+    /*) bad "schedule/$f names an absolute path outside the repo: $v" ;;
+    "") bad "schedule/$f has no command set" ;;
+    *)  ok  "schedule/$f is repo-relative or a bare name: $v" ;;
+  esac
+done
+# A SOURCED project conf may use $HOME; it must not hardcode one user's home.
+# (schedule/_paced*.conf and _monitor.conf are READ, not sourced -- $HOME does
+# not expand there, so their command column stays absolute by design and is
+# deliberately not checked here.)
+if grep -lE '^PROJECT_REPO_PATH="/home/' "$ROOT"/schedule/*.conf >/dev/null 2>&1; then
+  bad "a project conf hardcodes an absolute home in PROJECT_REPO_PATH -- it cannot clone onto another host or user"
+else
+  ok "no project conf hardcodes an absolute home in PROJECT_REPO_PATH"
+fi
+
+# schedule/scheduler.conf is a SYMLINK to ../.scheduler/schedule.conf -- the
+# self-contained-folder model every other project is migrating onto. It is
+# also a trap: `sed -i` does not edit through a symlink, it REPLACES it with a
+# regular file, silently detaching the conf from the folder that owns it and
+# leaving two copies to drift. That happened while writing this very commit
+# and was caught only by reading the diffstat (91 insertions for a one-line
+# change). Cheap to assert, invisible when it breaks.
+if [ -L "$ROOT/schedule/scheduler.conf" ]; then
+  ok "schedule/scheduler.conf is still a symlink into .scheduler/"
+else
+  bad "schedule/scheduler.conf is no longer a symlink -- an in-place edit replaced it, and .scheduler/schedule.conf is now a second copy that will drift"
+fi
+
 echo
 echo "meta-cmd preflight witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
