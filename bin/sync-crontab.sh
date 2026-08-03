@@ -461,6 +461,51 @@ meta_cmd_unrunnable() {
   return 0
 }
 
+# Resolve a meta command's WORD against this repo when it is written
+# repo-relative. Echoes the whole command line with only the word rewritten.
+#
+# WHY THIS EXISTS: scheduler could not bootstrap onto a bare host, and the way
+# it failed is exactly the shape this project's own discipline is against.
+# Both shipped meta confs named a path OUTSIDE the repo --
+#
+#   _runner.conf  RUNNER_CMD="/home/zach/.local/bin/usage-paced-runner.sh"
+#   _sweep.conf   SWEEP_TICK_CMD="/home/zach/.local/bin/scheduler sweep"
+#
+# -- and NOTHING in this repo creates either symlink: there is no install.sh
+# and no bin/install*. So on a fresh clone meta_cmd_unrunnable above correctly
+# rejects the path, the runner line is omitted, and because the runner tick is
+# the ONLY agent-dispatching line (every project's fixed BATCH line is
+# suppressed as a paced participant, and sweep opts out per host), the entire
+# generated block comes out empty. A total dispatch outage, announced as one
+# line on stderr, from a command that exits 0. Recorded in
+# realisateur/DEXTER-MIGRATION-NOTES-20260729.md as "scheduler cannot bootstrap
+# itself onto a bare host".
+#
+# The fix is to let a conf name the copy the repo already ships, because the
+# repo is the one thing a bare host is guaranteed to have once it has cloned.
+# Three cases, and only the middle one is new:
+#
+#   /abs/path      unchanged -- an absolute path still means exactly itself
+#   bin/foo.sh     repo-relative -> $SCHED_DIR/bin/foo.sh
+#   foo            unchanged -- a bare name is cron's PATH lookup, not a path
+#
+# The bare-name case must NOT be rewritten. `SWEEP_TICK_CMD="scheduler sweep"`
+# is a deliberate PATH lookup, and turning it into $SCHED_DIR/scheduler would
+# silently change which binary runs -- the opposite of the bug being fixed.
+#
+# Arguments after the word are preserved verbatim: SWEEP_TICK_CMD carries
+# `sweep` as an argument, so resolving the whole string would corrupt it.
+meta_cmd_resolve() {
+  local cmdline="$1" word rest
+  word="${cmdline%%[[:space:]]*}"
+  case "$word" in
+    /*)  printf '%s' "$cmdline" ;;
+    */*) rest="${cmdline#"$word"}"
+         printf '%s%s' "$SCHED_DIR/$word" "$rest" ;;
+    *)   printf '%s' "$cmdline" ;;
+  esac
+}
+
 # Resolve the command cron should run for one tier, honoring backwards
 # compatibility. $1=tier label (SWEEP|BATCH), $2=<TIER>_SCRIPT value,
 # $3=<TIER>_PROMPT value, $4=scheduler-run subcommand (sweep|batch). Echoes
@@ -694,7 +739,11 @@ if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
   elif ! validate_cron "$RUNNER_CRON"; then
     echo "ERROR [runner]: RUNNER_CRON='$RUNNER_CRON' isn't a valid 5-field cron expression -- runner tick omitted" >&2
     ERRORS=$((ERRORS + 1))
-  elif ! runner_why=$(meta_cmd_unrunnable "$RUNNER_CMD"); then
+  elif RUNNER_CMD="$(meta_cmd_resolve "$RUNNER_CMD")" \
+       && ! runner_why=$(meta_cmd_unrunnable "$RUNNER_CMD"); then
+    # Resolved BEFORE the check, so the path that is verified is the same one
+    # that gets written into the crontab -- checking one and emitting another
+    # is how a line passes validation and still dies at run time.
     echo "ERROR [runner]: RUNNER_CMD -- $runner_why -- runner tick omitted" >&2
     ERRORS=$((ERRORS + 1))
   else
@@ -718,7 +767,9 @@ if [ -n "$SWEEP_TICK_JOB" ] || [ -n "$SWEEP_TICK_CMD" ] || [ -n "$SWEEP_TICK_CRO
   elif ! validate_cron "$SWEEP_TICK_CRON"; then
     echo "ERROR [sweep]: SWEEP_TICK_CRON='$SWEEP_TICK_CRON' isn't a valid 5-field cron expression -- sweep tick omitted" >&2
     ERRORS=$((ERRORS + 1))
-  elif ! sweep_why=$(meta_cmd_unrunnable "$SWEEP_TICK_CMD"); then
+  elif SWEEP_TICK_CMD="$(meta_cmd_resolve "$SWEEP_TICK_CMD")" \
+       && ! sweep_why=$(meta_cmd_unrunnable "$SWEEP_TICK_CMD"); then
+    # Same ordering as the runner block above, for the same reason.
     echo "ERROR [sweep]: SWEEP_TICK_CMD -- $sweep_why -- sweep tick omitted" >&2
     ERRORS=$((ERRORS + 1))
   else
