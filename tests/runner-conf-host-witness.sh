@@ -91,9 +91,29 @@ case "$RUNNER_ENV" in *"PACED_MAX_PER_TICK=1"*) ok "dexter per-tick cap is 1" ;;
 case "$RUNNER_ENV" in *"USAGE_CEILING"*) bad "USAGE_CEILING baked onto dexter's cron line -- belongs in _usage.dexter.conf" ;; *) ok "no USAGE_CEILING on the cron line" ;; esac
 [ -z "$SWEEP_TICK_CRON" ] && ok "dexter has no sweep tick (matches its actual crontab)" || bad "dexter would get a sweep tick it never ran"
 
-echo "case 6 -- mandark is genuinely unaffected by all of the above"
+echo "case 6 -- mandark OPTS OUT of the runner tick (self-dev has left it)"
+# HISTORY, because this assertion has now been wrong twice and each time it
+# was the TEST that was stale, not the tree:
+#   originally  it asserted mandark ran */5, which is what _runner.conf shipped
+#               when this witness was written.
+#   2026-08-02  the shipped cadence became `0 */6` (THE FLOOR's pacing
+#               decision) and this line went red without anything being
+#               broken. It stayed red.
+#   2026-08-03  self-dev moved to `monkey` and mandark's runner was retired
+#               deliberately, via _runner.mandark.conf blanking RUNNER_CRON --
+#               Zach: "delete it via dog fooding if possible". The red then
+#               changed from '0 */6 * * *' to '', i.e. it began failing ABOUT
+#               the intended change.
+# A test asserting a cadence this host no longer has is not protecting
+# anything; it is a red that misdescribes the tree. What is worth protecting
+# is that the OPT-OUT resolves -- because if _runner.mandark.conf is ever
+# dropped or misspelled, mandark silently starts dispatching again against a
+# quota monkey is now spending.
 resolve "$ROOT/schedule" mandark
-[ "$RUNNER_CRON" = "*/5 * * * *" ] && ok "mandark still */5" || bad "mandark cadence changed to '$RUNNER_CRON'"
+[ -z "$RUNNER_CRON" ] && ok "mandark opts out of the runner tick (RUNNER_CRON blank)" \
+  || bad "mandark would dispatch again -- RUNNER_CRON resolved to '$RUNNER_CRON'; is _runner.mandark.conf still there?"
+[ -n "$SWEEP_TICK_CRON" ] && ok "mandark keeps its sweep tick (only agent dispatch left)" \
+  || bad "mandark lost its sweep tick too -- the opt-out was meant to be runner-only"
 
 echo "case 7 -- the real script agrees (not just this witness's local model)"
 # SYNC_HOST is the script's own override hook; preview mode writes nothing.
