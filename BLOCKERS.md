@@ -1769,3 +1769,62 @@ one thing this reap leaves outstanding.
 
 Decisions 1 (the `bashify emit` purge-guard narrowing, draft PR #4) and 3
 (basheur scoring a refusal as success) remain open.
+
+---
+
+## 2026-08-03 — machine-append: three open items answered by the monkey sprint
+
+Appended, not edited. The entries above are left exactly as written, including
+their empty `> (answer inline here)` slots; this section records that events
+have overtaken three of them, so a reader does not spend a decision on a
+question that is already settled. If any of these readings is wrong, the
+original entry is still there to answer directly.
+
+**"the dexter office needs an isolation boundary — VM, plain unix users, or
+containers?"** — ANSWERED **VM with users inside**, and executed this date.
+Zach directed a self-dev VM in the sprint framing ("move self-dev projects
+inside the vm ... each project is a user"). Built as `monkey`: VirtualBox on
+dexter's Windows host, Ubuntu 24.04, 6144MB/4vCPU, disk on D:, ssh 2225.
+Deliberately a SECOND VM rather than the office's `nomac`, which is
+media-arts-collective's and co-directed with Tyler, and whose `think` wrapper
+gates execution on a wavebucks balance — self-dev dispatch would have
+inherited a simulated economy as a precondition. The sub-question the entry
+also raised ("nested inside WSL2 vs on the Windows host as a WSL2 peer") is
+answered the second way: monkey is a VirtualBox guest of the Windows host, a
+peer to WSL2, not nested inside it. Full shape: realisateur/MONKEY.md.
+
+**"how should root happen on dexter?"** — LARGELY MOOT, and where it still
+applies the answer is (a). Creating the VM needed no root on dexter at all:
+VBoxManage is a WINDOWS process reached through WSL interop, so
+`provision/monkey-vm.sh` provisions a hypervisor guest from an unprivileged
+WSL shell. Root is still needed INSIDE monkey (project users, linger, sshd
+hardening), and that is shape (a) as recommended: an auditable script plus the
+guest's own credentials, with no standing privilege granted on dexter itself.
+Blanket NOPASSWD on `zach@dexter` was never taken and is not needed.
+
+**"gardien's nightly backup is OFF on dexter — bring it back, and where does
+it live now?"** — ANSWERED by events: it lives on MANDARK as
+`garde-nightly.timer`, and it works. It fires 03:33 daily, `ExecStart` is
+`garde media run --all-pending`, and it succeeded this morning. The entry's
+own worry — that a backup service in `zach@dexter`'s user systemd would be in
+the wrong place once the office moved into a VM — is resolved by the direction
+being the other way round: dexter is the DESTINATION (`/mnt/d/gardien-media`,
+261G), not the host of the job.
+
+Two things that decision left undone, and they are new, not restatements:
+
+- Until this date senechal did not KNOW garde-nightly existed. `health.backup_unit`
+  still named the retired `gardien.service`, so estate-health reported "no backup
+  is configured at all" as a SKIP, hourly, while a backup ran and succeeded; and
+  `estate.footprint` had no entry for it at all. Both fixed (senechal PR #2), and
+  the live `senechal.json` is gitignored so it was also patched by hand — which is
+  gardien's `garde.json` problem one level up, and is filed as a deferred decision
+  in realisateur/MONKEY.md.
+- `garde media run --all-pending` reported SUCCESS when it could see no
+  destination at all (gardien PR #1). It had done so at 03:34 this date with
+  dexter down. That matters more now that dexter is the only destination: a WSL2
+  distro stops when Windows logs out, so the destination is designed to be
+  intermittently absent, and the nightly job was treating absent as proven.
+
+NOT answered here, and still open: the 60-turn ceiling entry immediately above
+the isolation one, and everything else in this file.
