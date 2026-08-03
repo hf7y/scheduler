@@ -596,10 +596,43 @@ require_project() {
 }
 
 conf_field() {
-  local proj="$1" field="$2"
+  local proj="$1" field="$2" v
   local conf="$SCHED_ROOT/schedule/$proj.conf"
   [ -f "$conf" ] || return 1
-  grep -E "^${field}=" "$conf" | head -1 | cut -d= -f2- | tr -d '"'
+  v="$(grep -E "^${field}=" "$conf" | head -1 | cut -d= -f2- | tr -d '"')"
+
+  # ONE FILE, TWO READERS, AND THEY DISAGREED.
+  #
+  # schedule/*.conf is `source`d by bin/sync-crontab.sh and bin/scheduler-run,
+  # where PROJECT_REPO_PATH="$HOME/Documents/Projects/senechal" expands. THIS
+  # reader is grep+cut+tr, so the same line came back as the literal eleven
+  # characters `$HOME/Docum...` -- and every caller below treats the result as
+  # a real path. `scheduler -i senechal` (the ecosystem's front door, and what
+  # notify-senechal files through) refused with
+  #
+  #   scheduler: senechal's PROJECT_REPO_PATH does not exist on this host:
+  #   $HOME/Documents/Projects/senechal
+  #
+  # which is the failure reporting itself accurately and being impossible to
+  # act on. Introduced 2026-08-03 by the bare-host portability pass, which
+  # verified the SOURCED readers and never ran a text reader. Its witness
+  # asserted only "no conf hardcodes /home/" -- a test that passes while the
+  # feature is broken, which is the shape this repo keeps rediscovering.
+  #
+  # Expanded here rather than reverting the confs, because the portability was
+  # the point: a conf that means one path when sourced and a different literal
+  # when grepped is worse than either convention alone.
+  #
+  # ONLY the three forms a path can portably START with, and NO eval: a conf
+  # cannot execute anything through this function. `$HOME` mid-string is left
+  # alone deliberately -- it is not a shape any conf uses, and pretending to
+  # handle it would imply a general expansion this is not.
+  case "$v" in
+    '$HOME'|'$HOME'/*)     v="$HOME${v#\$HOME}" ;;
+    '${HOME}'|'${HOME}'/*) v="$HOME${v#\$\{HOME\}}" ;;
+    '~'|'~'/*)             v="$HOME${v#\~}" ;;
+  esac
+  printf '%s\n' "$v"
 }
 
 # --- cross-account run state -------------------------------------------
