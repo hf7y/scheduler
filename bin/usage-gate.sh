@@ -160,8 +160,41 @@ MODEL="$RES_VAL"
 command -v curl >/dev/null 2>&1 || emit_error no_curl
 command -v python3 >/dev/null 2>&1 || emit_error no_python
 
-TOKEN=$(python3 -c "import json;print(json.load(open('$CREDS'))['claudeAiOauth']['accessToken'])" 2>/dev/null) || emit_error no_token
-[ -n "$TOKEN" ] || emit_error empty_token
+# THREE PLACES A TOKEN CAN LIVE, and until 2026-08-03 this read only one of
+# them -- the one that does NOT work on an unattended host.
+#
+#   1. $CLAUDE_CODE_OAUTH_TOKEN        exported in the environment
+#   2. ~/.claude/settings.json .env    written from `claude setup-token`
+#   3. ~/.claude/.credentials.json     the interactive OAuth login
+#
+# (3) was the only one supported, and it is the login that EXPIRES and that a
+# headless host cannot perform. `monkey` -- the self-dev host stood up this
+# date, one unix user per project, no browser -- authenticates with a
+# long-lived setup-token in (2), because that is the only shape `claude`
+# itself reads with no session bus and no env inherited through cron.
+#
+# So the gate held every dispatch at `verdict=ERROR reason=no_token` on a host
+# where `claude -p` worked perfectly. The ecosystem's unattended-auth story
+# and its quota gate disagreed about where a credential lives, and the gate
+# was the half that got to decide. Same class as conf_field reading a conf
+# two ways: one fact, two readers.
+#
+# Order is deliberate: an explicitly exported token wins, because a caller
+# that set it meant it.
+TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+TOKEN_SRC="env"
+if [ -z "$TOKEN" ]; then
+  SETTINGS="$HOME/.claude/settings.json"
+  TOKEN=$(python3 -c "import json,sys;print(json.load(open('$SETTINGS')).get('env',{}).get('CLAUDE_CODE_OAUTH_TOKEN',''))" 2>/dev/null) || TOKEN=""
+  TOKEN_SRC="settings.json"
+fi
+if [ -z "$TOKEN" ]; then
+  TOKEN=$(python3 -c "import json;print(json.load(open('$CREDS'))['claudeAiOauth']['accessToken'])" 2>/dev/null) || TOKEN=""
+  TOKEN_SRC="credentials.json"
+fi
+# no_token still means "found nowhere", which is what the old reason meant --
+# callers and logs that match on it keep working.
+[ -n "$TOKEN" ] || emit_error no_token
 
 HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
 CODE=$(curl -sS -o /dev/null -D "$HDR" -w '%{http_code}' --max-time 30 \
