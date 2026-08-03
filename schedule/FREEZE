@@ -1,0 +1,14 @@
+monkey brought online 2026-08-03; only ecosim@monkey may dispatch.
+
+Self-dev has moved off mandark (realisateur/MONKEY.md). Until monkey has been
+watched through several real cycles, this file makes "one dispatcher" a
+MECHANICAL fact rather than a property of three conf files that all happen to
+agree today: bin/freeze-check.sh refuses dispatch at exit 1 for anything not
+named below, on every host, regardless of what any rotation says.
+
+The host-scoped form is used deliberately. A bare `EXEMPT: ecosim` would
+unfreeze ecosim everywhere, including on mandark where its row still exists in
+_paced.conf at enabled=0 -- and a single edit there would then arm a second
+host silently. Naming the host means the exemption cannot travel.
+
+EXEMPT: ecosim@monkey
