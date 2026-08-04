@@ -1,5 +1,5 @@
 monkey brought online 2026-08-03; only the accounts named below may dispatch,
-and today that is ecosim@monkey and bibliothecaire@monkey.
+and today that is ecosim@monkey, bibliothecaire@monkey and vim-arcade@monkey.
 
 Self-dev has moved off mandark (realisateur/MONKEY.md). This file makes the
 dispatcher roster a MECHANICAL fact rather than a property of three conf files
@@ -21,9 +21,18 @@ host silently. Naming the host means the exemption cannot travel.
 
 EXEMPT: ecosim@monkey
 EXEMPT: bibliothecaire@monkey
+# vim-arcade@monkey, added 2026-08-04: account #4, landed end to end
+# (bin/setup-selfdev-project.sh) and given the row in _paced.monkey.conf that
+# chezz was staged for -- Zach-directed, vim-arcade goes next, not chezz. See
+# that conf's own comment and realisateur/MONKEY.md 8.3 for the account
+# record.
+EXEMPT: vim-arcade@monkey
 # chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf. THIS ARMS
 # NOTHING BY ITSELF and is not an oversight: chezz's row in
 # _paced.monkey.conf is enabled=0, and membership in the rotation is what
 # arms a project -- this file only says which names are not frozen. Both
-# have to be true, and today only this one is.
+# have to be true, and today it is not (vim-arcade took the next slot
+# instead). Left exempt anyway, same as its rotation row: parked, not
+# deleted -- deleting either would re-arm the fixed-cron suppression this
+# repo's own rotation-membership rule warns against (_paced.conf's header).
 EXEMPT: chezz@monkey
