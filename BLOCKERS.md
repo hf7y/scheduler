@@ -1225,6 +1225,33 @@ happened yet for any of them.
   `# verified 2026-08-04 via: closeout-lint; hygiene-lint vim-arcade; git -C ~/Documents/Projects/vim-arcade status --short --branch; grep -n PROJECT_REPO_PATH scheduler/schedule/vim-arcade.conf`
   > (answer inline here)
 
+- **2026-08-04 (vim-arcade session):** **Ten failures in one day were one class
+  — two copies of a truth with nothing watching for drift** (`_launch` vs
+  `main()`; a test stub vs `TriageItem`, three times, once reaching a red
+  `main`; `main` vs `tmux-pane-mechanic`; two event loops; the `answered` label
+  vs the comment; one `hf7y` identity for two roles; a commit on a branch vs
+  three issues closed as "fixed"). `BUILD-DISCIPLINE.md` already says *"Config
+  read from one source, not retyped per file"* — but **none of the ten was
+  config.** The principle is right and already held; it is scoped one category
+  too narrow. Should the row widen to "including tests, branches, identities
+  and control flow", or is a config-only rule the deliberate limit?
+  Recorded in realisateur `0357e30`; detail in vim-arcade#42.
+  > (answer inline here)
+
+- **2026-08-04 (vim-arcade session):** **There was no CI in any of eight repos**
+  (vim-arcade, realisateur, scheduler, senechal, bibliothecaire, ecosim, wtul,
+  basheur) and PRs reported zero status checks — in an estate whose doctrine is
+  "a command on PATH, not a rule to remember, because prose decays and guards
+  don't". Four of the ten failures above existed **only in the combination** of
+  branches that were each individually green. vim-arcade now has it
+  (`6c25db5`), and it found two real defects on its first two runs that were
+  invisible from mandark: an undeclared dependency, and tests that only passed
+  because Zach's global git config happened to exist. Should CI roll out to the
+  other seven repos with tests, and should a CI row join BUILD-DISCIPLINE?
+  Note this is a decision, not a task — the work is small but the reach is
+  ecosystem-wide.
+  > (answer inline here)
+
 
 ## bibliothecaire
 
