@@ -21,3 +21,9 @@ host silently. Naming the host means the exemption cannot travel.
 
 EXEMPT: ecosim@monkey
 EXEMPT: bibliothecaire@monkey
+# chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf. THIS ARMS
+# NOTHING BY ITSELF and is not an oversight: chezz's row in
+# _paced.monkey.conf is enabled=0, and membership in the rotation is what
+# arms a project -- this file only says which names are not frozen. Both
+# have to be true, and today only this one is.
+EXEMPT: chezz@monkey
