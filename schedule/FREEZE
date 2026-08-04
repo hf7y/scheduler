@@ -1,10 +1,18 @@
-monkey brought online 2026-08-03; only ecosim@monkey may dispatch.
+monkey brought online 2026-08-03; only the accounts named below may dispatch,
+and today that is ecosim@monkey and bibliothecaire@monkey.
 
-Self-dev has moved off mandark (realisateur/MONKEY.md). Until monkey has been
-watched through several real cycles, this file makes "one dispatcher" a
-MECHANICAL fact rather than a property of three conf files that all happen to
-agree today: bin/freeze-check.sh refuses dispatch at exit 1 for anything not
-named below, on every host, regardless of what any rotation says.
+Self-dev has moved off mandark (realisateur/MONKEY.md). This file makes the
+dispatcher roster a MECHANICAL fact rather than a property of three conf files
+that all happen to agree today: bin/freeze-check.sh refuses dispatch at exit 1
+for anything not named below, on every host, regardless of what any rotation
+says.
+
+WHAT THIS FILE STILL DOES NOW THAT IT NAMES TWO. It stopped being "one
+dispatcher, enforced" on 2026-08-03 and it did NOT thereby become decoration.
+Seventeen projects are parked and every one of them has a schedule/<p>.conf; a
+row added to a rotation by an agent, a merge, or a copied file still dispatches
+NOTHING until a human adds a line here. The roster is the allowlist. Growing it
+by one, deliberately, is the mechanism working -- not evidence it has lapsed.
 
 The host-scoped form is used deliberately. A bare `EXEMPT: ecosim` would
 unfreeze ecosim everywhere, including on mandark where its row still exists in
@@ -12,3 +20,4 @@ _paced.conf at enabled=0 -- and a single edit there would then arm a second
 host silently. Naming the host means the exemption cannot travel.
 
 EXEMPT: ecosim@monkey
+EXEMPT: bibliothecaire@monkey
