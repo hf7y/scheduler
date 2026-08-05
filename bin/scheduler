@@ -1327,6 +1327,32 @@ cmd_idea() {
   slug="$(gh_repo_slug "$proj")" || exit 1
   ensure_gh_labels "$slug"
   today="$(date '+%Y-%m-%d %H:%M')"
+
+  # THE TITLE IS NOT THE NOTE. GitHub caps an issue title at 256 characters
+  # and rejects the whole call above it -- found 2026-08-05 by filing the
+  # first real note through this path:
+  #   scheduler idea: gh issue create FAILED against hf7y/scheduler
+  #   GraphQL: Title is too long (maximum is 256 characters)
+  # It failed loud and recorded nothing, which is right, but it made the
+  # front door unusable for any note longer than a sentence -- and a note
+  # longer than a sentence is the normal case for `notify-senechal`, which
+  # describes what changed, where, and how to retire it.
+  #
+  # cmd_ask gets away with title=text because a question IS one line. An
+  # idea is not. So: first line, truncated on a word boundary, and the FULL
+  # text always goes in the body -- the title is an index entry, never the
+  # record. Truncation is marked, so a reader can tell a shortened title
+  # from a short one.
+  local title first
+  first="$(printf '%s\n' "$text" | head -1)"
+  if [ "${#first}" -gt 200 ]; then
+    title="$(printf '%s' "${first:0:200}" | sed 's/[[:space:]][^[:space:]]*$//')..."
+  else
+    title="$first"
+  fi
+  # A multi-line note whose first line is already the whole title would
+  # otherwise look complete in every summary view while carrying more.
+  case "$text" in *$'\n'*) [ "$title" = "$first" ] && title="$title [...]" ;; esac
   body="$(printf '%s\n' \
     "$text" \
     "" \
@@ -1339,7 +1365,7 @@ cmd_idea() {
   # --body-file, not --body: a note containing a backtick or $( is a note,
   # not a command. Same reason CLAUDE.md requires `git commit -F`.
   local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
-  if ! url="$(gh issue create --repo "$slug" --title "$text" \
+  if ! url="$(gh issue create --repo "$slug" --title "$title" \
                 --label idea --body-file "$bf" 2>&1)"; then
     rm -f "$bf"
     echo "scheduler idea: gh issue create FAILED against $slug -- NOTHING was recorded." >&2
