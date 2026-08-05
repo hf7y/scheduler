@@ -1,5 +1,8 @@
-monkey brought online 2026-08-03; only the accounts named below may dispatch,
-and today that is ecosim@monkey, bibliothecaire@monkey and vim-arcade@monkey.
+monkey brought online 2026-08-03; only the accounts named below may dispatch.
+The EXEMPT: lines at the bottom are the roster -- read them, do not read a
+count restated up here. Two such restatements ("names two", and a three-name
+list) were both stale by 2026-08-05, when four accounts were exempt and all
+four dispatching; a number in prose beside a list is a promise nobody keeps.
 
 Self-dev has moved off mandark (realisateur/MONKEY.md). This file makes the
 dispatcher roster a MECHANICAL fact rather than a property of three conf files
@@ -7,7 +10,7 @@ that all happen to agree today: bin/freeze-check.sh refuses dispatch at exit 1
 for anything not named below, on every host, regardless of what any rotation
 says.
 
-WHAT THIS FILE STILL DOES NOW THAT IT NAMES TWO. It stopped being "one
+WHAT THIS FILE STILL DOES NOW THAT IT NAMES MORE THAN ONE. It stopped being "one
 dispatcher, enforced" on 2026-08-03 and it did NOT thereby become decoration.
 Seventeen projects are parked and every one of them has a schedule/<p>.conf; a
 row added to a rotation by an agent, a merge, or a copied file still dispatches
@@ -27,12 +30,18 @@ EXEMPT: bibliothecaire@monkey
 # that conf's own comment and realisateur/MONKEY.md 8.3 for the account
 # record.
 EXEMPT: vim-arcade@monkey
-# chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf. THIS ARMS
-# NOTHING BY ITSELF and is not an oversight: chezz's row in
-# _paced.monkey.conf is enabled=0, and membership in the rotation is what
-# arms a project -- this file only says which names are not frozen. Both
-# have to be true, and today it is not (vim-arcade took the next slot
-# instead). Left exempt anyway, same as its rotation row: parked, not
-# deleted -- deleting either would re-arm the fixed-cron suppression this
-# repo's own rotation-membership rule warns against (_paced.conf's header).
+# chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf.
+#
+# CORRECTED 2026-08-05: the note that stood here said this exemption "ARMS
+# NOTHING BY ITSELF" because chezz's row in _paced.monkey.conf was enabled=0.
+# That stopped being true the same day, in ca6607d ("arm chezz@monkey", #19),
+# which set the row to `chezz|1|1|`. chezz is ARMED and DISPATCHING -- verified
+# 2026-08-05 via a hand-triggered tick that logged
+# `DISPATCH [3/4] chezz -> .../scheduler-run chezz batch`.
+#
+# The arming was deliberate (#19's own title), so this is stale prose, not a
+# stray row -- but it was prose that told a reader the opposite of what the
+# machine does, which is worse than no note. Both conditions this file
+# describes (exempt here AND enabled in the rotation) are now satisfied for
+# all four accounts below; none of them is parked.
 EXEMPT: chezz@monkey
