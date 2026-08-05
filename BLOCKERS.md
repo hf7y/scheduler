@@ -1252,6 +1252,22 @@ happened yet for any of them.
   ecosystem-wide.
   > (answer inline here)
 
+- **2026-08-04 (vim-arcade session, later):** **A GitHub App identity for agents
+  needs your browser, and it is ecosystem-wide, not vim-arcade's alone.**
+  Everything an agent files is authored `hf7y`, indistinguishable from you — so
+  the merged rule "a repo-owner comment is the answer" can read an agent's own
+  comment as yours. Proven live on vim-arcade#6: four comments, all `hf7y`, two
+  yours and two an agent's. A provenance stamp shipped as the bridge
+  (vim-arcade `4a3aac5`), and it works — but it is forward-only: the ~33
+  artifacts written before it stay ambiguous. A GitHub App comments as
+  `name[bot]`, unspoofable, and fixes it intrinsically. The runbook (permission
+  scopes and why each) is committed at vim-arcade `4a3aac5` in
+  `.claude/GITHUB_APP_RUNBOOK.md`; only the browser steps are missing. Every
+  repo on the issues channel has this identical problem — should the App be
+  created once for the estate, and installed on both `hf7y` and
+  `media-arts-collective`? Tracked as vim-arcade#34.
+  > (answer inline here)
+
 
 ## bibliothecaire
 
