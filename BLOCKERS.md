@@ -986,6 +986,36 @@ happened yet for any of them.
   to Recently resolved once senechal's FOCUS.md carries the condition +
   interim flag.)*
 
+- **2026-08-05 (senechal `/cloture`): senechal's stability milestone cannot be met as written — drop its third criterion?**
+  The bar (issue #6, mirrored in `.scheduler/FOCUS.md`) has three criteria. Two are
+  `[x]`. The third is the lid-close/sleep power setting, which the milestone's own text
+  declares **out of scope for senechal** and "left unchecked/unbuilt here on purpose."
+  A criterion a milestone declares out of scope can never be checked, so the milestone
+  stays "in-progress" forever regardless of what gets built — and the parked-by-default
+  rule above it keeps applying. It has a real downstream cost: the dotfiles-repo idea is
+  recorded as blocked on the lid-close fix, so something senechal *does* own is parked
+  behind something it decided it does not. Options: (a) drop the third criterion and
+  refile lid-close/sleep under whoever owns live power management, at which point the
+  milestone is **met**; (b) keep it and name senechal as the owner of that setting after
+  all; (c) rewrite the bar. Not taken unilaterally — revising a stability milestone is a
+  scope decision, and that file is deliberate about what widens it (it carries two
+  explicitly *named* exceptions rather than silently blurred ones).
+  `# verified 2026-08-05 via: gh issue view 6 --repo hf7y/senechal; grep -n 'lid-close' senechal/.scheduler/FOCUS.md`
+>
+
+- **2026-08-05 (senechal `/cloture`): who owns issue hf7y/senechal#4, "burn line"?**
+  It asks to add a burn line to weekly usage and overlay it in red on the quota bar.
+  senechal owns no quota surface and renders no bar, so it is misfiled here. Candidates:
+  **scheduler** (`bin/token-usage.sh`, `schedule/_usage.conf`, the usage-paced governor
+  that actually computes burn), or **the panel widget** `com.docusketch.claudequota` —
+  the plasmoid you actually watch, which lives outside any repo and therefore has no
+  owner to file to. Not refiled by senechal: a wrong `scheduler -i` just moves the
+  orphan. Say which and it goes over in one command. The second candidate is the real
+  issue underneath — a widget in no repo means display requests land wherever someone
+  happens to type them.
+  `# verified 2026-08-05 via: gh issue view 4 --repo hf7y/senechal`
+>
+
 ## realisateur
 
 - **2026-07-30 (bashify pass):** **`basheur` is not registered with scheduler**
