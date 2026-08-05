@@ -1427,8 +1427,10 @@ happened yet for any of them.
   bar-tracking or QUESTIONS.md flagging back into the repo — every future
   run should check here (or its own commit history) rather than trust
   FOCUS.md's checklist state, which is now stale the moment code ships.
-  > (answer inline here — narrow per-file grant / defaultMode:auto
-  >  baseline / something else)
+>> _[consumed 2026-08-04 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline here — narrow per-file grant / defaultMode:auto
+  >>  baseline / something else)
 
 ## groc-mangr
 
