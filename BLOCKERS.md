@@ -348,6 +348,17 @@ paste.
 > The move has been indefinitely suspended. Self-dev indefinitely suspended
 > pending new agent to project topology insights. See basheur.
 
+  `# CORRECTION appended 2026-08-05 (background session), nothing above
+  rewritten:` the answer above is dated **2026-07-30** and has since been
+  overtaken by events — flagged here because it reads as standing policy and
+  an unattended run could act on it. Self-dev is **not** suspended: it moved
+  hosts. `MONKEY.md` records MILESTONE MET 2026-08-03, and on 2026-08-05 all
+  four monkey accounts dispatched and completed. Leaving the note is not
+  enough on its own — the reason a stale answer survived five days is that
+  nothing re-probes it, which is the same gap the two entries at the end of
+  this section are about.
+  `# verified 2026-08-05 via: ssh monkey, sudo -n -u {ecosim,vim-arcade,bibliothecaire,chezz} tail ~/.local/share/scheduler-paced-runner/run.log -- 4/4 DISPATCH+DONE at 14:24Z (bibliothecaire DONE 306s, ecosim 708s, vim-arcade 590s, chezz rc=1 1786s); crontab -l per account shows '0 */6' runner lines; loginctl Linger=yes`
+
 - **THREE MORE WITNESSES tonight for the unpushed-sweeper defect (`8c94eff`),
   taking it from 2 occurrences to 5 in one day** (agent-appended 2026-07-28
   ~23:40, realisateur `/ideate`; witness: `closeout-lint` FLAGs plus
