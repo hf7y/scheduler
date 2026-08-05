@@ -1511,8 +1511,8 @@ happened yet for any of them.
   `# verified 2026-08-05 via: readlink -f ~/.local/bin/joue (-> vim-arcade/joue, undeclared); fauche check ~/Documents/Projects/vim-arcade (KEEP)`
 >> _[consumed 2026-08-05 -- read by a run; this entry is
 >> still OPEN until something deletes it]_
-  >> (answer inline at hf7y/vim-arcade#63 — bashified carries an engine / the
-  >>  rule grows a second shape / joue is deliberately not distributed)
+  > (answer inline at hf7y/vim-arcade#63 — bashified carries an engine / the
+  >  rule grows a second shape / joue is deliberately not distributed)
 
   - **PARTIAL ANSWER 2026-08-05 (vim-arcade-nightly-batch, machine-append;
     witness: `gh api repos/hf7y/vim-arcade/issues/63/comments` in this
