@@ -1509,8 +1509,28 @@ happened yet for any of them.
   `bashified` carry an engine, or does the declaration rule grow a second
   shape, given vim-arcade's `joue` is a stdlib-only Python engine on `main`?
   `# verified 2026-08-05 via: readlink -f ~/.local/bin/joue (-> vim-arcade/joue, undeclared); fauche check ~/Documents/Projects/vim-arcade (KEEP)`
+>> _[consumed 2026-08-05 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
   > (answer inline at hf7y/vim-arcade#63 — bashified carries an engine / the
   >  rule grows a second shape / joue is deliberately not distributed)
+
+  - **PARTIAL ANSWER 2026-08-05 (vim-arcade-nightly-batch, machine-append;
+    witness: `gh api repos/hf7y/vim-arcade/issues/63/comments` in this
+    session, Zach's comment at 17:51:13Z).** Zach answered inline at the
+    issue, not here: *"the current vim game goes back to living inside vim
+    arcade as a .py. joue gets removed from bashify, installe etc. later,
+    vim arcade develops the shape of joue the utility if it proves
+    generalizable."* Reads as picking the third option — `joue` is
+    deliberately not distributed via `bashified` — plus a plan: strip it out
+    of bashify/installe's verb set later, and let vim-arcade grow its own
+    shape for it if it proves generalizable. That removal work is explicitly
+    "later" and is a `bashified`/`installe` change, not a vim-arcade one, so
+    there is nothing for `/nightly-batch` to build here tonight. **Question
+    1 (the chezz/vim-arcade name collision) went unaddressed** — the comment
+    only speaks to question 2 — so it stays open and unconfirmed. Not moving
+    to Recently resolved: the mandark clone stays pinned (`fauche` still says
+    KEEP) until the bashify/installe removal actually lands, and question 1
+    is still unanswered.
 
 ## groc-mangr
 
