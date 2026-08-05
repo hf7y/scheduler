@@ -238,8 +238,43 @@ MAX_PER_TICK="${PACED_MAX_PER_TICK:-8}"
 # cycle's spend has already landed by the time we re-probe -- so this stops
 # as soon as the account is genuinely on-pace/at-ceiling, not after a fixed
 # count. MAX_PER_TICK is just a runaway backstop, not the normal stop reason.
+#
+# TWO counters, since 2026-08-05, and the distinction is the whole fix.
+#
+#   dispatched -- rows this account actually RAN (or decided about: expired,
+#                 frozen). Bounded by MAX_PER_TICK. This is the quota-facing
+#                 number and its meaning is unchanged.
+#   examined   -- rows this account LOOKED AT. Bounded by $n, the rotation
+#                 length, so the loop terminates after one full lap no matter
+#                 how many rows turn out to belong to somebody else.
+#
+# WHY. A row whose command lives under another account's $HOME is not
+# runnable HERE, and used to consume a dispatch slot. On monkey four accounts
+# share one _paced.monkey.conf with four rows, so at PACED_MAX_PER_TICK=1
+# three of every four accounts spent their entire tick logging a SKIP for a
+# row they were never able to run. Measured at the 00:00 UTC tick, 2026-08-05:
+#
+#   [ecosim]         SKIP vim-arcade -- command not runnable  -> tick yielded
+#   [vim-arcade]     SKIP ecosim     -- command not runnable  -> tick yielded
+#   [bibliothecaire] DONE bibliothecaire rc=0 (182s)
+#
+# Effective throughput was ~1/N of capacity, and it got WORSE with every row
+# added -- so arming a fifth project slowed the four already running. That is
+# backwards for a rotation whose purpose is to add participants.
+#
+# WHY NOT SIMPLY STOP COUNTING THE SKIP. Because the counting was load-bearing
+# for TERMINATION, which the EXPIRED branch below says out loud: "so an
+# all-expired rotation still terminates the tick loop." With no counter at all
+# a rotation containing no runnable row would spin forever, re-probing the
+# usage gate each lap. `examined` is that guarantee, made explicit and
+# separated from the quota budget it was overloaded onto.
+#
+# COST: walking past a foreign row now costs one extra usage-gate probe (~23
+# Haiku tokens) instead of a whole tick. At four accounts x four ticks that is
+# well under 2k tokens a day to recover 4x the dispatch capacity.
 dispatched=0
-while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
+examined=0
+while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   if [ "${PACED_FORCE:-0}" = "1" ]; then
     log "PACED_FORCE=1 -- skipping usage gate"
   else
@@ -260,11 +295,22 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ]; do
   name="${names[$idx]}"; cmd="${cmds[$idx]}"
   echo "$idx" > "$PTR"
 
+  # Counted HERE, once, before any branch below can `continue`. Every exit
+  # path from this point is therefore bounded by the rotation length -- which
+  # is what makes it safe for the not-runnable branch to stop touching
+  # `dispatched`. Put this inside a branch instead and one `continue` without
+  # it becomes an infinite loop that re-probes the gate forever.
+  examined=$((examined + 1))
+
   # resolve the command's program (first token) to check it exists
   prog="${cmd%% *}"
   if [ ! -x "$prog" ] && ! command -v "$prog" >/dev/null 2>&1; then
-    log "SKIP $name -- command not runnable: $cmd"
-    dispatched=$((dispatched + 1))
+    # NOT counted against MAX_PER_TICK, unlike the EXPIRED and FROZEN skips
+    # below. Those are decisions about a row this account OWNS -- having made
+    # one, the tick has done its job. This one means "that row is somebody
+    # else's", which is not a decision and must not spend the budget. `examined`
+    # above is what stops the loop. See the two-counter note at the loop head.
+    log "SKIP $name -- command not runnable here: $cmd"
     continue
   fi
 
@@ -375,5 +421,12 @@ done
 
 if [ "$dispatched" -ge "$MAX_PER_TICK" ]; then
   log "PACED_MAX_PER_TICK ($MAX_PER_TICK) reached -- yielding tick, rotation continues next tick"
+elif [ "$examined" -ge "$n" ]; then
+  # A full lap with nothing dispatched is REPORTED, not silent. On a host
+  # where every row belongs to another account this is the normal, correct
+  # outcome; on a host where one row should have run it is the finding. Either
+  # way the log has to be able to tell "looked at everything and ran nothing"
+  # apart from "cron never fired", which an empty log cannot.
+  log "ROTATION EXHAUSTED -- examined all $n row(s), dispatched $dispatched"
 fi
 exit 0
