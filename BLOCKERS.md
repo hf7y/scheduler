@@ -619,6 +619,27 @@ in `.scheduler/QUESTIONS.md`, not here: svc-vaporwave's wrapper copies._
   > (answer inline here — narrow it to tracked changes, or leave it
   >  strict)
 
+- **2026-08-05 (background session): `installe` must learn to install from a
+  verb build — the chokepoint before any dev clone can leave mandark.** The
+  meta-repo `hf7y/verbs` works end to end (`VERB-DISTRIBUTION.md`: build
+  `build/2026-08-05T025146Z`, 31 verbs from 12 projects, installed and run
+  from a sandbox build root). What has NOT happened is the cutover: mandark's
+  `~/.local/bin` still symlinks 36 verbs straight into dev clones, so `fauche`
+  correctly says KEEP for every one of them. `installe` owns `~/.local/bin`
+  and its manifest, and `install-verb-build.sh --link` therefore refuses to
+  clobber anything installe owns and reports it instead. Reconciling the two
+  is one sitting — but it is a **contract change to the ecosystem's single
+  verb-installing command**, which `MONKEY.md` §9 already flags as a class
+  needing a human, and a past `installe --force` attempt was blocked by the
+  harness classifier rather than by the ecosystem. Deliberately not attempted
+  by this session for that reason. This is one of exactly two things standing
+  between here and an attended `fauche` session; the other is `joue`, filed
+  as `hf7y/vim-arcade` issue #63 and mirrored under `## vim-arcade` below.
+  `# verified 2026-08-05 via: fauche check ~/Documents/Projects/{bibliothecaire,ecosim,vim-arcade} (3x KEEP); readlink -f ~/.local/bin/* | grep Documents/Projects (36 links)`
+  > (answer inline here — teach installe to adopt a build root and repoint
+  >  ~/.local/bin at verb-builds/current, or hand ~/.local/bin ownership to
+  >  install-verb-build.sh, or name a third shape)
+
 ## aedile
 - **`gh` PAT for svc-vaporwave's `aedile-nightly-batch-loop.sh` expires
   2027-07-20.** Used only for `gh pr create` after pushing
@@ -1461,6 +1482,24 @@ happened yet for any of them.
 >> still OPEN until something deletes it]_
   >> (answer inline here — narrow per-file grant / defaultMode:auto
   >>  baseline / something else)
+
+- **2026-08-05 (background session): `joue` — naming, then shape. The last
+  thing pinning vim-arcade's dev clone to mandark.** Filed in full as
+  `hf7y/vim-arcade` issue #63; **answer there, not here** — vim-arcade is on
+  `ANSWER_CHANNEL="issues"` and its `.claude/QUESTIONS.md` was superseded
+  2026-08-04. This entry exists only so `scheduler status vim-arcade -I`
+  surfaces it, because that command still reads the superseded file and is
+  therefore blind to the issue queue (see the md→issues migration filed as an
+  idea against scheduler the same day). In short: `~/.local/bin/joue` is a
+  hand-installed symlink into the vim-arcade clone, so `fauche` says KEEP and
+  the clone cannot be removed. Two questions in order — (1) the chezz/
+  vim-arcade name collision, which `VERB-DISTRIBUTION.md` §2 suggests is
+  already resolved in fact and needs confirming rather than assuming; (2) does
+  `bashified` carry an engine, or does the declaration rule grow a second
+  shape, given vim-arcade's `joue` is a stdlib-only Python engine on `main`?
+  `# verified 2026-08-05 via: readlink -f ~/.local/bin/joue (-> vim-arcade/joue, undeclared); fauche check ~/Documents/Projects/vim-arcade (KEEP)`
+  > (answer inline at hf7y/vim-arcade#63 — bashified carries an engine / the
+  >  rule grows a second shape / joue is deliberately not distributed)
 
 ## groc-mangr
 
