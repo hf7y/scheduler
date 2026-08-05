@@ -840,7 +840,7 @@ gh_repo_slug() {
   local proj="$1" url slug
   url="$(conf_field "$proj" REPO_URL 2>/dev/null)" || true
   if [ -z "$url" ]; then
-    echo "scheduler: $proj has ANSWER_CHANNEL=issues but no REPO_URL in its conf" >&2
+    echo "scheduler: $proj has no REPO_URL in its conf -- required to reach GitHub, which is now the front door for both questions and ideas" >&2
     return 1
   fi
   slug="${url##*:}"          # ssh alias form -> owner/repo.git
@@ -909,6 +909,8 @@ ensure_gh_labels() {
     --description "Open question for the human; scheduler -q renders these" >/dev/null 2>&1 || true
   gh label create answered --repo "$slug" --color 0E8A16 \
     --description "Human has answered; this project's next run acts, then closes" >/dev/null 2>&1 || true
+  gh label create idea --repo "$slug" --color 1D76DB \
+    --description "Filed via scheduler -i / notify-senechal; this project's next run triages it" >/dev/null 2>&1 || true
 }
 
 # `scheduler -q <proj>` for an issues-channel project: render every open
@@ -1235,62 +1237,33 @@ cmd_idea_editor() {
     return 0
   fi
 
-  local focus_path
-  focus_path="$(resolve_focus_path "$proj")" || exit 1
-  local placeholder="(type your idea here -- leave this line untouched and quit to cancel)"
-  local ts="$(date '+%Y-%m-%d %H:%M')"
-  local line="- **$ts (via \`scheduler -i\`):** $placeholder"
-
-  local tmp
+  # NON-REALISATEUR: capture the text, then hand it to cmd_idea, which
+  # files a GitHub issue. This branch used to build a whole FOCUS.md in a
+  # temp file and mv it over the real one -- so the editor path pinned the
+  # clone exactly as the text path did. Fixing only the text path would
+  # have left `scheduler -i <proj>` with no argument still writing to disk:
+  # a front door that is GitHub only when you pass your note on the command
+  # line is not a front door, and the half that still wrote locally is the
+  # half `notify-senechal` does not use, so nothing would have noticed.
+  local tmp content
   tmp="$(mktemp)"
-  if [ -f "$focus_path" ]; then
-    cp "$focus_path" "$tmp"
-    # Same insertion logic as the text-argument path below: into an
-    # existing backlog/feature-request section if one exists, else a new
-    # "Ideas" section appended at the end.
-    if awk -v IGNORECASE=1 '/^#+.*(backlog|feature request)/{f=1} END{exit !f}' "$tmp"; then
-      awk -v IGNORECASE=1 -v line="$line" '
-        { print }
-        !done && /^#+.*(backlog|feature request)/ { print ""; print line; done=1 }
-      ' "$tmp" > "$tmp.ins" && mv "$tmp.ins" "$tmp"
-    else
-      {
-        echo
-        echo "## Ideas (added via \`scheduler -i\`)"
-        echo
-        echo "$line"
-      } >> "$tmp"
-    fi
-  else
-    # New file: the placeholder line goes straight into the same "Ideas"
-    # section the scaffold creates, in one shot -- no separate insertion
-    # pass, so there's no second "## Ideas" heading appended right after
-    # the first one.
-    {
-      echo "<!-- Per-project scope marker -- this file was CREATED by"
-      echo "     \`scheduler -i\` from a dropped idea. It's just that idea,"
-      echo "     not a real scope doc yet -- flesh this out properly, or at"
-      echo "     least confirm it before the next unattended run treats it"
-      echo "     as gospel. -->"
-      echo
-      echo "## Ideas (added via \`scheduler -i\`)"
-      echo
-      echo "$line"
-    } > "$tmp"
-  fi
-
+  printf '%s\n' \
+    "# Idea for $proj -- type below, then save+quit to submit." \
+    "# It is filed as a GitHub issue (label: idea) on $proj's repository." \
+    "# Leave this empty (comment lines only) and quit to cancel." \
+    "" > "$tmp"
   "${EDITOR:-vi}" "$tmp"
-
-  if grep -qF "$placeholder" "$tmp"; then
-    rm -f "$tmp"
-    echo "scheduler: idea cancelled (placeholder left untouched)"
+  content="$(grep -v '^#' "$tmp" | sed '/^[[:space:]]*$/d')"
+  rm -f "$tmp"
+  if [ -z "$content" ]; then
+    echo "scheduler: idea cancelled (nothing typed)"
     return 0
   fi
-
-  mkdir -p "$(dirname "$focus_path")"
-  mv "$tmp" "$focus_path"
-  echo "updated: $focus_path"
-  cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\` (editor): $(basename "$focus_path")"
+  # One line becomes the issue title; more than one keeps its shape, with
+  # the first line as the title. cmd_idea owns the filing either way, so
+  # there is one gh issue create in this file and not two.
+  cmd_idea "$proj" "$content"
+  return 0
 }
 
 cmd_idea() {
@@ -1329,45 +1302,55 @@ cmd_idea() {
     return
   fi
 
-  local focus_path
-  focus_path="$(resolve_focus_path "$proj")" || exit 1
-  local ts="$(date '+%Y-%m-%d %H:%M')"
-  local line="- **$ts (via \`scheduler -i\`):** $text"
-
-  if [ ! -f "$focus_path" ]; then
-    mkdir -p "$(dirname "$focus_path")"
-    {
-      echo "<!-- Per-project scope marker -- this file was CREATED by"
-      echo "     \`scheduler -i\` from a dropped idea. It's just that idea,"
-      echo "     not a real scope doc yet -- flesh this out properly, or at"
-      echo "     least confirm it before the next unattended run treats it"
-      echo "     as gospel. -->"
-      echo
-      echo "## Ideas (added via \`scheduler -i\`)"
-      echo
-      echo "$line"
-    } > "$focus_path"
-    echo "created: $focus_path"
-    cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\`: $(basename "$focus_path")"
-    return
+  # THE FRONT DOOR IS GITHUB (Zach, 2026-08-05).
+  #
+  # This used to resolve PROJECT_REPO_PATH and append a line to a LOCAL
+  # .scheduler/FOCUS.md, then commit and push it. That write is what pinned
+  # every registered project to a checkout on whatever host the note was
+  # typed on -- senechal most of all, because `notify-senechal` is a wrapper
+  # around `scheduler -i senechal` and the estate protocol says every
+  # machine-config change gets filed. So the ONE command every project is
+  # required to call was also the reason every project needed a clone here.
+  #
+  # It is the same defect as realisateur/MONKEY.md 8.1(2) from the other
+  # side: a self-dev account holds a READ-ONLY deploy key on senechal, so
+  # that push could not work and `installe` exited 8 on all 25 verbs while
+  # the change itself had landed. Filing an issue needs no write access to
+  # anyone's default branch and no clone on any host, so one change closes
+  # both.
+  #
+  # Deliberately NOT gated on answer_channel: that setting says where a
+  # project's ANSWERS come from, which is a different axis. An idea is an
+  # inbound note, and it now has exactly one destination for every project.
+  require_gh || exit 1
+  local slug url body today
+  slug="$(gh_repo_slug "$proj")" || exit 1
+  ensure_gh_labels "$slug"
+  today="$(date '+%Y-%m-%d %H:%M')"
+  body="$(printf '%s\n' \
+    "$text" \
+    "" \
+    "---" \
+    "filed $today via \`scheduler -i $proj\` on $(hostname -s)" \
+    "" \
+    "Triage this on ${proj}'s next run: fold it into FOCUS.md if it is work," \
+    "answer and close it if it is a note. Closing IS the acknowledgement --" \
+    "there is no separate label to add.")"
+  # --body-file, not --body: a note containing a backtick or $( is a note,
+  # not a command. Same reason CLAUDE.md requires `git commit -F`.
+  local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
+  if ! url="$(gh issue create --repo "$slug" --title "$text" \
+                --label idea --body-file "$bf" 2>&1)"; then
+    rm -f "$bf"
+    echo "scheduler idea: gh issue create FAILED against $slug -- NOTHING was recorded." >&2
+    printf '%s\n' "$url" >&2
+    exit 1
   fi
-
-  if awk -v IGNORECASE=1 '/^#+.*(backlog|feature request)/{f=1} END{exit !f}' "$focus_path"; then
-    awk -v IGNORECASE=1 -v line="$line" '
-      { print }
-      !done && /^#+.*(backlog|feature request)/ { print ""; print line; done=1 }
-    ' "$focus_path" > "$focus_path.tmp" && mv "$focus_path.tmp" "$focus_path"
-    echo "inserted into backlog/feature-request section: $focus_path"
-  else
-    {
-      echo
-      echo "## Ideas (added via \`scheduler -i\`)"
-      echo
-      echo "$line"
-    } >> "$focus_path"
-    echo "appended new section to: $focus_path"
-  fi
-  cmd_commit_file "$focus_path" "Idea added via \`scheduler -i\`: $(basename "$focus_path")"
+  rm -f "$bf"
+  echo "filed as a GitHub issue on $slug (label: idea)"
+  echo "  $text"
+  printf '  %s\n' "$url"
+  return 0
 }
 
 RUNNER_CONF="$SCHED_ROOT/schedule/_runner.conf"
