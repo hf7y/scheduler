@@ -60,8 +60,23 @@ EXEMPT: chezz@monkey
 # and the rotation row in _paced.monkey.conf will then dispatch nothing, which
 # is exactly what this file is for.
 #
-# baudin was named in the same breath and is deliberately NOT exempt here. The
-# usage gate read 7d util=0.540 against the sprint's 0.60 hard floor, so only
-# one new dispatcher was armed tonight; see the crt block in
-# _paced.monkey.conf for the reading and the reasoning.
+# SUPERSEDED, marked rather than deleted. This block used to end: "baudin was
+# named in the same breath and is deliberately NOT exempt here ... only one new
+# dispatcher was armed tonight." Zach merged #45 and directed baudin in the
+# same session, so baudin IS exempt now, below. Left visible because a file
+# whose prose silently agrees with whatever happened is the exact failure the
+# chezz block above records.
 EXEMPT: crt@monkey
+
+# baudin@monkey, added 2026-08-05 minutes after crt, Zach-directed in the same
+# session: "merged both, arm baudin too". Same reading of this file's
+# human-adds-the-line guard as the crt block above -- the human named the
+# project, an agent typed the line, and it is said here so a reader can
+# disagree and delete it. Deleting this line disarms baudin and nothing else.
+#
+# This makes SIX dispatchers on one quota. _paced.monkey.conf's header is the
+# thing to read before a seventh: the run lock is $HOME-scoped (per account,
+# not host-wide), USAGE_CEILING=0.99, and USAGE_RUSH_BEFORE_RESET_MIN=10080
+# keeps the even-burn hold permanently off. crt has not yet dispatched once, so
+# the per-run cost of BOTH new accounts is still unmeasured.
+EXEMPT: baudin@monkey
