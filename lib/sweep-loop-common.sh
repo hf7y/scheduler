@@ -278,6 +278,14 @@ notify() {
 # out that a request blocked on a human is DONE, not CONTINUE), and two
 # overlapping instructions in one prompt are worse than one good one.
 #
+# CALL IT BEFORE THE FEEDBACK BLOCKS, and only then. The skip test below asks
+# "does this CONF already ask for a verdict?", so its input must be the conf's
+# own brief and nothing else. Called after the feedback prepending instead, it
+# reads the feedback -- and vim-arcade's BLOCKERS.md section contains the
+# string verdict.sh, so on the first real dispatch (2026-08-06) it skipped on
+# the exact participant it was written to fix. tests/verdict-closeout-
+# witness.sh case 6 holds the ordering.
+#
 # Globals in, global out: reads TIER/PROJECT_KEY/VERDICT_BIN, rewrites PROMPT.
 # Same shape as notify() above, and for the same reason -- tests/
 # verdict-closeout-witness.sh lifts this function out of the engine and drives
@@ -550,11 +558,25 @@ fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"
 
+  LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  # Verdict closeout FIRST, while $PROMPT is still exactly the conf's own
+  # brief and nothing else. Caught by the first real dispatch, 2026-08-06:
+  # run this after the feedback blocks below and its "does this conf already
+  # ask for a verdict?" test reads THEM instead. vim-arcade's BLOCKERS.md
+  # section happens to contain the word verdict.sh, so the engine logged
+  # "skipped -- this conf's own prompt already names verdict.sh" and appended
+  # nothing, on the exact participant this was written to fix. A guard whose
+  # input is the composed prompt is answering a different question than the
+  # one it was asked. Ordering after this: feedback, then the conf's brief,
+  # then the closeout -- which is the right reading order anyway.
+  VERDICT_BIN="$(cd "$LIB_DIR/.." && pwd)/bin/verdict.sh"
+  append_verdict_closeout
+
   # Pick up any %%TAG inline comments the human left in the previous
   # report (see docs/feedback-tags.md) and put them first in this run's
   # prompt. LATEST.md gets overwritten by this same run below, so a tag
   # naturally clears itself once acted on -- no separate "mark as read".
-  LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   FEEDBACK_FILE="$HOME/reports/$PROJECT_KEY/LATEST.md"
   if [ -f "$FEEDBACK_FILE" ]; then
     FEEDBACK_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$FEEDBACK_FILE" 2>/dev/null || true)"
@@ -599,9 +621,6 @@ $BLOCKERS_BLOCK
 $PROMPT"
     fi
   fi
-
-  VERDICT_BIN="$(cd "$LIB_DIR/.." && pwd)/bin/verdict.sh"
-  append_verdict_closeout
 
   # claude's own output is tee'd to a per-run capture file (as well as
   # flowing into $LOG via the enclosing block redirect) so that a FAILED

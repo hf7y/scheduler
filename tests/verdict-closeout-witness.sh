@@ -113,6 +113,28 @@ append_verdict_closeout > "$TMP/out"; OUT="$(cat "$TMP/out")"
   || bad "told the agent to run a nonexistent command"
 grep -q 'WARNING' <<<"$OUT" && ok "warns in the run log" || bad "silently did nothing"
 
+echo "== 6. the engine calls it BEFORE the feedback blocks"
+# The regression that a real dispatch caught on 2026-08-06, and that no
+# unit test above can see, because it is a property of the CALL SITE:
+#
+#   found inline feedback tags in .../BLOCKERS.md under ## vim-arcade
+#   verdict closeout: skipped -- this conf's own prompt already names verdict.sh
+#
+# Case 3's skip is correct only when its input is the conf's own brief.
+# Called after the feedback prepending, it tests the FEEDBACK instead --
+# and vim-arcade's BLOCKERS.md section happens to contain "verdict.sh", so
+# the engine silently appended nothing on the exact participant this was
+# written for. Order is the fix, so order is what gets held.
+CALL_LN="$(grep -n '^  append_verdict_closeout$' "$LIB" | head -1 | cut -d: -f1)"
+FB_LN="$(grep -n '^  FEEDBACK_FILE=' "$LIB" | head -1 | cut -d: -f1)"
+if [ -n "$CALL_LN" ] && [ -n "$FB_LN" ]; then
+  [ "$CALL_LN" -lt "$FB_LN" ] \
+    && ok "called at line $CALL_LN, before the feedback block at $FB_LN" \
+    || bad "called at $CALL_LN, AFTER the feedback block at $FB_LN -- the skip test now reads the feedback, not the conf"
+else
+  bad "could not locate the call site (call=${CALL_LN:-none} feedback=${FB_LN:-none}) -- this check has stopped checking"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]
