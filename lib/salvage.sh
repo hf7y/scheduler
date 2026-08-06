@@ -20,8 +20,21 @@
 # batch, which is why "reset --hard eats work" was a story told in comments
 # rather than a case that fails a test.
 #
+# SECRETS. A salvage branch is PUSHED, so anything it sweeps up becomes
+# public-to-the-remote. The engine copies SECRETS_SRC_DIR into
+# $REPO/$SECRETS_DEST_SUBDIR inside the workspace, and with the disposable
+# clone retired that directory now SURVIVES between runs, sitting in the tree
+# looking exactly like uncommitted work. `git add -A` would commit it and
+# `git push` would publish it. So the caller passes those paths in
+# SALVAGE_EXCLUDE and they are excluded from BOTH the detection and the
+# commit -- excluding only the commit would leave every run seeing a dirty
+# tree and salvaging an empty branch forever.
+#
 # Usage:  salvage_then_restore <branch> <label> [log_fn]
-#   cwd must already be the workspace. Returns:
+#   cwd must already be the workspace.
+#   SALVAGE_EXCLUDE  optional space-separated list of repo-relative paths
+#                    that must never be salvaged (no spaces in the paths).
+#   Returns:
 #     0  workspace is at origin/<branch>; SALVAGE_REF is set if work was saved
 #     1  nothing was discarded, and the caller must abort (see SALVAGE_ERROR)
 # The caller owns notification -- this lib does not know what `notify` means.
@@ -29,6 +42,7 @@
 # shellcheck disable=SC2034
 SALVAGE_REF=""
 SALVAGE_ERROR=""
+: "${SALVAGE_EXCLUDE:=}"
 
 salvage_then_restore() {
   local branch="$1" label="$2" log_fn="${3:-echo}"
@@ -40,8 +54,16 @@ salvage_then_restore() {
     return 1
   fi
 
+  # Build the pathspec once and use it for BOTH detection and staging.
+  local -a scope=(--)
+  local p
+  scope+=(".")
+  for p in ${SALVAGE_EXCLUDE:-}; do
+    scope+=(":(exclude)$p")
+  done
+
   local working_state ahead changed ref
-  working_state="$(git status --porcelain 2>/dev/null)"
+  working_state="$(git status --porcelain "${scope[@]}" 2>/dev/null)"
   ahead="$(git rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
 
   if [ -n "$working_state" ] || [ "$ahead" -gt 0 ]; then
@@ -57,7 +79,7 @@ salvage_then_restore() {
       # -A is correct HERE specifically: this workspace has no other writer
       # (a human editing it defers the whole run via registry_should_defer),
       # and .gitignore still applies, so build debris does not ride along.
-      git add -A
+      git add -A "${scope[@]}"
       git commit -q -m "salvage: uncommitted work found by $label at $(date -Is)"
     fi
     if ! git push -u origin "$ref" >/dev/null 2>&1; then

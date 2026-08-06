@@ -448,6 +448,11 @@ fi
   # the check is the point: `set -uo pipefail` has no -e, so an unchecked
   # failure here would let the run continue on an unknown base and push real
   # work onto the wrong thing. A non-zero return means NOTHING was discarded.
+  # A salvage branch gets PUSHED. The secrets the engine copies into
+  # $SECRETS_DEST_SUBDIR now survive between runs (the workspace is no longer
+  # thrown away), so without this they would look like uncommitted work and
+  # be published. Excluded from detection as well as from the commit.
+  SALVAGE_EXCLUDE="${SECRETS_DEST_SUBDIR:-}"
   if ! salvage_then_restore "$BRANCH" "$JOB_NAME"; then
     echo "FATAL $SALVAGE_ERROR -- aborting before any claude work"
     notify -u critical "$JOB_NAME" "$SALVAGE_ERROR -- run aborted, see $LOG"

@@ -100,6 +100,27 @@ else
 fi
 [ -z "$SALVAGE_REF" ] && ok "no salvage branch created on refusal" || bad "created $SALVAGE_REF"
 
+echo "== 7. SECRETS must never ride out on a salvage branch (it gets PUSHED)"
+fresh
+mkdir -p .session-handoff && echo "oauth-token-DO-NOT-PUBLISH" > .session-handoff/creds
+echo "real work" > notes.md
+SALVAGE_EXCLUDE=".session-handoff"
+salvage_then_restore main testjob quiet && ok "returns 0" || bad "failed: $SALVAGE_ERROR"
+[ -n "$SALVAGE_REF" ] && ok "still salvaged the real work" || bad "did not salvage alongside excluded paths"
+git -C "$TMP/origin.git" cat-file -e "refs/heads/$SALVAGE_REF:notes.md" 2>/dev/null \
+  && ok "the real work reached origin" || bad "real work lost"
+git -C "$TMP/origin.git" cat-file -e "refs/heads/$SALVAGE_REF:.session-handoff/creds" 2>/dev/null \
+  && bad "SECRET WAS PUSHED TO ORIGIN" || ok "the secret did NOT reach origin"
+[ -f .session-handoff/creds ] && ok "secret still on disk for the run to use" || bad "secret was deleted"
+
+echo "== 8. an EXCLUDED path alone is not 'work' -- no empty salvage every run"
+fresh
+mkdir -p .session-handoff && echo tok > .session-handoff/creds
+SALVAGE_EXCLUDE=".session-handoff"
+salvage_then_restore main testjob quiet && ok "returns 0" || bad "failed: $SALVAGE_ERROR"
+[ -z "$SALVAGE_REF" ] && ok "no salvage branch for secrets-only dirt" || bad "salvaged $SALVAGE_REF for nothing"
+SALVAGE_EXCLUDE=""
+
 cd /
 echo
 echo "salvage-witness: $PASS passed, $FAIL failed"
