@@ -135,6 +135,8 @@ set -uo pipefail
 LIB_DIR_EARLY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$LIB_DIR_EARLY/autonomy-merge.sh"
+# shellcheck source=lib/salvage.sh
+source "$LIB_DIR_EARLY/salvage.sh"
 if [ -z "$AUTONOMY_TIER" ] && [ -n "${PROJECT_KEY:-}" ]; then
   LEGACY_CONF="$LIB_DIR_EARLY/../schedule/$PROJECT_KEY.conf"
   if [ -f "$LEGACY_CONF" ]; then
@@ -153,7 +155,42 @@ if [ -z "$AUTONOMY_TIER" ] && [ -n "${PROJECT_KEY:-}" ]; then
 fi
 
 STATE_DIR="$HOME/.local/share/${JOB_NAME}"
-REPO="$STATE_DIR/repo"
+
+# --- where the work happens (2026-08-06, Zach: "this should happen today") ---
+# The disposable clone at $STATE_DIR/repo is being retired. It was faking an
+# isolation that the per-user service accounts already provide for real: on
+# monkey each project runs as its own uid with a 0700 home, so there is
+# nothing for a second writer to collide with and nothing a human is editing.
+# What the clone DID provide was a licence to `git reset --hard` -- and that
+# licence ate real work: ecosim's auto-stash held PARADIGM 4 (verdict
+# designs), a supervisor history-loss fix and 87 lines of tests, stashed into
+# a directory nobody reads and abandoned for days.
+#
+# The predicate is deliberately narrow, and mechanical rather than a flag
+# someone has to remember to set correctly: use the account's own checkout
+# only when the account IS the project -- conf's CRON_ACCOUNT, the uid we are
+# actually running as, and PROJECT_KEY must all be the same string. That is
+# true for ecosim/bibliothecaire/vim-arcade/chezz/crt/baudin on monkey and
+# false for everything else, including any job running as `zach`, whose
+# PROJECT_REPO_PATH is a HUMAN's working copy and must never be touched by an
+# unattended run. Anything that does not match keeps the legacy clone.
+# SELFDEV_IN_ACCOUNT=0/1 in the env overrides the auto-detection either way.
+: "${SELFDEV_IN_ACCOUNT:=auto}"
+if [ "$SELFDEV_IN_ACCOUNT" = "auto" ]; then
+  SELFDEV_IN_ACCOUNT=0
+  if [ -n "${PROJECT_REPO_PATH:-}" ] &&
+     [ -n "${CRON_ACCOUNT:-}" ] &&
+     [ "${CRON_ACCOUNT:-}" = "$(id -un)" ] &&
+     [ "${CRON_ACCOUNT:-}" = "$PROJECT_KEY" ]; then
+    SELFDEV_IN_ACCOUNT=1
+  fi
+fi
+if [ "$SELFDEV_IN_ACCOUNT" = "1" ]; then
+  REPO="$PROJECT_REPO_PATH"
+else
+  REPO="$STATE_DIR/repo"
+fi
+
 LOG="$STATE_DIR/sweep.log"
 LOCK="$STATE_DIR/sweep.lock"
 EXPIRES_AT_FILE="$STATE_DIR/expires_at"
@@ -372,18 +409,7 @@ fi
     notify -u critical "$JOB_NAME" "cannot enter $REPO/$REPO_SUBDIR -- job aborted, see $LOG"
     exit 1
   fi
-  # Hard safety check, not just a convention: this clone is meant to be
-  # disposable between scheduled cycles, but a human can (and did, in
-  # practice) open an interactive session directly in it -- e.g. to poke
-  # at a project as svc-vaporwave. `git reset --hard` below would
-  # silently discard any uncommitted work left behind. Stash it instead
-  # of losing it; a stash survives reset --hard and is recoverable
-  # (`git stash list` / `git stash pop`) even if nobody notices right
-  # away, unlike a straight reset.
-  if ! git diff --quiet || ! git diff --cached --quiet; then
-    echo "uncommitted changes found before reset --hard -- stashing instead of discarding (git stash list to recover)"
-    git stash push -u -m "sweep-loop-common.sh auto-stash before reset $(date -Is)"
-  fi
+  echo "workspace: $REPO ($([ "$SELFDEV_IN_ACCOUNT" = "1" ] && echo "account checkout, salvage-then-restore" || echo "dedicated clone"))"
   # Resolve BRANCH from the remote's own default HEAD when the wrapper
   # didn't name one. Local read (the clone already recorded it), no
   # network; ls-remote is the fallback, and only then the old "main"
@@ -407,33 +433,28 @@ fi
   # every other part of this design assumes was silently void. Aborting
   # is correct: the next scheduled cycle retries, whereas a run on an
   # unknown base can commit and push real work onto the wrong thing.
-  if ! git checkout "$BRANCH"; then
-    echo "FATAL cannot checkout '$BRANCH' in $REPO -- aborting before any claude work (does that branch exist on origin?)"
-    notify -u critical "$JOB_NAME" "checkout $BRANCH failed -- job aborted, see $LOG"
-    exit 1
-  fi
+  # Fetch FIRST, before touching the working tree: everything below decides
+  # what to preserve by comparing against origin/$BRANCH, and comparing
+  # against a stale remote ref would mislabel already-pushed commits as
+  # unpushed work (or, worse, the reverse).
   if ! git fetch origin --quiet; then
     echo "FATAL git fetch origin failed -- aborting rather than running against a stale base"
     notify -u critical "$JOB_NAME" "fetch failed -- job aborted, see $LOG"
     exit 1
   fi
-  # Bit chezz 2026-07-25: a prior run can die (e.g. hit the monthly spend
-  # limit) after committing but before pushing, leaving real commits ahead
-  # of origin. The stash guard above protects uncommitted work; committed
-  # work had no equivalent -- this reset would destroy it outright, with
-  # only luck (the reflog GC window) standing between it and being gone.
-  # Rescue it into a dedicated ref before the reset can touch it.
-  AHEAD_COUNT=$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)
-  if [ "$AHEAD_COUNT" -gt 0 ]; then
-    RESCUE_REF="rescue/${JOB_NAME}-$(date +%Y%m%d%H%M%S)"
-    git branch "$RESCUE_REF" HEAD
-    echo "WARNING: $AHEAD_COUNT commit(s) ahead of origin/$BRANCH before reset --hard -- a prior run committed but never pushed. Rescued onto local ref '$RESCUE_REF' (git log $RESCUE_REF) before resetting; push it manually to recover."
-    notify -u critical "$JOB_NAME" "$AHEAD_COUNT unpushed commit(s) found -- rescued to $RESCUE_REF before reset, see $LOG"
-  fi
-  if ! git reset --hard "origin/$BRANCH"; then
-    echo "FATAL git reset --hard origin/$BRANCH failed -- aborting; the clone is NOT at origin's state"
-    notify -u critical "$JOB_NAME" "reset to origin/$BRANCH failed -- job aborted, see $LOG"
+
+  # --- salvage, then restore (2026-08-06; replaces stash + reset --hard) ---
+  # See lib/salvage.sh for why local preservation was the bug. CHECKED, and
+  # the check is the point: `set -uo pipefail` has no -e, so an unchecked
+  # failure here would let the run continue on an unknown base and push real
+  # work onto the wrong thing. A non-zero return means NOTHING was discarded.
+  if ! salvage_then_restore "$BRANCH" "$JOB_NAME"; then
+    echo "FATAL $SALVAGE_ERROR -- aborting before any claude work"
+    notify -u critical "$JOB_NAME" "$SALVAGE_ERROR -- run aborted, see $LOG"
     exit 1
+  fi
+  if [ -n "$SALVAGE_REF" ]; then
+    notify -u critical "$JOB_NAME" "previous run left work behind -- pushed to origin/$SALVAGE_REF for review"
   fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"
