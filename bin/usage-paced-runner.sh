@@ -269,12 +269,55 @@ MAX_PER_TICK="${PACED_MAX_PER_TICK:-8}"
 # usage gate each lap. `examined` is that guarantee, made explicit and
 # separated from the quota budget it was overloaded onto.
 #
-# COST: walking past a foreign row now costs one extra usage-gate probe (~23
-# Haiku tokens) instead of a whole tick. At four accounts x four ticks that is
-# well under 2k tokens a day to recover 4x the dispatch capacity.
+# COST: none, since 2026-08-06. Walking past a foreign row briefly cost one
+# extra usage-gate probe (~23 Haiku tokens), because the runnability test sat
+# AFTER the gate: the account paid a live probe against the SHARED account
+# quota to learn the row was not its own. The test now runs first (see
+# "RUNNABILITY BEFORE THE PROBE" below) and a foreign row costs a stat(2).
+# Measured on monkey at the 18:00Z tick 2026-08-06: 9 probes host-wide (3
+# accounts x 3 roster rows) to make 3 dispatch decisions. Now 3.
 dispatched=0
 examined=0
 while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
+  # pick next enabled participant (round-robin) -- PEEK ONLY. The pointer is
+  # not committed until this row is known to be one this account can decide
+  # about, so a HOLD verdict below still leaves the rotation exactly where it
+  # was, unchanged from when the gate probe stood at the top of this loop.
+  last=-1; [ -f "$PTR" ] && last="$(cat "$PTR" 2>/dev/null || echo -1)"
+  case "$last" in ''|*[!0-9-]*) last=-1 ;; esac
+  idx=$(( (last + 1) % n ))
+
+  name="${names[$idx]}"; cmd="${cmds[$idx]}"
+
+  # --- RUNNABILITY BEFORE THE PROBE (2026-08-06) ---------------------------
+  # "Is this row even mine?" is a local filesystem question -- one stat(2) --
+  # and until today it was asked AFTER the usage gate had already spent a live
+  # API probe against the account-wide quota. One uid cannot execute another
+  # uid's scheduler-run, so on monkey every account walked a 3-row roster of
+  # which exactly one row was executable under its uid, and bought a probe for
+  # each. 3 accounts x 3 rows = 9 probes to make 3 dispatch decisions.
+  #
+  # Order is the ENTIRE change. No branch below sees a different input, the
+  # rotation pointer advances over the same rows in the same sequence, and the
+  # gate still owns every real stop condition. Only the probes that could not
+  # have changed any outcome stop being bought.
+  #
+  # resolve the command's program (first token) to check it exists
+  prog="${cmd%% *}"
+  if [ ! -x "$prog" ] && ! command -v "$prog" >/dev/null 2>&1; then
+    # NOT counted against MAX_PER_TICK, unlike the EXPIRED and FROZEN skips
+    # below. Those are decisions about a row this account OWNS -- having made
+    # one, the tick has done its job. This one means "that row is somebody
+    # else's", which is not a decision and must not spend the budget.
+    # `examined` is what stops the loop, so it MUST be incremented on this
+    # path: it is now the only bound on a rotation of entirely foreign rows,
+    # and without it this `continue` is an infinite loop.
+    echo "$idx" > "$PTR"
+    examined=$((examined + 1))
+    log "SKIP $name -- command not runnable here: $cmd"
+    continue
+  fi
+
   if [ "${PACED_FORCE:-0}" = "1" ]; then
     log "PACED_FORCE=1 -- skipping usage gate"
   else
@@ -287,32 +330,13 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     log "RUN  $summary"
   fi
 
-  # pick next enabled participant (round-robin)
-  last=-1; [ -f "$PTR" ] && last="$(cat "$PTR" 2>/dev/null || echo -1)"
-  case "$last" in ''|*[!0-9-]*) last=-1 ;; esac
-  idx=$(( (last + 1) % n ))
-
-  name="${names[$idx]}"; cmd="${cmds[$idx]}"
-  echo "$idx" > "$PTR"
-
-  # Counted HERE, once, before any branch below can `continue`. Every exit
+  # Committed HERE, once, before any branch below can `continue`. Every exit
   # path from this point is therefore bounded by the rotation length -- which
   # is what makes it safe for the not-runnable branch to stop touching
   # `dispatched`. Put this inside a branch instead and one `continue` without
   # it becomes an infinite loop that re-probes the gate forever.
+  echo "$idx" > "$PTR"
   examined=$((examined + 1))
-
-  # resolve the command's program (first token) to check it exists
-  prog="${cmd%% *}"
-  if [ ! -x "$prog" ] && ! command -v "$prog" >/dev/null 2>&1; then
-    # NOT counted against MAX_PER_TICK, unlike the EXPIRED and FROZEN skips
-    # below. Those are decisions about a row this account OWNS -- having made
-    # one, the tick has done its job. This one means "that row is somebody
-    # else's", which is not a decision and must not spend the budget. `examined`
-    # above is what stops the loop. See the two-counter note at the loop head.
-    log "SKIP $name -- command not runnable here: $cmd"
-    continue
-  fi
 
   # Dead-man-switch awareness (2026-07-26, FOCUS.md EXPIRY_DAYS finding 2):
   # an expired participant used to consume a full dispatch slot and record
