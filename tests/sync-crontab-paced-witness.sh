@@ -69,11 +69,36 @@ RUNNER_ENV=""
 PACED_SUPPRESS_BATCH=1
 EOF
 
+# w-stateowner: an enabled rotation member that ALSO sets CRON_ACCOUNT.
+#
+# CRON_ACCOUNT is a STATE-ownership field, not a dispatch-targeting one: it is
+# what bin/scheduler's state_account()/state_home() read to answer "whose
+# ~/.local/share holds this job's run log" (scheduler#33 -- four monkey jobs
+# read as 7-12d idle and dead-man expired while running daily, because no conf
+# set it). Every project account on monkey therefore sets CRON_ACCOUNT=<itself>
+# and is an enabled participant in _paced.monkey.conf. Both at once is the
+# NORMAL, CORRECT configuration on that host -- not a misconfiguration.
+#
+# `root` is used only because it is a real account on every host, which is what
+# sync-crontab.sh's `home_of` check requires. Nothing is ever written to it:
+# this witness is preview-only and never passes --apply.
+printf '#!/bin/sh\n' > "$REPO/wrappers/w-stateowner.sh"
+chmod +x "$REPO/wrappers/w-stateowner.sh"
+cat > "$REPO/schedule/w-stateowner.conf" <<EOF
+PROJECT="w-stateowner"
+CRON_ACCOUNT="root"
+SWEEP_JOB_NAME=""; SWEEP_SCRIPT=""; SWEEP_CRON=""
+BATCH_JOB_NAME="w-stateowner-batch"
+BATCH_SCRIPT="$REPO/wrappers/w-stateowner.sh"
+BATCH_CRON=""
+EOF
+
 # The shared rotation: mandark's file, in the real repo's terms.
 {
   echo 'w-shared|1|1|/bin/true'
   echo 'w-parked|0|1|/bin/true'
   echo '#w-commented|1|1|/bin/true'
+  echo 'w-stateowner|1|1|/bin/true'
 } > "$REPO/schedule/_paced.conf"
 # Another host's rotation. Deliberately NOT this machine's hostname: the
 # point is that membership in a rotation this host does not run still means
@@ -104,6 +129,37 @@ if emits_line w-parked; then
   bad "w-parked got a fixed BATCH line -- parking must not re-arm fixed cron"
 else
   ok "parked-but-listed is suppressed (membership, not the enabled flag)"
+fi
+
+echo "== CRON_ACCOUNT (state ownership) must not be read as double dispatch"
+# Found 2026-08-05 while arming crt and baudin: every sync on monkey printed
+#   ERROR [ecosim]: CRON_ACCOUNT=ecosim, but 'ecosim' is also an ENABLED
+#   participant in <account>'s _paced.monkey.conf -- that is double dispatch.
+# four times, once per already-armed account, and reported "the affected
+# tier(s) were left OUT of the generated crontab".
+#
+# The guard's stated premise is that the project "would run twice -- once from
+# the runner here, once from that account's crontab". That premise is FALSE for
+# an enabled rotation member, because membership is exactly what suppresses the
+# fixed line: there is no second dispatch path to collide with. The guard
+# duplicates the suppression it is standing in front of.
+#
+# It also `continue`d, which skipped the rest of the loop body for that conf --
+# so the questions/<project>.md and focus/<project>.md symlinks were silently
+# never created either. That is a functional loss, not just noise, and it also
+# destroyed the "zero ERROR [" clean-preview witness that MONKEY.md 8.3 used as
+# an arming criterion.
+if emits_line w-stateowner; then
+  bad "w-stateowner got a fixed BATCH line -- an enabled rotation member must stay suppressed"\
+      "even when CRON_ACCOUNT names another account"
+else
+  ok "CRON_ACCOUNT + enabled rotation member is suppressed, not double-dispatched"
+fi
+if printf '%s\n' "$OUT" | grep -q 'ERROR \[w-stateowner\]'; then
+  bad "w-stateowner raised an ERROR -- CRON_ACCOUNT is a STATE field (scheduler#33);"\
+      "setting it on a paced participant is the normal configuration on monkey"
+else
+  ok "no ERROR raised for a paced participant that also owns its own state"
 fi
 
 echo "== and it does NOT suppress what it has no business suppressing"

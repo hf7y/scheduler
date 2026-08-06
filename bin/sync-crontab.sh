@@ -600,15 +600,42 @@ for conf in "${CONF_FILES[@]}"; do
     continue
   fi
 
-  # One project, one dispatcher. A foreign-account job that is ALSO an
-  # enabled participant in this account's paced rotation would run twice --
-  # once from the runner here, once from that account's crontab. This is
-  # the exact failure mode both aedile's and vkv-inventory's confs warn
-  # about in prose; assert it instead.
+  # One project, one dispatcher.
+  #
+  # CORRECTED 2026-08-05. This block used to raise an ERROR and `continue` when
+  # a conf set CRON_ACCOUNT to a foreign account AND that project was an
+  # enabled participant in this account's paced rotation, on the reasoning that
+  # it "would run twice -- once from the runner here, once from that account's
+  # crontab".
+  #
+  # That premise is false, and the guard duplicated the very mechanism standing
+  # behind it. Membership in a rotation is EXACTLY what suppresses this
+  # project's fixed Tier 2 line (paced_membership_set, below) -- so for an
+  # enabled participant no fixed line is ever emitted, and there is no second
+  # dispatch path for the runner to collide with.
+  #
+  # It was also reading CRON_ACCOUNT as a dispatch-TARGETING field. It is not:
+  # it is a STATE-ownership field, which bin/scheduler's state_account() and
+  # state_home() read to answer "whose ~/.local/share holds this job's run
+  # log". That is scheduler#33 -- four monkey jobs reported 7-12d idle and
+  # dead-man expired while running daily, precisely because no conf set it.
+  # So on monkey every project sets CRON_ACCOUNT=<itself> and is an enabled
+  # participant, and BOTH AT ONCE IS THE CORRECT CONFIGURATION.
+  #
+  # What it cost, observed while arming crt and baudin: every sync on monkey
+  # emitted four of these errors and reported "the affected tier(s) were left
+  # OUT of the generated crontab". Worse, `continue` skipped the REST of this
+  # loop body, so questions/<project>.md and focus/<project>.md were silently
+  # never linked for those four projects. And it destroyed the "zero ERROR ["
+  # clean-preview witness that MONKEY.md 8.3 uses as an arming criterion --
+  # a guard that cries wolf on the normal case retires the alarm.
+  #
+  # Kept as a note rather than deleted: which account owns a paced
+  # participant's state is still worth seeing in a preview. Covered by
+  # tests/sync-crontab-paced-witness.sh ("CRON_ACCOUNT (state ownership) must
+  # not be read as double dispatch").
   if [ "$conf_account" != "$LOCAL_ACCOUNT" ] && is_paced_enabled "$PROJECT"; then
-    echo "ERROR [$name]: CRON_ACCOUNT=$conf_account, but '$PROJECT' is also an ENABLED participant in $LOCAL_ACCOUNT's ${PACED_CONF:-rotation} ($PACED_CONF_SRC) -- that is double dispatch. Park it there (enabled 0) or drop CRON_ACCOUNT, and re-run." >&2
-    ERRORS=$((ERRORS + 1))
-    continue
+    echo "note [$name]: state owned by $conf_account; paced participant in ${PACED_CONF:-rotation} ($PACED_CONF_SRC) -- fixed cron suppressed, dispatched by the paced runner" >&2
   fi
 
   # Symlink this project's .claude/QUESTIONS.md into questions/<PROJECT>.md
