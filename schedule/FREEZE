@@ -44,7 +44,30 @@ EXEMPT: vim-arcade@monkey
 # machine does, which is worse than no note. Both conditions this file
 # describes (exempt here AND enabled in the rotation) are now satisfied for
 # all four accounts below; none of them is parked.
-EXEMPT: chezz@monkey
+#
+# PAUSED 2026-08-06, Zach-directed in session, in his words: "For now, pause
+# chezz for 1 week." UN-PAUSE ON OR AFTER 2026-08-13 -- uncomment the line
+# below AND flip chezz's row in _paced.monkey.conf back to enabled=1. Either
+# one alone leaves it dark, which is the point of having two.
+#
+# COMMENTED, NOT DELETED, deliberately: a deleted line loses the fact that this
+# is a dated pause with a return date rather than a project that was never
+# armed. `bin/freeze-check.sh` matches `^[[:space:]]*EXEMPT:`, so a leading `#`
+# genuinely disarms it -- this is not a cosmetic edit.
+#
+# The pause is not a punishment and not a quota measure. Zach: "chezz needs
+# special treatment. It deserves an audit of what's going wrong. Raising the
+# turn ceiling does not address the problem of batch jobs being too large."
+# The week is for that audit.
+#
+# A reader who disagrees can revert this in one move: uncomment the line. That
+# re-arms chezz and nothing else. Say so out loud, as this file's own
+# convention asks -- but know what you would be re-arming: in the chezz account
+# on monkey the Playwright suite cannot launch a browser at all (missing
+# libatk-1.0.so.0; 123 of 152 tests fail on a clean main), so its pre-commit
+# hook rejects every gameplay commit and the night's work is stashed by the
+# next reset --hard. Re-arming before that is fixed buys more stashes.
+#EXEMPT: chezz@monkey
 
 # crt@monkey, added 2026-08-05, Zach-directed in session: asked to "get dev off
 # mandark tonight" and, given the three options, chose the one whose stated
@@ -66,7 +89,23 @@ EXEMPT: chezz@monkey
 # same session, so baudin IS exempt now, below. Left visible because a file
 # whose prose silently agrees with whatever happened is the exact failure the
 # chezz block above records.
-EXEMPT: crt@monkey
+#
+# PAUSED 2026-08-06, Zach-directed in session: "CRT also needs to pause pending
+# Zach work."
+#
+# UN-PAUSE CONDITION IS A PERSON, NOT A DATE. Unlike chezz above there is no
+# return date to wait out; this line stays commented until Zach says the work
+# he has in mind is done. Uncommenting it AND flipping crt's row in
+# _paced.monkey.conf back to enabled=1 is what re-arms it.
+#
+# COMMENTED, NOT DELETED. The block above reserves this line for a human and
+# invites a reader who disagrees to delete it; that invitation still stands and
+# is the reason this is a comment rather than a removal -- the record of who
+# armed crt, and on what reading of the guard, is worth more than a tidy file.
+#
+# Note crt never dispatched a single measured run in its ~24h armed: its
+# per-run cost was unmeasured when it was armed and is unmeasured now.
+#EXEMPT: crt@monkey
 
 # baudin@monkey, added 2026-08-05 minutes after crt, Zach-directed in the same
 # session: "merged both, arm baudin too". Same reading of this file's
@@ -79,4 +118,24 @@ EXEMPT: crt@monkey
 # not host-wide), USAGE_CEILING=0.99, and USAGE_RUSH_BEFORE_RESET_MIN=10080
 # keeps the even-burn hold permanently off. crt has not yet dispatched once, so
 # the per-run cost of BOTH new accounts is still unmeasured.
-EXEMPT: baudin@monkey
+#
+# PAUSED 2026-08-06, Zach-directed in session, and INDEFINITELY: "Baudin should
+# come offline until I can figure out what it is and what it's supposed to do.
+# A run blocked on human-input should stop triggering."
+#
+# NO DATE AND NO TRIGGER. The un-pause condition is that baudin's owner decides
+# what baudin is for. It is the only one of today's three pauses whose blocker
+# is a question rather than a task.
+#
+# COMMENTED, NOT DELETED, for the same reason as the two above: the block
+# preceding this line records that a human named this project and an agent
+# typed the line, and says a reader may disagree and delete it. That record is
+# worth keeping even while the line is off. Re-arming means uncommenting here
+# AND flipping baudin's row in _paced.monkey.conf back to enabled=1.
+#
+# This drops monkey from six dispatchers to three (ecosim, bibliothecaire,
+# vim-arcade), which changes nothing about the quota arithmetic in
+# _paced.monkey.conf's header -- adding or removing rows scales how many things
+# ask permission, not what they are asking about. Do not read the smaller
+# roster as new headroom.
+#EXEMPT: baudin@monkey
