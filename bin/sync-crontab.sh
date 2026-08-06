@@ -579,6 +579,17 @@ for conf in "${CONF_FILES[@]}"; do
   unset REPO_URL SWEEP_PROMPT BATCH_PROMPT SCHEDULER_SUBDIR
   # Scoping axes -- reset so one conf's account/host can't leak into the next.
   unset CRON_ACCOUNT CRON_HOST
+  # ANSWER_CHANNEL was missing from this block until 2026-08-06, and the omission
+  # was invisible because its effect is a file that ISN'T created. Confs are
+  # sourced in glob order, so bibliothecaire.conf's ANSWER_CHANNEL="issues" was
+  # inherited by every conf after it in the alphabet -- chezz, crt, gardien,
+  # groc-mangr, nine-speakers, realisateur, scheduler, senechal, sequestria --
+  # each silently treated as migrated to the issues channel and given no
+  # questions/ or focus/ symlink at all. Only `baudin`, which sorts ahead of
+  # `bibliothecaire`, ever saw the default "file" channel. Witnessed by
+  # tests/sync-crontab-questions-witness.sh ("ANSWER_CHANNEL ... does not leak
+  # forward").
+  unset ANSWER_CHANNEL
   # shellcheck disable=SC1090
   source "$conf"
 
@@ -651,7 +662,25 @@ for conf in "${CONF_FILES[@]}"; do
   # directory as every other project's real one, and silently is not where
   # anyone reads or writes any more. The staleness this migration exists to
   # escape would come straight back wearing the old file's name.
-  if [ -n "${PROJECT_REPO_PATH:-}" ] && [ "${ANSWER_CHANNEL:-file}" != "issues" ]; then
+  #
+  # And PROJECT_REPO_PATH must actually BE there. It is an absolute path, so it
+  # is a claim about THIS host's filesystem as THIS account -- and every
+  # self-dev conf writes it as "$HOME/Documents/Projects/<p>", which resolves
+  # under whichever account is running the sync. On an account with no clone of
+  # that project the claim is simply false, and the --apply path below used to
+  # answer that by `mkdir -p`ing the claim true and writing a header into it.
+  # It produced /home/chezz/Documents/Projects/baudin/ (2026-08-05) and
+  # /home/crt/Documents/Projects/baudin/ (2026-08-06): one file each, no .git,
+  # never committed from, never read again -- and a questions/baudin.md symlink
+  # in each account's checkout pointing confidently at the phantom.
+  #
+  # Same rule bin/scheduler's require_repo_path() already states: an absolute
+  # path that is not there is a WRONG path, never a path to create. Skip, and
+  # say which path and which conf, because a silent drop here is
+  # indistinguishable from the sync forgetting the project exists.
+  if [ -n "${PROJECT_REPO_PATH:-}" ] && [ ! -d "$PROJECT_REPO_PATH" ]; then
+    echo "skipping [$name] questions/focus links: PROJECT_REPO_PATH=$PROJECT_REPO_PATH does not exist as $LOCAL_ACCOUNT on $SHORT_HOST -- not creating it (fix PROJECT_REPO_PATH in schedule/$name.conf, or clone it here, if this account is meant to have one)" >&2
+  elif [ -n "${PROJECT_REPO_PATH:-}" ] && [ "${ANSWER_CHANNEL:-file}" != "issues" ]; then
     # Self-contained-folder model: a migrated project sets
     # SCHEDULER_SUBDIR=".scheduler" -- a TOP-LEVEL dir, deliberately OUTSIDE
     # .claude/ -- so its FOCUS/QUESTIONS group under one folder it owns.
@@ -849,6 +878,20 @@ if [ "${#QUESTIONS_LINKS[@]}" -gt 0 ]; then
     mkdir -p "$QUESTIONS_DIR"
     for entry in "${QUESTIONS_LINKS[@]}"; do
       proj="${entry%%|*}"; target="${entry#*|}"
+      # Backstop for the fabrication above. The collector already refuses to
+      # queue a project whose PROJECT_REPO_PATH is absent, but that check is
+      # 200 lines away from this mkdir and the next edit that appends to
+      # QUESTIONS_LINKS will not see it. target is
+      # <repo>/<subdir>/QUESTIONS.md, so <repo> is two levels up: creating the
+      # SUBDIR inside a real checkout is the intended behaviour, creating the
+      # CHECKOUT is the bug. Loud, because reaching this means the collector's
+      # gate was bypassed rather than a project merely lacking a clone.
+      repo_root="$(dirname "$(dirname "$target")")"
+      if [ ! -d "$repo_root" ]; then
+        echo "ERROR [$proj]: refusing to fabricate a checkout at $repo_root to hold $target -- an absolute PROJECT_REPO_PATH that is not there is a wrong path, not one to create; no questions/$proj.md link written" >&2
+        ERRORS=$((ERRORS + 1))
+        continue
+      fi
       if [ ! -f "$target" ]; then
         mkdir -p "$(dirname "$target")"
         printf '%s' "$QUESTIONS_HEADER" > "$target"
