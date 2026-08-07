@@ -137,6 +137,8 @@ LIB_DIR_EARLY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$LIB_DIR_EARLY/autonomy-merge.sh"
 # shellcheck source=lib/salvage.sh
 source "$LIB_DIR_EARLY/salvage.sh"
+# shellcheck source=lib/run-record.sh
+source "$LIB_DIR_EARLY/run-record.sh"
 if [ -z "$AUTONOMY_TIER" ] && [ -n "${PROJECT_KEY:-}" ]; then
   LEGACY_CONF="$LIB_DIR_EARLY/../schedule/$PROJECT_KEY.conf"
   if [ -f "$LEGACY_CONF" ]; then
@@ -711,12 +713,39 @@ $PROMPT"
   # any other tier value; see that file for the merge/push/fallback logic.
   autonomy_sweep_repo "$REPO" "$BRANCH" "$AUTONOMY_TIER" "$TEST_CMD" "$JOB_NAME"
 
-  echo "=== $STATUS${STATUS_DETAIL:-} $(date -Is) (${ELAPSED}s) ==="
-
   if [ "$STATUS" = "FAILED" ]; then
     RUN_RC=1
     notify -u critical "$JOB_NAME FAILED" "See log: $LOG"
   fi
+
+  # --- THE COMPUTED VERDICT (lib/run-record.sh) -----------------------------
+  # Everything above this line that describes the run's outcome is either `rc`
+  # or the agent's own prose. bin/verdict.sh asks the agent; its answer is
+  # consumed at the NEXT dispatch, so nothing durable ever recorded what a run
+  # actually did. A run that fixed something and a run that filed three issues
+  # left identical records, and filing is cheaper -- see hf7y/scheduler#54 and
+  # the 2026-08-06 blowout (42 issues, five repos, one needed `git merge
+  # --ff-only`).
+  #
+  # So derive it. run_record_closeout re-reads git and the GitHub API AFTER
+  # `claude -p` has exited and appends one JSONL line per run to
+  # $STATE_ROOT/scheduler-runs/<participant>.jsonl -- outside this checkout, on
+  # purpose (that lib's header has the 18-hour vim-arcade freeze this avoids).
+  # The agent's prose rides along in claimed_verdict/claimed_reason and
+  # populates nothing.
+  #
+  # cd first: autonomy_sweep_repo above walks branches and is not guaranteed to
+  # leave us in the work tree the shas were taken from.
+  cd "$REPO/$REPO_SUBDIR" || echo "WARNING: cannot re-enter $REPO/$REPO_SUBDIR for the run record"
+  # A computed FAILED that does not change the run's exit status is just
+  # another self-report, so it folds into RUN_RC -- which is what lands in
+  # usage-paced-runner.sh's `DONE <name> rc=N`.
+  if ! run_record_closeout; then
+    RUN_RC=1
+    notify -u critical "$JOB_NAME COMPUTED-FAILED" "verdict computed from git/gh, not self-reported. See $LOG"
+  fi
+
+  echo "=== $STATUS${STATUS_DETAIL:-} $(date -Is) (${ELAPSED}s) ==="
 } >> "$LOG" 2>&1
 
 # The job's exit status is the runner's ONLY machine-readable verdict --
