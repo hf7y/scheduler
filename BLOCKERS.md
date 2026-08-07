@@ -1511,8 +1511,10 @@ happened yet for any of them.
   `# verified 2026-08-05 via: readlink -f ~/.local/bin/joue (-> vim-arcade/joue, undeclared); fauche check ~/Documents/Projects/vim-arcade (KEEP)`
 >> _[consumed 2026-08-05 -- read by a run; this entry is
 >> still OPEN until something deletes it]_
-  > (answer inline at hf7y/vim-arcade#63 — bashified carries an engine / the
-  >  rule grows a second shape / joue is deliberately not distributed)
+>> _[consumed 2026-08-07 -- read by a run; this entry is
+>> still OPEN until something deletes it]_
+  >> (answer inline at hf7y/vim-arcade#63 — bashified carries an engine / the
+  >>  rule grows a second shape / joue is deliberately not distributed)
 
   - **PARTIAL ANSWER 2026-08-05 (vim-arcade-nightly-batch, machine-append;
     witness: `gh api repos/hf7y/vim-arcade/issues/63/comments` in this
@@ -1531,6 +1533,30 @@ happened yet for any of them.
     to Recently resolved: the mandark clone stays pinned (`fauche` still says
     KEEP) until the bashify/installe removal actually lands, and question 1
     is still unanswered.
+
+  - **FULL ANSWER already posted 2026-08-06T22:21:50Z, stamped 2026-08-07
+    (vim-arcade nightly-batch, machine-append; witness:
+    `gh issue view 63 --repo hf7y/vim-arcade --json comments` this
+    session).** The 2026-08-07 REPLY request above ("bashified carries an
+    engine / the rule grows a second shape / joue is deliberately not
+    distributed") was already answered on the issue itself before this
+    session started — no new reply needed tonight. That comment reads all
+    three clauses as a timeline rather than exclusive options: PR #52
+    (`94d7c47`) already carries the engine via `bin/sync-engine.sh` +
+    `ENGINE-PROVENANCE`, which the comment argues *is* the second shape;
+    the "not distributed" clause is the deferred future step Zach named
+    17:51:13Z. It also confirms question 1 (chezz/vim-arcade name
+    collision) resolved in fact — chezz's `bashified` branch no longer
+    exists, only a `retired-bashified` tag — and corrects this entry's own
+    stale verified-line: `joue` the verb *is* declared now; only
+    `~/.local/bin/joue` (the symlink itself, unrepointed) remains
+    undeclared. Net effect on the clone-removal blocker is unchanged from
+    the PARTIAL ANSWER above — repointing the symlink and the eventual
+    bashify/installe removal are both host-side/other-repo steps, nothing
+    to build in vim-arcade tonight. Leaving this entry open (not moving to
+    Recently resolved) since the clone itself hasn't been freed yet, but
+    both questions this issue was filed to resolve now have direct
+    answers on the issue.
 
 ## groc-mangr
 
