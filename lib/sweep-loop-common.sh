@@ -240,6 +240,100 @@ notify() {
   return 0
 }
 
+# THE VERDICT CLOSEOUT -- appended to every batch brief, by the engine.
+#
+# bin/usage-paced-runner.sh logs, on a run that wrote nothing:
+#
+#   NO-VERDICT <p> -- ran with no verdict written (its brief asks for one)
+#
+# That parenthesis was an assumption, not a fact. Until 2026-08-06 the ONLY
+# thing anywhere that asked for a verdict was one hand-written paragraph
+# inside ONE conf's BATCH_PROMPT (schedule/bibliothecaire.conf, step 6). Every
+# other participant's brief was silent, so bibliothecaire wrote verdicts and
+# nobody else ever had: vim-arcade's $HOME/.local/share/scheduler-verdict/ did
+# not exist AT ALL after weeks of clean, untruncated 6-hourly dispatches
+# (probed on monkey 2026-08-06 -- the 18:00 run finished in 185s, rc=0, with a
+# full closing summary, so it was not truncation). The runner faithfully
+# logged NO-VERDICT every single tick and re-dispatched forever, which is
+# exactly the "retries forever, no braking" failure bin/verdict.sh was written
+# to end.
+#
+# So the instruction belongs HERE, where every dispatch passes, and not in
+# each conf: the contract is the RUNNER's, the runner is shared, and the next
+# account armed into schedule/_paced*.conf is then correct by default rather
+# than correct if someone remembered to paste a paragraph. Putting it here
+# also works regardless of how a conf spells its brief -- an inline prompt
+# (bibliothecaire) or a bare slash command (vim-arcade's "/nightly-batch",
+# which resolves inside the PROJECT's own repo, where this repo cannot reach
+# to add a step).
+#
+# BATCH TIER ONLY. The verdict file is keyed on the ROTATION PARTICIPANT NAME
+# (bin/verdict.sh's header), every row in schedule/_paced*.conf dispatches
+# `scheduler-run <p> batch`, and the runner consumes the file at dispatch. A
+# sweep-tier run writing under the same key between paced ticks would hand the
+# batch run someone else's verdict.
+#
+# A conf that already names verdict.sh itself keeps its own wording, unchanged:
+# bibliothecaire's is strictly more specific than this generic one (it spells
+# out that a request blocked on a human is DONE, not CONTINUE), and two
+# overlapping instructions in one prompt are worse than one good one.
+#
+# CALL IT BEFORE THE FEEDBACK BLOCKS, and only then. The skip test below asks
+# "does this CONF already ask for a verdict?", so its input must be the conf's
+# own brief and nothing else. Called after the feedback prepending instead, it
+# reads the feedback -- and vim-arcade's BLOCKERS.md section contains the
+# string verdict.sh, so on the first real dispatch (2026-08-06) it skipped on
+# the exact participant it was written to fix. tests/verdict-closeout-
+# witness.sh case 6 holds the ordering.
+#
+# Globals in, global out: reads TIER/PROJECT_KEY/VERDICT_BIN, rewrites PROMPT.
+# Same shape as notify() above, and for the same reason -- tests/
+# verdict-closeout-witness.sh lifts this function out of the engine and drives
+# it directly, which it cannot do to code buried in the run body.
+append_verdict_closeout() {
+  case "${TIER:-}" in
+    nightly-batch|batch) ;;
+    *) return 0 ;;
+  esac
+  if printf '%s' "$PROMPT" | grep -q 'verdict\.sh'; then
+    echo "verdict closeout: skipped -- this conf's own prompt already names verdict.sh"
+    return 0
+  fi
+  # Fail LOUD rather than pasting a path to a command that is not there: a
+  # brief that asks for an impossible step is worse than one that asks for
+  # nothing, and the runner would then report the resulting NO-VERDICT as the
+  # agent's fault.
+  if [ ! -x "${VERDICT_BIN:-}" ]; then
+    echo "WARNING: verdict closeout NOT appended -- '${VERDICT_BIN:-<unset>}' is missing or not executable. This run will log NO-VERDICT and be re-dispatched."
+    return 0
+  fi
+  PROMPT="$PROMPT
+
+---
+
+BEFORE YOU STOP, RECORD A VERDICT. This is not bookkeeping: it is the only way
+the scheduler can tell a run that finished from a run that was cut off, and the
+only signal that can ever stop this job being dispatched again.
+
+  $VERDICT_BIN set $PROJECT_KEY <VERDICT> \"<one line, what you actually did>\"
+
+  CONTINUE   there is ACTIONABLE work left -- something you could pick up on
+             the next run without anyone else doing anything first.
+  DONE       nothing actionable right now. THIS INCLUDES a backlog whose only
+             remaining items are BLOCKED WAITING ON A HUMAN, and a backlog you
+             have genuinely drained. Recording CONTINUE there gets you
+             re-dispatched every tick to re-read something nobody has touched,
+             which spends real quota to learn nothing. Do not invent work to
+             justify CONTINUE.
+  IMPOSSIBLE a real dead end, with the probe that proves it -- not merely out
+             of turns. This one brakes the whole ecosystem, so it requires a
+             reason and the command refuses it without one.
+
+If you ran out of room mid-task, write NOTHING: silence already classifies as
+NOT-DONE, which is the correct reading of a truncated run."
+  echo "verdict closeout: appended to the brief (participant $PROJECT_KEY, via $VERDICT_BIN)"
+}
+
 exec 200>"$LOCK"
 if ! flock -n 200; then
   echo "$(date -Is) already running, skipping" >> "$LOG"
@@ -464,11 +558,25 @@ fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"
 
+  LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  # Verdict closeout FIRST, while $PROMPT is still exactly the conf's own
+  # brief and nothing else. Caught by the first real dispatch, 2026-08-06:
+  # run this after the feedback blocks below and its "does this conf already
+  # ask for a verdict?" test reads THEM instead. vim-arcade's BLOCKERS.md
+  # section happens to contain the word verdict.sh, so the engine logged
+  # "skipped -- this conf's own prompt already names verdict.sh" and appended
+  # nothing, on the exact participant this was written to fix. A guard whose
+  # input is the composed prompt is answering a different question than the
+  # one it was asked. Ordering after this: feedback, then the conf's brief,
+  # then the closeout -- which is the right reading order anyway.
+  VERDICT_BIN="$(cd "$LIB_DIR/.." && pwd)/bin/verdict.sh"
+  append_verdict_closeout
+
   # Pick up any %%TAG inline comments the human left in the previous
   # report (see docs/feedback-tags.md) and put them first in this run's
   # prompt. LATEST.md gets overwritten by this same run below, so a tag
   # naturally clears itself once acted on -- no separate "mark as read".
-  LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   FEEDBACK_FILE="$HOME/reports/$PROJECT_KEY/LATEST.md"
   if [ -f "$FEEDBACK_FILE" ]; then
     FEEDBACK_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$FEEDBACK_FILE" 2>/dev/null || true)"
