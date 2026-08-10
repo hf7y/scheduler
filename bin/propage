@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# propage -- ship an edit to schedule/_standing-rules.md as a reviewable PR,
+# instead of hand-editing schedule/<project>.conf files and pushing to main.
+#
+# WHY THIS EXISTS. Commit 9cfd130 (2026-08-07, "briefs: standing rules at
+# the head of all three armed briefs") hand-typed one identical block of
+# rules -- rules 0 through 5, mechanism-first / close-what-you-resolved /
+# debt-rule / name-the-blocker / land-your-work / no-new-markdown -- into
+# THREE separate BATCH_PROMPT strings (schedule/ecosim.conf,
+# schedule/vim-arcade.conf, schedule/bibliothecaire.conf) as independent
+# copy-pasted text, confirmed byte-identical only by diffing after the
+# fact. There was no single place that text lived: the next edit meant
+# re-typing it into all three files again, by hand or by another one-off
+# script, and hoping nobody missed one. This is the same
+# "retyping is the distribution mechanism" failure this ecosystem has
+# already been burned by elsewhere -- this repo's own CLAUDE.md and
+# realisateur/CLAUDE.md's PR-convention section both record a version of
+# it. schedule/_standing-rules.md is now the one file that text lives in;
+# bin/scheduler-run prepends it to BATCH_PROMPT/SWEEP_PROMPT at dispatch
+# time for any conf that sets USES_STANDING_RULES=1. This script is the
+# one door for changing it -- it exists so the fix does not rot back into
+# a hand-edit-and-push habit the first time someone is in a hurry.
+#
+# CONTRACT.
+#   1. Edit schedule/_standing-rules.md yourself, on an otherwise clean
+#      checkout of this repo, on whatever branch you happen to be on.
+#   2. Run `propage` (or `propage --dry-run` to validate without shipping
+#      anything). It:
+#        a. refuses to run unless the ONLY uncommitted change in the repo
+#           is that one file -- a dirty tree with unrelated changes is
+#           refused, not silently swept into the PR;
+#        b. fetches origin and isolates your edit onto a FRESH branch cut
+#           from origin/main -- never committed on top of whatever branch
+#           was checked out, and never onto main itself;
+#        c. runs tests/conf-sources-clean-witness.sh against the new
+#           branch (a standing-rules edit that breaks conf sourcing would
+#           break every armed project's next dispatch, silently, at the
+#           next tick -- catch that HERE, not in production);
+#        d. commits with `git commit -F` against a message file, never
+#           `-m` (a multi-line or backtick-bearing message run through
+#           `-m` can execute -- this repo's own convention; see CLAUDE.md
+#           and tests/conf-sources-clean-witness.sh's own header for the
+#           backtick incident that convention exists to prevent);
+#        e. pushes the branch (never main) and opens a PR against main;
+#        f. polls `gh pr view --json mergeable,mergeStateStatus` a few
+#           seconds apart -- GitHub computes mergeability asynchronously,
+#           so checking once right after `gh pr create` reads UNKNOWN even
+#           on a PR that is perfectly fine -- and reports MERGEABLE /
+#           CONFLICTING / UNKNOWN plainly. It does not claim success on
+#           CONFLICTING, and does not claim success if the poll times out
+#           still UNKNOWN.
+#   3. Your original branch and working tree are restored exactly as they
+#      were -- dirty file included -- whether propage succeeds, fails, or
+#      you passed --dry-run. propage never leaves you on the branch it
+#      made; that branch lives on origin, referenced by the PR, for review
+#      to happen on GitHub, not in your working copy.
+#
+# NOT a framework: one file, one branch, one PR. If this needs to grow a
+# second responsibility, that is a sign it should stay two commands, not
+# one with a flag.
+
+set -uo pipefail
+
+# --- locate the repo this script belongs to, the same way bin/scheduler
+# does (self-location, then a hardcoded fallback for a copied-not-symlinked
+# install) -----------------------------------------------------------------
+SELF_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)"
+[ -n "$SELF_REAL" ] || SELF_REAL="${BASH_SOURCE[0]}"
+SELF_REPO="$(cd "$(dirname "$SELF_REAL")/.." 2>/dev/null && pwd)"
+: "${SELF_REPO:=}"
+if [ -n "$SELF_REPO" ] && [ -e "$SELF_REPO/.git" ] && [ -f "$SELF_REPO/bin/scheduler-run" ]; then
+  SCHED_ROOT="$SELF_REPO"
+else
+  SCHED_ROOT="/home/zach/Documents/Projects/scheduler"
+fi
+[ -f "$SCHED_ROOT/bin/scheduler-run" ] || { echo "propage: cannot find the scheduler repo (tried $SCHED_ROOT)" >&2; exit 2; }
+
+DRY_RUN=0
+case "${1:-}" in
+  --dry-run) DRY_RUN=1 ;;
+  "") : ;;
+  *) echo "propage: usage: propage [--dry-run]" >&2; exit 2 ;;
+esac
+
+cd "$SCHED_ROOT" || exit 2
+
+RULES_FILE="schedule/_standing-rules.md"
+[ -f "$RULES_FILE" ] || { echo "propage: $RULES_FILE does not exist -- create it first" >&2; exit 2; }
+
+command -v gh   >/dev/null 2>&1 || { echo "propage: gh CLI not found on PATH" >&2; exit 2; }
+command -v git  >/dev/null 2>&1 || { echo "propage: git not found on PATH" >&2; exit 2; }
+
+ORIG_BRANCH="$(git branch --show-current)"
+[ -n "$ORIG_BRANCH" ] || { echo "propage: HEAD is detached -- check out a real branch first" >&2; exit 2; }
+
+# --- step (a): the only uncommitted change allowed is the rules file ------
+STATUS="$(git status --porcelain)"
+OTHER="$(printf '%s\n' "$STATUS" | grep -v " ${RULES_FILE}\$\|^?? ${RULES_FILE}\$" | grep -v '^$' || true)"
+if [ -n "$OTHER" ]; then
+  echo "propage: refusing -- uncommitted changes beyond $RULES_FILE:" >&2
+  printf '%s\n' "$OTHER" >&2
+  echo "propage: commit or stash those separately, then re-run" >&2
+  exit 1
+fi
+RULES_STATUS="$(printf '%s\n' "$STATUS" | grep " ${RULES_FILE}\$\|^?? ${RULES_FILE}\$" || true)"
+if [ -z "$RULES_STATUS" ]; then
+  echo "propage: no uncommitted edit to $RULES_FILE -- nothing to propagate" >&2
+  exit 1
+fi
+
+TMP="$(mktemp -d)"
+cleanup() { rm -rf "$TMP"; }
+trap cleanup EXIT
+
+cp "$RULES_FILE" "$TMP/rules.new.md"
+
+# --- step (b): isolate the edit onto a fresh branch off fetched origin/main
+echo "propage: fetching origin ..."
+git fetch origin main >/dev/null 2>&1 || { echo "propage: git fetch origin main failed" >&2; exit 1; }
+
+# Bail early if there's nothing new relative to origin/main -- saves a
+# branch/PR cycle that would just be closed as a no-op.
+if git show "origin/main:$RULES_FILE" > "$TMP/rules.upstream.md" 2>/dev/null; then
+  if diff -q "$TMP/rules.new.md" "$TMP/rules.upstream.md" >/dev/null 2>&1; then
+    echo "propage: $RULES_FILE is identical to origin/main -- nothing to propagate" >&2
+    exit 1
+  fi
+fi
+
+# Return the working copy to HEAD's version of the file so branch-switching
+# is clean, regardless of whether the edit was to a tracked file or a new
+# untracked one.
+restore_local_edit() {
+  if printf '%s' "$RULES_STATUS" | grep -q '^??'; then
+    rm -f "$RULES_FILE"
+  else
+    git checkout -- "$RULES_FILE" 2>/dev/null || true
+  fi
+}
+restore_local_edit
+
+BR="propage/standing-rules-$(date -u +%Y%m%d%H%M%S)"
+if ! git checkout -b "$BR" origin/main >/dev/null 2>&1; then
+  echo "propage: could not create branch $BR off origin/main" >&2
+  git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+  cp "$TMP/rules.new.md" "$RULES_FILE"
+  exit 1
+fi
+
+# Put the edit back, now on top of fresh origin/main.
+cp "$TMP/rules.new.md" "$RULES_FILE"
+git add "$RULES_FILE"
+
+# --- step (c): the conf-sourcing witness must pass on the new branch ------
+WITNESS="tests/conf-sources-clean-witness.sh"
+FAIL=0
+if [ -x "$WITNESS" ] || [ -f "$WITNESS" ]; then
+  echo "propage: running $WITNESS ..."
+  bash "$WITNESS" || FAIL=1
+else
+  echo "propage: WARNING -- $WITNESS not found, skipping (this is the witness propage exists to run; its absence is a finding, not a pass)" >&2
+fi
+if [ "$FAIL" -ne 0 ]; then
+  echo "propage: refusing to ship -- $WITNESS failed against the edited branch" >&2
+  git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+  git branch -D "$BR" >/dev/null 2>&1
+  restore_local_edit
+  cp "$TMP/rules.new.md" "$RULES_FILE"
+  exit 1
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "propage: --dry-run OK -- $RULES_FILE change is isolated, sources cleanly, and differs from origin/main"
+  echo "propage: --dry-run stops before commit/push/PR"
+  git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+  git branch -D "$BR" >/dev/null 2>&1
+  restore_local_edit
+  cp "$TMP/rules.new.md" "$RULES_FILE"
+  exit 0
+fi
+
+# --- step (d): commit via -F, never -m (see header) ------------------------
+MSG_FILE="$TMP/commit-msg.txt"
+cat > "$MSG_FILE" <<'EOF'
+schedule/_standing-rules.md: propagate an edit via propage
+
+Shipped through bin/propage rather than a hand-edit-and-push, so this
+change reaches every conf with USES_STANDING_RULES=1 through the one file
+bin/scheduler-run already prepends at dispatch -- not retyped per conf.
+EOF
+if ! git commit -F "$MSG_FILE" >/dev/null; then
+  echo "propage: git commit failed" >&2
+  git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+  git branch -D "$BR" >/dev/null 2>&1
+  restore_local_edit
+  cp "$TMP/rules.new.md" "$RULES_FILE"
+  exit 1
+fi
+COMMIT_SHA="$(git rev-parse --short HEAD)"
+
+# --- step (e): push the branch (never main), open the PR -------------------
+echo "propage: pushing $BR ..."
+if ! git push -u origin "$BR" >/dev/null 2>&1; then
+  echo "propage: git push failed -- branch $BR NOT on origin, PR not opened" >&2
+  git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+  restore_local_edit
+  cp "$TMP/rules.new.md" "$RULES_FILE"
+  exit 1
+fi
+
+PR_BODY_FILE="$TMP/pr-body.txt"
+cat > "$PR_BODY_FILE" <<EOF
+Propagates an edit to schedule/_standing-rules.md, opened by bin/propage
+(commit $COMMIT_SHA).
+
+schedule/_standing-rules.md is prepended to BATCH_PROMPT/SWEEP_PROMPT at
+dispatch by bin/scheduler-run for any conf with USES_STANDING_RULES=1
+(currently ecosim, vim-arcade, bibliothecaire) -- see that script's comment
+and bin/propage's header for why this exists instead of hand-editing each
+conf. tests/conf-sources-clean-witness.sh passed on this branch before it
+was pushed.
+EOF
+
+PR_URL="$(gh pr create --base main --head "$BR" \
+  --title "schedule/_standing-rules.md: propagate an edit via propage" \
+  --body-file "$PR_BODY_FILE" 2>&1)" || {
+  echo "propage: gh pr create failed:" >&2
+  echo "$PR_URL" >&2
+  git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+  restore_local_edit
+  cp "$TMP/rules.new.md" "$RULES_FILE"
+  exit 1
+}
+echo "propage: opened $PR_URL"
+
+# --- step (f): poll mergeability, GitHub computes it async -----------------
+STATE="UNKNOWN"
+MERGE_STATUS="UNKNOWN"
+DEADLINE=$((SECONDS + 60))
+while [ "$SECONDS" -lt "$DEADLINE" ]; do
+  JSON="$(gh pr view "$BR" --json mergeable,mergeStateStatus 2>/dev/null)" || JSON=""
+  STATE="$(printf '%s' "$JSON" | grep -o '"mergeable":"[A-Z]*"' | cut -d'"' -f4)"
+  MERGE_STATUS="$(printf '%s' "$JSON" | grep -o '"mergeStateStatus":"[A-Z_]*"' | cut -d'"' -f4)"
+  [ -n "$STATE" ] || STATE="UNKNOWN"
+  [ "$STATE" = "UNKNOWN" ] || break
+  sleep 4
+done
+
+echo "propage: PR mergeable=$STATE mergeStateStatus=${MERGE_STATUS:-UNKNOWN}"
+case "$STATE" in
+  MERGEABLE)   echo "propage: MERGEABLE -- no conflicts against main" ;;
+  CONFLICTING) echo "propage: CONFLICTING -- do not treat this run as done; resolve on $BR and re-push" ;;
+  *)           echo "propage: still UNKNOWN after polling -- check $PR_URL manually before treating this as done" ;;
+esac
+
+# --- step 3: leave the caller exactly where they started --------------------
+git checkout "$ORIG_BRANCH" >/dev/null 2>&1
+restore_local_edit
+cp "$TMP/rules.new.md" "$RULES_FILE"
+
+echo "propage: back on $ORIG_BRANCH, working tree unchanged from before this run"
+echo "propage: PR: $PR_URL"
+[ "$STATE" = "MERGEABLE" ]

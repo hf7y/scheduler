@@ -60,6 +60,36 @@ fi
 PROMPT="$(field PROMPT)"
 [ -n "$PROMPT" ] || { echo "scheduler-run: ${PREFIX}_PROMPT not set in $CONF (required once ${PREFIX}_SCRIPT is removed)" >&2; exit 2; }
 
+# Standing rules: prepended here, not retyped into each conf's PROMPT.
+#
+# Commit 9cfd130 (2026-08-07) hand-typed an identical "STANDING RULES"
+# block (rules 0-5) into THREE separate BATCH_PROMPT strings -- ecosim,
+# vim-arcade, bibliothecaire -- as independent copy-pasted text. There was
+# no single source of truth: changing a rule meant re-typing it into every
+# conf again, by hand or by another one-off script, and hoping nobody
+# missed one. schedule/_standing-rules.md is now that one place; bin/propage
+# is how it gets edited and shipped (see its header).
+#
+# USES_STANDING_RULES is a project-level field (like AUTONOMY_TIER, not
+# prefixed by SWEEP_/BATCH_) so it applies uniformly regardless of which
+# tier's PROMPT this run is building. It is opt-IN, not automatic for every
+# conf: chezz, crt, baudin and friends never had this text and prepending
+# it to them would be changing their prompt's meaning, silently, as a side
+# effect of an unrelated engine change -- exactly the kind of surprise this
+# repo's build discipline forbids. Only a conf that explicitly asks for it
+# gets it.
+if [ "${USES_STANDING_RULES:-0}" = "1" ]; then
+  RULES_FILE="$SCHED_ROOT/schedule/_standing-rules.md"
+  if [ -f "$RULES_FILE" ]; then
+    PROMPT="$(cat "$RULES_FILE")
+
+$PROMPT"
+  else
+    echo "scheduler-run: $CONF sets USES_STANDING_RULES=1 but $RULES_FILE is missing" >&2
+    exit 2
+  fi
+fi
+
 # Project-level runtime config (shared by both tiers).
 PROJECT_KEY="${PROJECT_KEY:-$PROJECT}"
 : "${REPO_URL:?scheduler-run: REPO_URL must be set in $CONF}"
