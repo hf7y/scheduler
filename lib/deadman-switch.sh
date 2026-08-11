@@ -93,3 +93,64 @@ deadman_check() {
   } >> "$LOG"
   return 3
 }
+
+# ---------------------------------------------------------------------------
+# deadman_renew -- record that this job is ALIVE, pushing the stamp forward.
+#
+# THE POLARITY BUG THIS EXISTS TO FIX. Before it, `expires_at` was written
+# exactly once -- on the first run, because deadman_check only stamps when the
+# file is MISSING -- and never again. So the switch did not measure silence.
+# It measured the calendar: every job died EXPIRY_DAYS after its first run,
+# healthy or not, and the only cure was a human noticing and running `rm`.
+#
+# Measured on monkey 2026-08-11, which is why this is being written:
+#
+#     ecosim          expired 2026-08-10T22:20Z   (already dead; its 00:00
+#                                                  tick was rc=3, 0s, no work)
+#     bibliothecaire  expires 2026-08-11T05:21Z   (~4h)
+#     vim-arcade      expires 2026-08-11T19:03Z   (~18h)
+#
+# Three healthy, working accounts -- vim-arcade had closed an issue and merged
+# a PR on its previous tick -- all self-destructing inside 19 hours, on a timer
+# started by their first run seven days earlier. Nothing announced it. The
+# switch is also what `sync-crontab.sh --apply` reads to PRUNE a job's crontab
+# line, so an unnoticed trip escalates from "stops running" to "stops being
+# scheduled at all".
+#
+# WHAT COUNTS AS ALIVE, and why it is not "succeeded". A job that runs and
+# FAILS every night is not silent -- it is shouting, and the FAILED notify plus
+# a non-zero exit are the channel for that. A job whose cron stopped firing,
+# whose host is off, or whose wrapper dies before reaching the end is silent,
+# and that is the only thing a dead-man switch can honestly detect. So the
+# renewal is on REACHING THE END OF A RUN, whatever the run concluded.
+#
+# THE DELIBERATE BRAKE IS UNAFFECTED, and this is the load-bearing interaction:
+# bin/usage-paced-runner.sh brakes a GAVE-UP participant by stamping expires_at
+# IN THE PAST. That happens after the run, in the runner, not here -- so a
+# renewal earlier in the same run cannot undo it. An agent that declares
+# IMPOSSIBLE still stops. What can no longer happen is a job stopping because
+# a week went by.
+deadman_renew() {
+  local expires_at_file
+  : "${EXPIRY_DAYS:=7}"
+
+  if [ -z "${STATE_DIR:-}" ]; then
+    echo "deadman_renew: BROKEN CONTRACT -- STATE_DIR must be set" >&2
+    return 2
+  fi
+  if [ ! -d "$STATE_DIR" ]; then
+    echo "deadman_renew: BROKEN CONTRACT -- STATE_DIR ($STATE_DIR) does not exist" >&2
+    return 2
+  fi
+
+  expires_at_file="$STATE_DIR/expires_at"
+  # Unconditional overwrite. deadman_check writes only when the file is
+  # missing, which is correct for BOOTSTRAPPING a stamp and is exactly what
+  # made the stamp permanent; renewal is the opposite operation and has to say
+  # so by clobbering.
+  date -d "+${EXPIRY_DAYS} days" -Is > "$expires_at_file" || {
+    echo "deadman_renew: could not write $expires_at_file" >&2
+    return 2
+  }
+  return 0
+}
