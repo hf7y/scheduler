@@ -903,14 +903,23 @@ issues_counts() {
 # `gh label create` is idempotent-by-flag, not by nature -- without
 # --force it exits non-zero when the label already exists, which is the
 # normal case, so that specific failure is the success path here.
+#
+# $2, when given, is a `from:<calling-project>` label -- created on demand
+# the same way, since the set of callers is open-ended (every registered
+# project, plus "zach" for an interactive shell outside any checkout) and
+# can't be pre-seeded like the three fixed labels above.
 ensure_gh_labels() {
-  local slug="$1"
+  local slug="$1" from_label="${2:-}"
   gh label create question --repo "$slug" --color FBCA04 \
     --description "Open question for the human; scheduler -q renders these" >/dev/null 2>&1 || true
   gh label create answered --repo "$slug" --color 0E8A16 \
     --description "Human has answered; this project's next run acts, then closes" >/dev/null 2>&1 || true
   gh label create idea --repo "$slug" --color 1D76DB \
     --description "Filed via scheduler -i / notify-senechal; this project's next run triages it" >/dev/null 2>&1 || true
+  if [ -n "$from_label" ]; then
+    gh label create "$from_label" --repo "$slug" --color 5319E7 \
+      --description "Calling project recorded by scheduler -i, so an idea is triage-able by source without reading the body" >/dev/null 2>&1 || true
+  fi
 }
 
 # `scheduler -q <proj>` for an issues-channel project: render every open
@@ -1325,7 +1334,22 @@ cmd_idea() {
   require_gh || exit 1
   local slug url body today
   slug="$(gh_repo_slug "$proj")" || exit 1
-  ensure_gh_labels "$slug"
+
+  # WHO IS CALLING, not just who this is FOR: until now the calling project
+  # was only ever embedded as free prose by the calling agent's own
+  # discipline (e.g. "vim-arcade: relinked 14 verbs..." as the note's first
+  # words), never captured as data -- every issue was untriage-able by
+  # source without reading the full body. `project_for_path` already
+  # answers "which registered project owns this filesystem path" for the
+  # busy-marker machinery above; reused here against $PWD so filing a note
+  # gains a `from:<calling-project>` label for free. A shell outside every
+  # checkout (Zach typing interactively) is not a defect to route around --
+  # it is the "zach" source.
+  local from_proj from_label
+  from_proj="$(project_for_path "$PWD")" || from_proj="zach"
+  from_label="from:$from_proj"
+
+  ensure_gh_labels "$slug" "$from_label"
   today="$(date '+%Y-%m-%d %H:%M')"
 
   # THE TITLE IS NOT THE NOTE. GitHub caps an issue title at 256 characters
@@ -1366,14 +1390,14 @@ cmd_idea() {
   # not a command. Same reason CLAUDE.md requires `git commit -F`.
   local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
   if ! url="$(gh issue create --repo "$slug" --title "$title" \
-                --label idea --body-file "$bf" 2>&1)"; then
+                --label idea --label "$from_label" --body-file "$bf" 2>&1)"; then
     rm -f "$bf"
     echo "scheduler idea: gh issue create FAILED against $slug -- NOTHING was recorded." >&2
     printf '%s\n' "$url" >&2
     exit 1
   fi
   rm -f "$bf"
-  echo "filed as a GitHub issue on $slug (label: idea)"
+  echo "filed as a GitHub issue on $slug (labels: idea, $from_label)"
   echo "  $text"
   printf '  %s\n' "$url"
   return 0
