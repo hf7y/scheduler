@@ -30,6 +30,20 @@ EXEMPT: bibliothecaire@monkey
 # that conf's own comment and realisateur/MONKEY.md 8.3 for the account
 # record.
 EXEMPT: vim-arcade@monkey
+# realisateur@monkey and scheduler@monkey, added 2026-08-11, Zach-directed.
+# Accounts uid 3010 and 3011, provisioned the same day by
+# bin/setup-selfdev-project.sh --apply. hf7y/realisateur#111 asked since
+# 2026-08-08 whether the repo owning the toolchain gets a worker; Zach chose
+# OPTION A -- a full account, not the draft-PRs-only variant -- and chose to
+# arm the dispatcher's own account alongside it.
+#
+# Both were provisioned only AFTER enforce_admins was turned on for
+# hf7y/realisateur and hf7y/scheduler. Required checks were already configured
+# on both repos and were bypassable by an admin token until 2026-08-11; that
+# bypass was the whole containment argument in #111, so closing it first was
+# the precondition, not a follow-up.
+EXEMPT: realisateur@monkey
+EXEMPT: scheduler@monkey
 # chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf.
 #
 # CORRECTED 2026-08-05: the note that stood here said this exemption "ARMS
