@@ -139,6 +139,11 @@ source "$LIB_DIR_EARLY/autonomy-merge.sh"
 source "$LIB_DIR_EARLY/salvage.sh"
 # shellcheck source=lib/run-record.sh
 source "$LIB_DIR_EARLY/run-record.sh"
+# deadman_renew only. The TRIP check below is still this file's own inline copy
+# -- see the note at the expiry block for why that duplication is left standing
+# in this change rather than resolved inside it.
+# shellcheck source=lib/deadman-switch.sh
+source "$LIB_DIR_EARLY/deadman-switch.sh"
 if [ -z "$AUTONOMY_TIER" ] && [ -n "${PROJECT_KEY:-}" ]; then
   LEGACY_CONF="$LIB_DIR_EARLY/../schedule/$PROJECT_KEY.conf"
   if [ -f "$LEGACY_CONF" ]; then
@@ -430,6 +435,20 @@ fi
 # after (moved 2026-07-26): an expired job used to clone the repo and copy
 # secrets in first, then no-op -- burning network/disk for a run that was
 # never going to do anything. The check needs nothing but the stamp file.
+# DUPLICATION, NAMED RATHER THAN QUIETLY KEPT. lib/deadman-switch.sh exists to
+# be THE one implementation of this switch -- its header argues the case at
+# length, having been extracted in 2026-07 after a hand-pasted copy lost four
+# behaviours in a day. It is also, as of 2026-08-11, SOURCED BY NOTHING: the
+# copy it was written to retire is the block below, and the block below is what
+# actually runs on every self-dev account. The extraction happened; the
+# replacement never did.
+#
+# This change sources that lib for deadman_renew and leaves the trip check
+# here, on purpose. Swapping the trip path too is a behaviour change to the
+# engine every project is downstream of (its notify path differs, and
+# .scheduler/QUESTIONS.md q-756f82 records an unexplained notify-send hang that
+# is still open), and mixing it into the polarity fix would make one reviewable
+# thing into two unreviewable ones. It is the PR's stated open question.
 if [ ! -f "$EXPIRES_AT_FILE" ]; then
   date -d "+${EXPIRY_DAYS} days" -Is > "$EXPIRES_AT_FILE"
 fi
@@ -596,21 +615,24 @@ $PROMPT"
 
   # Same idea, but for the cross-project BLOCKERS.md (human-owned action
   # items, e.g. "go flip this setting in a browser"). --section restricts
-  # to this project's own "## $PROJECT_KEY" heading; --consume removes
-  # the matched %%TAG lines from BLOCKERS.md once collected (that file is
-  # hand-maintained and persistent, unlike LATEST.md, so it needs its own
-  # "mark as read" instead of relying on the next report overwriting it).
+  # to this project's own "## $PROJECT_KEY" heading; --consume records the
+  # matched entries as read (that file is hand-maintained and persistent,
+  # unlike LATEST.md, so it needs its own "mark as read" instead of relying
+  # on the next report overwriting it).
   BLOCKERS_FILE="$LIB_DIR/../BLOCKERS.md"
   if [ -f "$BLOCKERS_FILE" ]; then
-    # --consume only if this account can actually write the file back --
-    # a cross-account run (e.g. svc-vaporwave reading zach-owned
-    # BLOCKERS.md) that tried --consume anyway hung indefinitely on the
-    # resulting mv instead of failing fast (real incident 2026-07-20,
-    # root cause of the mv not fully diagnosed -- this guard sidesteps it
-    # rather than relying on understanding exactly why it hung).
-    CONSUME_FLAG=""
-    [ -w "$BLOCKERS_FILE" ] && CONSUME_FLAG="--consume"
-    BLOCKERS_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$BLOCKERS_FILE" --section "$PROJECT_KEY" $CONSUME_FLAG 2>/dev/null || true)"
+    # ALWAYS --consume, since 2026-08-11 (#61/#70). This call used to be
+    # gated on `[ -w "$BLOCKERS_FILE" ]`, because --consume rewrote the file
+    # in place and a cross-account run (svc-vaporwave reading zach-owned
+    # BLOCKERS.md) hung indefinitely on the resulting mv (2026-07-20).
+    # --consume no longer touches the file: the record lives in this
+    # account's own state dir. Two bugs die with the gate --
+    #   1. this line is the one that dirtied the tracked BLOCKERS.md that
+    #      bin/usage-paced-runner.sh's own pull gate then refuses to pull
+    #      past, freezing the host's deploy on its FIRST consumed tag;
+    #   2. a reader without write access silently never consumed at all, so
+    #      it was re-handed the same feedback on every single run.
+    BLOCKERS_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$BLOCKERS_FILE" --section "$PROJECT_KEY" --consume 2>/dev/null || true)"
     if [ -n "$BLOCKERS_BLOCK" ]; then
       echo "found inline feedback tags in $BLOCKERS_FILE under ## $PROJECT_KEY -- prepending to prompt"
       FEEDBACK_BLOCK="${FEEDBACK_BLOCK:-}${FEEDBACK_BLOCK:+$'\n\n'}$BLOCKERS_BLOCK"
@@ -743,6 +765,21 @@ $PROMPT"
   if ! run_record_closeout; then
     RUN_RC=1
     notify -u critical "$JOB_NAME COMPUTED-FAILED" "verdict computed from git/gh, not self-reported. See $LOG"
+  fi
+
+  # ALIVE. Reaching this line means the engine ran end to end, which is the
+  # only thing a dead-man switch can honestly measure -- see deadman_renew's
+  # header for why this is not conditioned on STATUS. Before this call the
+  # stamp was written once, on the first run, and never again, so every job
+  # died EXPIRY_DAYS after its FIRST run no matter how well it was working.
+  #
+  # Deliberately NOT guarded by `if [ "$STATUS" != FAILED ]`: a job failing
+  # loudly every night is not silent, and killing it a week later removes the
+  # noise rather than the fault.
+  if deadman_renew; then
+    echo "dead-man switch renewed -- next expiry $(cat "$EXPIRES_AT_FILE" 2>/dev/null)"
+  else
+    echo "WARNING: dead-man switch NOT renewed (deadman_renew failed); this job will expire on its existing stamp"
   fi
 
   echo "=== $STATUS${STATUS_DETAIL:-} $(date -Is) (${ELAPSED}s) ==="

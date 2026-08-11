@@ -6,8 +6,10 @@ It is **not a daemon**: cron is the coordinator. This repo is a shared engine
 + a config registry + a report aggregator.
 
 For the *why* behind every decision here (and the dated history), see
-[`DESIGN-NOTES.md`](DESIGN-NOTES.md). To move a project off the legacy
-per-project wrapper scripts, see [`MIGRATION.md`](MIGRATION.md).
+[`DESIGN-NOTES.md`](DESIGN-NOTES.md). The one-time move off the legacy
+per-project wrapper scripts is **complete** — see "Backwards compatibility"
+below for the witness, and `ecosystem1/scheduler/MIGRATION.md` in the vault
+for how it was done.
 
 ## The two job tiers
 
@@ -85,10 +87,10 @@ git repo at all — unverifiable is treated as dirty, not as clean.
 | `lib/check-witness.sh` | The one source for the runtime-witness convention every check in `bin/` follows: `check_witness <name>` stamps `~/.local/share/scheduler-checks/<name>.lastrun` as the check's first act. Sourced, not run; never fatal — bookkeeping must not be able to break a check. |
 | `bin/rotation-lint.sh` | Read-only "one project, one dispatcher" check across the **host split**. Two checks, both zero-false-positive: a project `enabled=1` in more than one `schedule/_paced*.conf` (two machines dispatching one project into one git history, with no shared lock), and a name listed twice in the *same* file (the runner has no dedup, so two enabled copies double-dispatch on one host; one enabled and one not is a shadowed line that makes the next "flip the X line" ambiguous). Retires a **prose convention, not a mechanism** — there was none: moving a project between hosts is a two-file edit (enable here, park there) and the rule was stated only in capitals in the conf files themselves (*"DO NOT LAND THIS ALONE"*, *"PAIRED, NOT LANDED ALONE"*), held together by whoever was editing remembering both halves. Deliberately does **not** check "enabled in *no* rotation" — parked-on-purpose and lost-in-a-move are the same bytes, and ~10 projects sit intentionally at `\|0\|` today, so that check would FLAG ten intentional parks to catch one accident. Not affected by an explicit `PACED_CONF` (that would pin it to one file and make it pass vacuously); point it elsewhere with `SCHED_ROOT`. Exit 0/1/3, where 3 is BLIND. Wired into `scheduler sweep` as its **tenth** pass; witness `tests/rotation-lint-witness.sh`. |
 | `bin/check-witness-lint.sh` | Read-only "this check exists; nothing has run it since \<date\>" — reads the witnesses back and reports `NEVER RUN` (built, never called) or `STALE` (was wired, silently unwired — e.g. a `sweep` pass deleted in a refactor). Deliberately not static analysis: grep proves a check is *mentioned*, and a call site in a branch that never executes greps identically to a live one. Same dead-man-switch shape as `EXPIRY_DAYS`, applied to checks. Wired into `scheduler sweep` as its **eleventh and last** pass — last so the passes that invoke the other checks have already refreshed their witnesses, and a wired check can't be reported stale by the sweep that just ran it. Grace period `CHECK_WITNESS_STALE_DAYS` (default 2). |
+| `bin/roster-target.sh` | Six read-only probes asking whether the **roster redesign** landed (#79 ROSTER, #80 `dose <project>`, #81 per-project rate, #78 dead-man polarity; frame: hf7y/realisateur#134). Reads only this repository, which is why — unlike realisateur's `bin/served-not-cloned.sh`, which reads a checkout by path plus ssh plus GitHub — scheduler's own suite can evaluate it. **Expected RED until the redesign lands** (0/6 as of 2026-08-10, exit 1), so the probes are operator-run and only `--strict` (the sunset date alone: no repo reads, no git, no network) is gated by `tests/run-all.sh`, via `tests/roster-target-witness.sh`. A permanently-red suite is a suite nobody reads. **Deletes itself 2026-08-24**: from that date `--strict` exits 4 and the only thing that clears it is removing both files — if the redesign landed they are redundant, and if it did not, the honest outcome is deletion plus a commit saying so, not moving the date. |
 | `schedule/*.conf` | One per registered project (`_batch.conf` is global auto-stagger config). |
 | `schedule/_usage.conf` | The pacing knobs `bin/usage-gate.sh` reads — `USAGE_CEILING`, `USAGE_MIN_SLACK`, `USAGE_RUSH_BEFORE_RESET_MIN`, `USAGE_PROBE_MODEL`. Resolved per field: explicit env > `_usage.<host>.conf` (per-host, same convention as `_paced.<host>.conf`) > this file > the gate's built-in defaults. Edit it and the next tick picks it up — no `sync-crontab.sh --apply`, unlike the `RUNNER_ENV` route it retires. An out-of-range value is a loud `ERROR` (exit 2 → HOLD) naming the file; the gate's verdict line reports which source each value came from (`knobs=ceiling:_usage.conf,...`). |
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in, plus `CLAUDE.md.template` (the "suggest `/ideate` instead of implementing" guardrail — see `docs/priority-weight.md` for the realisateur/scheduler split this belongs to). |
-| `INTAKE.md` | The web-tracker HTTP contract a project's backend implements to plug in. |
 | `docs/scheduler-cli.md` | The maintained man page for `bin/scheduler` (`scheduler man` opens it in `$PAGER`): glance column meanings, the `*` convention, where each number comes from, and the files behind them. The terse per-command list stays only in `scheduler --help` so the two can't drift. |
 | `docs/offline-first-checks.md` | The reusable pattern behind `bin/scheduler status`: build a check entirely out of deterministic scripts first, layer AI on top only as an opt-in (one-shot summary or interactive session) — a template for any project that wants the same kind of status check. |
 | `docs/priority-weight.md` | The optional `weight` field in `schedule/_paced.conf`: scheduler enforces it mechanically, realisateur is the one expected to set it based on cross-project vision judgment. |
@@ -108,7 +110,20 @@ Two kinds of fields (full annotated example in
 `BATCH_SCRIPT` (a path to a legacy `~/.local/bin/*-loop.sh` wrapper), that
 wrapper wins and the runtime fields are ignored for that tier. Drop the
 `*_SCRIPT` line to switch that tier onto `scheduler-run`. This is how a
-project migrates on its own schedule without a flag day — see `MIGRATION.md`.
+project migrated on its own schedule without a flag day.
+
+**That migration is complete, and the compatibility path above is now dead
+code.** The step-by-step move was consigned to the vault
+(`ecosystem1/scheduler/MIGRATION.md`, 2026-08-01) and removed from this repo
+on 2026-08-10, because every project it named has either migrated or been
+unregistered.
+
+WITNESS (re-run it; do not trust this paragraph):
+
+    grep -l '^\(SWEEP\|BATCH\)_SCRIPT=' schedule/*.conf
+    # -> schedule/scheduler.conf ONLY, which never used the shared engine
+    ls ~/.local/bin/*-loop.sh
+    # -> No such file or directory
 
 ## Two coordination mechanisms (don't conflate them)
 

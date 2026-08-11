@@ -4,10 +4,13 @@
 > do I use it," see [`README.md`](README.md). This file keeps the *why* — the
 > decisions, the gaps, and the dated history behind the current shape — so the
 > README can stay short. Some dated notes below predate the
-> `bin/scheduler-run` entrypoint (see README + [`MIGRATION.md`](MIGRATION.md));
-> where they describe per-project `~/.local/bin/*-loop.sh` wrappers, that is
-> the *legacy* path being migrated away from, kept working for backwards
-> compatibility.
+> `bin/scheduler-run` entrypoint (see README); where they describe
+> per-project `~/.local/bin/*-loop.sh` wrappers, that is the *legacy* path
+> that has since been migrated away from **completely** — no conf sets
+> `*_SCRIPT` and no wrapper survives on any host (README's "Backwards
+> compatibility" carries the witness). `MIGRATION.md`, which described the
+> move, is in the vault at `ecosystem1/scheduler/MIGRATION.md`. Later notes
+> in this file naming it are describing the repo as it stood then.
 
 Starting point dumped here from a working session (2026-07-17) on
 `vkv-inventory`'s bug tracker + browse-tab redesign. As of the same day,
@@ -291,10 +294,14 @@ crontab-installed) for chezz on the same shared-library shape; see
 
 ## What's in this directory
 
-- `INTAKE.md` — the standardized web-intake contract (read/write shape,
-  the `sweep-status` extension, the "never trust a raw POST response"
-  gotcha) both existing trackers already converged on independently, now
-  written down once for a *new* project's backend to implement against.
+- `INTAKE.md` — **consigned to the vault 2026-08-01, removed from the repo
+  2026-08-10**; read it at `ecosystem1/scheduler/INTAKE.md`. The standardized
+  web-intake contract (read/write shape, the `sweep-status` extension, the
+  "never trust a raw POST response" gotcha) that both existing trackers had
+  converged on independently. Both are gone from the registry: vkv-inventory
+  is unregistered outright, and chezz is parked (`chezz|0|...` in
+  `schedule/_paced.monkey.conf`), so the contract described a plug-in shape
+  with nothing left to plug in.
 - `lib/sweep-loop-common.sh` — the shared engine (lock/expiry/heartbeat/
   clone/invoke-claude/push-verification/cross-job registry). A
   per-project wrapper sets a handful of variables and sources this

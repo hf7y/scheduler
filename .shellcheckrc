@@ -1,0 +1,111 @@
+# .shellcheckrc -- what shellcheck means in THIS tree.
+#
+# Read by shellcheck itself from the repository root, so `shellcheck <file>`
+# typed by hand, `bin/shellcheck-lint.sh`, and CI all get the same answer.
+# ONE source, not a flag list retyped into three callers -- the build-
+# discipline row about config read from one place is the whole reason this
+# file exists rather than an `-e` string inside the guard.
+#
+# EVERY DISABLE BELOW NAMES ITS EVIDENCE, GATHERED HERE. This file began as a
+# copy of realisateur's, and a copy would have been the wrong artifact: a
+# disable list is a judgement about which classes are IDIOM in a particular
+# codebase, and importing another repository's judgement is how a suppression
+# ends up with nobody who can say why. The counts below are from the first
+# run against this tree (shellcheck 0.9.0, 61 tracked shell files, 405
+# findings at default severity / 74 at warning-and-above). Two of the three
+# codes coincide with realisateur's list; the EVIDENCE does not, and the
+# biggest class in this tree -- SC2015, at 247 hits -- is deliberately NOT
+# disabled here even though it would have been the easiest one to wave
+# through. See the rejected list at the bottom.
+
+# SC2034 -- "appears unused". 51 hits, 48 of them one structure: a variable
+# is set on one side of a `source` boundary and consumed on the other, which
+# shellcheck cannot see across.
+#   * schedule/<project>.conf and examples/*-loop.sh set JOB_NAME,
+#     PROJECT_KEY, TIER, REPO_URL, REPO_SUBDIR, EXPIRY_DAYS, MAX_TURNS and
+#     PROMPT, and lib/sweep-loop-common.sh reads them AFTER being sourced.
+#     That is not a style -- it IS this repository's dispatch contract, so
+#     every new project conf and every new loop script would arrive red.
+#   * The mirror image, lib -> caller: lib/registry-lock.sh (7) and
+#     lib/paced-conf.sh (2) publish REGISTRY_* / PACED_*_SRC for whoever
+#     sourced them.
+#   * tests/run-record-witness.sh (14) sets the same conf variables to drive
+#     lib/run-record.sh, i.e. the same contract exercised from a witness.
+# WHAT THIS COSTS, stated rather than glossed: the other 3 hits are genuine
+# dead stores and this disable hides them -- bin/usage-gate.sh's TOKEN_SRC
+# (assigned on all three branches, read nowhere in the repo), and unused
+# `local`s at bin/scheduler:2632 and bin/build-services-view.sh:42. None is a
+# bug; all three are named here so the cost is on the record.
+disable=SC2034
+
+# SC2016 -- "expressions don't expand in single quotes". 39 hits, and single
+# quotes are the CORRECT spelling in every one: printf format strings that
+# must emit a literal backtick or `> ` (bin/scheduler:975-979, :1919), sed
+# programs (bin/deploy-drift-check.sh), grep patterns matching source text
+# that literally contains `$expires_at_file` (bin/roster-target.sh:284), and
+# -- the sharpest example -- bin/scheduler:631, where `'$HOME'|'$HOME'/*)` is
+# a CASE PATTERN matching a conf value that is literally the string `$HOME`.
+# Expanding there would break the normaliser it belongs to.
+disable=SC2016
+
+# SC1091 -- "not following: <file> was not specified as input". 14 hits,
+# every one a `.` or `source` of a path this tree cannot make constant:
+# sibling libs resolved through $SCHED_ROOT at runtime (lib/registry-lock.sh,
+# lib/run-record.sh, lib/salvage.sh, lib/sweep-loop-common.sh), and -- the
+# case no source-path can ever fix -- fixture files that DO NOT EXIST until
+# the witness writes them (tests/*-witness.sh sourcing ./fn.sh, ./conf_field.sh,
+# ./backtick.conf). Following them needs -x plus a source-path, which makes
+# the answer depend on cwd. The `# shellcheck source=` directives already in
+# the tree are the honest form and they are kept.
+disable=SC1091
+
+# THREE DISABLES, AND NO MORE. The list above is global -- it silences a code
+# in every file, forever, including files nobody has written yet. That is only
+# honest for classes that are STRUCTURAL here (a language idiom, this repo's
+# own source-boundary contract, or a limit of static analysis), never for
+# classes that merely happen to have no live bug today.
+#
+# Everything else with hits goes in bin/shellcheck-lint.ratchet instead. The
+# difference is the whole design: a global disable makes the NEXT occurrence
+# invisible too, while a baseline records the ones that exist and fails on the
+# next one.
+#
+# CONSIDERED AND REJECTED, with the reason, because a disable list is only
+# trustworthy if the near-misses are written down too:
+#
+#   SC2015  "A && B || C is not if-then-else" -- 247 hits, by far the largest
+#           class in the tree and 232 of them in tests/, where
+#           `grep -q X <<<"$log" && ok "..." || bad "..."` is the assertion
+#           idiom of every witness. It is TEMPTING and it is refused: the
+#           other 15 hits are in bin/, including bin/verdict.sh (7) and
+#           bin/scheduler (2), where the middle command genuinely can fail and
+#           the fall-through would be silent. A global disable would hide
+#           those 15 and every future one to buy quiet in tests/. It is only
+#           info severity, so it never reaches the ratchet anyway -- a
+#           hand-run `shellcheck bin/verdict.sh` still shows it, which is
+#           exactly where it should stay visible.
+#
+#   SC1090  "can't follow non-constant source" -- only 5 hits, so the ratchet
+#           can hold them by name (bin/morning-report.sh, bin/sync-crontab.sh,
+#           tests/runner-conf-host-witness.sh) and a SIXTH still has to argue
+#           for itself. Disabling a 5-hit code buys nothing and gives up that.
+#
+#   SC2181  "check exit code directly, not with $?" -- 7 hits. This is the
+#           exit-0-no-op shape in miniature, in a repository whose recorded
+#           failure mode IS the exit-0 no-op. It stays loud.
+#
+# NOT disabled and NOT forgiven -- the classes that have actually cost this
+# estate something. This repo dispatches every other project's work as several
+# different unix accounts, so these are not theoretical here:
+#   SC2164  cd without || exit      -- bin/overnight-dev.sh and
+#                                      bin/scheduler-dev-cycle.sh run
+#                                      `git worktree remove --force` on the
+#                                      line after a cd. All 3 hits fixed in
+#                                      the change that added this file.
+#   SC2115  rm -rf "$var/"          -- an empty var makes that `rm -rf /`.
+#                                      Zero hits today; keep it that way.
+#   SC2086  unquoted expansion      -- the classic word-split, and the paths
+#                                      here are crontab lines and account
+#                                      names.
+#   SC1087  $arr[i] without braces  -- 1 hit, the tree's only error-severity
+#                                      finding (bin/usage-gate.sh:116).
