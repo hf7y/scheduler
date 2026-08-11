@@ -20,7 +20,7 @@ VERB_CAN_SUMMON=0
 
 # Where the legacy implementation lives, for subcommands that exec it. Read
 # from ONE place; never retyped per subcommand.
-LEGACY_ROOT="${DOSE_LEGACY_ROOT:-/home/zach/Documents/Projects/scheduler}"
+LEGACY_ROOT="${DOSE_LEGACY_ROOT:-$HOME/Documents/Projects/scheduler}"
 
 verb_subcommands() {
   printf '%s\n' \
