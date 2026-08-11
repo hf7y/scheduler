@@ -336,7 +336,11 @@ Commit each finished change with a clear message. Then append a section for THIS
   fi
 
   AFTER_SHA="$(git rev-parse HEAD)"
-  cd "$SCHED_REPO"
+  # cwd is $WORKTREE here, and the VERY NEXT LINE is a --force worktree
+  # removal. An unguarded cd (SC2164) means that runs from inside the worktree
+  # it is removing, discarding whatever the cycle just wrote. Refuse instead;
+  # the EXIT trap does the same cleanup, from a directory it checked.
+  cd "$SCHED_REPO" || { echo "cannot cd back to $SCHED_REPO -- refusing to run 'git worktree remove --force' from inside the worktree"; exit 1; }
   git worktree remove --force "$WORKTREE" 2>/dev/null || true
 
   CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
