@@ -298,10 +298,75 @@ fi
 # identically to the library for the same inputs. If you move or rename the
 # markers, that witness fails loud rather than silently testing nothing.
 # >>> paced conf resolution
+# ###########################################################################
+# HOST MODE READS THE ROSTER, NOT A CHECKOUT
+# ###########################################################################
+#
+# The last thing tying dispatch to a clone is not code, it is CONFIG: the
+# participants list. Everything else the dispatch path needs has been carried
+# onto `bashified` and travels in the verb build, but PACED_CONF resolves to
+# $REPO_ROOT/schedule/_paced.<host>.conf -- a file that only exists inside a
+# checkout, with a hardcoded /home/zach fallback below it (the same shape as
+# hf7y/scheduler#99).
+#
+# Zach, 2026-08-11: "scheduler should not need to exist as a check out on
+# monkey for the verbs to work" -- and the reason it matters is isolation. If
+# the dispatcher runs out of the same clone self-dev scheduler is editing, one
+# bad self-dev run takes down the thing that dispatches every other project.
+#
+# schedule/ROSTER already is the single source of who is live (#79), and
+# lib/dose-common.sh already fetches it from GitHub with no clone. So in host
+# mode the participants are MATERIALISED from the roster into the very same
+# `name|enabled|weight|command` rows this file already parses. The parser, the
+# rotation, the gate and every refusal below are untouched -- only where the
+# rows come from changes.
+#
+# ACCOUNT MODE IS UNCHANGED. It still reads _paced.<host>.conf from its own
+# checkout, so nothing about today's five armed accounts moves until the
+# cutover is a deliberate act.
+roster_rows() {
+  local line p ah rate state acct
+  while IFS= read -r line; do
+    case "$line" in ''|\#*) continue ;; esac
+    IFS='|' read -r p ah rate state <<<"$line"
+    p="$(printf '%s' "$p" | tr -d '[:space:]')"
+    ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+    [ -n "$p" ] || continue
+    [ "${ah##*@}" = "$PACED_HOST" ] || continue
+    acct="${ah%@*}"
+    # enabled is the roster's ONE state field -- the whole point of #79 is that
+    # live/parked cannot disagree with a second file. weight is emitted as 1
+    # because it is inert (#55) and this is a translation, not a revival.
+    case "$state" in
+      live)   printf '%s|1|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+      parked) printf '%s|0|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+    esac
+  done
+}
+
 LEGACY_PACED_CONF="/home/zach/Documents/Projects/scheduler/schedule/_paced.conf"
 PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -n "${PACED_CONF:-}" ]; then
   PACED_CONF_SRC="explicit PACED_CONF"
+elif [ "$PACED_HOST_MODE" = 1 ]; then
+  # Materialise the roster into the rows this file already parses, so nothing
+  # downstream changes. A tempfile rather than a here-doc because every reader
+  # below takes a PATH, and giving them one keeps this a source change instead
+  # of a parser change.
+  #
+  # FAIL CLOSED. fetch_roster separates BLIND (could not look) from GAP (looked,
+  # not there); either way host mode has no participants and must NOT silently
+  # fall through to a checkout's conf -- falling back would resurrect the exact
+  # clone dependency this branch exists to remove, and would do it invisibly,
+  # on the one path where nobody is watching.
+  . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
+    echo "usage-paced-runner: host mode needs lib/dose-common.sh beside this script and it is not there. Refusing." >&2; exit 2; }
+  _roster="$(fetch_roster)" || { echo "usage-paced-runner: host mode could not read schedule/ROSTER. Refusing to dispatch rather than fall back to a checkout." >&2; exit 2; }
+  PACED_CONF="$(mktemp)"; trap 'rm -f "$PACED_CONF"' EXIT
+  printf '%s\n' "$_roster" | roster_rows > "$PACED_CONF"
+  [ -s "$PACED_CONF" ] || { echo "usage-paced-runner: schedule/ROSTER names no project on $PACED_HOST. Refusing -- an empty rotation is indistinguishable from a parse failure." >&2; exit 2; }
+  PACED_CONF_SRC="schedule/ROSTER via gh ($(grep -c . "$PACED_CONF") row(s), no checkout)"
 elif [ -f "$REPO_ROOT/schedule/_paced.$PACED_HOST.conf" ]; then
   PACED_CONF="$REPO_ROOT/schedule/_paced.$PACED_HOST.conf"
   PACED_CONF_SRC="host-scoped for $PACED_HOST"
