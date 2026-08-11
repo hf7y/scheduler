@@ -55,7 +55,24 @@ fi
 STATE_DIR="$HOME/.local/share/$JOB_NAME"
 LOG="$STATE_DIR/run.log"
 LOCK="$STATE_DIR/run.lock"
-WORKTREE="$STATE_DIR/worktree"
+# WHERE THE CYCLE WORKS. A THROWAWAY CLONE since 2026-08-11, a linked git
+# worktree before that -- hf7y/scheduler#49, and Zach on 2026-08-06: "we
+# should not have any more worktrees after tonight." The 8 worktrees that
+# issue surveyed here were removed the same night and the estate was back to
+# 30 five days later, because this script and bin/overnight-dev.sh put one
+# back on every run. Clearing the directories was never the fix.
+#
+# A clone gives the cycle what the worktree gave it -- an isolated tree, the
+# live checkout left alone on main -- and drops the two things it also gave:
+# a registration in $SCHED_REPO/.git/worktrees that outlived the run, and a
+# SHARED ref store, which is the concurrent-writer hazard CLAUDE.md's subagent
+# rules exist for. The cost is one explicit push to publish the branch back,
+# below, in place of a ref update that used to happen implicitly.
+#
+# LEGACY_WORKTREE is the old path, kept ONLY so a registration left by a cycle
+# that ran before this change can still be cleared. Nothing is created there.
+LEGACY_WORKTREE="$STATE_DIR/worktree"
+DEV_CLONE="$STATE_DIR/clone"
 REPORTS_DIR="$HOME/reports/scheduler"
 DATE="$(date +%F)"
 BRANCH="paced/$DATE"
@@ -84,8 +101,8 @@ merge_mode() { [ -f "$MERGE_MODE_FILE" ] && cat "$MERGE_MODE_FILE" || echo "merg
 # ... safe fallback") and the failed-push path ("CRITICAL: could not push
 # main after this cycle"). Both were safe in the moment and both ended the
 # cycle in a state that NOTHING EVER REVISITED. Because the day's branch is
-# created with `git worktree add -b paced/<date> ... main` (below), the next
-# day forks from `main` and the previous day's unmerged tail is orphaned
+# forked from `main` (below -- with a worktree until 2026-08-11, a clone
+# since), the next day forks from `main` too and the previous day's unmerged tail is orphaned
 # permanently -- no mechanism pointed at it again. The prose fallbacks stay
 # (they are still the right immediate move); what changes is that they are
 # now the FIRST half of a retry, not the whole story.
@@ -243,9 +260,16 @@ if [ "${REGISTRY_DEFER_CAPPED:-0}" = "1" ]; then
 fi
 [ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
+# The trap deliberately does NOT remove $DEV_CLONE. Under a worktree, forcing
+# the removal cost nothing: the branch ref lived in the shared .git, so the
+# commits survived. A clone holds the ONLY copy until the publish below
+# succeeds, so a trap that removed it would destroy the work of any cycle
+# killed between its commit and its push. An abandoned clone is a directory
+# under $STATE_DIR -- not a registered worktree, and the next cycle salvages
+# any branch in it before discarding it.
 cleanup() {
   registry_release
-  cd "$SCHED_REPO" 2>/dev/null && git worktree remove --force "$WORKTREE" 2>/dev/null || true
+  cd "$SCHED_REPO" 2>/dev/null && git worktree remove --force "$LEGACY_WORKTREE" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -254,24 +278,50 @@ trap cleanup EXIT
   cd "$SCHED_REPO" || { echo "cannot cd $SCHED_REPO"; exit 1; }
   CRON_BEFORE="$(crontab -l 2>/dev/null | md5sum)"
 
-  git worktree remove --force "$WORKTREE" 2>/dev/null || true
+  # Clears a registration left by a cycle that ran before 2026-08-11. This
+  # creates nothing; it is the un-doing half of hf7y/scheduler#49.
+  git worktree remove --force "$LEGACY_WORKTREE" 2>/dev/null || true
   git worktree prune
 
+  # SALVAGE BEFORE DISCARD. A cycle killed between its commit and its publish
+  # leaves the only copy of that work in the clone below.
+  # reconcile_prior_cycles() recovers branches that reached $SCHED_REPO; this
+  # recovers the ones that never did. Same lesson as that function's header,
+  # one step earlier in the pipe. Pushes that are refused (main is checked out
+  # here; an older branch is behind) are not findings and stay quiet.
+  if [ -d "$DEV_CLONE/.git" ]; then
+    mapfile -t _stranded < <(git -C "$DEV_CLONE" for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null)
+    for _b in ${_stranded[@]+"${_stranded[@]}"}; do
+      [ "$_b" = "main" ] && continue
+      git -C "$DEV_CLONE" push -q "$SCHED_REPO" "$_b:refs/heads/$_b" 2>/dev/null \
+        && echo "salvaged $_b from an interrupted cycle's clone"
+    done
+  fi
+  rm -rf "$DEV_CLONE"
+
   # Recover anything a previous cycle could not merge or push, BEFORE the
-  # branch below is created -- `git worktree add -b ... main` forks from
-  # main, so reconciling first is what stops a new day's branch from
-  # stepping over the previous day's stranded tail. See the function's
-  # header for the incident this was written against.
+  # branch below is created -- a new day's branch forks from main, so
+  # reconciling first is what stops it from stepping over the previous day's
+  # stranded tail. See the function's header for the incident this was
+  # written against.
   reconcile_prior_cycles
 
+  git clone -q "$SCHED_REPO" "$DEV_CLONE" || { echo "clone of $SCHED_REPO failed"; exit 1; }
+
   # Branch paced/<date>: create from main on the day's first cycle, else reuse.
+  # Asked of $SCHED_REPO and not of the clone, so the answer is the same fact
+  # the merge phase below will act on. --no-track: the branch is published by
+  # an explicit refspec push, and an upstream pointing at a local clone would
+  # only be a second, wrong answer to "where does this branch live".
   if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-    git worktree add "$WORKTREE" "$BRANCH" || { echo "worktree add (reuse) failed"; exit 1; }
+    git -C "$DEV_CLONE" checkout -q -b "$BRANCH" --no-track "origin/$BRANCH" \
+      || { echo "checkout (reuse $BRANCH) failed"; exit 1; }
   else
-    git worktree add -b "$BRANCH" "$WORKTREE" main || { echo "worktree add (new) failed"; exit 1; }
+    git -C "$DEV_CLONE" checkout -q -b "$BRANCH" --no-track origin/main \
+      || { echo "checkout (new $BRANCH) failed"; exit 1; }
   fi
 
-  cd "$WORKTREE" || exit 1
+  cd "$DEV_CLONE" || exit 1
   BEFORE_SHA="$(git rev-parse HEAD)"
   echo "base $BEFORE_SHA"
 
@@ -282,7 +332,7 @@ This is the scheduler improving ITSELF, unattended, behind a HUMAN REVIEW GATE, 
 Read .scheduler/FOCUS.md next -- it is this project's scope AND backlog. Pick the NEXT highest-value, LOWEST-RISK improvement you can fully finish AND verify this cycle. This repo is the meta-tool that controls every other project's scheduling, so correctness beats volume.
 
 HARD RULES (infrastructure, not an app):
-  * Commit ONLY in this working directory ($WORKTREE) on branch $BRANCH. Touch nothing outside it.
+  * Commit ONLY in this working directory ($DEV_CLONE) on branch $BRANCH. Touch nothing outside it.
   * NEVER run 'crontab', and NEVER run bin/sync-crontab.sh with --apply. Previewing (no --apply) is fine.
   * NEVER edit installed wrappers under ~/.local/bin, or any file outside this repo.
   * Prefer changes verifiable here and now (shellcheck, dry-run, 'env -u SSH_AUTH_SOCK' to simulate cron). If a change can't be safely verified without going live, write it up as a proposal in the report instead of committing it.
@@ -336,8 +386,31 @@ Commit each finished change with a clear message. Then append a section for THIS
   fi
 
   AFTER_SHA="$(git rev-parse HEAD)"
-  cd "$SCHED_REPO"
-  git worktree remove --force "$WORKTREE" 2>/dev/null || true
+  # cwd is $DEV_CLONE here, and what follows removes it. An unguarded cd
+  # (SC2164) means that runs from inside the directory being deleted,
+  # discarding whatever the cycle just wrote. Refuse instead.
+  cd "$SCHED_REPO" || { echo "cannot cd back to $SCHED_REPO -- refusing to delete the clone from inside it"; exit 1; }
+
+  # PUBLISH. Under a worktree this step did not exist: the branch lived in
+  # $SCHED_REPO's own ref store, so committing in the worktree moved
+  # refs/heads/$BRANCH and everything below saw it. A clone has its own ref
+  # store, so the branch is pushed back before the merge phase reads it.
+  #
+  # A failed publish is the one place this design can lose work the old one
+  # could not, so it is loud and the clone is NOT deleted: the commits are
+  # still in it, the message says how to get them, and the salvage pass at the
+  # top of the next cycle does it without being asked.
+  if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
+    if git -C "$DEV_CLONE" push -q "$SCHED_REPO" "$BRANCH:refs/heads/$BRANCH"; then
+      echo "published $BRANCH into $SCHED_REPO"
+      rm -rf "$DEV_CLONE"
+    else
+      echo "CRITICAL: this cycle committed on $BRANCH and could NOT publish it into $SCHED_REPO. The commits exist only in $DEV_CLONE, which is deliberately left in place. Recover with: git -C $SCHED_REPO fetch $DEV_CLONE $BRANCH:$BRANCH"
+      timeout 5 notify-send -u critical "$JOB_NAME" "self-dev cycle could not publish $BRANCH -- commits are in $DEV_CLONE, see $LOG" 2>/dev/null || true
+    fi
+  else
+    rm -rf "$DEV_CLONE"
+  fi
 
   CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
   if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then

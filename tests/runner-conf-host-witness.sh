@@ -91,9 +91,9 @@ case "$RUNNER_ENV" in *"PACED_MAX_PER_TICK=1"*) ok "dexter per-tick cap is 1" ;;
 case "$RUNNER_ENV" in *"USAGE_CEILING"*) bad "USAGE_CEILING baked onto dexter's cron line -- belongs in _usage.dexter.conf" ;; *) ok "no USAGE_CEILING on the cron line" ;; esac
 [ -z "$SWEEP_TICK_CRON" ] && ok "dexter has no sweep tick (matches its actual crontab)" || bad "dexter would get a sweep tick it never ran"
 
-echo "case 6 -- mandark OPTS OUT of the runner tick (self-dev has left it)"
-# HISTORY, because this assertion has now been wrong twice and each time it
-# was the TEST that was stale, not the tree:
+echo "case 6 -- mandark OPTS OUT of BOTH ticks, each by its OWN host conf"
+# HISTORY, because this assertion has now been wrong three times and every
+# time it was the TEST that was stale, not the tree:
 #   originally  it asserted mandark ran */5, which is what _runner.conf shipped
 #               when this witness was written.
 #   2026-08-02  the shipped cadence became `0 */6` (THE FLOOR's pacing
@@ -103,17 +103,61 @@ echo "case 6 -- mandark OPTS OUT of the runner tick (self-dev has left it)"
 #               deliberately, via _runner.mandark.conf blanking RUNNER_CRON --
 #               Zach: "delete it via dog fooding if possible". The red then
 #               changed from '0 */6 * * *' to '', i.e. it began failing ABOUT
-#               the intended change.
-# A test asserting a cadence this host no longer has is not protecting
-# anything; it is a red that misdescribes the tree. What is worth protecting
-# is that the OPT-OUT resolves -- because if _runner.mandark.conf is ever
-# dropped or misspelled, mandark silently starts dispatching again against a
-# quota monkey is now spending.
+#               the intended change. The line was rewritten to assert the
+#               opt-out, and a SECOND assertion was added alongside it: that
+#               the opt-out was runner-ONLY, mandark still keeping its */15
+#               sweep tick.
+#   2026-08-05  and two days later schedule/_sweep.mandark.conf landed (commit
+#               421cca6, Zach-directed: "retire the scheduler sweep cron line
+#               so the clone can go"), blanking SWEEP_TICK_CRON at the sweep
+#               tier's OWN file. "mandark keeps its sweep tick" became false by
+#               decision. The suite has been red on main ever since, which is
+#               hf7y/scheduler#58.
+#
+# WHICH OF #58's TWO POSSIBILITIES THIS WAS -- the premise expired; the code
+# did not regress. Told apart by a COUNTERFACTUAL rather than by reading the
+# confs: hold the real _runner.conf + _runner.mandark.conf + _sweep.conf and
+# withhold ONLY _sweep.mandark.conf, and mandark's sweep tick comes straight
+# back at the shared cadence. The runner opt-out reaches nothing outside its
+# own tier -- sync-crontab.sh re-initialises the SWEEP_TICK_* trio and captures
+# its own shared-value baseline after the runner block has already finished.
+# That counterfactual is asserted below rather than described, and case 10
+# asserts the same property host-independently against the real script.
+#
+# So this case now asserts what is still true and still worth protecting: both
+# ticks are off on mandark, and EACH IS ATTRIBUTABLE TO ITS OWN CONF. The
+# attribution is the falsifiable part and the reason this is not a tautology --
+# "SWEEP_TICK_CRON is blank" alone would merely restate the file. It fails if
+# _runner.mandark.conf is dropped or misspelled (mandark silently dispatches
+# again against a quota monkey is now spending), it fails if
+# _sweep.mandark.conf is dropped (the sweep tick returns unannounced), and it
+# fails if the sweep stays off with that file withheld -- which is exactly the
+# tier leak #58's first branch describes.
 resolve "$ROOT/schedule" mandark
 [ -z "$RUNNER_CRON" ] && ok "mandark opts out of the runner tick (RUNNER_CRON blank)" \
   || bad "mandark would dispatch again -- RUNNER_CRON resolved to '$RUNNER_CRON'; is _runner.mandark.conf still there?"
-[ -n "$SWEEP_TICK_CRON" ] && ok "mandark keeps its sweep tick (only agent dispatch left)" \
-  || bad "mandark lost its sweep tick too -- the opt-out was meant to be runner-only"
+[ -z "$SWEEP_TICK_CRON" ] && ok "mandark opts out of the sweep tick too (retired 2026-08-05)" \
+  || bad "mandark's sweep tick is back -- SWEEP_TICK_CRON resolved to '$SWEEP_TICK_CRON'; is _sweep.mandark.conf still there?"
+
+# ATTRIBUTION. Same real confs, same host, that ONE file withheld. Symlinks, so
+# this reads whatever is committed today rather than a copy that goes stale.
+ATTR="$TMP/attr"; mkdir -p "$ATTR"
+for f in _runner.conf _runner.mandark.conf _sweep.conf; do ln -sf "$ROOT/schedule/$f" "$ATTR/$f"; done
+# The shared cadence is read from _sweep.conf itself, not hardcoded here: a
+# literal '*/15' is precisely the assertion that rotted twice above. Requiring
+# it non-empty first keeps the comparison from passing vacuously if _sweep.conf
+# ever stops arming a sweep at all.
+resolve "$ATTR" nosuchhost; SHARED_SWEEP="$SWEEP_TICK_CRON"
+resolve "$ATTR" mandark
+[ -z "$RUNNER_CRON" ] && ok "withholding _sweep.mandark.conf leaves the RUNNER opt-out standing" \
+  || bad "the runner opt-out vanished when a SWEEP file was withheld -- the tiers are coupled"
+if [ -z "$SHARED_SWEEP" ]; then
+  bad "_sweep.conf arms no sweep tick at all, so this case can prove nothing about mandark's"
+elif [ "$SWEEP_TICK_CRON" = "$SHARED_SWEEP" ]; then
+  ok "and the sweep tick returns to _sweep.conf's shared '$SHARED_SWEEP' -- the opt-out is _sweep.mandark.conf's own, not a leak from the runner tier"
+else
+  bad "withholding _sweep.mandark.conf did NOT restore the shared sweep tick (got '$SWEEP_TICK_CRON', shared is '$SHARED_SWEEP') -- the runner opt-out is leaking into the sweep tier"
+fi
 
 echo "case 7 -- the real script agrees (not just this witness's local model)"
 # SYNC_HOST is the script's own override hook; preview mode writes nothing.
@@ -225,6 +269,60 @@ case "$out" in
   *"note [runner]"*"opts OUT"*) ok "9d: runner tier honours the same opt-out rule" ;;
   *)                            bad "9d: runner opt-out neither errored nor announced: ${out:-<nothing>}" ;;
 esac
+
+echo "case 10 -- an opt-out in ONE tier leaves the OTHER tier armed"
+# ADDED 2026-08-11 with hf7y/scheduler#58. This is the durable half of what
+# case 6 used to assert. Case 6 protected "the runner opt-out is runner-only"
+# by pointing at mandark, a real host -- so the assertion lived or died on a
+# POLICY DECISION about one machine, and on 2026-08-05 that decision changed
+# and took the assertion with it. The property itself never changed and is
+# worth keeping: it is about the resolution code, not about any host.
+#
+# So it is re-asserted here on synthetic hosts nobody administers, where no
+# future retirement can expire it, and against the REAL script rather than
+# this file's local resolve() -- cases 8-9's whole lesson being that the local
+# model agreed with the script while the script was refusing dexter's opt-out.
+#
+# WHY THE EXISTING CASES DID NOT COVER THIS: 9d exercises a runner-tier
+# opt-out, but by then _sweep.charlie.conf has been blanking the sweep tier
+# since 9c, so a leak from runner into sweep would be invisible -- the sweep
+# tick is already gone for its own reasons. `delta` below has exactly one host
+# file at a time, which is the only arrangement that can see a leak.
+#
+# The FAKE checkout, its shared _runner.conf and _sweep.conf, and run_fake are
+# case 9's; `delta` has no host file there, so it starts with both ticks armed.
+run_fake_out() { SYNC_HOST="$1" timeout 60 bash "$FAKE/bin/sync-crontab.sh" 2>/dev/null; }
+
+out="$(run_fake_out delta)"
+case "$out" in *":RUNNER"*) ok "10 baseline: delta starts with the runner tick armed" ;;
+               *)           bad "10 baseline: delta has no runner tick to lose; got: ${out:-<nothing>}" ;; esac
+case "$out" in *":SWEEP"*)  ok "10 baseline: delta starts with the sweep tick armed" ;;
+               *)           bad "10 baseline: delta has no sweep tick to lose; got: ${out:-<nothing>}" ;; esac
+
+# 10a: runner opts out, NO sweep host file -> the sweep tick must SURVIVE.
+printf 'RUNNER_CRON=""\n' > "$FAKE/schedule/_runner.delta.conf"
+out="$(run_fake_out delta)"; err="$(run_fake delta)"
+case "$err" in *"note [runner]"*"opts OUT"*) ok "10a: the runner opt-out is taken" ;;
+               *)                            bad "10a: runner opt-out not announced: ${err:-<nothing>}" ;; esac
+case "$out" in *":RUNNER"*) bad "10a: runner tick emitted despite the opt-out" ;;
+               *)           ok "10a: the runner tick is gone" ;; esac
+case "$out" in *":SWEEP"*)  ok "10a: and the SWEEP tick survives it -- the tiers are independent" ;;
+               *)           bad "10a: opting out of the RUNNER tick also removed the SWEEP tick -- the opt-out is leaking tiers" ;; esac
+case "$err" in *"ERROR [sweep]"*) bad "10a: the sweep tier errored on a conf that never changed" ;;
+               *)                 ok "10a: and the sweep tier reports no error of its own" ;; esac
+
+# 10b: the mirror, so neither tier can quietly become the one that leaks.
+rm -f "$FAKE/schedule/_runner.delta.conf"
+printf 'SWEEP_TICK_CRON=""\n' > "$FAKE/schedule/_sweep.delta.conf"
+out="$(run_fake_out delta)"; err="$(run_fake delta)"
+case "$err" in *"note [sweep]"*"opts OUT"*) ok "10b: the sweep opt-out is taken" ;;
+               *)                           bad "10b: sweep opt-out not announced: ${err:-<nothing>}" ;; esac
+case "$out" in *":SWEEP"*)  bad "10b: sweep tick emitted despite the opt-out" ;;
+               *)           ok "10b: the sweep tick is gone" ;; esac
+case "$out" in *":RUNNER"*) ok "10b: and the RUNNER tick survives it -- independent in both directions" ;;
+               *)           bad "10b: opting out of the SWEEP tick also removed the RUNNER tick -- the opt-out is leaking tiers" ;; esac
+case "$err" in *"ERROR [runner]"*) bad "10b: the runner tier errored on a conf that never changed" ;;
+               *)                  ok "10b: and the runner tier reports no error of its own" ;; esac
 
 echo
 echo "runner-conf-host-witness: $PASS passed, $FAIL failed"

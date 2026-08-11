@@ -14,8 +14,9 @@ cron jobs.
    `bin/collect-feedback.sh .scheduler/QUESTIONS.md --consume` — it
    surfaces the user's inline `> ` replies (QUESTIONS.md is append-only by
    convention, so nothing else reads them back). For each reply: act on it,
-   then delete that question's whole entry (`--consume` only strips the
-   reply line itself). This gap — a written reply nothing ever consumed —
+   then delete that question's whole entry (`--consume` does not edit the
+   file at all — it records the reply as read in this account's state dir,
+   so the entry stays exactly where it is). This gap — a written reply nothing ever consumed —
    is exactly what left a stale, already-resolved question sitting in
    wtul's own QUESTIONS.md until a human flagged it by hand; don't let the
    same thing happen here.
