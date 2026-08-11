@@ -198,9 +198,46 @@ GH_APP_CONF="${SELFDEV_APP_CONF:-$HOME/.config/selfdev/gh-app.conf}"
 if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_APP_CONF" ] && [ -x "$GH_APP_HELPER" ]; then
   if _gh_tok="$(SELFDEV_APP_CONF="$GH_APP_CONF" "$GH_APP_HELPER" --token 2>/dev/null)" \
      && [ -n "$_gh_tok" ]; then
-    GH_TOKEN="$_gh_tok"
-    export GH_TOKEN
-    echo "scheduler-run: minted a GitHub App installation token for $(id -un)" >&2
+    # ------------------------------------------------------------------
+    # A MINTED TOKEN IS NOT A USEFUL TOKEN, and the first version of this
+    # block confused the two. It checked only that the helper printed
+    # something -- which is "it produced output", not "it works", and that
+    # is the exact conflation this whole day was spent removing elsewhere.
+    #
+    # Found within an hour of arming, by the account it broke, and filed as
+    # hf7y/realisateur#175. The App `unattended-monkey` is installed on TEN
+    # repositories -- the ten product projects -- and hf7y/realisateur and
+    # hf7y/scheduler are NOT among them:
+    #
+    #   $ gh api /installation/repositories -q '.repositories[].full_name'
+    #   chezz baudin gardien bibliothecaire crt ecosim groc-mangr
+    #   nine-speakers sequestria vim-arcade
+    #
+    # So on realisateur@monkey and scheduler@monkey the mint SUCCEEDS and
+    # hands back a token that 404s on the account's own repository. Exporting
+    # it OVERRODE a working stored credential and made every `gh` call fail,
+    # until the agent unset it by hand. The mint was a regression for exactly
+    # the two accounts added the same day.
+    #
+    # scheduler being PUBLIC is what made it hard to see: public-repo reads
+    # do not need installation scope, so scheduler@monkey's reads 200 by
+    # accident while its writes would not. realisateur is private and 404s
+    # outright. One symptom, two different lies.
+    #
+    # So: probe the account's OWN repo before exporting. Fail-open to the
+    # stored credential, loudly. This cannot fix the scope -- widening the
+    # installation is a browser click only Zach can make (#175) -- but it
+    # stops the mint from being worse than not minting.
+    # ------------------------------------------------------------------
+    _gh_own="${GH_OWN_REPO:-hf7y/$PROJECT}"
+    if GH_TOKEN="$_gh_tok" gh api "repos/$_gh_own" --jq .full_name >/dev/null 2>&1; then
+      GH_TOKEN="$_gh_tok"
+      export GH_TOKEN
+      echo "scheduler-run: minted a GitHub App installation token for $(id -un) (verified against $_gh_own)" >&2
+    else
+      echo "scheduler-run: WARNING -- minted an App token for $(id -un), but it cannot see $_gh_own, so it was NOT exported. The App installation does not cover that repository; widening it is a browser click (hf7y/realisateur#175). Falling back to this account's stored gh auth, which is what the account was using before." >&2
+    fi
+    unset _gh_own
   else
     echo "scheduler-run: WARNING -- $GH_APP_CONF exists but '$GH_APP_HELPER --token' produced nothing. Falling back to this account's stored gh auth, which is the credential shape that stranded ecosim's work for two days. Check it before trusting this run's PR steps." >&2
   fi
