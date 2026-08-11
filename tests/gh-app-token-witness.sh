@@ -79,7 +79,16 @@ CONF="$TMP/gh-app.conf"
 mkhelper() { printf '%s\n' '#!/usr/bin/env bash' "$@" > "$HELPER"; chmod +x "$HELPER"; }
 
 run() {  # echoes what the engine saw in GH_TOKEN; stderr lands in $TMP/err
+  # unset, not just left un-exported: this witness's OWN dispatcher (scheduler-run,
+  # 9735193) mints and exports GH_TOKEN into its own process before invoking
+  # anything else, so any real self-dev run of this suite -- including
+  # scheduler's own, armed 2026-08-11 (5380468) -- inherits a live token here.
+  # Cases 1-3 assert what happens when the account had NO prior token; an
+  # inherited one would silently take that branch instead (case 4's own
+  # behaviour), making the assertion pass or fail by environment accident
+  # rather than by what scheduler-run actually does.
   ( cd "$FX" \
+    && unset GH_TOKEN \
     && SELFDEV_APP_CONF="$CONF" SELFDEV_GH_APP_SH="$HELPER" \
        bash bin/scheduler-run proj batch 2>"$TMP/err" )
 }
