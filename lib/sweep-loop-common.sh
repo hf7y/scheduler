@@ -615,21 +615,24 @@ $PROMPT"
 
   # Same idea, but for the cross-project BLOCKERS.md (human-owned action
   # items, e.g. "go flip this setting in a browser"). --section restricts
-  # to this project's own "## $PROJECT_KEY" heading; --consume removes
-  # the matched %%TAG lines from BLOCKERS.md once collected (that file is
-  # hand-maintained and persistent, unlike LATEST.md, so it needs its own
-  # "mark as read" instead of relying on the next report overwriting it).
+  # to this project's own "## $PROJECT_KEY" heading; --consume records the
+  # matched entries as read (that file is hand-maintained and persistent,
+  # unlike LATEST.md, so it needs its own "mark as read" instead of relying
+  # on the next report overwriting it).
   BLOCKERS_FILE="$LIB_DIR/../BLOCKERS.md"
   if [ -f "$BLOCKERS_FILE" ]; then
-    # --consume only if this account can actually write the file back --
-    # a cross-account run (e.g. svc-vaporwave reading zach-owned
-    # BLOCKERS.md) that tried --consume anyway hung indefinitely on the
-    # resulting mv instead of failing fast (real incident 2026-07-20,
-    # root cause of the mv not fully diagnosed -- this guard sidesteps it
-    # rather than relying on understanding exactly why it hung).
-    CONSUME_FLAG=""
-    [ -w "$BLOCKERS_FILE" ] && CONSUME_FLAG="--consume"
-    BLOCKERS_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$BLOCKERS_FILE" --section "$PROJECT_KEY" $CONSUME_FLAG 2>/dev/null || true)"
+    # ALWAYS --consume, since 2026-08-11 (#61/#70). This call used to be
+    # gated on `[ -w "$BLOCKERS_FILE" ]`, because --consume rewrote the file
+    # in place and a cross-account run (svc-vaporwave reading zach-owned
+    # BLOCKERS.md) hung indefinitely on the resulting mv (2026-07-20).
+    # --consume no longer touches the file: the record lives in this
+    # account's own state dir. Two bugs die with the gate --
+    #   1. this line is the one that dirtied the tracked BLOCKERS.md that
+    #      bin/usage-paced-runner.sh's own pull gate then refuses to pull
+    #      past, freezing the host's deploy on its FIRST consumed tag;
+    #   2. a reader without write access silently never consumed at all, so
+    #      it was re-handed the same feedback on every single run.
+    BLOCKERS_BLOCK="$("$LIB_DIR/../bin/collect-feedback.sh" "$BLOCKERS_FILE" --section "$PROJECT_KEY" --consume 2>/dev/null || true)"
     if [ -n "$BLOCKERS_BLOCK" ]; then
       echo "found inline feedback tags in $BLOCKERS_FILE under ## $PROJECT_KEY -- prepending to prompt"
       FEEDBACK_BLOCK="${FEEDBACK_BLOCK:-}${FEEDBACK_BLOCK:+$'\n\n'}$BLOCKERS_BLOCK"

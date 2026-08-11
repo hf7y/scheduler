@@ -1,0 +1,67 @@
+# tests.yml -- run tests/run-all.sh on every pull request into main and on
+# every push to main.
+#
+# WHY THIS EXISTS. Until now this repository had no .github/workflows/ at all.
+# tests/run-all.sh has existed since 2026-07-28 and already auto-discovers
+# every tests/*-witness.sh, but nothing invoked it except a person who
+# remembered to. That is the same defect run-all.sh itself was written to
+# retire, one level up: run-all.sh fixed "three witnesses existed and NOTHING
+# ran them"; this fixes "one runner existed and nothing ran IT".
+#
+# The cost of the gap is on the record. tests/runner-conf-host-witness.sh went
+# red on main on 2026-08-05 and stayed red until 2026-08-11 -- six days, and
+# it was filed (hf7y/scheduler#58) only after being mistaken for expected
+# output. A suite whose failures nobody is shown is documentation.
+#
+# WHAT IT DOES NOT DO YET: gate. This repository has no branch protection
+# (`gh api repos/hf7y/scheduler/branches/main/protection` -> 404, and it is
+# why `gh pr merge --auto` is a silent no-op here), so this is a red light,
+# not a locked door. Making `suites` a REQUIRED check is hf7y/scheduler#87,
+# and it is deliberately ordered after this: requiring a check on a main that
+# is already red wedges the repository against its own guard. The job is named
+# `suites` -- matching hf7y/realisateur's workflow -- so that #87 has a stable
+# name to require rather than one invented at the time.
+
+name: tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ONE command, and deliberately no per-witness loop here. run-all.sh is
+      # already that loop -- it collects failures rather than stopping at the
+      # first, so a single red witness cannot hide the twenty-three after it,
+      # and it exits 1 on "no witnesses found" so an empty glob is a failure
+      # rather than a green run that tested nothing. Re-implementing either
+      # rule in YAML would give this repository two definitions of what a
+      # failing suite is, and the one in the workflow is the one nobody runs
+      # locally.
+      #
+      # Its non-zero exit is what fails this job: a `run:` block executes under
+      # `bash -e`, so exit 1 from run-all.sh ends the step red. Verified before
+      # merge by breaking a witness locally and confirming run-all.sh exits 1
+      # (it does; that is exactly how #58 was reproduced).
+      #
+      # NOTHING IS INSTALLED ABOVE, and that is a finding rather than an
+      # omission. The suite is hermetic: every witness builds its fixtures in
+      # mktemp dirs, the three that touch `gh` stub it, no witness invokes
+      # `crontab`, `shellcheck` appears only as source/disable directives, and
+      # sync-crontab.sh is only ever run in preview mode, which reads and
+      # writes no crontab. Checked by running the whole suite under a scrubbed
+      # HOME (no ~/.gitconfig, so no user identity and no init.defaultBranch,
+      # which is a runner's condition): the result was identical to a normal
+      # run. If that stops being true, the fix is an install step here, not a
+      # witness taught to skip.
+      - name: Run every witness in tests/
+        run: bash tests/run-all.sh

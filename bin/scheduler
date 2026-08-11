@@ -375,8 +375,9 @@ WHERE SCOPE AND QUESTIONS LIVE, AND HOW A REPLY ROUND-TRIPS
   To answer a question: open it (`scheduler questions <project>`), write
   a `> ` reply directly under the entry, save. The next run of that
   project is expected to call bin/collect-feedback.sh --consume against
-  its own QUESTIONS.md, which reads your `> ` reply and deletes that
-  question's entry -- if a project's own nightly-batch command skips that
+  its own QUESTIONS.md, which reads your `> ` reply and records it as read
+  in that account's state dir (the FILE is never rewritten -- deleting the
+  answered entry is the run's job) -- if a project's own nightly-batch command skips that
   step, your reply sits there unread indefinitely (a real, previously-hit
   bug class; FOCUS.md's backlog tracks which projects still need this
   audited).
@@ -763,18 +764,11 @@ require_repo_path() {  # $1 = project, $2 = the resolved repo path
   return 1
 }
 
-resolve_focus_path() {
-  local proj="$1"
-  local repo_path subdir
-  repo_path="$(conf_field "$proj" PROJECT_REPO_PATH)"
-  if [ -z "$repo_path" ]; then
-    echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
-    return 1
-  fi
-  require_repo_path "$proj" "$repo_path" || return 1
-  subdir="$(conf_field "$proj" SCHEDULER_SUBDIR)"
-  echo "$repo_path/${subdir:-.claude}/FOCUS.md"
-}
+# resolve_focus_path() lived here and was DELETED 2026-08-11 (hf7y/scheduler#25
+# item 1). PR #22 moved the idea front door to GitHub issues and deleted the
+# local FOCUS.md writer that was its only caller, orphaning it; it then sat for
+# a week resolving a path nothing wrote. require_repo_path() below is NOT
+# orphaned by this -- resolve_questions_path() still calls it.
 
 resolve_questions_path() {
   local proj="$1"
@@ -917,8 +911,18 @@ ensure_gh_labels() {
   gh label create idea --repo "$slug" --color 1D76DB \
     --description "Filed via scheduler -i / notify-senechal; this project's next run triages it" >/dev/null 2>&1 || true
   if [ -n "$from_label" ]; then
+    # 100 CHARACTERS, NOT 102. GitHub rejects a label description over 100 with
+    # HTTP 422; the description here was 102, so this call ALWAYS failed, `|| true`
+    # swallowed it, and the `gh issue create` below then failed with
+    # "could not add label: 'from:<p>' not found" and recorded NOTHING.
+    #
+    # That made notify-senechal -- the front door every project is required to
+    # use before changing machine-wide config -- unusable from any checkout,
+    # from the moment #69 merged (2026-08-11) until this fix. Found by trying
+    # to file a real note through it. Length asserted in
+    # tests/from-label-witness.sh so prose is not what keeps it under.
     gh label create "$from_label" --repo "$slug" --color 5319E7 \
-      --description "Calling project recorded by scheduler -i, so an idea is triage-able by source without reading the body" >/dev/null 2>&1 || true
+      --description "Calling project recorded by scheduler -i; lets an idea be triaged by source" >/dev/null 2>&1 || true
   fi
 }
 
@@ -1625,6 +1629,35 @@ cmd_commit_file() {
   # --porcelain` catches both untracked and modified.
   if [ -z "$(git -C "$repo" status --porcelain -- "$path" 2>/dev/null)" ]; then
     return 0
+  fi
+  # Refuse a file this path cannot safely adopt, rather than committing it
+  # under the human's name (2026-07-27, from realisateur /ideate's proposal
+  # 1: the 0e9b6a6 live exhibit -- a `~:30` tick caught BLOCKERS.md mid
+  # vimdiff-merge and committed two unresolved conflict blocks plus a
+  # verbatim duplicate "## realisateur" section under Zach's name; a dirty
+  # tree the human returns to is strictly better than a corrupt commit).
+  # Both checks are cheap and offline -- a literal conflict marker at line
+  # start, and a duplicate "## <heading>" (fence-skipped, same convention
+  # bin/blockers-freshness-check.sh already uses so the two can't drift
+  # about what "outside a fenced block" means). Runs before EITHER commit
+  # path below (focus-commit for multi-writer files, or the bare path for
+  # everything else) so it guards whichever one a given file takes.
+  if [ -f "$path" ]; then
+    if grep -qE '^(<<<<<<<( |$)|=======$|>>>>>>>( |$))' "$path" 2>/dev/null; then
+      echo "REFUSED: $path contains an unresolved conflict marker (<<<<<<<, =======, or >>>>>>> at line start) -- left as an uncommitted edit, resolve by hand" >&2
+      return 1
+    fi
+    local dup_headings
+    dup_headings="$(awk '
+      BEGIN{fence=0}
+      /^[[:space:]]*(```|~~~)/{fence=!fence; next}
+      !fence && /^##[[:space:]]+.+$/{print}
+    ' "$path" | sort | uniq -d)"
+    if [ -n "$dup_headings" ]; then
+      echo "REFUSED: $path has a duplicate heading -- left as an uncommitted edit, resolve by hand:" >&2
+      printf '  %s\n' "$dup_headings" >&2
+      return 1
+    fi
   fi
   # --- multi-writer files go through the atomic guard, not bare git ---------
   # FOCUS.md / QUESTIONS.md / BLOCKERS.md are written by independent systems
