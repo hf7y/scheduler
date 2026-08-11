@@ -375,8 +375,9 @@ WHERE SCOPE AND QUESTIONS LIVE, AND HOW A REPLY ROUND-TRIPS
   To answer a question: open it (`scheduler questions <project>`), write
   a `> ` reply directly under the entry, save. The next run of that
   project is expected to call bin/collect-feedback.sh --consume against
-  its own QUESTIONS.md, which reads your `> ` reply and deletes that
-  question's entry -- if a project's own nightly-batch command skips that
+  its own QUESTIONS.md, which reads your `> ` reply and records it as read
+  in that account's state dir (the FILE is never rewritten -- deleting the
+  answered entry is the run's job) -- if a project's own nightly-batch command skips that
   step, your reply sits there unread indefinitely (a real, previously-hit
   bug class; FOCUS.md's backlog tracks which projects still need this
   audited).

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # collect-feedback.sh <file> [--section "## Heading text"] [--consume]
+#                     <file> --list-consumed
 #
 # Scans <file> for inline %%TAG comment lines AND plain `> ` blockquote
 # replies (see ../docs/feedback-tags.md for the format) and prints a
@@ -37,17 +38,83 @@
 #                     BLOCKERS.md organized with a "## <project>" heading
 #                     per project) be scanned separately per project, each
 #                     run only picking up its own section.
-# `--consume` MARKS replies, it does not delete them (changed 2026-07-28,
-# Zach-directed, after the defect below). A matched `> reply` is rewritten
-# in place as `>> reply` under a dated `>> _[consumed ...]_` header. It
-# stays visible, attributed, and in position; it is simply no longer
-# collectable, so it can never be handed to a second run as if fresh.
-# `>>` lines are skipped outright, which makes --consume idempotent.
 #
-# Why: --consume stripped the `> ` marker as a SIDE EFFECT of collecting,
-# before the calling run had decided whether to act. wtul run 28
-# (2026-07-27, wtul repo 0baabb6) consumed 28 of Zach's replies, judged
-# them "mostly not actionable", and deleted ZERO entries. The answers
+# ---------------------------------------------------------------------------
+# WHERE THE CONSUMPTION RECORD LIVES, AND WHY IT MOVED (2026-08-11, #61/#70)
+#
+# --consume USED to rewrite <file> in place: `%%TAG` lines were deleted and
+# a matched `> reply` was demoted to `>> reply` under a dated
+# `>> _[consumed ...]_` header. That worked, and it deadlocked the fleet.
+#
+# The file it rewrites on a dispatcher host is the repo's own TRACKED
+# BLOCKERS.md. bin/usage-paced-runner.sh gates its pull-before-dispatch on
+# `git status --porcelain --untracked-files=no`. So the job dirtied the very
+# file its own deploy gate refuses to pull past: the FIRST consumed tag on a
+# host froze that host at whatever commit it happened to be at, permanently,
+# with one `PULL skip` line in a log nobody reads as the only symptom.
+# Measured cost: PR #59 fixed vim-arcade's brief and merged 2026-08-06T20:02Z.
+# It never ran. Five days later that clone was still pinned behind origin/main
+# for exactly this reason, and crt was wedged the same way (#61 comment,
+# 2026-08-06: two of six monkey clones, and it is every account that has ever
+# consumed a tag, which is every account the feedback channel reaches).
+#
+# The category error was putting a fact about THIS HOST'S RUN HISTORY into the
+# PROJECT'S CONTENT. "A run on this machine has already been handed this
+# entry" is not something the repo knows or should carry; it is per-host
+# runtime state, like the rotation pointer and the verdict files. So it now
+# lives beside them:
+#
+#   ~/.local/share/scheduler-glance/consumed-entries.tsv
+#   (same dir, same SCHEDULER_RECEIPT_DIR override, as consumed-receipts.log)
+#
+# one tab-separated line per consumed entry:
+#   <consumed-at>  <file>  <section>  <anchor>  <kind>  <text>
+# and an entry whose (file, section, anchor, kind, text) is already in the
+# ledger is never collected again. **<file> IS NEVER MODIFIED.** Consequences,
+# all of them the point:
+#   - the pull gate never sees a dirty tree caused by this script
+#   - a fresh clone is never "dirty on arrival"
+#   - the human's words are not merely preserved, they are not touched
+#   - the %%TAG path stops DELETING (the defect this header used to note as
+#     "still deletes and has the identical defect -- filed in FOCUS.md, not
+#     fixed here"). Nothing is removed from anything any more.
+#   - a reader with no write access to <file> can consume correctly instead of
+#     re-prepending the same feedback on every run forever
+#
+# WHAT WAS LOST, AND WHERE IT WENT. The `>>` demotion was also a human-visible
+# "a run read this" marker in the file. On a dispatcher clone that marker was
+# already write-only -- nothing committed or pushed it, so it never reached
+# the human who wrote the reply; it only ever fed the next run on the same
+# host, which is exactly what the ledger does, and better. For the human, the
+# read side is now a flag rather than a file edit:
+#
+#   collect-feedback.sh <file> --list-consumed
+#
+# MIGRATION -- existing in-repo `>>` markers (2026-08-11). Two halves:
+#   1. `>>` lines are STILL skipped outright, exactly as before. A host
+#      carrying an old in-file marker therefore does not re-prepend feedback
+#      it already acted on. Nothing to do, nothing lost.
+#   2. On a --consume pass, every legacy `>>` block that is not already in the
+#      ledger is SEEDED into it, keyed identically to the `> ` reply it was
+#      made from. This is what makes the live remediation of a wedged clone
+#      safe: after one pass under this code, `git restore BLOCKERS.md` on
+#      vim-arcade/crt discards the dirty diff WITHOUT un-consuming the entries
+#      it recorded -- which, before the seeding, it would have (#75, 2026-08-11:
+#      "git restore destroys a real record").
+# The seeding is one-way by design. To deliberately re-ask something already
+# consumed, edit the words (a changed entry is a new entry, and collects) or
+# delete its line from the ledger.
+#
+# `--consume` MARKS replies, it does not delete them (changed 2026-07-28,
+# Zach-directed, after the defect below) -- and since 2026-08-11 it marks them
+# somewhere that is not the file at all. `>>` lines are skipped outright,
+# which is what made --consume idempotent then and still does now, alongside
+# the ledger.
+#
+# Why the 2026-07-28 change: --consume stripped the `> ` marker as a SIDE
+# EFFECT of collecting, before the calling run had decided whether to act.
+# wtul run 28 (2026-07-27, wtul repo 0baabb6) consumed 28 of Zach's replies,
+# judged them "mostly not actionable", and deleted ZERO entries. The answers
 # survived only as unattributed prose wedged inside still-open questions:
 # invisible to every future --consume (nothing left to collect) and
 # indistinguishable from the question's own body text. A question had
@@ -56,29 +123,30 @@
 # Apps Script URLs plus "build it", a decided either/or.
 #
 # The deletion of an entry is the CALLER's job and always was; this
-# script's job is to report what it read. It no longer destroys evidence
-# on the caller's behalf. NOTE: the %%TAG path above still deletes and
-# has the identical defect -- filed in FOCUS.md, not fixed here.
+# script's job is to report what it read. It does not destroy evidence on
+# the caller's behalf, and no longer edits the caller's file at all.
 #
-#   --consume         after collecting, rewrite <file> removing the
-#                     matched %%TAG lines (headings, blocker descriptions,
-#                     and every other line are left untouched) so they
-#                     aren't re-collected next time. A tag under a
+#   --consume         after collecting, record the matched entries in this
+#                     account's consumption ledger so they are not collected
+#                     again. <file> is NOT modified. An entry under a
 #                     DIFFERENT section (when --section filters it out) is
-#                     left in place either way. Use for a persistent,
+#                     neither collected nor recorded. Use for a persistent,
 #                     hand-maintained file like BLOCKERS.md; don't use on
 #                     a report's LATEST.md -- that file already gets
 #                     overwritten wholesale by the run that acts on it.
+#   --list-consumed   print this account's ledger rows for <file> (the read
+#                     side of the marker that used to be visible in the file
+#                     itself). Exit 1 when there are none.
 #
 # Consumption receipt (added 2026-07-27): every --consume call that
-# actually removes >=1 matched entry appends one line to
+# actually consumes >=1 matched entry appends one line to
 # ~/.local/share/scheduler-glance/consumed-receipts.log (override with
 # SCHEDULER_RECEIPT_DIR) -- timestamp, file, section, count. This exists
 # so "an entry vanished from a QUESTIONS.md/BLOCKERS.md" can later be told
 # apart from "a human hand-deleted an entry nothing ever consumed" --
 # before this, --consume left no trace it had run, so there was no answer
-# key to check a disappearance against. Purely additive: does not change
-# what gets removed or when, only records that removal happened.
+# key to check a disappearance against. It remains the per-CALL summary;
+# consumed-entries.tsv beside it is the per-ENTRY detail.
 #
 # Deliberately generic: works on any text file, not just reports, so the
 # same %%TAG convention can be reused anywhere a human wants to leave an
@@ -89,16 +157,42 @@ set -uo pipefail
 FILE=""
 SECTION=""
 CONSUME=0
+LIST_CONSUMED=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --section) SECTION="${2:-}"; shift 2 ;;
     --consume) CONSUME=1; shift ;;
+    --list-consumed) LIST_CONSUMED=1; shift ;;
     *) FILE="$1"; shift ;;
   esac
 done
 
-[ -n "$FILE" ] || { echo "usage: collect-feedback.sh <file> [--section TEXT] [--consume]" >&2; exit 2; }
+[ -n "$FILE" ] || { echo "usage: collect-feedback.sh <file> [--section TEXT] [--consume] | <file> --list-consumed" >&2; exit 2; }
+
+# ONE definition of where this account's consumption state lives -- the
+# per-call receipt log and the per-entry ledger share a directory and a single
+# override, so there is no second place to retype the path.
+RECEIPT_DIR="${SCHEDULER_RECEIPT_DIR:-$HOME/.local/share/scheduler-glance}"
+LEDGER="$RECEIPT_DIR/consumed-entries.tsv"
+
+# The ledger is keyed on an ABSOLUTE path: callers reach the same file by
+# several spellings (lib/../BLOCKERS.md from the engine, ./BLOCKERS.md by
+# hand), and an unnormalised key would record them as different entries and
+# hand the same feedback over twice.
+FILE_ABS="$(readlink -f "$FILE" 2>/dev/null || true)"
+[ -n "$FILE_ABS" ] || FILE_ABS="$FILE"
+
+if [ "$LIST_CONSUMED" = "1" ]; then
+  [ -f "$LEDGER" ] || exit 1
+  OUT="$(awk -F'\t' -v f="$FILE_ABS" '
+    $2 == f { printf "%s  [%s under %s] %s\n", $1, $5, ($3 == "" ? "(no section)" : $3), $6 }
+  ' "$LEDGER")"
+  [ -n "$OUT" ] || exit 1
+  printf '%s\n' "$OUT"
+  exit 0
+fi
+
 [ -f "$FILE" ] || exit 1
 
 norm() { printf '%s' "$1" | sed -E 's/^[ \t]*#+[ \t]*//; s/[ \t]+$//' | tr '[:upper:]' '[:lower:]'; }
@@ -106,125 +200,182 @@ norm() { printf '%s' "$1" | sed -E 's/^[ \t]*#+[ \t]*//; s/[ \t]+$//' | tr '[:up
 SECTION_NORM=""
 [ -n "$SECTION" ] && SECTION_NORM="$(norm "$SECTION")"
 
-KEEP_FILE=""
+# Keys of entries consumed by THIS call, collected by awk and appended to the
+# ledger below. Written by awk rather than parsed back out of $OUT: the printed
+# block is for a human/agent to read and its shape is free to change, while the
+# key must stay byte-stable or an entry silently un-consumes itself.
+KEYS_FILE=""
 if [ "$CONSUME" = "1" ]; then
-  KEEP_FILE="$(mktemp)"
+  KEYS_FILE="$(mktemp)"
 fi
 
-OUT="$(awk -v section_filter="$SECTION_NORM" -v keep_file="${KEEP_FILE:-}" -v consume="$CONSUME" -v consume_date="$(date +%Y-%m-%d)" '
+OUT="$(awk -v section_filter="$SECTION_NORM" -v consume="$CONSUME" \
+           -v ledger="$LEDGER" -v keys_file="${KEYS_FILE:-}" -v file_key="$FILE_ABS" '
   function norm(s,   t) {
     t = s
     sub(/^[ \t]*#+[ \t]*/, "", t)
     gsub(/[ \t]+$/, "", t)
     return tolower(t)
   }
-  function flush_reply() {
+  # The ledger key. Section AND anchor are both in it on purpose: a short
+  # reply ("> yes") can legitimately appear twice under one heading, and a key
+  # that could not tell those apart would silently swallow the second one.
+  # Feedback lost is a worse failure than feedback offered twice, so the key
+  # errs narrow -- editing the line above a consumed reply re-collects it,
+  # which is visible and harmless.
+  function mkkey(h, a, kind, text,   th, ta, tt) {
+    th = h; ta = a; tt = text
+    gsub(/\t/, " ", th); gsub(/\t/, " ", ta); gsub(/\t/, " ", tt)
+    return file_key "\t" th "\t" ta "\t" kind "\t" tt
+  }
+  # Should this entry be collected now? Only if no run has been handed it
+  # before. Marked as consumed only when --consume: a plain read must not
+  # change what the next read sees.
+  function claim(k) {
+    if (k in seen) return 0
+    if (consume) { seen[k] = 1; print k > keys_file }
+    return 1
+  }
+  # Migration: record a legacy in-file `>>` marker in the ledger, so the
+  # record survives the tracked file being restored/reverted/re-cloned.
+  function seed(k) {
+    if (!consume) return
+    if (k in seen) return
+    seen[k] = 1
+    print k > keys_file
+  }
+  function flush_reply(   k) {
     if (in_reply) {
       if (reply_matched) {
-        print "### REPLY"
-        if (heading != "") print "Section: " heading
-        if (reply_anchor != "") print "Re: \"" reply_anchor "\""
-        print reply_text
-        print ""
+        k = mkkey(reply_heading_norm, reply_anchor, "REPLY", reply_text)
+        if (claim(k)) {
+          print "### REPLY"
+          if (reply_heading != "") print "Section: " reply_heading
+          if (reply_anchor != "") print "Re: \"" reply_anchor "\""
+          print reply_text
+          print ""
+        }
       }
       in_reply = 0
       reply_text = ""
     }
   }
-  BEGIN { heading = ""; heading_norm = ""; anchor = ""; in_reply = 0; reply_text = "" }
+  function flush_consumed(   k) {
+    if (in_consumed) {
+      if (consumed_text != "") {
+        k = mkkey(consumed_heading_norm, consumed_anchor, "REPLY", consumed_text)
+        seed(k)
+      }
+      in_consumed = 0
+      consumed_text = ""
+    }
+  }
+  BEGIN {
+    heading = ""; heading_norm = ""; anchor = ""
+    in_reply = 0; reply_text = ""
+    in_consumed = 0; consumed_text = ""
+    if (ledger != "") {
+      while ((getline lline < ledger) > 0) {
+        lp = index(lline, "\t")
+        if (lp > 0) seen[substr(lline, lp + 1)] = 1
+      }
+      close(ledger)
+    }
+  }
   /^#+[ \t]/ {
-    flush_reply()
+    flush_reply(); flush_consumed()
     heading = $0
     heading_norm = norm($0)
     anchor = ""
-    if (consume) print $0 > keep_file
     next
   }
   /^%%(ACTION|BLOCKER|QUESTION|NOTE|APPROVE|REJECT)([ \t]|$)/ {
-    flush_reply()
+    flush_reply(); flush_consumed()
     matched = (section_filter == "" || heading_norm == section_filter)
     if (matched) {
-      line = $0
-      sub(/^%%/, "", line)
-      split(line, parts, /[ \t]+/)
+      tagline = $0
+      sub(/^%%/, "", tagline)
+      split(tagline, parts, /[ \t]+/)
       kw = parts[1]
-      text = line
+      text = tagline
       sub("^" kw "[ \t]*", "", text)
-      print "### " kw
-      if (heading != "") print "Section: " heading
-      if (anchor != "") print "Re: \"" anchor "\""
-      if (text != "") print text
-      print ""
-      # deliberately NOT written to keep_file -- this is the removal
-    } else if (consume) {
-      print $0 > keep_file
+      if (claim(mkkey(heading_norm, anchor, kw, text))) {
+        print "### " kw
+        if (heading != "") print "Section: " heading
+        if (anchor != "") print "Re: \"" anchor "\""
+        if (text != "") print text
+        print ""
+      }
     }
     next
   }
   /^[ \t]*>>/ {
-    # An ALREADY-CONSUMED reply (see the marking rule below). Never
-    # re-collected, never re-marked, kept verbatim. This is what makes
-    # --consume idempotent.
+    # An ALREADY-CONSUMED reply, in the pre-2026-08-11 in-file format. Never
+    # re-collected, never re-marked, kept verbatim -- this is half of what
+    # makes --consume idempotent. The other half is the ledger, and this block
+    # feeds it: see seed() above and the MIGRATION note in the header.
     flush_reply()
-    if (consume) print $0 > keep_file
+    cc = $0
+    sub(/^[ \t]*>>[ \t]?/, "", cc)
+    if (!in_consumed) {
+      in_consumed = 1
+      consumed_anchor = anchor
+      consumed_heading_norm = heading_norm
+      consumed_text = ""
+    }
+    # The two header lines the old in-place marker wrote are not part of the
+    # human reply and must not enter the key, or the seeded key would not
+    # match the one the same reply produces when it is a plain `> ` line.
+    if (cc ~ /^_\[consumed / || cc ~ /^still OPEN until something deletes it\]_$/) next
+    if (consumed_text == "") consumed_text = cc; else consumed_text = consumed_text " " cc
     next
   }
   /^[ \t]*>[ \t]?/ {
+    flush_consumed()
     content = $0
     sub(/^[ \t]*>[ \t]?/, "", content)
     if (content == "(answer inline here)" || content ~ /^\(answer inline here\)/) {
       flush_reply()
-      if (consume) print $0 > keep_file
       next
     }
     if (content ~ /^[ \t]*$/ && !in_reply) {
       # A bare ">" not continuing a reply is an un-answered slot, same as
       # the "(answer inline here)" placeholder: keep it, collect nothing.
-      if (consume) print $0 > keep_file
       next
     }
     if (!in_reply) {
       in_reply = 1
       reply_anchor = anchor
+      reply_heading = heading
+      reply_heading_norm = heading_norm
       reply_text = content
       reply_matched = (section_filter == "" || heading_norm == section_filter)
-      if (consume && reply_matched) {
-        # Open the marked block. See the header note on why a consumed
-        # reply is MARKED and not deleted.
-        print ">> _[consumed " consume_date " -- read by a run; this entry is" > keep_file
-        print ">> still OPEN until something deletes it]_" > keep_file
-      }
     } else {
       reply_text = reply_text " " content
-    }
-    if (consume) {
-      if (reply_matched) {
-        # MARK, do not delete: demote "> foo" to ">> foo". Still visibly
-        # the words of the human, in place and in order -- but no longer
-        # collectable, so it cannot reach a second run as if it were new.
-        # NB: no apostrophes in this awk program; it is single-quoted.
-        marked = $0
-        sub(/^([ \t]*)>/, "&>", marked)
-        print marked > keep_file
-      } else {
-        print $0 > keep_file
-      }
     }
     next
   }
   {
-    flush_reply()
+    flush_reply(); flush_consumed()
     if ($0 !~ /^[ \t]*$/) anchor = $0
-    if (consume) print $0 > keep_file
   }
-  END { flush_reply() }
+  END { flush_reply(); flush_consumed() }
 ' "$FILE")"
 
-if [ "$CONSUME" = "1" ] && [ -n "$KEEP_FILE" ]; then
-  mv "$KEEP_FILE" "$FILE"
+if [ "$CONSUME" = "1" ] && [ -n "$KEYS_FILE" ]; then
+  if [ -s "$KEYS_FILE" ]; then
+    # LOUD on failure. An unrecordable consumption is not a no-op: the entry
+    # will be handed to the next run as if it were fresh, which is the exact
+    # re-prepend loop the ledger exists to end.
+    if ! { mkdir -p "$RECEIPT_DIR" 2>/dev/null \
+           && awk -v ts="$(date -Is)" '{ print ts "\t" $0 }' "$KEYS_FILE" >> "$LEDGER"; }; then
+      echo "collect-feedback.sh: WARNING could not record consumption in $LEDGER -- these entries WILL be collected again next run" >&2
+    fi
+  fi
+  rm -f "$KEYS_FILE"
+
   if [ -n "$OUT" ]; then
     RECEIPT_COUNT="$(printf '%s\n' "$OUT" | grep -c '^### ')"
-    RECEIPT_DIR="${SCHEDULER_RECEIPT_DIR:-$HOME/.local/share/scheduler-glance}"
     mkdir -p "$RECEIPT_DIR" 2>/dev/null || true
     printf '%s\tfile=%s\tsection=%s\tconsumed=%s\n' \
       "$(date -Is)" "$FILE" "${SECTION:--}" "$RECEIPT_COUNT" \

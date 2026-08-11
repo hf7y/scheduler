@@ -110,14 +110,84 @@ log() { echo "$(date -Is) $*" >> "$LOG"; }
 # turns out to come from an uncommitted script sitting beside the tracked one
 # -- this decision is the thing to reopen. File it here and flip the gate back
 # to a bare `status --porcelain`.
+#
+# ESCALATION (2026-08-11, #61/#70). "Fail loud" was only half true: every
+# non-advancing branch below logged ONE line, at the same volume, every tick,
+# forever. A one-off blip and a permanent freeze were the same log line, so
+# there was no observation that distinguished them and nothing that ever
+# raised its voice. Measured: vim-arcade's clone sat behind origin/main from
+# 2026-08-06 to at least 2026-08-11 -- five days, ~1400 identical `PULL skip`
+# lines -- while PR #59, merged specifically to fix that account's brief, could
+# not reach it. The line was there the whole time. Nobody reads a line that
+# says the same thing on a healthy host and a frozen one.
+#
+# So a repeat is now counted, and a run of PACED_PULL_ESCALATE_AFTER ticks with
+# the SAME cause is a finding: it logs PULL FROZEN and files once into
+# realisateur's inbox through the same door the GAVE-UP brake uses further
+# down. Recovery is announced too (PULL RECOVERED), because "it started working
+# again" is exactly as unobservable as the freeze was.
+#
+# WHAT IT DELIBERATELY DOES NOT DO IS RESOLVE THE TREE. `git restore` or a
+# stash here would have destroyed a real record: the dirty diff on vim-arcade
+# is a machine-append from a 2026-08-08 run marking a BLOCKERS entry consumed,
+# verified absent from origin/main (#75). Committing on `main` in that clone is
+# worse still -- HEAD stops being an ancestor of origin/main and this block
+# then logs `PULL WARNING -- diverged` on every tick forever. The self-healing
+# is upstream of here and already landed in this change: bin/collect-feedback.sh
+# no longer writes the tracked file at all, so the engine stops creating the
+# condition. What remains is the class of dirty tree a HUMAN made, and that is
+# a finding to raise, not a diff to discard.
+# >>> pull gate
+PULL_STATE="$STATE_DIR/pull-block.state"
+PULL_ESCALATE_AFTER="${PACED_PULL_ESCALATE_AFTER:-3}"
+
+# Records that this tick's pull did NOT advance, and escalates once the same
+# cause has repeated PULL_ESCALATE_AFTER ticks running. State is "<n> <reason>
+# <filed>"; a change of reason restarts the count, so an unrelated blip cannot
+# inherit an older cause's escalation.
+pull_blocked() {  # $1 = short reason key   $2 = the line to log
+  local reason="$1" line="$2" n=1 filed=0 prev_n=0 prev_reason="" prev_filed=0
+  if [ -f "$PULL_STATE" ]; then
+    read -r prev_n prev_reason prev_filed < "$PULL_STATE" 2>/dev/null || true
+  fi
+  case "$prev_n" in ''|*[!0-9]*) prev_n=0 ;; esac
+  case "$prev_filed" in ''|*[!0-9]*) prev_filed=0 ;; esac
+  if [ "$prev_reason" = "$reason" ]; then n=$((prev_n + 1)); filed="$prev_filed"; fi
+  log "$line [consecutive blocked ticks: $n]"
+  if [ "$n" -ge "$PULL_ESCALATE_AFTER" ]; then
+    log "PULL FROZEN -- $REPO_ROOT has not advanced for $n consecutive tick(s) (cause: $reason). Deployed code on this host is STALE and a merged fix cannot reach it. NOT auto-resolved: a dirty tree here can hold the only copy of a record (hf7y/scheduler#61, #75)."
+    if [ "$filed" = "0" ] && command -v scheduler >/dev/null 2>&1; then
+      if scheduler -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
+        filed=1
+        log "FILED the pull freeze to realisateur's inbox"
+      else
+        log "FILED FAILED -- could not file the pull freeze to realisateur; it exists in this log only"
+      fi
+    fi
+  fi
+  printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
+}
+
+# The clone is current. Silent in the normal case -- this runs every 5 minutes
+# -- but a freeze that ends says so, once.
+pull_advanced() {
+  local prev_n=0 prev_reason=""
+  if [ -f "$PULL_STATE" ]; then
+    read -r prev_n prev_reason _ < "$PULL_STATE" 2>/dev/null || true
+    log "PULL RECOVERED -- advancing again after $prev_n consecutive blocked tick(s) (cause was: $prev_reason)"
+    rm -f "$PULL_STATE"
+  fi
+}
+
 if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
   if [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-    log "PULL skip -- $REPO_ROOT has uncommitted changes to TRACKED files"
+    pull_blocked dirty-tracked "PULL skip -- $REPO_ROOT has uncommitted changes to TRACKED files"
   elif ! timeout 20 git -C "$REPO_ROOT" fetch --quiet origin main 2>>"$LOG"; then
-    log "PULL skip -- fetch failed or timed out (network/auth?)"
+    pull_blocked fetch-failed "PULL skip -- fetch failed or timed out (network/auth?)"
   elif git -C "$REPO_ROOT" merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
-    : # already up to date (or ahead) -- nothing to log every 5 minutes
+    pull_advanced  # already up to date (or ahead) -- nothing to log every 5 minutes
   elif git -C "$REPO_ROOT" merge --ff-only origin/main --quiet 2>>"$LOG"; then
+    pull_advanced
     log "PULL fast-forwarded to $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
   elif git -C "$REPO_ROOT" merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
     # A fast-forward WAS possible by ancestry, so the merge refused for a
@@ -125,11 +195,12 @@ if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
     # be overwritten by merge". Name that specifically: it is the one case the
     # untracked-files decision above deliberately lets reach git, and a
     # "diverged" message here would be a lie that costs an hour to unpick.
-    log "PULL BLOCKED -- ff-only refused despite clean ancestry; an untracked file in $REPO_ROOT likely collides with an incoming tracked file (see merge error above). Code here is STALE until a human moves it."
+    pull_blocked untracked-collision "PULL BLOCKED -- ff-only refused despite clean ancestry; an untracked file in $REPO_ROOT likely collides with an incoming tracked file (see merge error above). Code here is STALE until a human moves it."
   else
-    log "PULL WARNING -- $REPO_ROOT diverged from origin/main, code here may be stale (needs a human/session merge, not auto-resolved)"
+    pull_blocked diverged "PULL WARNING -- $REPO_ROOT diverged from origin/main, code here may be stale (needs a human/session merge, not auto-resolved)"
   fi
 fi
+# <<< pull gate
 
 # --- which participants file? (host-scoped, 2026-07-24) ---------------------
 # Two hosts now run this dispatcher out of ONE git-tracked repo (mandark and
