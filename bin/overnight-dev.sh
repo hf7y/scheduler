@@ -4,9 +4,18 @@
 # The 03:00 cron job (scheduler-nightly-batch-loop.sh) is a SINGLE
 # review-gated run and re-running it the same day DESTROYS the prior branch.
 # This driver is the "keep developing while I sleep" companion: it runs a
-# CHAIN of cycles through the night, each in a throwaway git worktree, and --
+# CHAIN of cycles through the night, each in a throwaway git CLONE, and --
 # crucially -- each productive cycle branches from the PREVIOUS productive
 # cycle so work ACCUMULATES instead of clobbering.
+#
+# IT WAS A WORKTREE UNTIL 2026-08-11 (hf7y/scheduler#49; Zach, 2026-08-06:
+# "we should not have any more worktrees after tonight"). Each cycle created
+# one and each cycle removed it, so this was the tidier of the two creators in
+# this repo -- but a cycle killed mid-run left the registration behind, and
+# the shared .git it borrowed is the concurrent-writer hazard CLAUDE.md's
+# subagent rules exist for. A clone gives the same isolation, registers
+# nothing, and costs one explicit push per productive cycle to publish the
+# branch the morning review reads.
 #
 # Same conservative philosophy as the nightly job:
 #   * REVIEW GATE: every cycle's work lands on a branch overnight/<date>-cNN
@@ -31,7 +40,10 @@ SCHED_REPO="/home/zach/Documents/Projects/scheduler"
 STATE_DIR="$HOME/.local/share/$JOB_NAME"
 LOG="$STATE_DIR/run.log"
 LOCK="$STATE_DIR/run.lock"
-WORKTREE="$STATE_DIR/worktree"
+# LEGACY_WORKTREE is the old path, kept ONLY so a registration left by a run
+# from before 2026-08-11 can still be cleared. Nothing is created there.
+LEGACY_WORKTREE="$STATE_DIR/worktree"
+DEV_CLONE="$STATE_DIR/clone"
 REPORTS_DIR="$HOME/reports/scheduler"
 DATE="$(date +%F)"
 REPORT="$REPORTS_DIR/${DATE}-overnight.md"
@@ -57,7 +69,12 @@ fi
 
 [ -f "$LOG" ] && { tail -n 8000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
-cleanup() { cd "$SCHED_REPO" 2>/dev/null && git worktree remove --force "$WORKTREE" 2>/dev/null || true; }
+# The trap clears a legacy registration and nothing else. It must NOT rm the
+# clone: with a worktree the branch ref lived in the shared .git so a forced
+# removal cost no commits, whereas the clone holds the only copy until the
+# push below succeeds. An abandoned clone is a directory under $STATE_DIR, not
+# a registered worktree, and the next cycle salvages any branch in it.
+cleanup() { cd "$SCHED_REPO" 2>/dev/null && git worktree remove --force "$LEGACY_WORKTREE" 2>/dev/null || true; }
 trap cleanup EXIT
 
 BASE="main"   # first cycle branches from main; then chains through productive cycles
@@ -77,18 +94,37 @@ BASE="main"   # first cycle branches from main; then chains through productive c
     echo "==== $(date -Is) cycle $i/$MAX_CYCLES  branch=$BRANCH  base=$BASE ===="
     CRON_BEFORE="$(crontab -l 2>/dev/null | md5sum)"
 
-    git worktree remove --force "$WORKTREE" 2>/dev/null || true
-    git branch -D "$BRANCH" 2>/dev/null || true
+    git worktree remove --force "$LEGACY_WORKTREE" 2>/dev/null || true
     git worktree prune
-    if ! git worktree add -b "$BRANCH" "$WORKTREE" "$BASE"; then
-      echo "cycle $i: worktree add failed on base $BASE -- skipping cycle"
+
+    # SALVAGE BEFORE DISCARD: a cycle killed between its commit and its push
+    # left the only copy of that work in the clone. A refused push (the branch
+    # already landed, or is behind) is not a finding and stays quiet.
+    if [ -d "$DEV_CLONE/.git" ]; then
+      mapfile -t _stranded < <(git -C "$DEV_CLONE" for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null)
+      for _b in ${_stranded[@]+"${_stranded[@]}"}; do
+        [ "$_b" = "main" ] && continue
+        git -C "$DEV_CLONE" push -q "$SCHED_REPO" "$_b:refs/heads/$_b" 2>/dev/null \
+          && echo "salvaged $_b from an interrupted cycle's clone"
+      done
+    fi
+    rm -rf "$DEV_CLONE"
+
+    git branch -D "$BRANCH" 2>/dev/null || true
+    if ! git clone -q "$SCHED_REPO" "$DEV_CLONE"; then
+      echo "cycle $i: clone of $SCHED_REPO failed -- skipping cycle"
+      continue
+    fi
+    if ! git -C "$DEV_CLONE" checkout -q -b "$BRANCH" --no-track "origin/$BASE"; then
+      echo "cycle $i: could not branch $BRANCH off $BASE -- skipping cycle"
+      rm -rf "$DEV_CLONE"
       continue
     fi
 
     # The RECOVERY cd is guarded too (SC2164). If both fail we are in an
-    # unknown directory, and `continue` walks straight back into
-    # `git worktree remove --force` / `git branch -D` at the top of the loop.
-    cd "$WORKTREE" || { cd "$SCHED_REPO" || { echo "cannot cd $SCHED_REPO after a failed worktree cd -- stopping"; exit 1; }; continue; }
+    # unknown directory, and `continue` walks straight back into a `rm -rf`
+    # and a `git branch -D` at the top of the loop.
+    cd "$DEV_CLONE" || { cd "$SCHED_REPO" || { echo "cannot cd $SCHED_REPO after a failed clone cd -- stopping"; exit 1; }; continue; }
     BEFORE_SHA="$(git rev-parse HEAD)"
 
     PROMPT="/nightly-batch
@@ -98,7 +134,7 @@ This is the scheduler improving ITSELF overnight, fully unattended, behind a HUM
 Read .scheduler/FOCUS.md next -- it is this project's scope AND backlog. Pick the NEXT highest-value, LOWEST-RISK improvement you can fully finish AND verify this cycle. This repo is the meta-tool that controls every other project's cron jobs, so correctness beats volume: one well-tested change is worth more than three risky ones.
 
 HARD RULES (this is infrastructure, not an app):
-  * Make changes ONLY as commits in THIS working directory ($WORKTREE) on branch $BRANCH. Touch nothing outside it.
+  * Make changes ONLY as commits in THIS working directory ($DEV_CLONE) on branch $BRANCH. Touch nothing outside it.
   * NEVER run 'crontab', and NEVER run bin/sync-crontab.sh with --apply. Previewing (no --apply) to validate a schedule change is fine and encouraged.
   * NEVER edit the installed wrapper scripts under ~/.local/bin, or any file outside this repo.
   * Prefer changes verifiable here and now (shellcheck, a dry-run, simulating cron's env with 'env -u SSH_AUTH_SOCK') over changes whose only test is 'wait for tonight'. If a change can't be safely verified without going live, write it up as a proposal in the report instead of committing it.
@@ -116,11 +152,10 @@ Commit each finished change with a clear message. Then append a section for THIS
     fi
 
     AFTER_SHA="$(git rev-parse HEAD)"
-    # cwd is $WORKTREE here. If this cd fails and the loop continues, the next
-    # cycle runs `git worktree remove --force "$WORKTREE"`, `git branch -D` and
-    # `git worktree prune` from INSIDE the worktree an unattended agent just
-    # wrote in. Refuse instead; the EXIT trap still cleans up.
-    cd "$SCHED_REPO" || { echo "cannot cd back to $SCHED_REPO after cycle $i -- stopping before the destructive worktree reset"; exit 1; }
+    # cwd is $DEV_CLONE here. If this cd fails and the loop continues, the next
+    # cycle runs `rm -rf "$DEV_CLONE"` and `git branch -D` from INSIDE the
+    # directory an unattended agent just wrote in. Refuse instead.
+    cd "$SCHED_REPO" || { echo "cannot cd back to $SCHED_REPO after cycle $i -- stopping before the destructive clone reset"; exit 1; }
 
     CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
     if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then
@@ -132,13 +167,24 @@ Commit each finished change with a clear message. Then append a section for THIS
     fi
 
     if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
-      echo "cycle $i ($STATUS): new commits on $BRANCH --"
-      git log --oneline "$BASE..$BRANCH" 2>/dev/null
-      git worktree remove --force "$WORKTREE" 2>/dev/null || true
-      BASE="$BRANCH"   # chain: next cycle builds on this productive branch
+      # PUBLISH, then chain. The morning review is `git log main..$BASE` in
+      # $SCHED_REPO, and the NEXT cycle branches off `origin/$BASE` in a fresh
+      # clone -- neither can see this branch until it is pushed back. Under a
+      # worktree both were free, because the ref store was shared.
+      if git -C "$DEV_CLONE" push -q "$SCHED_REPO" "$BRANCH:refs/heads/$BRANCH"; then
+        echo "cycle $i ($STATUS): new commits on $BRANCH --"
+        git log --oneline "$BASE..$BRANCH" 2>/dev/null
+        rm -rf "$DEV_CLONE"
+        BASE="$BRANCH"   # chain: next cycle builds on this productive branch
+      else
+        # Do NOT advance the chain and do NOT delete the clone: the commits
+        # exist only there. The next cycle's salvage pass pushes them.
+        echo "cycle $i ($STATUS): CRITICAL -- committed on $BRANCH but could not publish it into $SCHED_REPO. Commits are in $DEV_CLONE and it is left in place; the chain stays on $BASE. Recover with: git -C $SCHED_REPO fetch $DEV_CLONE $BRANCH:$BRANCH"
+        timeout 5 notify-send -u critical "$JOB_NAME" "cycle $i could not publish $BRANCH -- commits are in $DEV_CLONE, see $LOG" 2>/dev/null || true
+      fi
     else
       echo "cycle $i ($STATUS): no commits -- discarding empty branch $BRANCH"
-      git worktree remove --force "$WORKTREE" 2>/dev/null || true
+      rm -rf "$DEV_CLONE"
       git branch -D "$BRANCH" 2>/dev/null || true
     fi
 
