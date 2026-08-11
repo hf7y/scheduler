@@ -917,8 +917,18 @@ ensure_gh_labels() {
   gh label create idea --repo "$slug" --color 1D76DB \
     --description "Filed via scheduler -i / notify-senechal; this project's next run triages it" >/dev/null 2>&1 || true
   if [ -n "$from_label" ]; then
+    # 100 CHARACTERS, NOT 102. GitHub rejects a label description over 100 with
+    # HTTP 422; the description here was 102, so this call ALWAYS failed, `|| true`
+    # swallowed it, and the `gh issue create` below then failed with
+    # "could not add label: 'from:<p>' not found" and recorded NOTHING.
+    #
+    # That made notify-senechal -- the front door every project is required to
+    # use before changing machine-wide config -- unusable from any checkout,
+    # from the moment #69 merged (2026-08-11) until this fix. Found by trying
+    # to file a real note through it. Length asserted in
+    # tests/from-label-witness.sh so prose is not what keeps it under.
     gh label create "$from_label" --repo "$slug" --color 5319E7 \
-      --description "Calling project recorded by scheduler -i, so an idea is triage-able by source without reading the body" >/dev/null 2>&1 || true
+      --description "Calling project recorded by scheduler -i; lets an idea be triaged by source" >/dev/null 2>&1 || true
   fi
 }
 
