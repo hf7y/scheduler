@@ -726,7 +726,29 @@ for conf in "${CONF_FILES[@]}"; do
   # of requiring a hand-picked, non-colliding literal time every time a
   # project registers. ---
   jn="${BATCH_JOB_NAME:-}"; sc="${BATCH_SCRIPT:-}"; cr="${BATCH_CRON:-}"
-  if [ "$conf_account" = "$LOCAL_ACCOUNT" ] && is_paced "$PROJECT" && { [ -n "$jn" ] || [ -n "$sc" ] || [ -n "$cr" ]; }; then
+  # MEMBERSHIP ALONE SUPPRESSES, whatever account owns the state. This used to
+  # read `[ "$conf_account" = "$LOCAL_ACCOUNT" ] && is_paced ...`, which was
+  # correct only while the foreign-account case was handled somewhere else.
+  #
+  # It was, until 2026-08-05. b73778f (2026-07-25) added the account condition
+  # in the same commit that made a foreign-account conf which is ALSO an
+  # enabled rotation member raise `ERROR ... that is double dispatch` and
+  # `continue` -- so that conf never reached this tier at all, and restricting
+  # the suppression here changed nothing. 3029e02 (2026-08-05, #47) then
+  # correctly downgraded that ERROR+continue to a note, on the reasoning that
+  # "membership is exactly what suppresses the fixed Tier 2 line ... the guard
+  # duplicated the mechanism standing right behind it" -- but the mechanism
+  # behind it was this line, and this line declined to act on a foreign
+  # account. Removing the `continue` therefore un-suppressed the very case the
+  # commit was arguing about: the conf now falls through to here and is emitted
+  # as a fixed nightly line, while the paced runner dispatches it too. Double
+  # dispatch, armed by the crontab writer, which is the whole subject of
+  # tests/sync-crontab-paced-witness.sh.
+  #
+  # The note printed a few lines above already claims "fixed cron suppressed",
+  # and Tier 1 (SWEEP) above suppresses on `is_paced` with no account condition
+  # at all. This makes Tier 2 agree with both, and with the witness.
+  if is_paced "$PROJECT" && { [ -n "$jn" ] || [ -n "$sc" ] || [ -n "$cr" ]; }; then
     echo "note [$name/BATCH]: paced participant -- fixed cron suppressed, dispatched by ${RUNNER_JOB:-usage-paced-runner}" >&2
     jn=""; sc=""; cr=""   # fall through to the "not used" branch below
   fi
