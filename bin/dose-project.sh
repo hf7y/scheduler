@@ -81,6 +81,11 @@ DOSE_LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # shellcheck source=../lib/dose-common.sh
 . "$DOSE_LIB_DIR/lib/dose-common.sh"
 
+# The fetch lives HERE, not in the library: sourcing a library must not make a
+# network call, and must not exit the process that sourced it (#120's defect,
+# fixed 2026-08-11).
+ROSTER_CONTENT="$(fetch_roster)" || exit $?
+
 # --- 2. project not in roster -> exit 4, not 0 ------------------------------
 find_row() {
   local proj="$1" f1 f2 f3 f4
