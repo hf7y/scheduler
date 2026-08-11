@@ -89,9 +89,29 @@ run() {  # echoes what the engine saw in GH_TOKEN; stderr lands in $TMP/err
   # rather than by what scheduler-run actually does.
   ( cd "$FX" \
     && unset GH_TOKEN \
-    && SELFDEV_APP_CONF="$CONF" SELFDEV_GH_APP_SH="$HELPER" \
+    && PATH="$TMP/stub:$PATH" \
+       SELFDEV_APP_CONF="$CONF" SELFDEV_GH_APP_SH="$HELPER" GH_OWN_REPO="hf7y/proj" \
        bash bin/scheduler-run proj batch 2>"$TMP/err" )
 }
+
+# A stub `gh` ahead of the real one on PATH. scheduler-run now PROBES the
+# minted token against the account's own repo before exporting it, so this
+# suite has to answer that probe -- and it must answer it locally. A witness
+# that reached api.github.com would be measuring GitHub's uptime and the
+# runner's network, and would go red for reasons unrelated to the code it
+# tests.
+#
+# $TMP/gh-scope decides the answer: "ok" (the default) means the token can see
+# the repo; anything else means it cannot. That switch is the whole of case 5.
+mkdir -p "$TMP/stub"
+cat > "$TMP/stub/gh" <<EOF
+#!/usr/bin/env bash
+# stub gh -- answers only the scope probe scheduler-run makes.
+[ "\$(cat "$TMP/gh-scope" 2>/dev/null)" = "ok" ] || exit 1
+echo hf7y/proj
+EOF
+chmod +x "$TMP/stub/gh"
+echo ok > "$TMP/gh-scope"
 
 echo "== case 1: configured and the helper works -- the minted token reaches the run"
 : > "$CONF"
@@ -142,6 +162,33 @@ if [ "$out" = "ghs_CALLER_SUPPLIED" ]; then
   ok "an inherited GH_TOKEN is not clobbered"
 else
   bad "the mint overrode a caller's explicit credential: [$out]"
+fi
+
+echo "== case 5: minted but USELESS -- a token that cannot see its own repo"
+# THE REGRESSION THIS CASE EXISTS FOR, found within an hour of arming by the
+# account it broke (hf7y/realisateur#175). The App `unattended-monkey` is
+# installed on the TEN product repos and NOT on hf7y/realisateur or
+# hf7y/scheduler, so on those two accounts the mint SUCCEEDS and returns a
+# token that 404s on the account's own repository. Exporting it OVERRODE a
+# working stored credential and made every gh call fail.
+#
+# "The helper printed something" is not "the token works", and the first
+# version of this block could not tell the two apart. That is the same
+# conflation as a green check on an unrun test.
+: > "$CONF"
+mkhelper 'echo ghs_OUT_OF_SCOPE'
+echo no > "$TMP/gh-scope"
+out="$(run)"; rc=$?
+echo ok > "$TMP/gh-scope"
+if [ "$rc" -eq 0 ] && [ "$out" = "<unset>" ]; then
+  ok "an out-of-scope token is NOT exported -- the stored credential survives"
+else
+  bad "a useless token was exported over a working one: rc=$rc GH_TOKEN=[$out]"
+fi
+if grep -q 'cannot see' "$TMP/err"; then
+  ok "and it says WHICH repo the token could not see"
+else
+  bad "silent non-export is indistinguishable from an unconfigured account: [$(cat "$TMP/err")]"
 fi
 
 echo
