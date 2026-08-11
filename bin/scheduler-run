@@ -60,6 +60,76 @@ fi
 PROMPT="$(field PROMPT)"
 [ -n "$PROMPT" ] || { echo "scheduler-run: ${PREFIX}_PROMPT not set in $CONF (required once ${PREFIX}_SCRIPT is removed)" >&2; exit 2; }
 
+# Standing rules: prepended here, not retyped into each conf's PROMPT.
+# Witness: tests/standing-rules-witness.sh.
+#
+# Commit 9cfd130 (2026-08-07) hand-typed an identical "STANDING RULES"
+# block (rules 0-5) into THREE separate BATCH_PROMPT strings -- ecosim,
+# vim-arcade, bibliothecaire -- as independent copy-pasted text. There was
+# no single source of truth: changing a rule meant re-typing it into every
+# conf again, by hand or by another one-off script, and hoping nobody
+# missed one. schedule/_standing-rules.md is now that one place.
+#
+# AT THE TRUE HEAD, which is a behaviour change from 9cfd130 and an
+# intended one. That commit inserted the block mid-sentence, splitting
+# ecosim's "Your role in the backlog-as-sensor build is" from its own
+# predicate "MONITORING THE NUMBERS AND THE FEEDBACK" -- a dangling
+# sentence in a dispatched agent's prompt. Removing the inlined copy
+# rejoins it. And the block's first line reads "These override everything
+# below": prepending is the only position at which that sentence is true,
+# so the old placement did not merely read badly, it made rule text lie.
+#
+# EDITING IT NEEDS NO SPECIAL DOOR, and that is deliberate. Branch, edit,
+# PR against main, `gh pr merge --auto --squash` -- the same path as any
+# other file here. #71 originally shipped a 263-line `bin/propage` verb to
+# wrap exactly that; it was cut before merge because its first live
+# `--dry-run` printed "OK", exited 0, and left the caller on the throwaway
+# branch it made with the edit still staged (both git errors were sent to
+# /dev/null), and because the two jobs it did for real -- run the witness
+# before pushing, then poll mergeability -- are what CI (#91) and the
+# required `suites` check do on the merge result, which is the thing that
+# actually matters. See #72.
+#
+# WHY THIS IS SAFER THAN THE PROSE IT REPLACED, not just tidier: inside a
+# conf this text was the right-hand side of BATCH_PROMPT="...", so a
+# backtick or $(...) in it EXECUTED at `source` time -- the hazard
+# tests/conf-sources-clean-witness.sh exists to catch. Read from a .md by
+# $(cat ...) into a variable, the same characters are inert; nothing here
+# evals PROMPT. The extraction removed a code-execution surface.
+#
+# PER-TIER, FALLING BACK TO PER-PROJECT. <PREFIX>_USES_STANDING_RULES wins
+# if the conf sets it, else the unprefixed project-level field (like
+# AUTONOMY_TIER). Project-level alone was correct only by accident: no conf
+# arms SWEEP today, so "applies to whichever tier is dispatching" and
+# "applies to batch" are the same sentence right now. The day a project
+# arms SWEEP, they stop being, and the wrong answer would be silent. Three
+# lines to make the distinction expressible beats a comment promising to
+# revisit it.
+#
+# Opt-IN, never automatic: chezz, crt, baudin and friends never had this
+# text and prepending it to them would change their prompt's meaning as a
+# side effect of an unrelated engine change. Only a conf that asks gets it.
+#
+# NOT REACHABLE from the legacy <TIER>_SCRIPT path -- that wrapper never
+# sources the conf, so it has no field to read. One tier is affected,
+# scheduler.conf's own BATCH_SCRIPT, and it does not want these rules; it
+# is the dev-cycle job, whose prompt lives in the wrapper. Accepted as a
+# known gap rather than papered over: the fix is migrating that tier off
+# the wrapper (MIGRATION.md), not a second hook into a path being retired.
+RULES_OPT="$(field USES_STANDING_RULES)"
+[ -n "$RULES_OPT" ] || RULES_OPT="${USES_STANDING_RULES:-0}"
+if [ "$RULES_OPT" = "1" ]; then
+  RULES_FILE="$SCHED_ROOT/schedule/_standing-rules.md"
+  if [ -f "$RULES_FILE" ]; then
+    PROMPT="$(cat "$RULES_FILE")
+
+$PROMPT"
+  else
+    echo "scheduler-run: $CONF sets USES_STANDING_RULES=1 but $RULES_FILE is missing" >&2
+    exit 2
+  fi
+fi
+
 # Project-level runtime config (shared by both tiers).
 PROJECT_KEY="${PROJECT_KEY:-$PROJECT}"
 : "${REPO_URL:?scheduler-run: REPO_URL must be set in $CONF}"
