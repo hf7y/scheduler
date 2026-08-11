@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# DEPRECATED as a pattern for NEW projects. Per-project wrapper scripts like
-# this are the LEGACY path -- a new project sets no wrapper at all and puts
-# this same config into schedule/<project>.conf, which bin/scheduler-run
-# reads (see ../README.md and ../MIGRATION.md). Kept only as a reference for
-# the still-live wrappers that haven't migrated yet.
+# DEAD PATTERN, kept only as an artefact. Per-project wrapper scripts like
+# this were the LEGACY path -- a project sets no wrapper at all and puts this
+# same config into schedule/<project>.conf, which bin/scheduler-run reads
+# (see ../README.md).
+#
+# The line above used to end "Kept only as a reference for the still-live
+# wrappers that haven't migrated yet." There are none, verified 2026-08-10:
+# `ls ~/.local/bin/*-loop.sh` finds no file, and vkv-inventory -- the project
+# this example is named for -- is no longer registered in schedule/ at all.
+# So this file references nothing live. It is a candidate for deletion; that
+# is a separate change from the prose reaping that noticed it.
 #
 # Example: what the REAL script at
 # ~/.local/bin/vkv-inventory-bug-sweep-loop.sh (currently ~97 lines,
