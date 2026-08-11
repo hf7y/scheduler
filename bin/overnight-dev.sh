@@ -85,7 +85,10 @@ BASE="main"   # first cycle branches from main; then chains through productive c
       continue
     fi
 
-    cd "$WORKTREE" || { cd "$SCHED_REPO"; continue; }
+    # The RECOVERY cd is guarded too (SC2164). If both fail we are in an
+    # unknown directory, and `continue` walks straight back into
+    # `git worktree remove --force` / `git branch -D` at the top of the loop.
+    cd "$WORKTREE" || { cd "$SCHED_REPO" || { echo "cannot cd $SCHED_REPO after a failed worktree cd -- stopping"; exit 1; }; continue; }
     BEFORE_SHA="$(git rev-parse HEAD)"
 
     PROMPT="/nightly-batch
@@ -113,7 +116,11 @@ Commit each finished change with a clear message. Then append a section for THIS
     fi
 
     AFTER_SHA="$(git rev-parse HEAD)"
-    cd "$SCHED_REPO"
+    # cwd is $WORKTREE here. If this cd fails and the loop continues, the next
+    # cycle runs `git worktree remove --force "$WORKTREE"`, `git branch -D` and
+    # `git worktree prune` from INSIDE the worktree an unattended agent just
+    # wrote in. Refuse instead; the EXIT trap still cleans up.
+    cd "$SCHED_REPO" || { echo "cannot cd back to $SCHED_REPO after cycle $i -- stopping before the destructive worktree reset"; exit 1; }
 
     CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
     if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then
