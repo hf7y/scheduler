@@ -126,6 +126,16 @@ if [ -f "$RL" ]; then
   lastdisp="$(grep -n 'DISPATCH\|DONE ' "$RL" 2>/dev/null | tail -1 | cut -c1-90)"
   holdstreak="$(tail -400 "$RL" | grep -c 'HOLD (gate')"
   row UNPRINTED "deployed code stopped pulling new commits" "${pullskip:-0} PULL skip(s) -- a stray untracked file is enough"
+  # The LIFETIME count above cannot tell a blip from a freeze -- which is the
+  # whole of #61. The dispatcher now keeps the CONSECUTIVE count as state; read
+  # it rather than re-deriving it from the log, so there is one definition.
+  PB="$SHARE/scheduler-paced-runner/pull-block.state"
+  if [ -f "$PB" ]; then
+    read -r pb_n pb_reason _ < "$PB" 2>/dev/null || true
+    row UNPRINTED "is the pull frozen RIGHT NOW" "${pb_n:-?} consecutive blocked tick(s), cause: ${pb_reason:-unknown} -- deployed code here is STALE"
+  else
+    row UNPRINTED "is the pull frozen RIGHT NOW" "no -- last pull attempt advanced or was already current"
+  fi
   row UNPRINTED "consecutive gate HOLDs (dispatch drought)" "${holdstreak:-0} in the last 400 log lines"
   row UNPRINTED "when the last actual dispatch was" "${lastdisp:-none found in run.log}"
 else
