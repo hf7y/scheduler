@@ -93,6 +93,44 @@ _freeze_file() {
   printf '%s\n' "${SCHEDULER_FREEZE_FILE:-$here/../schedule/FREEZE}"
 }
 
+# _freeze_fetch_remote -- put schedule/FREEZE from GitHub into a cached temp
+# file and name it in $_FREEZE_REMOTE_CACHE. Returns non-zero if it could not.
+#
+# FAIL CLOSED IS THE CALLER'S JOB, not this function's: it reports whether it
+# got the file, and freeze_check treats "no" as FROZEN. Splitting it that way
+# keeps the polarity decision in one readable place instead of buried in a
+# fetch.
+_FREEZE_REMOTE_CACHE=""
+_freeze_fetch_remote() {
+  local ttl="${SCHEDULER_FREEZE_CACHE_TTL:-45}"
+  local cache="${SCHEDULER_FREEZE_CACHE:-${XDG_CACHE_HOME:-${TMPDIR:-/tmp}}/scheduler-freeze.$(id -u)}"
+  _FREEZE_REMOTE_CACHE="$cache"
+  # Fresh enough? Reuse. `find -newermt` avoids stat(1) portability games.
+  if [ -f "$cache" ]; then
+    local age; age=$(( $(date +%s) - $(date -r "$cache" +%s 2>/dev/null || echo 0) ))
+    [ "$age" -ge 0 ] && [ "$age" -lt "$ttl" ] && return 0
+  fi
+  local lib="${SCHEDULER_DOSE_COMMON:-}"
+  if [ -z "$lib" ]; then
+    local here; here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+    lib="$here/../lib/dose-common.sh"
+  fi
+  [ -r "$lib" ] || return 1
+  # shellcheck source=../lib/dose-common.sh
+  . "$lib" || return 1
+  local body
+  body="$(fetch_repo_file schedule/FREEZE 2>/dev/null)" || {
+    # A 404 (GAP) means the ref genuinely carries no FREEZE -- that is RELEASED,
+    # the same statement an absent file makes inside a real schedule/. Only an
+    # unreachable/unauthenticated GitHub (BLIND) is a refusal. Conflating them
+    # would make every network hiccup a full estate stop.
+    [ "$?" = 4 ] && { : > "$cache"; return 0; }
+    return 1
+  }
+  printf '%s\n' "$body" > "$cache" || return 1
+  return 0
+}
+
 freeze_check() {
   local f reason proj exempt
   # FIRST act, before every early return: a freeze check that came back
@@ -120,13 +158,29 @@ freeze_check() {
     if [ -d "$(dirname "$f")" ]; then
       return 0                     # released: schedule/ is there, FREEZE is not
     fi
-    printf 'FROZEN (no config) -- %s\n' "$f" >&2
-    printf '  no schedule/ directory here, so this copy cannot tell a released freeze from a missing one.\n' >&2
-    printf '  Treating as FROZEN: an abort handle that fails open is not an abort handle.\n' >&2
-    printf '  Point SCHEDULER_FREEZE_FILE at a real FREEZE, or run from a checkout.\n' >&2
-    return 2
+    # NO LOCAL CONFIG -- try GitHub before refusing (hf7y/scheduler#124).
+    #
+    # FILESYSTEM FIRST, DELIBERATELY, and this ordering is the safety property:
+    # an operator standing at the machine with no network must still be able to
+    # stop it. GitHub is the FALLBACK for a build-resident copy that has no
+    # schedule/ at all, never an override of a local file.
+    #
+    # CACHED FOR A FEW SECONDS, because the runner re-checks freeze PER
+    # PARTICIPANT on purpose -- "a freeze that lands mid-tick must stop the
+    # remaining participants" -- and that is a separate process each time, so
+    # an uncached fetch would be one API call per project per tick. Measured
+    # run durations are 110-1000s, so a short TTL costs a freeze essentially
+    # nothing in reaction time while removing the per-participant call.
+    if _freeze_fetch_remote; then
+      f="$_FREEZE_REMOTE_CACHE"
+    else
+      printf 'FROZEN (no config) -- %s\n' "$f" >&2
+      printf '  no schedule/ directory here, and schedule/FREEZE could not be read from GitHub either.\n' >&2
+      printf '  Treating as FROZEN: an abort handle that fails open is not an abort handle.\n' >&2
+      printf '  Point SCHEDULER_FREEZE_FILE at a real FREEZE, or run from a checkout.\n' >&2
+      return 2
+    fi
   fi
-
   if [ ! -r "$f" ]; then
     printf 'FROZEN (unreadable) -- %s exists but cannot be read. Treating as
 FROZEN: an abort handle that fails open is not an abort handle.\n' "$f" >&2
