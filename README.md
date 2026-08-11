@@ -6,8 +6,10 @@ It is **not a daemon**: cron is the coordinator. This repo is a shared engine
 + a config registry + a report aggregator.
 
 For the *why* behind every decision here (and the dated history), see
-[`DESIGN-NOTES.md`](DESIGN-NOTES.md). To move a project off the legacy
-per-project wrapper scripts, see [`MIGRATION.md`](MIGRATION.md).
+[`DESIGN-NOTES.md`](DESIGN-NOTES.md). The one-time move off the legacy
+per-project wrapper scripts is **complete** — see "Backwards compatibility"
+below for the witness, and `ecosystem1/scheduler/MIGRATION.md` in the vault
+for how it was done.
 
 ## The two job tiers
 
@@ -88,7 +90,6 @@ git repo at all — unverifiable is treated as dirty, not as clean.
 | `schedule/*.conf` | One per registered project (`_batch.conf` is global auto-stagger config). |
 | `schedule/_usage.conf` | The pacing knobs `bin/usage-gate.sh` reads — `USAGE_CEILING`, `USAGE_MIN_SLACK`, `USAGE_RUSH_BEFORE_RESET_MIN`, `USAGE_PROBE_MODEL`. Resolved per field: explicit env > `_usage.<host>.conf` (per-host, same convention as `_paced.<host>.conf`) > this file > the gate's built-in defaults. Edit it and the next tick picks it up — no `sync-crontab.sh --apply`, unlike the `RUNNER_ENV` route it retires. An out-of-range value is a loud `ERROR` (exit 2 → HOLD) naming the file; the gate's verdict line reports which source each value came from (`knobs=ceiling:_usage.conf,...`). |
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS/QUESTIONS templates a project copies in, plus `CLAUDE.md.template` (the "suggest `/ideate` instead of implementing" guardrail — see `docs/priority-weight.md` for the realisateur/scheduler split this belongs to). |
-| `INTAKE.md` | The web-tracker HTTP contract a project's backend implements to plug in. |
 | `docs/scheduler-cli.md` | The maintained man page for `bin/scheduler` (`scheduler man` opens it in `$PAGER`): glance column meanings, the `*` convention, where each number comes from, and the files behind them. The terse per-command list stays only in `scheduler --help` so the two can't drift. |
 | `docs/offline-first-checks.md` | The reusable pattern behind `bin/scheduler status`: build a check entirely out of deterministic scripts first, layer AI on top only as an opt-in (one-shot summary or interactive session) — a template for any project that wants the same kind of status check. |
 | `docs/priority-weight.md` | The optional `weight` field in `schedule/_paced.conf`: scheduler enforces it mechanically, realisateur is the one expected to set it based on cross-project vision judgment. |
@@ -108,7 +109,20 @@ Two kinds of fields (full annotated example in
 `BATCH_SCRIPT` (a path to a legacy `~/.local/bin/*-loop.sh` wrapper), that
 wrapper wins and the runtime fields are ignored for that tier. Drop the
 `*_SCRIPT` line to switch that tier onto `scheduler-run`. This is how a
-project migrates on its own schedule without a flag day — see `MIGRATION.md`.
+project migrated on its own schedule without a flag day.
+
+**That migration is complete, and the compatibility path above is now dead
+code.** The step-by-step move was consigned to the vault
+(`ecosystem1/scheduler/MIGRATION.md`, 2026-08-01) and removed from this repo
+on 2026-08-10, because every project it named has either migrated or been
+unregistered.
+
+WITNESS (re-run it; do not trust this paragraph):
+
+    grep -l '^\(SWEEP\|BATCH\)_SCRIPT=' schedule/*.conf
+    # -> schedule/scheduler.conf ONLY, which never used the shared engine
+    ls ~/.local/bin/*-loop.sh
+    # -> No such file or directory
 
 ## Two coordination mechanisms (don't conflate them)
 
