@@ -127,6 +127,40 @@ merge_mode() { [ -f "$MERGE_MODE_FILE" ] && cat "$MERGE_MODE_FILE" || echo "merg
 # (honest -- the debt is still there) but notified only once per branch, so
 # a real blockage doesn't become notification spam that trains you to
 # ignore it.
+# notify_human <title> <body> -- a desktop popup, unless nobody is watching.
+#
+# WHY THIS GUARD EXISTS. On 2026-08-11 Zach was paged every ~2 minutes by
+# `notify-send -u critical test-job "paced/2026-07-25 conflicts with main ..."`
+# fired from a throwaway /tmp/tmp.XXXX/tN/repo clone -- some harness
+# exercising this function for real across numbered scratch clones. Two
+# sessions spent real effort arguing about WHOSE harness it was. That argument
+# is the wrong one to have to win: the popup is wrong no matter who fired it,
+# because A RECONCILE RUNNING IN A SCRATCH CLONE HAS NO HUMAN AUDIENCE.
+#
+# THE DISCRIMINATOR IS THE REPO PATH, NOT THE JOB NAME. Matching on
+# JOB_NAME=test-job would be a naming convention, and the next harness picks a
+# different name. "Is this repo under a temp root" is a fact about the world,
+# it is true of every scratch clone anyone will ever write, and it is false of
+# every real checkout. Same reason bin/lib/not-a-verb.tsv records judgements
+# and not patterns.
+#
+# IT STILL SAYS SO. The message goes to the log either way -- suppressing the
+# popup must not also suppress the finding, or this guard becomes the silent
+# no-op the estate keeps paying for. Only the interruption is dropped.
+notify_human() {
+  local title="$1" body="$2" root
+  root="${SCHED_REPO:-$PWD}"
+  case "$root" in
+    "${TMPDIR:-/tmp}"/*|/tmp/*|/var/tmp/*)
+      echo "notify: SUPPRESSED (repo is a scratch clone under a temp root: $root) -- would have said: $title: $body"
+      return 0 ;;
+  esac
+  # q-756f82: a bare `|| true` guards a notify-send that FAILS, not one that
+  # NEVER RETURNS (dbus socket present, nobody listening -- live 2026-07-28).
+  # Bounded so a decoration cannot wedge the job.
+  timeout 5 notify-send -u critical "$title" "$body" 2>/dev/null || true
+}
+
 reconcile_prior_cycles() {
   local mode b n ahead marker merged_any=0 conflicted=0
 
@@ -171,10 +205,7 @@ reconcile_prior_cycles() {
       echo "reconcile: CONFLICT merging $b -- aborted, main UNCHANGED. Needs a human: git merge $b"
       if [ ! -f "$marker" ]; then
         : > "$marker"
-        # q-756f82: a bare `|| true` guards a notify-send that FAILS, not one
-        # that NEVER RETURNS (dbus socket present, nobody listening -- live
-        # 2026-07-28). Bounded so a decoration cannot wedge the job.
-        timeout 5 notify-send -u critical "$JOB_NAME" "$b conflicts with main -- $n commit(s) stranded, needs a hand merge (see $LOG)" 2>/dev/null || true
+        notify_human "$JOB_NAME" "$b conflicts with main -- $n commit(s) stranded, needs a hand merge (see $LOG)"
       fi
     fi
   done
@@ -188,7 +219,7 @@ reconcile_prior_cycles() {
       echo "reconcile: pushed -- local main and origin/main are level"
     else
       echo "reconcile: push FAILED -- local main left ahead of origin, will retry next cycle"
-      timeout 5 notify-send -u critical "$JOB_NAME" "reconcile could not push main ($ahead ahead) -- see $LOG" 2>/dev/null || true
+      notify_human "$JOB_NAME" "reconcile could not push main ($ahead ahead) -- see $LOG"
     fi
   fi
 
