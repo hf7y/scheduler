@@ -255,7 +255,20 @@ probe_doseproject() {
 # ---------------------------------------------------------------------------
 probe_rosterfromgh() {
   local hits
-  hits="$(grep -rlE 'gh (api|repo view).*(ROSTER|contents)' "$SCHED_ROOT/bin" 2>/dev/null | head -1)"
+  # THE COMMAND WORD MAY BE A VARIABLE. The first pattern here required a
+  # literal `gh`, and reported UNMET on 2026-08-11 against a bin/dose-project.sh
+  # that does exactly what this probe asks -- because it calls "$GH_BIN", and
+  # GH_BIN exists so tests/dose-project-witness.sh can put a fake gh in front of
+  # it. That is the shape the estate wants (INSTALLE_*, VERB_BUILD_ROOT and
+  # TICK_* are all the same idea), so a probe that only sees hardcoded command
+  # names penalises the testable spelling and under-reports the vision it
+  # measures. An UNMET that is wrong is worse than no probe: someone reads it as
+  # work still to do and builds the thing twice.
+  #
+  # Widened, not loosened. The second alternative still demands `contents` AND
+  # `ROSTER` on one line, which is the GitHub contents API reading this exact
+  # file and is not something an unrelated command says by accident.
+  hits="$(grep -rlE 'gh (api|repo view).*(ROSTER|contents)|api[^|;]*contents[^|;]*ROSTER' "$SCHED_ROOT/bin" 2>/dev/null | head -1)"
   if [ -n "$hits" ]; then
     row MET rosterfromgh "$(basename "$hits") reads the roster over gh"
   else
