@@ -763,18 +763,11 @@ require_repo_path() {  # $1 = project, $2 = the resolved repo path
   return 1
 }
 
-resolve_focus_path() {
-  local proj="$1"
-  local repo_path subdir
-  repo_path="$(conf_field "$proj" PROJECT_REPO_PATH)"
-  if [ -z "$repo_path" ]; then
-    echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
-    return 1
-  fi
-  require_repo_path "$proj" "$repo_path" || return 1
-  subdir="$(conf_field "$proj" SCHEDULER_SUBDIR)"
-  echo "$repo_path/${subdir:-.claude}/FOCUS.md"
-}
+# resolve_focus_path() lived here and was DELETED 2026-08-11 (hf7y/scheduler#25
+# item 1). PR #22 moved the idea front door to GitHub issues and deleted the
+# local FOCUS.md writer that was its only caller, orphaning it; it then sat for
+# a week resolving a path nothing wrote. require_repo_path() below is NOT
+# orphaned by this -- resolve_questions_path() still calls it.
 
 resolve_questions_path() {
   local proj="$1"
