@@ -47,9 +47,77 @@ SELF_DIR="$(cd "$(dirname "$SELF_REAL")" && pwd)"
 REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
 : "${REPO_ROOT:=}"   # empty is fine -- the checks below just fall through
 
-STATE_DIR="$HOME/.local/share/$JOB_NAME"
+# ###########################################################################
+# HOST MODE -- one dispatcher for the machine, instead of one per account.
+# ###########################################################################
+#
+# Zach, 2026-08-11: "now that we've moved to /usr/lib and other host level
+# things, the per-user absurdity should end and become rationalized."
+#
+# THE PREMISE THAT JUSTIFIED PER-ACCOUNT DISPATCH IS GONE, and it was retired
+# deliberately the same day rather than eroding. The five self-dev accounts on
+# monkey now share one build root, one /usr/local/bin, one pin and one release
+# clock in root's crontab (hf7y/realisateur#179). Dispatch was the only half of
+# the machine still modelling accounts as islands.
+#
+# WHAT WAS ACTUALLY BROKEN. This file's own header says "Take a global flock",
+# and that was true on mandark where one unix user ran every project. Here the
+# lock is $HOME-scoped, so five accounts firing at the same `0 */6` took five
+# DIFFERENT lock files and serialised nothing. All five then probed
+# usage-gate.sh for ACCOUNT-WIDE quota, read the same pre-spend number, and
+# each decided RUN from it -- a thundering herd against one budget, with the
+# in-tick re-probe unable to see the other four spending concurrently.
+#
+# THE REJECTED FIX, recorded so it is not re-proposed: stagger each account's
+# cron minute by cksum % 60. That lowers collision PROBABILITY and arbitrates
+# nothing -- two accounts nine minutes apart still overlap on a run, and
+# measured durations reach ~1000s. Randomising spawn time is not arbitration.
+#
+# THE SPLIT. The DECISION is host-level; the EXECUTION stays per-account. Only
+# three things change, which is why this is a mode and not a second
+# dispatcher -- a second implementation of "who dispatches now" would be one
+# fact with two readers, and this estate has paid for that shape repeatedly:
+#
+#   1. the lock and rotation state move to host scope (below)
+#   2. the run is wrapped in `sudo -u <account>` (see the dispatch site)
+#   3. rotation stops being inert BY ITSELF -- the runnability test further
+#      down asks `[ -x "$prog" ]`, which is false for a peer's 0700 home under
+#      that peer's uid and TRUE under root. Nothing there needed changing;
+#      hf7y/scheduler#55's "weight and rotation index are wholly inert" was a
+#      consequence of who was asking, not of the code.
+#
+# Everything else -- the gate, freeze-check, verdict handling, MAX_PER_TICK,
+# the logging -- is untouched and shared by both modes, which is the point.
+PACED_HOST_MODE="${PACED_HOST_MODE:-0}"
+
+# acct_of_prog <path> -- which account owns the row whose command is <path>.
+# A FUNCTION, not an inline sed, so tests/paced-host-mode-witness.sh can call
+# it: the alternative is a regex whose only exercise is production, which is
+# how hf7y/scheduler#112's unwitnessed branch got written down as a known gap
+# rather than shipped as a claim. Prints nothing and returns 1 when the path
+# is not under /home/<acct>/, which the caller must treat as "not mine".
+acct_of_prog() {
+  local a; a="$(printf '%s' "${1:-}" | sed -n 's#^/home/\([^/]\{1,\}\)/.*#\1#p')"
+  [ -n "$a" ] || return 1
+  printf '%s' "$a"
+}
+
+if [ "$PACED_HOST_MODE" = 1 ]; then
+  # Refuse rather than silently degrade: host mode without root cannot sudo to
+  # the accounts, so every dispatch would fail one at a time and the tick would
+  # look like five broken projects instead of one misconfigured runner.
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "usage-paced-runner: PACED_HOST_MODE=1 needs root (it dispatches AS each account via sudo). Refusing." >&2
+    exit 2
+  fi
+  STATE_DIR="${PACED_HOST_STATE:-/var/lib/$JOB_NAME}"
+  LOCK="${PACED_HOST_LOCK:-/run/lock/$JOB_NAME.lock}"
+  mkdir -p "$STATE_DIR" "$(dirname "$LOCK")" 2>/dev/null || true
+else
+  STATE_DIR="$HOME/.local/share/$JOB_NAME"
+  LOCK="$STATE_DIR/run.lock"
+fi
 LOG="$STATE_DIR/run.log"
-LOCK="$STATE_DIR/run.lock"
 PTR="$STATE_DIR/rotation.idx"
 
 USAGE_GATE="${USAGE_GATE:-$HOME/.local/bin/usage-gate.sh}"
@@ -470,7 +538,28 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # stamp that reads as current is worse than no stamp.
   "$SELF_DIR/verdict.sh" clear "$name" >/dev/null 2>&1 || true
 
-  log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF)"
+  # HOST MODE: run AS the account that owns the row. The account is read off
+  # the command's own path (/home/<acct>/...), which is the authority for who
+  # runs it -- that path IS the thing being executed, so deriving the uid from
+  # anywhere else would let the two disagree.
+  #
+  # A LOGIN-SHAPED PATH IS NOT OPTIONAL. `sudo -u x cmd` is not a login shell,
+  # so Ubuntu's .profile never runs and ~/.local/bin is absent -- the omission
+  # that once made land-selfdev.sh report "installe is not on PATH" from the
+  # script that had just linked it (realisateur MONKEY.md 8.1). /usr/local/bin
+  # is included because that is where this host's verbs now live.
+  if [ "$PACED_HOST_MODE" = 1 ]; then
+    acct="$(acct_of_prog "$prog" || true)"
+    acct_home="$(getent passwd "$acct" 2>/dev/null | cut -d: -f6)"
+    if [ -z "$acct" ] || [ -z "$acct_home" ]; then
+      log "SKIP $name -- host mode cannot tell which account owns '$prog' (no /home/<acct>/ prefix, or no such account). NOT dispatched."
+      dispatched=$((dispatched + 1))
+      continue
+    fi
+    cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin $cmd"
+  fi
+
+  log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF mode=$([ "$PACED_HOST_MODE" = 1 ] && echo host || echo account))"
   start=$(date +%s)
   # shellcheck disable=SC2086
   if $cmd; then rc=0; else rc=$?; fi
