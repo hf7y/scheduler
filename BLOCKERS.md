@@ -1345,6 +1345,16 @@ happened yet for any of them.
   > (answer inline here)
 
 
+- **2026-08-11 (realisateur, machine-append): four entries above from the 2026-07-29 mandark-bootstrap ("THE PLAY") sprint are STALE -- the plan they belong to was superseded wholesale by the monkey migration, and one of them lost a real answer in a hand-merge.** Found because this exact stale block (unattributed decision text, dated 2026-07-29, no ANSWERED marker) was fed verbatim into a realisateur dispatch prompt today as "act on this first" -- it would have had this run re-litigate root/VM/backup calls that are long since moot.
+
+1. "four migration decisions... confirm 63cf3b4" (the `dd11360`/`63cf3b4` entry): WAS answered and applied -- `58d6495` ("mandark scheduler self-dev goes DARK") is a real ancestor of scheduler `main` HEAD (`git merge-base --is-ancestor 58d6495 HEAD`, verified this session) and its own commit message states it recorded the ANSWERED text in this file's slot. That text is no longer present in the live file (`git log -p -- BLOCKERS.md | grep 'confirm 63cf3b4'` finds it only in `58d6495`'s diff, not in current content) -- lost somewhere in the run of hand-merges/conflict-resolutions between `58d6495` and `da7fef1` ("Hand-merge stranded paced/2026-07-27 into main"). Substance intact regardless: `schedule/_paced.dexter.conf:245-258` still documents mandark's scheduler line as dark for exactly this reason, and `schedule/_paced.conf` carries no active mandark scheduler row today.
+2. "the freeze may now be released" (the `EXEMPT: scheduler@dexter` entry): premise gone. `schedule/FREEZE` is no longer the one-shot migration gate this question was about -- since 2026-08-03 it is a standing dispatcher allowlist ("Self-dev has moved off mandark... WHAT THIS FILE STILL DOES NOW THAT IT NAMES MORE THAN ONE"), so "release it" no longer parses as an action.
+3. "does the milestone override stash-and-restore, or re-derive" (M1.5): about a bootstrap step (`THE PLAY`) for mandark self-dev, which never ran to that step -- self-dev moved to `monkey` instead (`realisateur/MONKEY.md`, milestone met 2026-08-03). No M1.5 exists to have an override.
+4. "scheduler's self-dev cycles keep hitting the 60-turn ceiling" (`scheduler-dev-cycle.sh` on mandark): same -- that cycle script's mandark deployment is what went dark per (1); the question is about a runner that no longer dispatches.
+
+Not moving these to Recently resolved -- unattended runs may not move/prune per this file's own policy, and (1)'s substance was answered by a human even though the annotation was lost, which is a different shape than (2)-(4)'s premise having expired. Leaving all four in place with this note attached; a human sweep (`/ideate`/`scheduler -b --claude`) can retire them properly.
+`# verified 2026-08-11 via: git merge-base --is-ancestor 58d6495 HEAD; git log -p -- BLOCKERS.md | grep 'confirm 63cf3b4'; sed -n '245,258p' schedule/_paced.dexter.conf; cat schedule/FREEZE | head -20; head -15 realisateur/MONKEY.md`
+
 ## bibliothecaire
 
 - **Three of seven themes are blocked on primary texts behind a library
