@@ -101,7 +101,31 @@ freeze_check() {
   proj="${1:-}"
   f="$(_freeze_file)"
 
-  [ -e "$f" ] || return 0          # the common case: no file, not frozen
+  # ABSENT FILE vs ABSENT CONFIG. These are opposite answers and they used to
+  # share a line.
+  #
+  # An absent FREEZE inside a real schedule/ directory means RELEASED -- the
+  # file's own documented way to lift a freeze is `git rm` it -- so returning 0
+  # there is correct and stays.
+  #
+  # An absent schedule/ DIRECTORY means this copy has no configuration at all,
+  # and answering "not frozen" is a guess dressed as a verdict. Found live
+  # 2026-08-11 the moment this script started travelling in the verb build:
+  # the build carries bin/, lib/, man/ and test/ but no schedule/, so
+  # `dose freeze-check ecosim` on a host with no checkout returned rc=0 --
+  # ALLOWED -- and the emergency abort handle was inert on exactly the hosts it
+  # exists to stop. The next branch down already states the rule this broke:
+  # "an abort handle that fails open is not an abort handle."
+  if [ ! -e "$f" ]; then
+    if [ -d "$(dirname "$f")" ]; then
+      return 0                     # released: schedule/ is there, FREEZE is not
+    fi
+    printf 'FROZEN (no config) -- %s\n' "$f" >&2
+    printf '  no schedule/ directory here, so this copy cannot tell a released freeze from a missing one.\n' >&2
+    printf '  Treating as FROZEN: an abort handle that fails open is not an abort handle.\n' >&2
+    printf '  Point SCHEDULER_FREEZE_FILE at a real FREEZE, or run from a checkout.\n' >&2
+    return 2
+  fi
 
   if [ ! -r "$f" ]; then
     printf 'FROZEN (unreadable) -- %s exists but cannot be read. Treating as
