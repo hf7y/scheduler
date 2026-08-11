@@ -1,0 +1,59 @@
+# schedule/ROSTER -- the single source scheduler#79 is building toward.
+# project | account@host | rate | state
+#
+# NOT YET AUTHORITATIVE. schedule/_paced.monkey.conf, schedule/FREEZE, and
+# each schedule/<project>.conf are still what dispatch actually reads today;
+# this file is a parallel derivation of the same set, kept honest by
+# `bash bin/roster-diff.sh`. It becomes authoritative only when the
+# retirement PR (hf7y/scheduler#79) removes those three as liveness sources
+# -- bin/roster-target.sh's `onekey` probe is what measures that landing,
+# not this file merely existing with rows in it (`oneroster`).
+#
+# ONLY ZACH EDITS THIS FILE. schedule/FREEZE's header reserves its
+# human-adds-the-line guard for exactly this reason ("a row added ... by an
+# agent ... still dispatches NOTHING until a human adds a line here"). Once
+# #80's `dose <project>` reads this file to converge a host, editing a row
+# here IS arming or parking a project -- the same act FREEZE will not let an
+# agent do to itself. Until then this file is inert prose an agent may read
+# but must not change, and least of all change-then-converge against.
+#
+# `state` is ONE field (live/parked) -- the whole point, per #79: it is what
+# makes "enabled=1 in one file but EXEMPT commented in another" unrepresentable.
+# `rate` is 6h for every row below, taken as-is from _runner.monkey.conf's
+# RUNNER_CRON="0 */6 * * *". This migration changes NOTHING about dispatch
+# behaviour, live or parked -- do not read a different rate into any row.
+#
+# Derived 2026-08-11 from _paced.monkey.conf (enabled==1), FREEZE (uncommented
+# EXEMPT: <p>@monkey), and each schedule/<p>.conf's CRON_HOST/CRON_ACCOUNT --
+# live only where all three agree. Re-verify, don't trust this comment:
+#   bash bin/roster-diff.sh
+
+ecosim          | ecosim@monkey          | 6h | live
+bibliothecaire  | bibliothecaire@monkey  | 6h | live
+vim-arcade      | vim-arcade@monkey      | 6h | live
+realisateur     | realisateur@monkey     | 6h | live
+scheduler       | scheduler@monkey       | 6h | live
+
+# PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
+# Playwright cannot launch a browser in that account (missing
+# libatk-1.0.so.0), so no gameplay commit can land there. UN-PAUSE ON OR
+# AFTER 2026-08-13 by changing `parked` to `live` below -- today that alone
+# is not enough, since this file is not yet authoritative: _paced.monkey.conf's
+# row must also go back to enabled=1 and FREEZE's `EXEMPT: chezz@monkey` must
+# also be uncommented. Both, or it stays dark, same as always.
+chezz           | chezz@monkey           | 6h | parked
+
+# PAUSED 2026-08-06, Zach-directed: "CRT also needs to pause pending Zach
+# work." UN-PAUSE CONDITION IS A PERSON, NOT A DATE -- no 2026-08-13 here.
+# Note: schedule/crt.conf sets no CRON_HOST/CRON_ACCOUNT at all (unlike
+# chezz's, which does); the account@host below is staged from its
+# _paced.monkey.conf row and FREEZE's commented EXEMPT line, not from a
+# third file that agrees -- that third leg has simply never been filled in.
+crt             | crt@monkey             | 6h | parked
+
+# PAUSED 2026-08-06, Zach-directed, INDEFINITELY: "Baudin should come
+# offline until I can figure out what it is and what it's supposed to do. A
+# run blocked on human-input should stop triggering." No date, no trigger --
+# un-pause condition is Zach deciding what baudin is for. Same
+# CRON_HOST/CRON_ACCOUNT gap as crt above: schedule/baudin.conf sets neither.
+baudin          | baudin@monkey          | 6h | parked
