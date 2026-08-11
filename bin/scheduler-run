@@ -156,6 +156,57 @@ done
 # so never has PREFIX) needs that fallback.
 : "${AUTONOMY_TIER:=}"
 
+# ---------------------------------------------------------------------------
+# GH_TOKEN -- mint a one-hour GitHub App installation token, when this account
+# is wired for one. Witness: tests/gh-app-token-witness.sh.
+#
+# WHY THIS IS HERE AND NOT LEFT TO `gh`. Without it, `gh` uses whatever
+# long-lived token happens to sit in the account's own ~/.config/gh/hosts.yml,
+# and those drift per account with nothing comparing them. Measured on monkey
+# 2026-08-11, three armed accounts, three different answers:
+#
+#     vim-arcade      gho_...            pulls API works
+#     bibliothecaire  gho_...            pulls API works
+#     ecosim          github_pat_11A...  403 on the ENTIRE Pull-requests API
+#
+# ecosim's fine-grained PAT was missing the Pull requests permission, so it was
+# refused on READ as well as write. It did correct work on 2026-08-09 and again
+# on 08-11, pushed branch `port-self-dev-checks` with green tests, and could
+# not open a pull request for any of it.
+#
+# THE PART WORTH FIXING IS THE SILENCE, not the permission. `gh issue list`
+# kept working, so the brief's first step succeeded and every run looked
+# healthy right up to the step that mattered. Nothing in the engine had an
+# opinion about which credential an account carried, so the account whose token
+# had rotted was the last to find out.
+#
+# An installation token expires in an hour and is minted from a key on demand
+# -- see realisateur's bin/selfdev-gh-app.sh and its own "WHY A TOKEN AND NOT A
+# PAT". Minting here means every account draws the same credential from the
+# same source, once per dispatch, instead of from ten files nobody diffs.
+#
+# FAIL-OPEN WHEN UNCONFIGURED, FAIL-LOUD WHEN BROKEN. An account with no
+# gh-app.conf keeps whatever auth it already had: this must never take a
+# working credential away from an account that has one, which today is every
+# account but ecosim. But a mint that is CONFIGURED and then FAILS says so on
+# stderr instead of silently falling back, because a silent fallback is
+# indistinguishable from the unconfigured case -- and that indistinguishability
+# is precisely what cost ecosim two days.
+# ---------------------------------------------------------------------------
+GH_APP_HELPER="${SELFDEV_GH_APP_SH:-$HOME/.local/libexec/selfdev/selfdev-gh-app.sh}"
+GH_APP_CONF="${SELFDEV_APP_CONF:-$HOME/.config/selfdev/gh-app.conf}"
+if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_APP_CONF" ] && [ -x "$GH_APP_HELPER" ]; then
+  if _gh_tok="$(SELFDEV_APP_CONF="$GH_APP_CONF" "$GH_APP_HELPER" --token 2>/dev/null)" \
+     && [ -n "$_gh_tok" ]; then
+    GH_TOKEN="$_gh_tok"
+    export GH_TOKEN
+    echo "scheduler-run: minted a GitHub App installation token for $(id -un)" >&2
+  else
+    echo "scheduler-run: WARNING -- $GH_APP_CONF exists but '$GH_APP_HELPER --token' produced nothing. Falling back to this account's stored gh auth, which is the credential shape that stranded ecosim's work for two days. Check it before trusting this run's PR steps." >&2
+  fi
+  unset _gh_tok
+fi
+
 export JOB_NAME PROJECT_KEY TIER PREFIX REPO_URL REPO_SUBDIR PROMPT AUTONOMY_TIER
 [ -n "${TEST_CMD:-}" ] && export TEST_CMD
 
