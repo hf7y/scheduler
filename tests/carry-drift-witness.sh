@@ -29,7 +29,12 @@ ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
 bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
 echo "carry-drift-witness"
 
-REF_MAIN="${CARRY_REF_MAIN:-main}"
+# origin/main, not main: a CI checkout has no local branches, and the fetch
+# below writes into refs/remotes/origin/. Defaulting to the bare name made this
+# fetch successfully and then go BLIND looking for a ref it had not created --
+# caught by CI on this witness's own first run, which is the correct place for
+# a check about deploy drift to be caught.
+REF_MAIN="${CARRY_REF_MAIN:-origin/main}"
 REF_BASH="${CARRY_REF_BASHIFIED:-origin/bashified}"
 
 # CI CHECKOUTS ARE SHALLOW. actions/checkout fetches the one ref under test, so
@@ -40,10 +45,9 @@ REF_BASH="${CARRY_REF_BASHIFIED:-origin/bashified}"
 # green) if the fetch cannot supply it either.
 for r in "$REF_MAIN" "$REF_BASH"; do
   git rev-parse --verify -q "$r" >/dev/null 2>&1 && continue
-  case "$r" in
-    origin/*) git fetch -q --depth=1 origin "${r#origin/}:refs/remotes/origin/${r#origin/}" 2>/dev/null || true ;;
-    *)        git fetch -q --depth=1 origin "$r:refs/remotes/origin/$r" 2>/dev/null || true ;;
-  esac
+  # Fetch into the SAME name being tested, or the check above still fails.
+  b="${r#origin/}"
+  git fetch -q --depth=1 origin "$b:refs/remotes/origin/$b" 2>/dev/null || true
 done
 
 for r in "$REF_MAIN" "$REF_BASH"; do
