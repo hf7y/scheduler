@@ -19,20 +19,51 @@
 #
 # `state` is ONE field (live/parked) -- the whole point, per #79: it is what
 # makes "enabled=1 in one file but EXEMPT commented in another" unrepresentable.
-# `rate` is 6h for every row below, taken as-is from _runner.monkey.conf's
-# RUNNER_CRON="0 */6 * * *". This migration changes NOTHING about dispatch
-# behaviour, live or parked -- do not read a different rate into any row.
+# `rate` was 6h for every row -- the value the migration inherited from
+# _runner.monkey.conf so that it changed nothing. RAISED TO 2h for the live
+# rows on 2026-08-12, Zach-directed ("up the arithmetic to increase pace").
+#
+# THE ARITHMETIC, so the next reader can redo it rather than trust it.
+# 5 live accounts, PACED_MAX_PER_TICK=1, and each account can only execute its
+# OWN row (the other homes are 0700), so a tick is one dispatch per account:
+#
+#   6h  ->  4 ticks/day x 5 =  20 dispatches/day   (before)
+#   2h  -> 12 ticks/day x 5 =  60 dispatches/day   (now, 3x)
+#
+# Note PACED_MAX_PER_TICK is NOT a lever here: it is capped by the number of
+# rows an account can actually run, which is one. Under host dispatch
+# (hf7y/scheduler#55) it becomes a real knob; today only the interval is.
+#
+# THIS FILE IS THE ONLY PLACE THE RATE IS SET. _runner.<host>.conf's RUNNER_CRON
+# is deliberately left alone: it is the legacy writer, applied by running
+# `sync-crontab.sh --apply` AS EACH ACCOUNT, which is the five-way manual dance
+# hf7y/scheduler#81 exists to retire. Editing both would have made two writers
+# for one fact, and whichever ran last would win silently -- exactly
+# hf7y/scheduler#119. Change the rate HERE and converge with the verb:
+#
+#     dose <project> --apply        (on the host named in the row)
+#
+# WHAT THE GATE SAID WHEN THIS WAS SET, measured not assumed:
+#   verdict=RUN binding=7d util=0.310 burnline=0.258 slack=-0.052
+#   resets_in_min=7482
+# 31% of the 7-day window used with 1.8 days elapsed -- ALREADY ABOVE the
+# even-burn line, and running only because USAGE_RUSH_BEFORE_RESET_MIN=10080
+# disables pacing for the whole window. At 3x, the 0.99 ceiling is reachable
+# in roughly a day, after which the gate HOLDS until the window rolls. That is
+# the ceiling working as configured (Zach, 2026-07-29), not a failure -- but it
+# means the observable outcome of this change may be "burns hard, then pauses"
+# rather than "burns evenly". Dial the rate here if that is not wanted.
 #
 # Derived 2026-08-11 from _paced.monkey.conf (enabled==1), FREEZE (uncommented
 # EXEMPT: <p>@monkey), and each schedule/<p>.conf's CRON_HOST/CRON_ACCOUNT --
 # live only where all three agree. Re-verify, don't trust this comment:
 #   bash bin/roster-diff.sh
 
-ecosim          | ecosim@monkey          | 6h | live
-bibliothecaire  | bibliothecaire@monkey  | 6h | live
-vim-arcade      | vim-arcade@monkey      | 6h | live
-realisateur     | realisateur@monkey     | 6h | live
-scheduler       | scheduler@monkey       | 6h | live
+ecosim          | ecosim@monkey          | 2h | live
+bibliothecaire  | bibliothecaire@monkey  | 2h | live
+vim-arcade      | vim-arcade@monkey      | 2h | live
+realisateur     | realisateur@monkey     | 2h | live
+scheduler       | scheduler@monkey       | 2h | live
 
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
