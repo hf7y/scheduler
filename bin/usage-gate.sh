@@ -1,71 +1,24 @@
 #!/usr/bin/env bash
 # usage-gate.sh -- the pacing brain's sensor + decision.
 #
-# Reads your LIVE, account-wide usage from Anthropic's own usage endpoint and
-# decides whether background jobs may run right now, so autonomous work fills
-# the quota you're leaving on the table without pushing you toward the cap.
-# Model: drive each window's utilisation along a straight "even-burn" line
-# from the window start to 100% at its reset; RUN when actual util is BELOW
-# that line (slack going to waste), HOLD when at/over it (you're already on
-# pace to spend it) or above a safety ceiling.
+# Reads your LIVE, account-wide usage from Anthropic's unified rate-limit
+# headers and decides whether background jobs may run right now, so autonomous
+# work fills the quota you're leaving on the table without pushing you toward
+# the cap. Model: drive each window's utilisation along a straight "even-burn"
+# line from the window start to 100% at its reset; RUN when actual util is
+# BELOW that line (slack going to waste), HOLD when at/over it (you're already
+# on pace to spend it) or above a safety ceiling.
 #
-# Signal (2026-08-11, TOKEN-FREE as of this change -- see "WHY THE PROBE
-# CHANGED" below): a plain authenticated GET to
-#   https://api.anthropic.com/api/oauth/usage
-# returns `five_hour`/`seven_day` objects (`utilization` 0-100, `resets_at`
-# ISO8601) plus a `limits[]` breakdown with a `severity` per window (matched
-# by `kind`: "session" = 5h, "weekly_all" = 7d). Same OAuth bearer token the
-# gate already resolves below, reused for a read instead of a spend. These
-# are ACCOUNT-WIDE (web, Slack, every machine, jobs), so jobs pace against
-# YOUR own usage too -- exactly the requirement. Anthropic enforces a rolling
-# 5-hour AND a 7-day window; we honour BOTH and defer to the tighter.
-#
-# WHY THE PROBE CHANGED: the previous signal was a real `POST /v1/messages`
-# call (model=$USAGE_PROBE_MODEL, max_tokens=1, "~23 tokens") whose only
-# purpose was reading the `anthropic-ratelimit-unified-*` response headers --
-# it spent real quota, from the SAME weekly budget it exists to protect, on
-# every gate check (4-24+ times/day across hosts under the paced-runner
-# schedule). senechal's claudequota plasmoid already reads this exact
-# five_hour/seven_day shape from /api/oauth/usage with zero token cost (see
-# hf7y/senechal remedies/claudequota-*.sh and contents/scripts/claude-quota-json)
-# -- this change ports that endpoint here so the gate stops taxing the thing
-# it measures. `schedule/_runner.mandark.conf`'s own retirement note already
-# names this cost explicitly ("still called usage-gate.sh, spending a quota
-# probe against the SHARED weekly budget for work it could not do") --  this
-# change removes the spend itself rather than working around it by disabling
-# hosts.
-#
-# DRAFT / NOT YET LIVE-VERIFIED (2026-08-11) -- read before merging. What IS
-# confirmed: the endpoint, auth (same bearer token), and the utilization/
-# resets_at shape -- all checked with a live `curl` against this account
-# during the senechal session that found this bug (48%/54% five_hour, 27%/28%
-# seven_day, matching the widget). What is NOT yet confirmed:
-#   1. The `severity` field's full vocabulary. Only "normal" has been
-#      observed live. The old header-based `status` had a documented
-#      "rejected" value that hard-blocked; this account has never actually
-#      been rejected during testing, so there is no live example of what
-#      `limits[].severity` says when it would. The block condition below
-#      (`severity not in ("normal", "warning")`) is a conservative GUESS,
-#      not a verified port -- confirm against Anthropic's docs for this field
-#      (linked from the `spend.disclaimer` URL in the response body) or by
-#      finding a session that actually got throttled, before trusting it to
-#      gate real dispatch.
-#   2. Behaviour under the live paced-runner loop across hosts (dexter,
-#      monkey) -- only run ad hoc from a shell so far, not through
-#      bin/usage-paced-runner.sh or a real cron tick.
-#   3. tests/usage-gate-token-witness.sh still targets the token-resolution
-#      code, which is untouched, so it should still pass -- but there is no
-#      behavioural test for the probe/parse itself (the same gap the token
-#      witness's own header names: "would need to stand up a fake
-#      api.anthropic.com"). Consider adding one against a canned JSON body
-#      before merging.
-# Opened as a DRAFT PR for exactly this reason -- the token-cost bug and the
-# fix's shape are both solid, but a later pass should close 1-3 before this
-# starts gating real dispatch.
+# Signal: one ~23-token Haiku probe returns headers
+#   anthropic-ratelimit-unified-{5h,7d}-{utilization,reset,status}
+#   anthropic-ratelimit-unified-representative-claim   (which window binds)
+# These are ACCOUNT-WIDE (web, Slack, every machine, jobs), so jobs pace
+# against YOUR own usage too -- exactly the requirement. Anthropic enforces a
+# rolling 5-hour AND a 7-day window; we honour BOTH and defer to the tighter.
 #
 # Output: key=val lines + a human summary. Exit code is the verdict:
 #   0 = RUN   (every window below its burn-line by >= MIN_SLACK, below CEILING)
-#   1 = HOLD  (on/over pace, at ceiling, or a window's severity looks blocking)
+#   1 = HOLD  (on/over pace, at ceiling, or a window is 'rejected')
 #   2 = ERROR (probe failed / unparseable)  -> callers MUST treat as HOLD
 #
 # Rush-before-reset (human policy, 2026-07-20): within USAGE_RUSH_BEFORE_RESET_MIN
@@ -243,108 +196,84 @@ fi
 # callers and logs that match on it keep working.
 [ -n "$TOKEN" ] || emit_error no_token
 
-# TOKEN-FREE PROBE (2026-08-11): a plain GET, no model, no spend -- see the
-# header comment's "WHY THE PROBE CHANGED". $MODEL/$USAGE_PROBE_MODEL is
-# resolved above for backward compatibility (a conf/env setting it should not
-# start erroring) but is no longer used for anything; keeping the knob alive
-# is cheap, deleting it isn't free for anyone who set it. Body captured to a
-# tempfile rather than a variable so a huge/garbled response can't blow up
-# `$()` command substitution the way the old header-only capture never risked.
-BODY_FILE="$(mktemp)"; trap 'rm -f "$BODY_FILE"' EXIT
-CODE=$(curl -sS -o "$BODY_FILE" -w '%{http_code}' --max-time 15 \
-  https://api.anthropic.com/api/oauth/usage \
+HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
+CODE=$(curl -sS -o /dev/null -D "$HDR" -w '%{http_code}' --max-time 30 \
+  https://api.anthropic.com/v1/messages \
   -H "authorization: Bearer $TOKEN" \
   -H "anthropic-version: 2023-06-01" \
   -H "anthropic-beta: oauth-2025-04-20" \
-  -H "accept: application/json" 2>/dev/null) \
+  -H "content-type: application/json" \
+  -d "{\"model\":\"$MODEL\",\"max_tokens\":1,\"system\":\"You are Claude Code, Anthropic's official CLI for Claude.\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" 2>/dev/null) \
   || emit_error curl_failed
 
-# Decision core in python: parse the usage body, compute burn-lines, pick
-# verdict. USAGE_RUSH_BEFORE_RESET_MIN is passed EXPLICITLY: python reads it
-# from its own environment, so before conf support it only ever arrived when
-# a caller had exported it -- a conf/shell-var value would have been silently
-# ignored.
+# Decision core in python: parse headers, compute burn-lines, pick verdict.
+# USAGE_RUSH_BEFORE_RESET_MIN is passed EXPLICITLY: python reads it from its
+# own environment, so before conf support it only ever arrived when a caller
+# had exported it -- a conf/shell-var value would have been silently ignored.
 CEILING="$CEILING" MIN_SLACK="$MIN_SLACK" HTTP_CODE="$CODE" QUIET="$QUIET" \
 USAGE_RUSH_BEFORE_RESET_MIN="$RUSH_MIN" \
 KNOB_SRC="ceiling:$CEILING_SRC,min_slack:$MIN_SLACK_SRC,rush_min:$RUSH_MIN_SRC" \
-python3 - "$BODY_FILE" <<'PY'
-import json, os, sys, time
-from datetime import datetime
+python3 - "$HDR" <<'PY'
+import os, re, sys, time
 
-body_path = sys.argv[1]
+hdr_path = sys.argv[1]
 ceiling  = float(os.environ["CEILING"])
 min_slack= float(os.environ["MIN_SLACK"])
 quiet    = os.environ.get("QUIET") == "1"
 code     = os.environ.get("HTTP_CODE", "?")
 now      = time.time()
 
+vals = {}
+pat = re.compile(r"^anthropic-ratelimit-unified-([\w-]+):\s*(.*?)\s*$", re.I)
+for line in open(hdr_path, "r", errors="replace"):
+    m = pat.match(line)
+    if m:
+        vals[m.group(1).lower()] = m.group(2).strip()
+
+WINDOWS = (("5h", 5*3600), ("7d", 7*86400))
 def num(x):
     try: return float(x)
     except (TypeError, ValueError): return None
 
-def parse_iso(s):  # "2026-08-11T20:00:00.734421+00:00" -> epoch seconds
-    if not s: return None
-    try: return datetime.fromisoformat(s).timestamp()
-    except (TypeError, ValueError): return None
-
-try:
-    j = json.load(open(body_path, "r", errors="replace"))
-except (json.JSONDecodeError, OSError):
-    j = None
-
-# WINDOWS: (label, json key for the util/reset pair, `limits[].kind` for its
-# severity entry, window length in seconds).
-WINDOWS = (("5h", "five_hour", "session", 5*3600), ("7d", "seven_day", "weekly_all", 7*86400))
-
-if not isinstance(j, dict) or not any(k in j for _, k, _, _ in WINDOWS):
-    print("ERROR" if quiet else f"verdict=ERROR reason=no_usage_fields http_code={code}")
+if not any(("%s-utilization" % w) in vals for w, _ in WINDOWS):
+    print("ERROR" if quiet else f"verdict=ERROR reason=no_headers http_code={code}")
     sys.exit(2)
-
-limits_by_kind = {
-    e["kind"]: e for e in (j.get("limits") or []) if isinstance(e, dict) and e.get("kind")
-}
 
 # Rush-before-reset (human policy, 2026-07-20): unused WEEKLY quota is lost
 # at the 7d reset, it doesn't roll over -- so preserving even-burn slack in
 # the final stretch before that reset is pure waste, not caution. Once the
 # 7d window is within RUSH_MIN of its own reset, drop "on-pace" as a hold
-# reason on BOTH windows (still respect "ceiling"/a blocking severity --
-# those are real API limits, not pacing preference) and just run flat-out
-# until one of those actually blocks. This deliberately accepts hitting the
-# 5h ceiling early ("the session maxes out") -- that window refreches on its
+# reason on BOTH windows (still respect "ceiling"/"rejected" -- those are
+# real API limits, not pacing preference) and just run flat-out until one
+# of those actually blocks. This deliberately accepts hitting the 5h
+# ceiling early ("the session maxes out") -- that window refreches on its
 # own on a matter of hours regardless, unlike the 7-day budget this is
 # trying not to leave on the table.
 RUSH_MIN = float(os.environ.get("USAGE_RUSH_BEFORE_RESET_MIN", "120"))
-reset_7d = parse_iso((j.get("seven_day") or {}).get("resets_at"))
+reset_7d = num(vals.get("7d-reset"))
 rush = reset_7d is not None and (reset_7d - now) / 60.0 <= RUSH_MIN
 
 rows, block = [], []
-for w, jkey, limkey, length in WINDOWS:
-    win = j.get(jkey) or {}
-    util_pct = num(win.get("utilization"))
-    reset = parse_iso(win.get("resets_at"))
-    if util_pct is None or reset is None:
+for w, length in WINDOWS:
+    util   = num(vals.get(f"{w}-utilization"))
+    reset  = num(vals.get(f"{w}-reset"))
+    status = vals.get(f"{w}-status", "")
+    if util is None or reset is None:
         continue
-    util = util_pct / 100.0
-    # DRAFT/UNVERIFIED (see this script's header, "DRAFT / NOT YET
-    # LIVE-VERIFIED" item 1): only "normal" has been observed live for this
-    # field. Treating anything else as blocking is the conservative guess
-    # standing in for the old header `status == "rejected"` check.
-    severity = ((limits_by_kind.get(limkey) or {}).get("severity") or "normal").lower()
     # even-burn target = fraction of the window elapsed by now
     target = 1.0 - (reset - now) / length
     target = max(0.0, min(1.0, target))
     slack  = target - util               # >0 => behind pace => room to run
     reasons = []
-    if severity not in ("normal", "warning"): reasons.append(f"severity:{severity}")
-    if util >= ceiling:                       reasons.append("ceiling")
-    if slack < min_slack and not rush:        reasons.append("on-pace")
+    if status.lower() == "rejected":       reasons.append("rejected")
+    if util >= ceiling:                    reasons.append("ceiling")
+    if slack < min_slack and not rush:     reasons.append("on-pace")
     if reasons: block.append((w, reasons))
-    rows.append((w, util, target, slack, reset, severity))
+    rows.append((w, util, target, slack, reset, status))
 
 # tightest = least slack; that's the binding window
 rows.sort(key=lambda r: r[3])
-binding = rows[0][0] if rows else "?"
+binding = rows[0][0] if rows else vals.get("representative-claim", "?")
 run = (len(block) == 0) and (len(rows) > 0)
 verdict = "RUN" if run else "HOLD"
 
