@@ -259,6 +259,76 @@ CODE=$(curl -sS -o "$BODY_FILE" -w '%{http_code}' --max-time 15 \
   -H "accept: application/json" 2>/dev/null) \
   || emit_error curl_failed
 
+# ###########################################################################
+# FALL BACK TO THE PAID PROBE WHEN THE FREE ONE IS REFUSED
+# ###########################################################################
+#
+# /api/oauth/usage answers for an INTERACTIVE OAuth credential and 403s for a
+# `claude setup-token` token. Those are different credential types and the
+# estate holds both:
+#
+#   mandark      ~/.claude/.credentials.json   interactive   -> 200
+#   monkey/*     settings.json CLAUDE_CODE_OAUTH_TOKEN       -> 403
+#
+# hf7y/scheduler#110 swapped the paid POST /v1/messages probe for this GET on
+# the strength of a live check that was real but ran on mandark only
+# (senechal/.scheduler/FOCUS.md, 2026-08-04). Merged 2026-08-11T22:56Z; the
+# five armed accounts pulled main, every gate returned
+# `verdict=ERROR reason=no_usage_fields http_code=403`, ERROR is treated as
+# HOLD by design, and ALL SELF-DEV DISPATCH STOPPED at the 00:00 tick with
+# nothing saying why. Verified with one token against both endpoints:
+# v1/messages 200, api/oauth/usage 403.
+#
+# So the free probe is right where it works and wrong as the only path. On a
+# 401/403 -- the credential-shaped refusals, not a network fault -- fall back
+# to the ~23-token Haiku probe that has always worked. Cost is unchanged on
+# every host that can use the free endpoint, and dispatch survives on the ones
+# that cannot.
+#
+# NOT a silent fallback: the reason is carried into the verdict line so a
+# reader can see which probe answered and stop wondering why one host spends
+# tokens and another does not.
+PROBE_VIA=oauth-usage
+case "$CODE" in
+  401|403)
+    PROBE_VIA="v1-messages-fallback(${CODE})"
+    CODE=$(curl -sS -o "$BODY_FILE" -w '%{http_code}' --max-time 15 \
+      -X POST https://api.anthropic.com/v1/messages \
+      -H "authorization: Bearer $TOKEN" \
+      -H "anthropic-version: 2023-06-01" \
+      -H "anthropic-beta: oauth-2025-04-20" \
+      -H "content-type: application/json" \
+      -d "{\"model\":\"$USAGE_PROBE_MODEL\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" \
+      -D "$BODY_FILE.hdr" 2>/dev/null) || emit_error curl_failed_fallback
+    # The paid probe reports usage in HEADERS, not the body. Rewrite the body
+    # into the same five_hour/seven_day shape the parser below already reads,
+    # so the fallback changes where the numbers come FROM and nothing else.
+    python3 - "$BODY_FILE.hdr" "$BODY_FILE" <<'HDR'
+import re, sys, json
+hdr, out = sys.argv[1], sys.argv[2]
+try:
+    text = open(hdr, errors="replace").read()
+except OSError:
+    text = ""
+def g(name):
+    m = re.search(r'^%s:\s*(.+?)\s*$' % re.escape(name), text, re.I | re.M)
+    return m.group(1) if m else None
+def pct(v):
+    try: return float(v) * (100.0 if float(v) <= 1.0 else 1.0)
+    except (TypeError, ValueError): return None
+five = pct(g("anthropic-ratelimit-unified-5h-utilization"))
+seven = pct(g("anthropic-ratelimit-unified-7d-utilization"))
+doc = {}
+if five is not None:
+    doc["five_hour"] = {"utilization": five, "resets_at": g("anthropic-ratelimit-unified-5h-reset")}
+if seven is not None:
+    doc["seven_day"] = {"utilization": seven, "resets_at": g("anthropic-ratelimit-unified-7d-reset")}
+open(out, "w").write(json.dumps(doc))
+HDR
+    rm -f "$BODY_FILE.hdr"
+    ;;
+esac
+
 # Decision core in python: parse the usage body, compute burn-lines, pick
 # verdict. USAGE_RUSH_BEFORE_RESET_MIN is passed EXPLICITLY: python reads it
 # from its own environment, so before conf support it only ever arrived when
@@ -266,7 +336,7 @@ CODE=$(curl -sS -o "$BODY_FILE" -w '%{http_code}' --max-time 15 \
 # ignored.
 CEILING="$CEILING" MIN_SLACK="$MIN_SLACK" HTTP_CODE="$CODE" QUIET="$QUIET" \
 USAGE_RUSH_BEFORE_RESET_MIN="$RUSH_MIN" \
-KNOB_SRC="ceiling:$CEILING_SRC,min_slack:$MIN_SLACK_SRC,rush_min:$RUSH_MIN_SRC" \
+KNOB_SRC="ceiling:$CEILING_SRC,min_slack:$MIN_SLACK_SRC,rush_min:$RUSH_MIN_SRC,probe:$PROBE_VIA" \
 python3 - "$BODY_FILE" <<'PY'
 import json, os, sys, time
 from datetime import datetime
