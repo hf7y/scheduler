@@ -213,12 +213,26 @@ FAKE="$TMP/fake"
 mkdir -p "$FAKE/bin" "$FAKE/schedule"
 ln -s "$SYNC" "$FAKE/bin/sync-crontab.sh"
 ln -s "$ROOT/lib" "$FAKE/lib"
+# read_crontab_for(), for this account, shells out to a bare `crontab -l` --
+# there is no synthetic-account hook the way there is for schedule/. Without
+# a stub, sync-crontab.sh merges THIS ACCOUNT'S REAL crontab into the preview
+# it emits for every synthetic host below, and on a live self-dev account
+# that crontab already has a line tagged "...:RUNNER" (its own dispatch tick)
+# -- which then satisfies any later "*:RUNNER*" substring check regardless of
+# what the fake host actually resolved. A fake `crontab` ahead on PATH keeps
+# the preview scoped to what these tests actually configured.
+cat > "$FAKE/bin/crontab" <<'EOF'
+#!/usr/bin/env bash
+echo "no crontab for fake account" >&2
+exit 1
+EOF
+chmod +x "$FAKE/bin/crontab"
 # One project conf is required or the script exits 0 at "no schedule/*.conf
 # entries yet" before it ever reaches the tick blocks. CRON_HOST pins it to a
 # host that is never used below, so it is skipped and contributes no lines and
 # no errors of its own -- the tick tiers are the only thing under test here.
 printf 'CRON_HOST="nosuchhost"\n' > "$FAKE/schedule/dummy.conf"
-run_fake() { SYNC_HOST="$1" timeout 60 bash "$FAKE/bin/sync-crontab.sh" 2>&1 >/dev/null; }
+run_fake() { PATH="$FAKE/bin:$PATH" SYNC_HOST="$1" timeout 60 bash "$FAKE/bin/sync-crontab.sh" 2>&1 >/dev/null; }
 
 # 9a: JOB+CMD set, CRON never set anywhere, NO host file -> incomplete.
 cat > "$FAKE/schedule/_sweep.conf" <<'EOF'
@@ -291,7 +305,7 @@ echo "case 10 -- an opt-out in ONE tier leaves the OTHER tier armed"
 #
 # The FAKE checkout, its shared _runner.conf and _sweep.conf, and run_fake are
 # case 9's; `delta` has no host file there, so it starts with both ticks armed.
-run_fake_out() { SYNC_HOST="$1" timeout 60 bash "$FAKE/bin/sync-crontab.sh" 2>/dev/null; }
+run_fake_out() { PATH="$FAKE/bin:$PATH" SYNC_HOST="$1" timeout 60 bash "$FAKE/bin/sync-crontab.sh" 2>/dev/null; }
 
 out="$(run_fake_out delta)"
 case "$out" in *":RUNNER"*) ok "10 baseline: delta starts with the runner tick armed" ;;
