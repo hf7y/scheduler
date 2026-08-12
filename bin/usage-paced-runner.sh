@@ -88,6 +88,14 @@ REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
 #
 # Everything else -- the gate, freeze-check, verdict handling, MAX_PER_TICK,
 # the logging -- is untouched and shared by both modes, which is the point.
+# The run ledger. Sourced early so both the recording below and the DONE brake
+# above the dispatch can see it. Pure library: sourcing it runs nothing.
+# shellcheck source=../lib/run-ledger.sh
+[ -r "$SELF_DIR/../lib/run-ledger.sh" ] && . "$SELF_DIR/../lib/run-ledger.sh"
+
+# How many dispatch opportunities a project is held for after recording DONE.
+# 0 disables the brake entirely without editing code.
+LEDGER_DONE_COOLDOWN="${LEDGER_DONE_COOLDOWN:-3}"
 PACED_HOST_MODE="${PACED_HOST_MODE:-0}"
 
 # acct_of_prog <path> -- which account owns the row whose command is <path>.
@@ -598,6 +606,30 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     continue
   fi
 
+  # DONE COOLDOWN. Checked HERE, per-participant and BEFORE the gate probe, for
+  # the same reason the runnability test moved above the probe: a row we are
+  # not going to dispatch must not buy a live quota probe first.
+  #
+  # Slot IS consumed, matching FROZEN above: having decided about this row, the
+  # tick has done its job. Not consuming it would let a cooling-down project
+  # spin the rotation looking for someone else to run, which is a different
+  # behaviour from the one being asked for.
+  if declare -F ledger_since >/dev/null 2>&1 && [ "${LEDGER_DONE_COOLDOWN:-3}" -gt 0 ]; then
+    _since="$(ledger_since "$name" DONE 2>/dev/null || echo 999999)"
+    if [ "${_since:-999999}" -lt "${LEDGER_DONE_COOLDOWN:-3}" ]; then
+      # THE SKIP IS RECORDED. Without this row the count never advances and the
+      # hold is permanent -- a stop wearing a cooldown's name. Recording it also
+      # makes the brake visible in the same ledger as the dispatches it
+      # replaced, so "why did this project go quiet" is one file, not a guess.
+      ledger_append "$name" "${TIER:-batch}" - COOLDOWN "held: $((LEDGER_DONE_COOLDOWN - _since)) more opportunit(ies) after DONE" 2>/dev/null || true
+      log "COOLDOWN $name -- DONE $_since opportunit(ies) ago; holding until ${LEDGER_DONE_COOLDOWN}. It resumes on its own; nothing is stuck."
+      dispatched=$((dispatched + 1))
+      unset _since
+      continue
+    fi
+    unset _since
+  fi
+
   # Consume any prior verdict BEFORE dispatching, so this run's outcome can
   # never be read off the last run's file. Same lesson as expires_at: a stale
   # stamp that reads as current is worse than no stamp.
@@ -653,6 +685,43 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). Treated as NOT-DONE and re-dispatched; metabolism untouched."
   fi
 
+  # RECORD IT, before anything can consume it. verdict.sh clears the verdict at
+  # the NEXT dispatch, so this line is the only thing that will still exist by
+  # then -- and repetition is only observable because of it (#54).
+  if declare -F ledger_append >/dev/null 2>&1; then
+    _lreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
+    ledger_append "$name" "${TIER:-batch}" "$rc" "${outcome:-NOT-DONE}" "${_lreason:-}" \
+      || log "LEDGER $name -- could not append to the run ledger; repetition is unobservable for this run"
+    unset _lreason
+  fi
+
+  # ###########################################################################
+  # DONE BRAKES (hf7y/scheduler#54). The vrc -eq 0 branch that never existed.
+  # ###########################################################################
+  #
+  # `vrc` has been computed on the line above for as long as this file has
+  # existed and only `-eq 3` was ever read. Measured 2026-08-06: DONE recorded
+  # nine times across four accounts in one day, stopping nothing;
+  # bibliothecaire said DONE on six consecutive runs and was re-dispatched
+  # every time. Every brief tells the agent DONE means "the bar in my brief is
+  # met; stop dispatching" -- a contract the code did not honour, which is
+  # worse than not asking, because the agent spends turns producing a signal
+  # that is discarded.
+  #
+  # A COOLDOWN, NOT A SWITCH, and that is the thermostat part. One DONE could
+  # justify stopping the project outright, but DONE goes stale the moment new
+  # work arrives, and a project that can never restart without a human is a
+  # brake with no thaw. So DONE lowers the FREQUENCY: the project is skipped
+  # for the next LEDGER_DONE_COOLDOWN dispatch opportunities and then gets a
+  # chance again on its own. Repeated DONEs extend nothing further -- the
+  # cooldown is per most-recent-streak, so a project that is genuinely finished
+  # settles at one run per cooldown window instead of every tick, and one that
+  # was only briefly done resumes immediately after its next NOT-DONE.
+  #
+  # It reads the LEDGER, not the verdict file, because the verdict is consumed
+  # at the next dispatch and cannot answer "how many times in a row".
+  #
+  # Tunable and OFF at 0 -- see the config block near the top.
   if [ "$vrc" -eq 3 ]; then
     # GAVE-UP: the agent itself said IMPOSSIBLE, with a reason. This is the
     # ONLY path that reduces metabolism -- reached by an explicit claim, never
