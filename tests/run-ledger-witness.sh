@@ -24,6 +24,26 @@ export RUN_LEDGER_FILE="$W/ledger.tsv"
 [ ! -e "$RUN_LEDGER_FILE" ] && ok "sourcing the library creates nothing" \
   || bad "sourcing wrote a file -- a library must not act"
 
+# --- 1b. THE PATH RESOLVES PER CALL ---------------------------------------
+# It was a top-level assignment, so a caller exporting RUN_LEDGER_FILE AFTER
+# sourcing got the default silently. tests/blocked-vocabulary-witness.sh did
+# exactly that and wrote 23 fabricated rows into mandark's REAL ledger while
+# believing itself hermetic. A test that is wrong about its own isolation is
+# worse than one that admits it needs the estate.
+( real="$HOME/.local/share/scheduler-paced-runner/ledger.tsv"
+  had=no; [ -e "$real" ] && had=yes
+  bash -c ". '$HERE/../lib/run-ledger.sh'; export RUN_LEDGER_FILE='$W/late.tsv'; ledger_append q b 1 BLOCKED why" 2>/dev/null
+  [ -s "$W/late.tsv" ] || { echo FAILLATE; exit 0; }
+  now=no; [ -e "$real" ] && now=yes
+  [ "$had" = "$now" ] || { echo FAILREAL; exit 0; }
+  echo OKLATE ) > "$W/late.res" 2>/dev/null
+case "$(cat "$W/late.res" 2>/dev/null)" in
+  OKLATE)   ok "RUN_TIME export is honoured, and the real ledger is untouched" ;;
+  FAILLATE) bad "exporting RUN_LEDGER_FILE after sourcing had no effect -- writes go to the default" ;;
+  FAILREAL) bad "the test wrote to the REAL ledger -- isolation is broken" ;;
+  *)        bad "the per-call resolution check did not run" ;;
+esac
+
 # --- 2. append-only: rows accumulate, nothing is rewritten ----------------
 ledger_append alpha batch 0 DONE "bar met"
 ledger_append alpha batch 1 NOT-DONE "more to do"
