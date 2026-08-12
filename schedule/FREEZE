@@ -106,6 +106,24 @@ EXEMPT: scheduler@monkey
 #
 # Note crt never dispatched a single measured run in its ~24h armed: its
 # per-run cost was unmeasured when it was armed and is unmeasured now.
+# UPDATED 2026-08-12, Zach-directed ("move sequestria, groc-mangr, crt,
+# secretaire and ensure they will trigger when the gate opens"). crt's row in
+# _paced.monkey.conf is now `crt|1|1|` again, and its RUNNER cron line is
+# installed. This line -- the second of the two locks the pause block above
+# describes -- is deliberately still commented. Uncommenting it is now the
+# WHOLE act: crt dispatches on the next even-hour tick with nothing else to do.
+# Left to a human because this file's own header reserves it for one.
+#
+# Same for the three rows added at the bottom of _paced.monkey.conf in the same
+# pass (sequestria, groc-mangr, secretaire): all three are enabled there, all
+# three have accounts, clones, credentials and runner ticks on monkey, and none
+# has a line here. Add one per project, when you want that project to run.
+#   EXEMPT: sequestria@monkey
+#   EXEMPT: groc-mangr@monkey
+#   EXEMPT: secretaire@monkey
+# Read schedule/secretaire.conf's header before adding the third: that project
+# is de-animated and has an empty queue, so opening its gate buys a nightly run
+# that correctly records DONE and stops.
 #EXEMPT: crt@monkey
 
 # baudin@monkey, added 2026-08-05 minutes after crt, Zach-directed in the same
