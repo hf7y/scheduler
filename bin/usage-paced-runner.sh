@@ -96,9 +96,6 @@ REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
 # How many dispatch opportunities a project is held for after recording DONE.
 # 0 disables the brake entirely without editing code.
 LEDGER_DONE_COOLDOWN="${LEDGER_DONE_COOLDOWN:-3}"
-# Base hold after a BLOCKED verdict, multiplied by the number of consecutive
-# blockages and doubled again when the reason repeats. 0 disables the backoff.
-LEDGER_BLOCKED_HOLD="${LEDGER_BLOCKED_HOLD:-6}"
 PACED_HOST_MODE="${PACED_HOST_MODE:-0}"
 
 # acct_of_prog <path> -- which account owns the row whose command is <path>.
@@ -633,33 +630,6 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     unset _since
   fi
 
-  # BLOCKED BACKOFF. Same shape as the DONE cooldown and for the same reason it
-  # must record its skips -- but the hold LENGTH is not constant: it grows with
-  # the number of consecutive blockages and doubles again when the reason has
-  # not changed. Recomputed here from the ledger rather than stashed anywhere,
-  # so there is exactly one place the backoff is defined and no second copy to
-  # drift.
-  if declare -F ledger_since >/dev/null 2>&1 && [ "${LEDGER_BLOCKED_HOLD:-6}" -gt 0 ]; then
-    _bsince="$(ledger_since "$name" BLOCKED 2>/dev/null || echo 999999)"
-    if [ "${_bsince:-999999}" -lt 999999 ]; then
-      _brun="$(ledger_run "$name" BLOCKED BLOCKED-HOLD 2>/dev/null || echo 1)"
-      [ "${_brun:-0}" -lt 1 ] && _brun=1
-      _bwant=$(( ${LEDGER_BLOCKED_HOLD:-6} * _brun ))
-      _r1="$(ledger_reason "$name" BLOCKED 1 2>/dev/null || true)"
-      _r2="$(ledger_reason "$name" BLOCKED 2 2>/dev/null || true)"
-      [ -n "$_r1" ] && [ "$_r1" = "$_r2" ] && _bwant=$(( _bwant * 2 ))
-      if [ "$_bsince" -lt "$_bwant" ]; then
-        ledger_append "$name" "${TIER:-batch}" - BLOCKED-HOLD "waiting: $_bsince/$_bwant after blockage #$_brun" 2>/dev/null || true
-        log "BLOCKED-HOLD $name -- $_bsince/$_bwant opportunit(ies) since it reported BLOCKED${_r1:+ ($_r1)}. Backing off, not giving up."
-        dispatched=$((dispatched + 1))
-        unset _bsince _brun _bwant _r1 _r2
-        continue
-      fi
-      unset _brun _bwant _r1 _r2
-    fi
-    unset _bsince
-  fi
-
   # Consume any prior verdict BEFORE dispatching, so this run's outcome can
   # never be read off the last run's file. Same lesson as expires_at: a stale
   # stamp that reads as current is worse than no stamp.
@@ -752,42 +722,6 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # at the next dispatch and cannot answer "how many times in a row".
   #
   # Tunable and OFF at 0 -- see the config block near the top.
-  # ###########################################################################
-  # BLOCKED LENGTHENS THE INTERVAL (hf7y/scheduler#63)
-  # ###########################################################################
-  #
-  # Zach, 2026-08-06: "failed runs should lengthen the interval on blocked. But
-  # not on incomplete." Until 2026-08-12 there was no word for it -- CONTINUE,
-  # a truncated run and a total blockage all classified NOT-DONE and all
-  # re-dispatched identically, so the interval could not respond because there
-  # was nothing in the signal to respond to.
-  #
-  # BLOCKED is not IMPOSSIBLE. IMPOSSIBLE means give up and reduce metabolism
-  # ecosystem-wide -- far too strong for "waiting on Zach" or "no credential
-  # provisioned". BLOCKED means back off, say so loudly, and try later.
-  #
-  # BACKOFF, and it escalates on the SAME blocker. The hold is
-  # LEDGER_BLOCKED_HOLD per consecutive blockage, so the second is held twice
-  # as long as the first. If the reason is UNCHANGED from the previous
-  # blockage, it doubles again: repeating the same blocker is strictly more
-  # informative than being blocked on something new, and it is the signal Zach
-  # asked for. That comparison is only possible because the ledger keeps the
-  # reason -- `verdict.sh clear` deletes it at the next dispatch.
-  if [ "$vrc" -eq 4 ]; then
-    _breason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2-)"
-    _brun=1; _bsame=""
-    if declare -F ledger_run >/dev/null 2>&1; then
-      _brun="$(ledger_run "$name" BLOCKED BLOCKED-HOLD 2>/dev/null || echo 1)"
-      [ "${_brun:-0}" -lt 1 ] && _brun=1
-      _bprev="$(ledger_reason "$name" BLOCKED 2>/dev/null || true)"
-      [ -n "${_bprev:-}" ] && [ "$_bprev" = "$_breason" ] && _bsame=yes
-    fi
-    _bhold=$(( ${LEDGER_BLOCKED_HOLD:-6} * _brun ))
-    [ -n "$_bsame" ] && _bhold=$(( _bhold * 2 ))
-    log "BLOCKED $name -- ${_breason:-no reason recorded} (blockage #$_brun${_bsame:+, SAME reason as last time}); lengthening: held ${_bhold} opportunit(ies). Not IMPOSSIBLE -- it will try again by itself."
-    unset _breason _bprev _bsame _bhold _brun
-  fi
-
   if [ "$vrc" -eq 3 ]; then
     # GAVE-UP: the agent itself said IMPOSSIBLE, with a reason. This is the
     # ONLY path that reduces metabolism -- reached by an explicit claim, never
