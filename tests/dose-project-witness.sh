@@ -80,7 +80,8 @@ chmod +x "$FAKEBIN/getent"
 export PATH="$FAKEBIN:$PATH"
 export DOSE_HOST_OVERRIDE="testhost"
 ROSTER="ecosim | ecosim@testhost | 6h | live
-ghosttown | ghosttown@testhost | 6h | parked"
+ghosttown | ghosttown@testhost | 6h | parked
+elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
 
 # --- 1. unknown project exits 4, not 0 --------------------------------------
 export FAKE_GH_MODE=ok FAKE_ROSTER_CONTENT="$ROSTER"
@@ -131,6 +132,23 @@ grep -qi verify <<<"$out" && ok "the failure names verify, not a generic error" 
   || bad "drift failure doesn't mention verify: $out"
 grep -qF "WRONG_ENV" "$CRONFILE" && ok "re-read caught the inert write instead of trusting crontab's exit 0" \
   || bad "cronfile changed even though the write was inert: $(cat "$CRONFILE")"
+
+
+# --- 5. roster names a different host: refuse, touch nothing (#112) --------
+# DOSE_HOST_OVERRIDE=testhost (set above), but this row's host is
+# 'otherhost' -- exercises bin/dose-project.sh's `exit 7` branch (the guard
+# that stops `dose ecosim` typed on the wrong machine from converging a host
+# the roster never named). Landed in #111 unwitnessed; this closes that gap.
+export CRONFILE="$WORK/cron5"; : > "$CRONFILE"
+before="$(sha256sum "$CRONFILE")"
+out="$("$TARGET" elsewhere-proj --apply 2>&1)"; rc=$?
+after="$(sha256sum "$CRONFILE")"
+[ "$rc" -eq 7 ] && ok "wrong-host row exits 7 (refused)" \
+  || bad "wrong-host row exited $rc, want 7: $out"
+grep -qi 'REFUSED' <<<"$out" && ok "the refusal is named, not a generic error" \
+  || bad "exit 7 but the message never says REFUSED: $out"
+[ "$before" = "$after" ] && ok "wrong-host row: fixture crontab byte-unchanged (nothing touched)" \
+  || bad "wrong-host row MODIFIED the crontab -- the guard is supposed to stop before any write: $out"
 
 echo
 echo "dose-project-witness: $pass passed, $fail failed"
