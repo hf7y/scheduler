@@ -46,19 +46,6 @@ EXEMPT: realisateur@monkey
 EXEMPT: scheduler@monkey
 # chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf.
 #
-# CORRECTED 2026-08-05: the note that stood here said this exemption "ARMS
-# NOTHING BY ITSELF" because chezz's row in _paced.monkey.conf was enabled=0.
-# That stopped being true the same day, in ca6607d ("arm chezz@monkey", #19),
-# which set the row to `chezz|1|1|`. chezz is ARMED and DISPATCHING -- verified
-# 2026-08-05 via a hand-triggered tick that logged
-# `DISPATCH [3/4] chezz -> .../scheduler-run chezz batch`.
-#
-# The arming was deliberate (#19's own title), so this is stale prose, not a
-# stray row -- but it was prose that told a reader the opposite of what the
-# machine does, which is worse than no note. Both conditions this file
-# describes (exempt here AND enabled in the rotation) are now satisfied for
-# all four accounts below; none of them is parked.
-#
 # PAUSED 2026-08-06, Zach-directed in session, in his words: "For now, pause
 # chezz for 1 week." UN-PAUSE ON OR AFTER 2026-08-13 -- uncomment the line
 # below AND flip chezz's row in _paced.monkey.conf back to enabled=1. Either
