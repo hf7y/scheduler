@@ -105,7 +105,35 @@ EOF
 # "somebody's runner owns this project's Tier 2".
 echo 'w-otherhost|1|1|/bin/true' > "$REPO/schedule/_paced.someotherhost.conf"
 
-run_sync() { ( cd "$REPO" && "$REPO/bin/sync-crontab.sh" 2>&1 ); }
+# Hermetic sudo (scheduler#94): resolve_cmd's foreign-account executability
+# check (bin/sync-crontab.sh ~line 541) runs `sudo -n -u "$acct" test -x
+# "$script"`, and real sudo's answer depends on the INVOKING ACCOUNT's
+# passwordless-sudo rights -- an ambient property of the host this witness
+# happens to run on, not of the code under test. That let a real
+# double-dispatch regression go undetected here for six days: with no
+# passwordless sudo the check fails for want of a password before the code
+# under test is even reached, and with it the check passes as root
+# regardless. Either way "no BATCH line, no error we recognise" looks the
+# same as correct suppression. Stubbing sudo to just drop `-n`/`-u ACCT` and
+# exec the remaining command makes the check answer `test -x "$script"`
+# directly -- deterministic, and independent of who is running this test.
+STUBBIN="$TMP/stubbin"; mkdir -p "$STUBBIN"
+cat > "$STUBBIN/sudo" <<'STUB'
+#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n) shift ;;
+    -u) shift; shift ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+exec "$@"
+STUB
+chmod +x "$STUBBIN/sudo"
+
+run_sync() { ( cd "$REPO" && PATH="$STUBBIN:$PATH" "$REPO/bin/sync-crontab.sh" 2>&1 ); }
 OUT="$(run_sync)"
 
 # A project is SUPPRESSED when no crontab line is generated for it. Match the
@@ -155,7 +183,15 @@ if emits_line w-stateowner; then
 else
   ok "CRON_ACCOUNT + enabled rotation member is suppressed, not double-dispatched"
 fi
-if printf '%s\n' "$OUT" | grep -q 'ERROR \[w-stateowner\]'; then
+
+# scheduler#94: this used to be the exact bracket form 'ERROR \[w-stateowner\]',
+# which cannot match this script's own error format -- every ERROR line here
+# is tagged with its tier ("ERROR [w-stateowner/BATCH]: ..."), never a bare
+# "[w-stateowner]". The exact-bracket grep therefore never matched anything,
+# on any host, and this assertion had silently never been evaluated. Matching
+# the open bracket plus name, unanchored on the right, catches an ERROR for
+# this project regardless of which tier or wording raised it.
+if printf '%s\n' "$OUT" | grep -q 'ERROR \[w-stateowner'; then
   bad "w-stateowner raised an ERROR -- CRON_ACCOUNT is a STATE field (scheduler#33);"\
       "setting it on a paced participant is the normal configuration on monkey"
 else
