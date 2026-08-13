@@ -27,17 +27,19 @@ Before marking anything done:
 - [ ] Verified **where the consumer reads it** (pushed to the ref the job
       clones — not just committed locally)?
 - [ ] Multi-line or shell-quoting commit message written with
-- [ ] `silence-audit --strict` clean? (mechanizes the retired
-      stderr-silencing / wired-to-a-real-path / names-what-it-retires rows)
       **`git commit -F <file>`**, not `-m` (backticks inside double
       quotes execute)?
+- [ ] `silence-audit --strict` clean? (mechanizes the retired
+      stderr-silencing / wired-to-a-real-path / names-what-it-retires rows)
 
 ## Ecosystem protocols (realisateur baseline)
 The checklist above governs work inside this repo. These govern anything
-that reaches OUTSIDE it. Each is a command on `PATH`, installed by
-realisateur — not a rule to remember, because prose decays and guards
-don't. If a command is missing, say so loudly rather than doing the step
-by hand: a missing guard is a finding, not an inconvenience.
+that reaches OUTSIDE it. Each is a command on `PATH` — installed by
+realisateur, or, where the command is another project's own front door,
+by senechal's `installe` from the ecosystem verb build — not a rule to
+remember, because prose decays and guards don't. If a command is missing,
+say so loudly rather than doing the step by hand: a missing guard is a
+finding, not an inconvenience.
 
 - **Changing machine-wide config** — anything outside this repo that the
   machine as a whole sees: crontab entries, `~/.claude` settings hooks,
@@ -63,4 +65,24 @@ by hand: a missing guard is a finding, not an inconvenience.
   project's own automation is mid-run against the same files right now:
   **defer the write**, note what was deferred and why, and carry on. Do
   not edit a FOCUS.md out from under a live run.
+
+- **Asking for research** — `bibliothecaire` answers research requests,
+  and its front door is a command, not a cross-write. Run:
+  `consulte --claim '<the claim to substantiate>' --falsifier '<what would falsify it>' --from <this project>`
+  It files a GitHub issue on `hf7y/bibliothecaire` labelled `request` —
+  the queue bibliothecaire's own run already works — so it needs **no
+  clone of that repo and no push access to any branch of it**, and works
+  from any account on any host with `gh`, including the read-only
+  deploy-key ones. `--falsifier` is required: a request that names
+  nothing that would settle it against you is asking for agreement, not
+  research. Then `consulte list --from <this project>` for what you have
+  asked, `consulte show <n>` for the answer when it lands.
+  **Filing is free; answering is metered** — bibliothecaire spends the
+  model call and the literature search, not you — so ask once and read
+  the queue before asking again.
+  This retires the hand-carry, which had already failed once: on
+  2026-08-04 ecosim's request for a literature read on two hypotheses sat
+  staged and uncommitted on a clone for two days, because the account
+  that wanted to ask held no credential for bibliothecaire and there was
+  no door that did not need one.
 <!-- <<< realisateur-baseline -->
