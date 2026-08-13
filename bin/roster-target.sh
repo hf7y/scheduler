@@ -268,7 +268,13 @@ probe_rosterfromgh() {
   # Widened, not loosened. The second alternative still demands `contents` AND
   # `ROSTER` on one line, which is the GitHub contents API reading this exact
   # file and is not something an unrelated command says by accident.
-  hits="$(grep -rlE 'gh (api|repo view).*(ROSTER|contents)|api[^|;]*contents[^|;]*ROSTER' "$SCHED_ROOT/bin" 2>/dev/null | head -1)"
+  #
+  # SEARCHES bin/ AND lib/, not bin/ alone. The read moved out of
+  # bin/dose-project.sh into lib/dose-common.sh's fetch_repo_file() so
+  # `dose <project>` and `dose host` share one fetcher instead of drifting
+  # (hf7y/scheduler#119's exact failure shape) -- scoping this probe to bin/
+  # only made it report UNMET against the very code it was written to find.
+  hits="$(grep -rlE 'gh (api|repo view).*(ROSTER|contents)|api[^|;]*contents[^|;]*ROSTER' "$SCHED_ROOT/bin" "$SCHED_ROOT/lib" 2>/dev/null | head -1)"
   if [ -n "$hits" ]; then
     row MET rosterfromgh "$(basename "$hits") reads the roster over gh"
   else
