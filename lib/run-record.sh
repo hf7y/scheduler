@@ -417,7 +417,7 @@ run_record_closeout() {
   line="$(run_record_line \
     "${JOB_NAME}-${START_TS}" "$JOB_NAME" "$PROJECT_KEY" "${TIER:-unspecified}" \
     "$slug" "${BRANCH:-}" "$started" "$ended" "$(( $(date +%s) - START_TS ))" \
-    "${RUN_RC:-0}" "${STATUS:-}" "$BEFORE_SHA" "$AFTER_SHA" "${REMOTE_SHA:-}" \
+    "${RUN_RC:-0}" "${STATUS:-}${STATUS_DETAIL:-}" "$BEFORE_SHA" "$AFTER_SHA" "${REMOTE_SHA:-}" \
     "${claimed_v:-}" "${claimed_r:-}")"
 
   if run_record_append "$ledger" "$line"; then

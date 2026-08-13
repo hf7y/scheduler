@@ -247,6 +247,38 @@ notify() {
   return 0
 }
 
+# claude_failure_detail() -- say WHY claude -p failed, when the cause is
+# recognizable from its own output, instead of every non-zero exit reading as
+# the same generic FAILED. Takes the path to a captured claude -p transcript
+# (stdout+stderr combined, as the engine tees it); echoes a STATUS_DETAIL
+# suffix (leading space, parenthesized) or nothing if unrecognized.
+#
+# Two causes named today:
+#   auth     "Not logged in" etc -- has a specific human fix (refresh the CLI
+#            login) and is NOT a quota/turn cutoff. Pages loudly.
+#   ceiling  "Reached max turns (N)" -- the run was cut off with a turn
+#            budget exhausted, not broken. hf7y/scheduler#31: this collapsed
+#            into the same generic FAILED as every other cause, so a run that
+#            landed two real commits and ran out of room looked identical in
+#            the log to one that crashed outright. Does NOT page -- hitting a
+#            turn ceiling is an expected, unremarkable outcome (see
+#            bin/verdict.sh's header: absence of a verdict is NEVER "gave
+#            up", it is NOT-DONE, re-dispatch, metabolism unchanged), it is
+#            only unnamed today.
+#
+# Pure function: reads the file, writes nothing, no side effects. Same shape
+# as notify() above and for the same reason -- tests/
+# claude-failure-detail-witness.sh lifts this out of the engine and drives it
+# directly, which it cannot do to code buried in the run body.
+claude_failure_detail() {
+  local out="$1"
+  if grep -qiE 'not logged in|please run /login|invalid api key|oauth token.*(expired|revoked)|authentication[_ ]?error' "$out" 2>/dev/null; then
+    echo " (auth: not logged in)"
+  elif grep -qiE 'reached max turns' "$out" 2>/dev/null; then
+    echo " (ceiling: max turns reached)"
+  fi
+}
+
 # THE VERDICT CLOSEOUT -- appended to every batch brief, by the engine.
 #
 # bin/usage-paced-runner.sh logs, on a run that wrote nothing:
@@ -661,22 +693,21 @@ $PROMPT"
     STATUS="done"
   else
     STATUS="FAILED"
-    # Say WHY claude itself failed when the cause is recognizable, instead
-    # of every non-zero exit reading as the same generic FAILED. The one
-    # cause worth naming today is a lapsed/absent CLI login ("Not logged
-    # in") -- a recurring unattended failure mode (see
-    # .scheduler/QUESTIONS.md answer 2026-07-25: make it LOUD, same
-    # principle as stale .active markers and push-reason surfacing). It
-    # is NOT a quota/turn cutoff and has a specific human fix: run any
-    # interactive claude session as this OS user to refresh credentials.
     # STATUS itself stays the exact string "FAILED" -- the push-reason and
     # exit-code blocks below compare it with = -- the detail rides in
-    # STATUS_DETAIL and is appended to the final === line.
-    if grep -qiE 'not logged in|please run /login|invalid api key|oauth token.*(expired|revoked)|authentication[_ ]?error' "$CLAUDE_OUT" 2>/dev/null; then
-      STATUS_DETAIL=" (auth: not logged in)"
-      echo "CRITICAL: claude authentication failure -- this account's CLI credentials have lapsed (\"Not logged in\"), NOT a quota/turn cutoff. Fix: run any interactive claude session as OS user $(id -un) to refresh the login, then this job recovers on its own next scheduled run."
-      notify -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG"
-    fi
+    # STATUS_DETAIL and is appended to the final === line (and, since
+    # hf7y/scheduler#31, into the durable run record's status field too --
+    # see the run_record_line call below).
+    STATUS_DETAIL="$(claude_failure_detail "$CLAUDE_OUT")"
+    case "$STATUS_DETAIL" in
+      " (auth: not logged in)")
+        echo "CRITICAL: claude authentication failure -- this account's CLI credentials have lapsed (\"Not logged in\"), NOT a quota/turn cutoff. Fix: run any interactive claude session as OS user $(id -un) to refresh the login, then this job recovers on its own next scheduled run."
+        notify -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG"
+        ;;
+      " (ceiling: max turns reached)")
+        echo "claude hit --max-turns ($MAX_TURNS) before finishing -- cut off, not broken. Any commits made before the cutoff are still evaluated below (pushed/not-pushed); this is NOT-DONE per bin/verdict.sh, re-dispatched next tick with metabolism unchanged. hf7y/scheduler#31."
+        ;;
+    esac
   fi
 
   # Objective, tool-verified facts about what actually happened -- not
