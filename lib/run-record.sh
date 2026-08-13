@@ -148,13 +148,20 @@ rr_is_sha() { [[ "${1:-}" =~ ^[0-9a-f]{7,40}$ ]]; }
 rr_add_reason() { RR_REASONS="${RR_REASONS:-}${RR_REASONS:+$'\n'}$1"; }
 
 # owner/name from origin, for gh -R. Empty if origin is not a GitHub remote.
+#
+# Self-dev accounts point origin at a per-repo SSH host alias
+# (git@github-<project>:owner/repo.git, see ~/.ssh/config), not literal
+# github.com -- a literal *github.com* match against that alias always
+# failed, so every self-dev run recorded gh:"unavailable" regardless of
+# whether gh actually worked. Match any github.com or github-* host and
+# pull the trailing owner/repo off the URL generically.
 run_record_repo_slug() {
   local url; url="$(git remote get-url origin 2>/dev/null)" || return 1
   case "$url" in
-    *github.com*) ;;
+    *github.com*|*github-*) ;;
     *) return 1 ;;
   esac
-  printf '%s' "$url" | sed -E 's#^.*github\.com[:/]##; s#\.git$##'
+  printf '%s' "$url" | sed -E 's#^.*[:/]([^/:]+/[^/]+)$#\1#; s#\.git$##'
 }
 
 # --- WHAT GITHUB SAYS HAPPENED ---------------------------------------------

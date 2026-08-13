@@ -103,6 +103,17 @@ run_record_probe_git "$B" "$B" "$R"
 run_record_compute_verdict 0
 [ "$RR_VERDICT" = "IDLE" ] && ok "an idle run is IDLE, not FAILED" || bad "verdict=$RR_VERDICT"
 
+echo "== 2b. REPO SLUG SURVIVES A SELF-DEV SSH ALIAS, not just literal github.com"
+fresh
+git remote set-url origin git@github.com:test/fixture.git
+[ "$(run_record_repo_slug)" = "test/fixture" ] && ok "literal github.com resolves" || bad "literal github.com broke"
+git remote set-url origin "git@github-realisateur:hf7y/realisateur.git"
+[ "$(run_record_repo_slug)" = "hf7y/realisateur" ] && ok "per-repo SSH alias (git@github-<project>:) resolves" || bad "SSH alias slug: $(run_record_repo_slug)"
+git remote set-url origin https://github.com/hf7y/realisateur.git
+[ "$(run_record_repo_slug)" = "hf7y/realisateur" ] && ok "https github.com resolves" || bad "https slug: $(run_record_repo_slug)"
+git remote set-url origin git@gitlab.com:hf7y/realisateur.git
+[ -z "$(run_record_repo_slug)" ] && ok "non-github remote still returns empty" || bad "gitlab leaked a slug: $(run_record_repo_slug)"
+
 echo "== 3. THE PROPERTY: the agent cannot write the sha, the counts, or the verdict"
 fresh
 B="$(git rev-parse HEAD)"
