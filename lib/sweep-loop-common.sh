@@ -202,6 +202,9 @@ LOG="$STATE_DIR/sweep.log"
 LOCK="$STATE_DIR/sweep.lock"
 EXPIRES_AT_FILE="$STATE_DIR/expires_at"
 HEARTBEAT_FILE="$STATE_DIR/last_heartbeat"
+# hf7y/scheduler#31 item 2 -- see write_ceiling_breadcrumb/read_ceiling_breadcrumb
+# below. Lives in STATE_DIR (survives between runs, unlike the disposable clone).
+CEILING_BREADCRUMB_FILE="$STATE_DIR/ceiling_breadcrumb.txt"
 
 # Cross-job, cross-tier registry -- one directory shared by EVERY project's
 # EVERY job, not per-job like STATE_DIR above. $LOCK (above) only stops
@@ -277,6 +280,76 @@ claude_failure_detail() {
   elif grep -qiE 'reached max turns' "$out" 2>/dev/null; then
     echo " (ceiling: max turns reached)"
   fi
+}
+
+# write_ceiling_breadcrumb() / read_ceiling_breadcrumb() -- hf7y/scheduler#31
+# item 2, the second half of the ceiling-cutoff work (item 1, #166, only made
+# the cutoff distinguishable in the log/ledger; this is the part that changes
+# what the NEXT dispatch sees).
+#
+# A run cut off by --max-turns already gets its pushed commits back for free:
+# the next dispatch clones/fetches origin, which already has them (see
+# salvage_then_restore above). What it does NOT get back is CONTEXT -- the
+# next dispatch receives the exact same conf brief from scratch, with no
+# sense that this is a continuation of something already in progress rather
+# than a fresh start. chezz's #31 case: two real commits landed, then the run
+# was cut off, and the following tick had no way to know "Bump pawn spawn
+# allowance" was step one of a larger change already underway.
+#
+# write_ceiling_breadcrumb runs at the end of a run (after push status is
+# known); read_ceiling_breadcrumb runs near the top of the NEXT run, before
+# the claude invocation, alongside the existing FEEDBACK_BLOCK/BLOCKERS_BLOCK
+# prepending below. Same shape as those and as claude_failure_detail() above
+# -- globals in/out rather than a return value, so tests/
+# ceiling-breadcrumb-witness.sh can lift them out of the engine and drive
+# them directly without running a real job.
+#
+# Does NOT change dispatch behaviour: a cutoff run is still NOT-DONE, still
+# re-dispatched next tick. This only restores context for that re-dispatch.
+#
+# Globals in: STATUS_DETAIL, BEFORE_SHA, AFTER_SHA, CLAUDE_OUT, MAX_TURNS,
+# CEILING_BREADCRUMB_FILE. No-op (and no file left behind) unless
+# STATUS_DETAIL names a ceiling cutoff -- an unrelated FAILED run must not
+# leave a stale breadcrumb for the next dispatch to misread as "resume this".
+write_ceiling_breadcrumb() {
+  case "${STATUS_DETAIL:-}" in
+    *"ceiling: max turns reached"*) ;;
+    *) return 0 ;;
+  esac
+  {
+    echo "Cut off $(date -Is) by --max-turns ($MAX_TURNS)."
+    if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
+      echo "Commits made this run (${BEFORE_SHA:0:12}..${AFTER_SHA:0:12}):"
+      git log --oneline "$BEFORE_SHA..$AFTER_SHA"
+    else
+      echo "No commits made this run before the cutoff."
+    fi
+    echo
+    echo "Tail of the transcript at cutoff:"
+    tail -n 40 "$CLAUDE_OUT" 2>/dev/null
+  } > "$CEILING_BREADCRUMB_FILE"
+  echo "ceiling breadcrumb written -- $CEILING_BREADCRUMB_FILE (consumed by the next run's prompt)"
+}
+
+# Globals in/out: PROMPT (rewritten if a breadcrumb is found), CEILING_BREADCRUMB_FILE
+# in. CONSUMES (deletes) the file unconditionally once read, same as
+# BLOCKERS.md's --consume above -- a breadcrumb re-read on every future run
+# would look like an infinite loop of "resume" instructions long after the
+# task actually moved on.
+read_ceiling_breadcrumb() {
+  [ -f "$CEILING_BREADCRUMB_FILE" ] || return 0
+  local block
+  block="$(cat "$CEILING_BREADCRUMB_FILE")"
+  rm -f "$CEILING_BREADCRUMB_FILE"
+  [ -n "$block" ] || return 0
+  echo "found a ceiling-cutoff breadcrumb from the previous run -- prepending to prompt, consumed"
+  PROMPT="The previous run of this job was cut off by --max-turns mid-task (hf7y/scheduler#31) -- this is a CONTINUATION, not a fresh start. What it had gotten to:
+
+$block
+
+---
+
+$PROMPT"
 }
 
 # THE VERDICT CLOSEOUT -- appended to every batch brief, by the engine.
@@ -678,6 +751,14 @@ $PROMPT"
     fi
   fi
 
+  # Resume breadcrumb from a previous ceiling cutoff, if the last run left
+  # one -- see write_ceiling_breadcrumb/read_ceiling_breadcrumb above.
+  # Deliberately AFTER the feedback/BLOCKERS prepending above (reading order:
+  # human feedback first, then "you're continuing a cut-off task", then the
+  # conf's own brief) and unconditional on TIER, unlike append_verdict_closeout
+  # -- a bug-sweep tier can hit --max-turns exactly the same way batch does.
+  read_ceiling_breadcrumb
+
   # claude's own output is tee'd to a per-run capture file (as well as
   # flowing into $LOG via the enclosing block redirect) so that a FAILED
   # run can be diagnosed against exactly THIS run's output -- $LOG
@@ -759,6 +840,14 @@ $PROMPT"
       echo "push reason: origin/$BRANCH has commit(s) local doesn't (diverged) -- would need a merge/rebase before push, not a credential issue"
     fi
   fi
+
+  # Resume breadcrumb for the NEXT run, if this one was cut off by
+  # --max-turns -- see write_ceiling_breadcrumb above. No-op for every other
+  # STATUS/STATUS_DETAIL. Placed after push status is known (the breadcrumb
+  # names the commit range) and before autonomy_sweep_repo below, which walks
+  # branches and could otherwise leave BEFORE_SHA/AFTER_SHA meaning something
+  # different than "this run's own commits" by the time it runs.
+  write_ceiling_breadcrumb
 
   # AUTONOMY_TIER="high" gate (lib/autonomy-merge.sh) -- runs regardless of
   # whether THIS run's own subagent created a branch, so it also catches
