@@ -212,11 +212,17 @@ HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
 # below, unchanged. A wrong guess about the free body's shape degrades to
 # "pay for this tick" rather than to a silently wrong verdict.
 #
-# 429 is the one code that must NOT fall through: it means the credential is
-# fine but rate-limited, and the paid endpoint sharing the same budget would
-# likely 429 too -- spending a call to learn nothing, exactly when spending
-# is least wanted. It resolves below as ERROR (no usable header), same as
-# any other unreadable probe.
+# 429 falls through like every other non-200. It used to be walled off from
+# the fallback on the reasoning that the paid endpoint shares the same budget
+# and would likely 429 too, so the call would buy nothing. Live on monkey
+# 2026-08-13 that reasoning was wrong in the direction that costs the most:
+# the FREE endpoint rate-limits on its own, independently of account quota,
+# and every 429 became reason=no_headers -> ERROR -> HOLD. realisateur, ecosim
+# and vim-arcade drew it on every tick from 08:50 onward and dispatched
+# nothing for 14h with quota to spare -- bibliothecaire, alternating between
+# the two paths in the same hours, reported binding=7d NOT binding at 14:12.
+# A 429 that does share the budget still costs exactly one call to find out,
+# and answers with a real verdict instead of a hold that measured nothing.
 FREE_BODY="$(mktemp)"; trap 'rm -f "$HDR" "$FREE_BODY"' EXIT
 FREE_CODE=$(curl -sS -o "$FREE_BODY" -w '%{http_code}' --max-time 15 \
   https://api.anthropic.com/api/oauth/usage \
@@ -281,12 +287,11 @@ PY
     CODE=200
     PROBE_VIA="oauth-usage"
   fi
-elif [ "$FREE_CODE" = "429" ]; then
-  CODE=429
-  PROBE_VIA="oauth-usage-429-no-fallback"
-  : > "$HDR"
 fi
 
+# Exactly one paid call per invocation: this block is straight-line, runs only
+# when the free probe did not produce a usable CODE, and is the only place the
+# paid endpoint is touched.
 if [ -z "$CODE" ]; then
   PROBE_VIA="paid-fallback(free:$FREE_CODE)"
   CODE=$(curl -sS -o /dev/null -D "$HDR" -w '%{http_code}' --max-time 30 \

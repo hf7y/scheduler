@@ -7,8 +7,8 @@
 # once, holding ALL self-dev dispatch (ERROR is HOLD by design) until #132
 # reverted it. This witness proves the fallback this time degrades safely:
 # free is tried first, but anything short of a clean 200 with a parseable
-# body falls straight through to the paid probe that was already working,
-# and 429 specifically does NOT spend a paid call to learn nothing.
+# body -- 403, 429, or an unrecognised 200 shape -- falls straight through to
+# the paid probe that was already working, in exactly one call per tick.
 #
 # Hermetic: a fake curl on PATH speaks for both api.anthropic.com endpoints,
 # keyed off the URL. Never touches the live estate or a real token.
@@ -47,6 +47,7 @@ case "$url" in
       echo "fake curl: paid probe called when it must not be" >&2
       exit 9
     fi
+    [ -n "${FAKE_PAID_CALL_LOG:-}" ] && echo "call" >> "$FAKE_PAID_CALL_LOG"
     [ -n "$hdrfile" ] && printf '%s' "${FAKE_PAID_HEADERS:-}" > "$hdrfile"
     printf '%s' "${FAKE_PAID_CODE:-200}"
     ;;
@@ -87,14 +88,21 @@ out="$(FAKE_FREE_CODE=403 FAKE_FREE_BODY='{"type":"error"}' \
 case "$out" in *"probe:paid-fallback(free:403)"*) ok "2a 403 falls back to paid, tagged in probe" ;; *) bad "2a no fallback tag: $out" ;; esac
 [ "$rc" -le 1 ] && ok "2b fallback still reaches a verdict (rc=$rc)" || bad "2b fallback errored (rc=$rc): $out"
 
-# --- 3. free 429 -> must NOT spend the paid probe ---------------------------
+# --- 3. free 429 -> falls through to paid, in exactly ONE call --------------
+# The free endpoint rate-limits independently of account quota, so a 429 there
+# says nothing about whether there is quota to dispatch on. Walling it off from
+# the fallback held realisateur/ecosim/vim-arcade for 14h on 2026-08-13 with
+# quota to spare. It now costs one paid call and yields a real verdict.
+CALLS="$WORK/paid-calls"; : > "$CALLS"
 out="$(FAKE_FREE_CODE=429 FAKE_FREE_BODY='{}' \
-       FAKE_PAID_SHOULD_NOT_BE_CALLED=1 \
+       FAKE_PAID_CODE=200 FAKE_PAID_CALL_LOG="$CALLS" \
+       FAKE_PAID_HEADERS=$'anthropic-ratelimit-unified-5h-utilization: 0.19\r\nanthropic-ratelimit-unified-5h-reset: 9999999999\r\nanthropic-ratelimit-unified-7d-utilization: 0.39\r\nanthropic-ratelimit-unified-7d-reset: 9999999999\r\n' \
        run_gate)"; rc=$?
-[ "$rc" -eq 2 ] && ok "3a 429 with no fallback exits ERROR, not a spent call (rc=$rc)" || bad "3a wrong exit for 429 (rc=$rc): $out"
-case "$out" in *"probe:oauth-usage-429-no-fallback"*) ok "3b probe tag names the no-fallback path" ;; *) bad "3b probe tag missing: $out" ;; esac
-case "$out" in *"reason=no_headers"*) ok "3d reason names the 429 as unusable data, not a crash" ;; *) bad "3d reason missing: $out" ;; esac
-case "$out" in *"http_code=429"*) ok "3c http_code reports the 429, not a synthesized one" ;; *) bad "3c http_code wrong: $out" ;; esac
+[ "$rc" -le 1 ] && ok "3a 429 reaches a real verdict, not ERROR (rc=$rc)" || bad "3a 429 still errors (rc=$rc): $out"
+case "$out" in *"probe:paid-fallback(free:429)"*) ok "3b probe tag names the fallback and the 429 that caused it" ;; *) bad "3b probe tag missing: $out" ;; esac
+case "$out" in *"http_code=200"*) ok "3c http_code is the paid probe's, not the free 429" ;; *) bad "3c http_code wrong: $out" ;; esac
+n="$(wc -l < "$CALLS")"
+[ "$n" -eq 1 ] && ok "3d exactly one paid call per tick (n=$n)" || bad "3d paid probe called $n times, want 1: $out"
 
 # --- 4. free 200 but a body that doesn't parse -> falls through to paid ----
 out="$(FAKE_FREE_CODE=200 FAKE_FREE_BODY='{"unexpected":"shape"}' \
