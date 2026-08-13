@@ -197,14 +197,107 @@ fi
 [ -n "$TOKEN" ] || emit_error no_token
 
 HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
-CODE=$(curl -sS -o /dev/null -D "$HDR" -w '%{http_code}' --max-time 30 \
-  https://api.anthropic.com/v1/messages \
+
+# --- try the FREE probe first, fall back to the paid one -------------------
+# GET /api/oauth/usage costs nothing, but it only answers for an INTERACTIVE
+# OAuth credential (~/.claude/.credentials.json). A `claude setup-token`
+# credential (every monkey self-dev account) gets 403 -- confirmed live
+# 2026-08-13, error body `permission_error: OAuth token does not meet scope
+# requirement user:profile`. hf7y/scheduler#110 made this endpoint the ONLY
+# path and it 403'd on every setup-token account at once -- ERROR is HOLD by
+# design, so that stopped ALL self-dev dispatch until #132 reverted it back
+# to paid-always. This is the fallback #133 asked for, not a repeat of #110:
+# free is attempted, but ANY doubt -- non-200, or a 200 body that doesn't
+# parse into a usable window -- falls straight through to the paid probe
+# below, unchanged. A wrong guess about the free body's shape degrades to
+# "pay for this tick" rather than to a silently wrong verdict.
+#
+# 429 is the one code that must NOT fall through: it means the credential is
+# fine but rate-limited, and the paid endpoint sharing the same budget would
+# likely 429 too -- spending a call to learn nothing, exactly when spending
+# is least wanted. It resolves below as ERROR (no usable header), same as
+# any other unreadable probe.
+FREE_BODY="$(mktemp)"; trap 'rm -f "$HDR" "$FREE_BODY"' EXIT
+FREE_CODE=$(curl -sS -o "$FREE_BODY" -w '%{http_code}' --max-time 15 \
+  https://api.anthropic.com/api/oauth/usage \
   -H "authorization: Bearer $TOKEN" \
-  -H "anthropic-version: 2023-06-01" \
   -H "anthropic-beta: oauth-2025-04-20" \
-  -H "content-type: application/json" \
-  -d "{\"model\":\"$MODEL\",\"max_tokens\":1,\"system\":\"You are Claude Code, Anthropic's official CLI for Claude.\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" 2>/dev/null) \
-  || emit_error curl_failed
+  -H "accept: application/json" 2>/dev/null) || FREE_CODE="curl_failed"
+
+CODE=""
+PROBE_VIA="paid"
+if [ "$FREE_CODE" = "200" ]; then
+  # Convert the free endpoint's JSON body into the same
+  # anthropic-ratelimit-unified-{5h,7d}-{utilization,reset} header lines the
+  # decision core already parses, so ONE parser reads both probes. Tries a
+  # few plausible key names for the weekly window since only one live 200
+  # sample has ever been quoted (senechal, 2026-08-04, mandark) and it did
+  # not exercise that key -- exit 1 (nothing written) on any shape miss, and
+  # the bash side below falls through to paid rather than trust a guess.
+  if python3 - "$FREE_BODY" "$HDR" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+
+body_path, hdr_path = sys.argv[1], sys.argv[2]
+try:
+    doc = json.load(open(body_path))
+except (OSError, ValueError):
+    sys.exit(1)
+
+def epoch(resets_at):
+    if not isinstance(resets_at, str):
+        return None
+    try:
+        return int(datetime.fromisoformat(resets_at.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+def frac(util):
+    # observed shape uses a 0-100 percentage ("utilization":7.0 == 7%); if a
+    # future response is already a 0-1 fraction, don't re-scale it.
+    try:
+        v = float(util)
+    except (TypeError, ValueError):
+        return None
+    return v if v <= 1.0 else v / 100.0
+
+WINDOWS = (("5h", ("five_hour", "5h")), ("7d", ("seven_day", "seven_days", "week", "7d")))
+lines = []
+for hdr_key, body_keys in WINDOWS:
+    win = next((doc[k] for k in body_keys if isinstance(doc.get(k), dict)), None)
+    if win is None:
+        continue
+    u, r = frac(win.get("utilization")), epoch(win.get("resets_at"))
+    if u is None or r is None:
+        continue
+    lines.append(f"anthropic-ratelimit-unified-{hdr_key}-utilization: {u}\n")
+    lines.append(f"anthropic-ratelimit-unified-{hdr_key}-reset: {r}\n")
+
+if not lines:
+    sys.exit(1)
+open(hdr_path, "w").writelines(lines)
+PY
+  then
+    CODE=200
+    PROBE_VIA="oauth-usage"
+  fi
+elif [ "$FREE_CODE" = "429" ]; then
+  CODE=429
+  PROBE_VIA="oauth-usage-429-no-fallback"
+  : > "$HDR"
+fi
+
+if [ -z "$CODE" ]; then
+  PROBE_VIA="paid-fallback(free:$FREE_CODE)"
+  CODE=$(curl -sS -o /dev/null -D "$HDR" -w '%{http_code}' --max-time 30 \
+    https://api.anthropic.com/v1/messages \
+    -H "authorization: Bearer $TOKEN" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "anthropic-beta: oauth-2025-04-20" \
+    -H "content-type: application/json" \
+    -d "{\"model\":\"$MODEL\",\"max_tokens\":1,\"system\":\"You are Claude Code, Anthropic's official CLI for Claude.\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" 2>/dev/null) \
+    || emit_error curl_failed
+fi
 
 # Decision core in python: parse headers, compute burn-lines, pick verdict.
 # USAGE_RUSH_BEFORE_RESET_MIN is passed EXPLICITLY: python reads it from its
@@ -212,7 +305,7 @@ CODE=$(curl -sS -o /dev/null -D "$HDR" -w '%{http_code}' --max-time 30 \
 # had exported it -- a conf/shell-var value would have been silently ignored.
 CEILING="$CEILING" MIN_SLACK="$MIN_SLACK" HTTP_CODE="$CODE" QUIET="$QUIET" \
 USAGE_RUSH_BEFORE_RESET_MIN="$RUSH_MIN" \
-KNOB_SRC="ceiling:$CEILING_SRC,min_slack:$MIN_SLACK_SRC,rush_min:$RUSH_MIN_SRC" \
+KNOB_SRC="ceiling:$CEILING_SRC,min_slack:$MIN_SLACK_SRC,rush_min:$RUSH_MIN_SRC,probe:$PROBE_VIA" \
 python3 - "$HDR" <<'PY'
 import os, re, sys, time
 
@@ -236,7 +329,7 @@ def num(x):
     except (TypeError, ValueError): return None
 
 if not any(("%s-utilization" % w) in vals for w, _ in WINDOWS):
-    print("ERROR" if quiet else f"verdict=ERROR reason=no_headers http_code={code}")
+    print("ERROR" if quiet else f"verdict=ERROR reason=no_headers http_code={code} knobs={os.environ.get('KNOB_SRC','?')}")
     sys.exit(2)
 
 # Rush-before-reset (human policy, 2026-07-20): unused WEEKLY quota is lost
