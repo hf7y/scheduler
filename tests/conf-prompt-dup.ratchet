@@ -2,6 +2,4 @@
 # Raised or lowered ONLY by --accept, which always reports what it changed.
 # Key: fileA:field <TAB> fileB:field <TAB> sha12 of the duplicated block.
 # See tests/conf-prompt-duplication-witness.sh for why the pair-and-hash.
-# accepted 2026-08-11T07:46:23Z threshold=8
-ecosim.conf:BATCH_PROMPT	vim-arcade.conf:BATCH_PROMPT	a89531e346a4
-ecosim.conf:BATCH_PROMPT	vim-arcade.conf:BATCH_PROMPT	f54bf944ad1c
+# accepted 2026-08-13T10:28:14Z threshold=8

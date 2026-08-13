@@ -130,6 +130,28 @@ $PROMPT"
   fi
 fi
 
+# Fragment markers: @@FRAGMENT:<name>@@ anywhere in PROMPT is replaced with
+# the verbatim contents of schedule/_<name>.md. Additive alongside
+# USES_STANDING_RULES above, not a replacement for it -- that mechanism only
+# PREPENDS at the true head, which is right for a block whose own first line
+# claims "These override everything below" but wrong for #98's two blocks
+# (ecosim.conf/vim-arcade.conf's triage rules and verdict semantics), which
+# sit mid-prompt wrapped in project-specific prose on both sides. A boolean
+# cannot say where in the middle of a string a block goes; a marker can.
+# Witness: tests/fragment-marker-witness.sh.
+while [[ "$PROMPT" == *'@@FRAGMENT:'*'@@'* ]]; do
+  marker="$(printf '%s' "$PROMPT" | grep -oE '@@FRAGMENT:[A-Za-z0-9_-]+@@' | head -1)"
+  frag_name="${marker#@@FRAGMENT:}"; frag_name="${frag_name%@@}"
+  FRAG_FILE="$SCHED_ROOT/schedule/_$frag_name.md"
+  if [ -f "$FRAG_FILE" ]; then
+    frag_body="$(cat "$FRAG_FILE")"
+    PROMPT="${PROMPT//$marker/$frag_body}"
+  else
+    echo "scheduler-run: $CONF references $marker but $FRAG_FILE is missing" >&2
+    exit 2
+  fi
+done
+
 # Project-level runtime config (shared by both tiers).
 PROJECT_KEY="${PROJECT_KEY:-$PROJECT}"
 : "${REPO_URL:?scheduler-run: REPO_URL must be set in $CONF}"
