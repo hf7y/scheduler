@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# invoque -- launch an agent session against one project, preloaded with its
+# status report
+#
+# Coined 2026-08-13 by `bashify coin` onto scheduler's bashified branch,
+# beside `dose`, `arme`, `jauge`, `rapporte` and `relis`. One noun, many
+# verbs.
+#
+# THE SEAM. hf7y/scheduler#109 asked which of the five existing verbs this
+# capability belonged to; none did without its NAME line growing an "and".
+# `dose` is the RECURRING dispatcher -- unattended, on a clock, against the
+# shared paced quota. This is the other half of "run an agent": a single,
+# human-invoked session against ONE project, right now, preloaded with that
+# project's offline status report. `jauge` only measures spend and never
+# dispatches; `arme` only arms jobs that spend nothing; `rapporte` and
+# `relis` only read files this ecosystem writes about itself. None of the
+# five could absorb this without becoming two verbs, so this is the sixth.
+#
+# IT WRAPS, IT DOES NOT REIMPLEMENT. Both forms exec the identical code path
+# `bin/scheduler`'s own `cmd_status` has run since before this verb existed
+# -- same report builder, same session launch, unchanged. This is the same
+# pattern `dose`, `jauge`, `rapporte` and `relis` already use: a thin front
+# door onto scheduler's own bin/, not a second implementation to drift.
+#
+# THE COST BOUNDARY IS DELIBERATELY NOT --summon. VERB_CAN_SUMMON exists for
+# a verb whose stated job is something ELSE, escalating to an agent only for
+# a gap not yet mechanized (lib/verb.sh's own header). Launching a session
+# IS this verb's entire job, not a stand-in for a missing mechanism -- the
+# same shape `dose`'s own `usage-paced-runner` subcommand already has, which
+# also declares VERB_CAN_SUMMON=0 while dispatching real spend. So this
+# verb never spends silently for a different reason: the bare (no-mode) form
+# is offline, and every mode that spends is a flag the caller must name
+# explicitly (--summary or --interactive/-I) -- there is no default that
+# reaches an agent.
+#
+# --summary IS bin/scheduler's own --claude, renamed at this door only.
+# man/invoque.1's own page test (row 8) forbids naming a vendor or agent
+# anywhere ON THE PAGE -- and a flag a caller must type is necessarily part
+# of the page. The legacy flag name is an implementation detail from before
+# that rule existed on this repo; this verb keeps it working underneath
+# (see MODE_LEGACY_FLAG below) without carrying it onto its own surface.
+#
+# NEVER SPEND TO DISCOVER A TYPO. Before any spending mode runs, the bare
+# (free) report is fetched first and its exit code checked; a spending mode
+# proceeds only once that resolves to a real project.
+
+SELF="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+VERB_NAME=invoque
+VERB_SUMMARY="launch an agent session against one project, preloaded with its status report"
+VERB_USAGE="invoque <project> [--summary|--interactive|-I]"
+VERB_CAN_SUMMON=0
+VERB_EXITS="0 kept  2 usage  4 gap  (a live session's own exit code is not enumerated here -- see man page)"
+# shellcheck source=../lib/verb.sh
+. "$SELF/lib/verb.sh"
+
+# Where the legacy implementation lives. Same LEGACY_ROOT shape every other
+# scheduler verb uses -- GAPs honestly (exit 4) on a host with no checkout
+# rather than pretending, per the half-and-half state `dose`'s own header
+# documents.
+LEGACY_ROOT="${INVOQUE_LEGACY_ROOT:-$HOME/Documents/Projects/scheduler}"
+
+# A leading flag with no project is a flag, not a project name -- lets
+# `invoque --help`/`--version` reach verb_parse the same way every other
+# verb here handles it.
+case "${1:-}" in
+  -*) proj="" ;;
+  *)  proj="${1:-}"; [ $# -gt 0 ] && shift ;;
+esac
+
+# The mode, if any, is the project's SECOND positional -- extracted before
+# verb_parse because --summary/--interactive/-I are dash-prefixed and would
+# otherwise hit verb_parse's generic "unknown flag" arm.
+mode=""
+if [ -n "$proj" ]; then
+  case "${1:-}" in
+    --summary|--interactive|-I) mode="$1"; shift ;;
+  esac
+fi
+
+# Translate this verb's own vendor-neutral flag to the legacy one underneath
+# it. ONE place, so the two names can never drift apart silently.
+MODE_LEGACY_FLAG="$mode"
+[ "$mode" = --summary ] && MODE_LEGACY_FLAG=--claude
+
+verb_parse "$@"
+set -- "${VERB_ARGS[@]+"${VERB_ARGS[@]}"}"
+[ $# -eq 0 ] || verb_die "unexpected extra argument: $1  (try: $VERB_USAGE)"
+[ -n "$proj" ] || verb_die "usage: $VERB_USAGE"
+
+[ -x "$LEGACY_ROOT/bin/scheduler" ] \
+  || verb_gap "bin/scheduler is not executable or not present under $LEGACY_ROOT"
+
+# The bare report: offline, read-only, zero cost. Fetched first always, so
+# a bad project name is caught before anything is spent, and reused directly
+# as this verb's own output when no mode was requested.
+report="$("$LEGACY_ROOT/bin/scheduler" status "$proj" 2>&1)"; rc=$?
+if [ "$rc" != 0 ]; then
+  verb_die "$(printf '%s\n' "$report" | tail -1)"
+fi
+
+if [ -z "$mode" ]; then
+  printf '%s\n' "$report"
+  exit 0
+fi
+
+# From here the process becomes the session: `cmd_status --interactive`
+# execs into it directly, and `cmd_status --claude` runs a one-shot pass and
+# returns whatever that pass exits. Neither is a code this contract
+# enumerates -- see EXIT STATUS in the man page.
+exec "$LEGACY_ROOT/bin/scheduler" status "$proj" "$MODE_LEGACY_FLAG"

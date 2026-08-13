@@ -1,0 +1,183 @@
+.TH INVOQUE 1 "2026-08-13" "scheduler" "Zach's utilities"
+.SH NAME
+invoque \- launch an agent session against one project, preloaded with its status report
+.SH SYNOPSIS
+.B invoque
+\fIproject\fR
+.br
+.B invoque
+\fIproject\fR \fB\-\-summary\fR
+.br
+.B invoque
+\fIproject\fR \fB\-\-interactive\fR|\fB\-I\fR
+.br
+.B invoque
+[\fB\-\-json\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-\-version\fR]
+.SH DESCRIPTION
+.B invoque
+hands one project's offline status report to a live agent session, on
+demand, for a caller sitting at a prompt right now. It is the single-shot
+counterpart to
+.BR dose (1),
+which dispatches the same class of session on a
+recurring, unattended schedule against the shared paced quota \- the two
+divide "run an agent" the way
+.BR jauge (1)
+divides "measure spend" from
+"cause it": neither verb does the other's job.
+.TP
+.I project
+(bare, no mode)
+Print the same offline status report
+.B scheduler status
+.I project
+already produces \- git health, pending feedback, open questions, the
+project's last automated run. Reads only; reaches no paid service.
+.TP
+.B \-\-summary
+Run a read\-only one\-shot pass over that report and the project's own
+tree, and print a short summary. Spends on every call.
+.TP
+.BR \-\-interactive ", " \-I
+Replace this process with a live, interactive session in the project's
+own directory, preloaded with the report as its first message. Spends on
+every call.
+.SS It wraps, it does not reimplement
+Both spending modes exec the identical code path
+.BR "scheduler status" 's
+own
+.B cmd_status
+has run since before this verb existed \- same report builder, same
+session launch, unchanged. The bare report is fetched first in every
+invocation, free, so a mistyped project name is caught before a spending
+mode is ever reached.
+.SH OPTIONS
+.TP
+.B \-\-json
+Not wired for this verb. Requesting it is reported rather than ignored.
+.TP
+.BR \-q ", " \-\-quiet
+Suppress commentary; results only.
+.TP
+.BR \-h ", " \-\-help
+Print usage and the exit vocabulary.
+.TP
+.B \-\-version
+Print the version.
+.SH EXIT STATUS
+.TP
+.B 0
+The bare report was printed. (A spending mode that completes and returns
+control exits with whatever the session itself exited \- see the note
+below, not this code.)
+.TP
+.B 2
+Usage error: no project given, an unrecognised extra argument, or the
+project named does not resolve.
+.TP
+.B 4
+GAP:
+.I bin/scheduler
+is absent or not executable under the resolved checkout, so no report
+can be built and nothing was spent.
+.PP
+Once a spending mode's session actually starts, this process
+.B becomes
+that session \- the same way
+.BR ssh (1)
+becomes the remote command it launches. Its exit code is whatever the
+session itself exits with, which is not part of this contract: a session
+that ran and disagreed with what it found is not this verb failing.
+.SH EXAMPLES
+The bare form is free and offline:
+.PP
+.RS
+.nf
+$ invoque realisateur
+scheduler status: realisateur -- 2026-08-13 16:32
+
+\-\- git health (/home/scheduler/Documents/Projects/realisateur) \-\-
+clean, up to date with origin
+...
+$ echo $?
+0
+.fi
+.RE
+.PP
+A project that does not resolve is a usage error, not a gap, and nothing
+is spent to discover it:
+.PP
+.RS
+.nf
+$ invoque does\-not\-exist
+invoque: scheduler: no such project 'does\-not\-exist', or it has no PROJECT_REPO_PATH set
+$ echo $?
+2
+.fi
+.RE
+.PP
+No project at all:
+.PP
+.RS
+.nf
+$ invoque
+invoque: usage: invoque <project> [\-\-summary|\-\-interactive|\-I]
+$ echo $?
+2
+.fi
+.RE
+.SH COST
+This verb spends money: every
+.B \-\-summary
+or
+.B \-\-interactive
+call reaches a paid model session, by design \- that is the entire
+reason it exists, not an escalation from a missing mechanism. It carries
+no
+.B \-\-summon
+flag: that flag is for a verb whose stated job is something else,
+declaring it can escalate to an agent only for a gap not yet mechanized.
+Here there is no such gap to name \- launching a session
+.B is
+the job \- so the cost boundary is the two mode flags themselves, which
+the caller must always name explicitly. The bare form never spends.
+.SH FILES
+.TP
+.I bin/invoque
+This utility.
+.TP
+.I bin/scheduler
+The legacy implementation it wraps; carried on a host with a scheduler
+checkout, GAPs honestly on one without.
+.TP
+.I lib/verb.sh
+The shared runtime it sources.
+.SH SEE ALSO
+.BR dose (1),
+.BR jauge (1),
+.BR rapporte (1),
+.BR relis (1),
+.BR arme (1),
+.BR ssh (1)
+.PP
+Expectations transfer from
+.BR dose (1)
+for the domain this verb was cut out of, and from
+.BR ssh (1)
+for what happens to the exit code once a spending mode replaces this
+process with a live session.
+.SH HISTORY
+Coined 2026-08-13 with
+.B bashify coin
+as the sixth verb of one noun, in answer to hf7y/scheduler#109: no
+existing verb could gain "launch an agent with a prompt template and
+instructions" without its NAME line needing "and", so this is new rather
+than an extension.
+.SH GAPS
+"Specific instructions" beyond the fixed status\-report template \-
+freeform text a caller appends to what a spending mode preloads \- is not
+yet built. Recorded in
+.I GAPS.md
+rather than silently omitted; the two modes above cover exactly what the
+legacy status command they wrap already covered before this page existed,
+unchanged.
