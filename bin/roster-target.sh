@@ -290,7 +290,7 @@ probe_deadman() {
   [ -f "$f" ] || { row BLIND deadman "no lib/deadman-switch.sh"; return; }
   # MET requires a stamp write that is NOT guarded by the file being absent --
   # i.e. a successful run refreshes the deadline.
-  if grep -qE 'renew_on_success|refresh_expiry|stamp_on_run' "$f" 2>/dev/null; then
+  if grep -qE 'renew_on_success|refresh_expiry|stamp_on_run|deadman_renew' "$f" 2>/dev/null; then
     row MET deadman "a successful run refreshes the deadline"
   else
     local guard
