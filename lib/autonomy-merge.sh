@@ -96,6 +96,36 @@ autonomy_sweep_repo() {
       ahead="$(git rev-list --count "$default_branch..$branch" 2>/dev/null || echo 0)"
       [ "$ahead" -gt 0 ] || continue
 
+      # SQUASH-MERGE CHECK (scheduler#146). `ahead` alone is right only for
+      # ff/no-ff integration. A squash merge puts a NEW commit on
+      # $default_branch whose diff equals the branch's cumulative diff but
+      # does not contain the branch's own commits as ancestors -- so `ahead`
+      # never returns to 0 for a branch that already landed, and this loop
+      # re-merged the same already-shipped content every cycle and CRITICALed
+      # on the inevitable non-fast-forward push, forever (realisateur,
+      # observed 2026-08-12, four dispatches straight on one branch).
+      #
+      # Detect it with patch-id, not a forge API call: this sweep must keep
+      # working with no network and no `gh` auth (see the fetch-failure and
+      # unresolvable-default-branch skips above, same philosophy). If the
+      # branch's total diff since its merge-base has the same patch-id as
+      # some commit $default_branch already carries, the content is upstream
+      # even though the branch's commits are not ancestors.
+      base="$(git merge-base "$default_branch" "$branch" 2>/dev/null || true)"
+      already_landed=""
+      if [ -n "$base" ]; then
+        branch_patch_id="$(git diff "$base" "$branch" 2>/dev/null | git patch-id --stable 2>/dev/null | cut -d' ' -f1)"
+        if [ -n "$branch_patch_id" ]; then
+          already_landed="$(git rev-list "$base..$default_branch" 2>/dev/null | while read -r c; do
+            git show "$c" 2>/dev/null | git patch-id --stable 2>/dev/null | cut -d' ' -f1
+          done | grep -xF "$branch_patch_id" || true)"
+        fi
+      fi
+      if [ -n "$already_landed" ]; then
+        echo "[$label] autonomy sweep: $branch already landed on $default_branch (squash, patch-id match) -- skipping, not re-merging"
+        continue
+      fi
+
       echo "[$label] autonomy sweep: $branch is $ahead commit(s) ahead of $default_branch"
 
       gate="ungated"
