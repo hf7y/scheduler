@@ -29,15 +29,31 @@ if [ "${FAKE_GH_MODE:-ok}" = "fail" ]; then
   echo "gh: authentication failed" >&2
   exit 1
 fi
-# absent: the FILE 404s but the REPO probe succeeds -- the exact pair that
-# proves "not there" is knowable, and is not the same event as "cannot look".
-if [ "${FAKE_GH_MODE:-ok}" = "absent" ]; then
-  case "$2" in
-    */contents/*) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
-    *)            echo "scheduler"; exit 0 ;;
-  esac
-fi
-printf '%s' "$FAKE_ROSTER_CONTENT" | base64 -w0
+case "$2" in
+  */contents/schedule/ROSTER*)
+    # absent: the FILE 404s but the REPO probe (the catch-all below) still
+    # succeeds -- the exact pair that proves "not there" is knowable, and is
+    # not the same event as "cannot look".
+    if [ "${FAKE_GH_MODE:-ok}" = "absent" ]; then
+      echo "gh: Not Found (HTTP 404)" >&2; exit 1
+    fi
+    printf '%s' "$FAKE_ROSTER_CONTENT" | base64 -w0 ;;
+  */contents/schedule/_runner.conf*)
+    printf '%s' "${FAKE_RUNNER_CONTENT:-}" | base64 -w0 ;;
+  */contents/schedule/_runner.*.conf*)
+    # scheduler#112: dose-project.sh reads a host override the same way
+    # sync-crontab.sh does. Absent by default (most hosts have none of these
+    # three fields overridden); FAKE_RUNNER_HOST_MODE=present serves one.
+    if [ "${FAKE_RUNNER_HOST_MODE:-absent}" = "absent" ]; then
+      echo "gh: Not Found (HTTP 404)" >&2; exit 1
+    fi
+    printf '%s' "${FAKE_RUNNER_HOST_CONTENT:-}" | base64 -w0 ;;
+  *)
+    # repo-reachability probe (repos/<slug>, no /contents/) -- always
+    # succeeds here; FAKE_GH_MODE=fail above is the only "gh itself is down"
+    # case this fixture models.
+    echo "scheduler"; exit 0 ;;
+esac
 EOF
 chmod +x "$FAKEBIN/gh"
 
@@ -82,9 +98,16 @@ export DOSE_HOST_OVERRIDE="testhost"
 ROSTER="ecosim | ecosim@testhost | 6h | live
 ghosttown | ghosttown@testhost | 6h | parked
 elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
+# scheduler#112: RUNNER_JOB/RUNNER_CMD/RUNNER_ENV come from schedule/_runner.conf
+# now, not a hardcoded second copy -- same values real _runner.conf carries
+# today, so the TAG/cmd-path assertions below read exactly as they did before.
+RUNNER_CONTENT='RUNNER_JOB="scheduler-paced-runner"
+RUNNER_CMD="bin/usage-paced-runner.sh"
+RUNNER_ENV="PACED_MAX_PER_TICK=1"
+'
 
 # --- 1. unknown project exits 4, not 0 --------------------------------------
-export FAKE_GH_MODE=ok FAKE_ROSTER_CONTENT="$ROSTER"
+export FAKE_GH_MODE=ok FAKE_ROSTER_CONTENT="$ROSTER" FAKE_RUNNER_CONTENT="$RUNNER_CONTENT"
 export CRONFILE="$WORK/cron1"; : > "$CRONFILE"
 out="$("$TARGET" nope-not-a-project --check 2>&1)"; rc=$?
 [ "$rc" -eq 4 ] && ok "unknown project exits 4 (gap)" || bad "unknown project exited $rc, want 4: $out"
@@ -149,6 +172,39 @@ grep -qi 'REFUSED' <<<"$out" && ok "the refusal is named, not a generic error" \
   || bad "exit 7 but the message never says REFUSED: $out"
 [ "$before" = "$after" ] && ok "wrong-host row: fixture crontab byte-unchanged (nothing touched)" \
   || bad "wrong-host row MODIFIED the crontab -- the guard is supposed to stop before any write: $out"
+
+# --- 6. schedule/_runner.conf is read fresh, not hardcoded (#112) ----------
+# A shared RUNNER_JOB of "renamed-job" (no host override) must show up in the
+# emitted crontab TAG -- proves the value came from the fetched conf, not the
+# old literal "scheduler-paced-runner" constant.
+export CRONFILE="$WORK/cron6"; : > "$CRONFILE"
+export FAKE_RUNNER_CONTENT='RUNNER_JOB="renamed-job"
+RUNNER_CMD="bin/usage-paced-runner.sh"
+RUNNER_ENV="PACED_MAX_PER_TICK=1"
+'
+out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "apply with a renamed shared RUNNER_JOB still converges" \
+  || bad "apply exited $rc with a renamed RUNNER_JOB: $out"
+grep -qF 'scheduler:renamed-job:RUNNER' "$CRONFILE" \
+  && ok "the emitted crontab TAG carries the fetched RUNNER_JOB, not a hardcoded one" \
+  || bad "crontab does not reflect the fetched RUNNER_JOB: $(cat "$CRONFILE")"
+export FAKE_RUNNER_CONTENT="$RUNNER_CONTENT"
+
+# --- 7. a HOST-scoped override wins over the shared conf, per field (#112) -
+export CRONFILE="$WORK/cron7"; : > "$CRONFILE"
+export FAKE_RUNNER_HOST_MODE=present
+export FAKE_RUNNER_HOST_CONTENT='RUNNER_ENV="PACED_MAX_PER_TICK=3"
+'
+out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "apply with a host-scoped RUNNER_ENV override converges" \
+  || bad "apply exited $rc with a host override present: $out"
+grep -qF 'PACED_MAX_PER_TICK=3' "$CRONFILE" \
+  && ok "the host-scoped RUNNER_ENV overrides the shared conf's value" \
+  || bad "host override did not take effect: $(cat "$CRONFILE")"
+grep -qF 'scheduler:scheduler-paced-runner:RUNNER' "$CRONFILE" \
+  && ok "RUNNER_JOB, which the host file does NOT set, still comes from the shared conf" \
+  || bad "an unset host field should not have blanked the shared value: $(cat "$CRONFILE")"
+unset FAKE_RUNNER_HOST_MODE FAKE_RUNNER_HOST_CONTENT
 
 echo
 echo "dose-project-witness: $pass passed, $fail failed"
