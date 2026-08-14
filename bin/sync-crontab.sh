@@ -996,7 +996,14 @@ for acct in "${ACCT_ORDER[@]}"; do
     while IFS= read -r kline; do
       [ -n "$kline" ] || continue
       case "$kline" in \#*) continue ;; esac
-      kcmd="$(awk '{ $1=$2=$3=$4=$5=""; sub(/^ +/,""); print }' <<<"$kline")"
+      # Strip the same "# scheduler:..." tag suffix mcmd strips above. Without
+      # this, an unmanaged line carrying that exact tag -- which is what
+      # bin/dose-project.sh's own converged crontab lines look like, since it
+      # derives the same tag from this project's own RUNNER_JOB -- can never
+      # compare equal to mcmd even when the command it runs is byte-identical,
+      # so this guard is silently blind to a dose-converged line and a rerun
+      # of --apply installs a second runner line instead of warning about one.
+      kcmd="$(awk '{ $1=$2=$3=$4=$5=""; sub(/^ +/,""); sub(/ *# scheduler:.*$/,""); print }' <<<"$kline")"
       [ "$kcmd" = "$mcmd" ] || continue
       if [ "$ADOPT" -eq 1 ]; then
         echo "adopting [$acct]: '$mcmd' was hand-installed; the managed block takes it over (raw line dropped)"
