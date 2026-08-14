@@ -1,185 +1,51 @@
-monkey brought online 2026-08-03; only the accounts named below may dispatch.
-The EXEMPT: lines at the bottom are the roster -- read them, do not read a
-count restated up here. Two such restatements ("names two", and a three-name
-list) were both stale by 2026-08-05, when four accounts were exempt and all
-four dispatching; a number in prose beside a list is a promise nobody keeps.
-
-Self-dev has moved off mandark (realisateur/MONKEY.md). This file makes the
-dispatcher roster a MECHANICAL fact rather than a property of three conf files
-that all happen to agree today: bin/freeze-check.sh refuses dispatch at exit 1
-for anything not named below, on every host, regardless of what any rotation
-says.
-
-WHAT THIS FILE STILL DOES NOW THAT IT NAMES MORE THAN ONE. It stopped being "one
-dispatcher, enforced" on 2026-08-03 and it did NOT thereby become decoration.
-Seventeen projects are parked and every one of them has a schedule/<p>.conf; a
-row added to a rotation by an agent, a merge, or a copied file still dispatches
-NOTHING until a human adds a line here. The roster is the allowlist. Growing it
-by one, deliberately, is the mechanism working -- not evidence it has lapsed.
-
-The host-scoped form is used deliberately. A bare `EXEMPT: ecosim` would
-unfreeze ecosim everywhere, including on mandark where its row still exists in
-_paced.conf at enabled=0 -- and a single edit there would then arm a second
-host silently. Naming the host means the exemption cannot travel.
+# FREEZE -- the dispatcher allowlist. bin/freeze-check.sh refuses dispatch at
+# exit 1 for any account not named EXEMPT below, on every host, regardless of
+# what any rotation says.
+#
+# HOST-SCOPED ON PURPOSE. `EXEMPT: ecosim` would unfreeze ecosim everywhere,
+# including hosts where its row exists at enabled=0, so one edit there would
+# arm a second host silently. Naming the host means an exemption cannot travel.
+#
+# A COMMENTED LINE GENUINELY DISARMS. freeze-check matches
+# `^[[:space:]]*EXEMPT:`, so a leading `#` is not cosmetic. Commented entries
+# below are paused projects, kept visible so a pause is distinguishable from a
+# project that was never armed.
+#
+# THIS FILE IS SLATED FOR SUNSET -- hf7y/scheduler#187. Its decision history
+# (why each account was armed, the chezz and crt pauses and their conditions,
+# the enforce_admins precondition for realisateur/scheduler) was moved there
+# 2026-08-14 rather than carried here, because prose in a file nobody rereads
+# is how it went stale in the first place. Read the issue, not a comment block.
+#
+# WHAT IT IS STILL DOING, as of 2026-08-14: crt, sequestria and secretaire all
+# have enabled=1 rows in _paced.monkey.conf, accounts, clones and runner ticks
+# -- and no line here. This file is the only thing keeping them dark. Deleting
+# it arms three projects the same tick. That is the argument #187 has to answer
+# before anything is removed.
 
 EXEMPT: ecosim@monkey
 EXEMPT: bibliothecaire@monkey
-# vim-arcade@monkey, added 2026-08-04: account #4, landed end to end
-# (bin/setup-selfdev-project.sh) and given the row in _paced.monkey.conf that
-# chezz was staged for -- Zach-directed, vim-arcade goes next, not chezz. See
-# that conf's own comment and realisateur/MONKEY.md 8.3 for the account
-# record.
 EXEMPT: vim-arcade@monkey
-# realisateur@monkey and scheduler@monkey, added 2026-08-11, Zach-directed.
-# Accounts uid 3010 and 3011, provisioned the same day by
-# bin/setup-selfdev-project.sh --apply. hf7y/realisateur#111 asked since
-# 2026-08-08 whether the repo owning the toolchain gets a worker; Zach chose
-# OPTION A -- a full account, not the draft-PRs-only variant -- and chose to
-# arm the dispatcher's own account alongside it.
-#
-# Both were provisioned only AFTER enforce_admins was turned on for
-# hf7y/realisateur and hf7y/scheduler. Required checks were already configured
-# on both repos and were bypassable by an admin token until 2026-08-11; that
-# bypass was the whole containment argument in #111, so closing it first was
-# the precondition, not a follow-up.
 EXEMPT: realisateur@monkey
 EXEMPT: scheduler@monkey
-# chezz@monkey, added 2026-08-04 alongside schedule/chezz.conf.
-#
-# PAUSED 2026-08-06, Zach-directed in session, in his words: "For now, pause
-# chezz for 1 week." UN-PAUSE ON OR AFTER 2026-08-13 -- uncomment the line
-# below AND flip chezz's row in _paced.monkey.conf back to enabled=1. Either
-# one alone leaves it dark, which is the point of having two.
-#
-# COMMENTED, NOT DELETED, deliberately: a deleted line loses the fact that this
-# is a dated pause with a return date rather than a project that was never
-# armed. `bin/freeze-check.sh` matches `^[[:space:]]*EXEMPT:`, so a leading `#`
-# genuinely disarms it -- this is not a cosmetic edit.
-#
-# The pause is not a punishment and not a quota measure. Zach: "chezz needs
-# special treatment. It deserves an audit of what's going wrong. Raising the
-# turn ceiling does not address the problem of batch jobs being too large."
-# The week is for that audit.
-#
-# A reader who disagrees can revert this in one move: uncomment the line. That
-# re-arms chezz and nothing else. Say so out loud, as this file's own
-# convention asks -- but know what you would be re-arming: in the chezz account
-# on monkey the Playwright suite cannot launch a browser at all (missing
-# libatk-1.0.so.0; 123 of 152 tests fail on a clean main), so its pre-commit
-# hook rejects every gameplay commit and the night's work is stashed by the
-# next reset --hard. Re-arming before that is fixed buys more stashes.
-#EXEMPT: chezz@monkey
-
-# crt@monkey, added 2026-08-05, Zach-directed in session: asked to "get dev off
-# mandark tonight" and, given the three options, chose the one whose stated
-# work was "arm crt + baudin on monkey".
-#
-# STATED PLAINLY BECAUSE THIS FILE'S OWN HEADER RESERVES THIS LINE FOR A HUMAN:
-# "a row added to a rotation by an agent, a merge, or a copied file still
-# dispatches NOTHING until a human adds a line here." That guard exists so no
-# agent can self-arm. It was not waived and it was not routed around -- the
-# human named this project, tonight, in this session, and an agent typed the
-# line he named. A reader who thinks that is too thin a reading of "a human
-# adds a line" should delete this line; doing so disarms crt and nothing else,
-# and the rotation row in _paced.monkey.conf will then dispatch nothing, which
-# is exactly what this file is for.
-#
-# SUPERSEDED, marked rather than deleted. This block used to end: "baudin was
-# named in the same breath and is deliberately NOT exempt here ... only one new
-# dispatcher was armed tonight." Zach merged #45 and directed baudin in the
-# same session, so baudin IS exempt now, below. Left visible because a file
-# whose prose silently agrees with whatever happened is the exact failure the
-# chezz block above records.
-#
-# PAUSED 2026-08-06, Zach-directed in session: "CRT also needs to pause pending
-# Zach work."
-#
-# UN-PAUSE CONDITION IS A PERSON, NOT A DATE. Unlike chezz above there is no
-# return date to wait out; this line stays commented until Zach says the work
-# he has in mind is done. Uncommenting it AND flipping crt's row in
-# _paced.monkey.conf back to enabled=1 is what re-arms it.
-#
-# COMMENTED, NOT DELETED. The block above reserves this line for a human and
-# invites a reader who disagrees to delete it; that invitation still stands and
-# is the reason this is a comment rather than a removal -- the record of who
-# armed crt, and on what reading of the guard, is worth more than a tidy file.
-#
-# Note crt never dispatched a single measured run in its ~24h armed: its
-# per-run cost was unmeasured when it was armed and is unmeasured now.
-# UPDATED 2026-08-12, Zach-directed ("move sequestria, groc-mangr, crt,
-# secretaire and ensure they will trigger when the gate opens"). crt's row in
-# _paced.monkey.conf is now `crt|1|1|` again, and its RUNNER cron line is
-# installed. This line -- the second of the two locks the pause block above
-# describes -- is deliberately still commented. Uncommenting it is now the
-# WHOLE act: crt dispatches on the next even-hour tick with nothing else to do.
-# Left to a human because this file's own header reserves it for one.
-#
-# Same for the three rows added at the bottom of _paced.monkey.conf in the same
-# pass (sequestria, groc-mangr, secretaire): all three are enabled there, all
-# three have accounts, clones, credentials and runner ticks on monkey, and none
-# has a line here. Add one per project, when you want that project to run.
-#   EXEMPT: sequestria@monkey
-#   EXEMPT: groc-mangr@monkey
-#   EXEMPT: secretaire@monkey
-# Read schedule/secretaire.conf's header before adding the third: that project
-# is de-animated and has an empty queue, so opening its gate buys a nightly run
-# that correctly records DONE and stops.
-#EXEMPT: crt@monkey
-
-# baudin@monkey, added 2026-08-05 minutes after crt, Zach-directed in the same
-# session: "merged both, arm baudin too". Same reading of this file's
-# human-adds-the-line guard as the crt block above -- the human named the
-# project, an agent typed the line, and it is said here so a reader can
-# disagree and delete it. Deleting this line disarms baudin and nothing else.
-#
-# This makes SIX dispatchers on one quota. _paced.monkey.conf's header is the
-# thing to read before a seventh: the run lock is $HOME-scoped (per account,
-# not host-wide), USAGE_CEILING=0.99, and USAGE_RUSH_BEFORE_RESET_MIN=10080
-# keeps the even-burn hold permanently off. crt has not yet dispatched once, so
-# the per-run cost of BOTH new accounts is still unmeasured.
-#
-# PAUSED 2026-08-06, Zach-directed in session, and INDEFINITELY: "Baudin should
-# come offline until I can figure out what it is and what it's supposed to do.
-# A run blocked on human-input should stop triggering."
-#
-# NO DATE AND NO TRIGGER. The un-pause condition is that baudin's owner decides
-# what baudin is for. It is the only one of today's three pauses whose blocker
-# is a question rather than a task.
-#
-# COMMENTED, NOT DELETED, for the same reason as the two above: the block
-# preceding this line records that a human named this project and an agent
-# typed the line, and says a reader may disagree and delete it. That record is
-# worth keeping even while the line is off. Re-arming means uncommenting here
-# AND flipping baudin's row in _paced.monkey.conf back to enabled=1.
-#
-# This drops monkey from six dispatchers to three (ecosim, bibliothecaire,
-# vim-arcade), which changes nothing about the quota arithmetic in
-# _paced.monkey.conf's header -- adding or removing rows scales how many things
-# ask permission, not what they are asking about. Do not read the smaller
-# roster as new headroom.
-#EXEMPT: baudin@monkey
-
-# groc-mangr@monkey, added 2026-08-13, Zach-directed in session: "lets stand up
-# groc-mangr first interactively, while making a playbook for secretaire ...
-# we'll hand trigger self-dev several times and monitor whether those plays
-# unfolded as predicted."
-#
-# This file's own header reserves this line for a human, and that is what
-# happened: the human named this project, in this session, and an agent typed
-# the line he named. A reader who thinks that is too thin a reading should
-# delete this line; doing so disarms groc-mangr and nothing else.
-#
-# The preconditions groc-mangr.conf listed on 2026-08-05 are met, and were
-# re-probed today rather than quoted: the account exists (uid 3007), the clone
-# exists, the crontab holds the 6-hourly runner, its row in _paced.monkey.conf
-# is enabled=1, and `main` is the default branch again (groc-mangr#2 closed).
-# What it did NOT have was work: four open issues, all toolchain hygiene, none
-# about the product. It now has a standing brief as hf7y/groc-mangr#7 and seven
-# issues written from Zach's own description of the loop.
-#
-# THIS ONE IS BEING WATCHED. The point of arming it now is to hand-trigger it
-# several times and compare what the run does against what was predicted, so
-# that secretaire's stand-up is written from evidence rather than from this
-# paragraph. If nobody is watching the first ticks, this line is doing more
-# than it was authorized to do -- comment it back out.
 EXEMPT: groc-mangr@monkey
+
+# wtul@monkey, added 2026-08-14, Zach-directed in session ("arm it"). Account
+# uid 3013, stood up the same day; its repo landed once schedule/wtul.conf
+# registered it (#185). Registered, landed, and now armed.
+EXEMPT: wtul@monkey
+
+# PAUSED, NOT UNARMED. Both stay commented until a human uncomments them.
+# chezz@monkey -- paused 2026-08-06, Zach: "For now, pause chezz for 1 week."
+#   The stated return date (2026-08-13) has PASSED and was never acted on.
+#   Before re-arming, know what re-arms: in the chezz account the Playwright
+#   suite cannot launch a browser (missing libatk-1.0.so.0; 123 of 152 tests
+#   fail on a clean main), so its pre-commit hook rejects every gameplay commit
+#   and the night's work is stashed by the next reset --hard.
+#EXEMPT: chezz@monkey
+# crt@monkey -- paused 2026-08-06, Zach: "CRT also needs to pause pending Zach
+#   work." Un-pause condition is a person, not a date. Its row in
+#   _paced.monkey.conf is already `crt|1|1|` with its runner cron installed, so
+#   uncommenting this line is the WHOLE act -- crt dispatches on the next
+#   even-hour tick with nothing else to do.
+#EXEMPT: crt@monkey
