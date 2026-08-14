@@ -16,14 +16,45 @@
 # trailing paragraph so it stays the LAST non-blank line -- deliberately,
 # so a stamp quoted mid-body from another comment does not count.
 #
+# WHAT COUNTS AS AN ANSWER (2026-08-14). Zach answers a question issue by
+# COMMENTING and LEAVING IT OPEN. He does not apply the `answered` label and
+# does not want to, so neither issue STATE nor LABEL carries any information
+# about whether he answered: an open question issue is NOT evidence it is
+# unanswered. The predicate that needs no cooperation from anybody is this
+# stamp -- an issue is ANSWERED if it carries a comment by the repo OWNER
+# that is not agent-stamped. Under one shared `hf7y` token an agent's own
+# reply looks exactly like his, which is what the stamp is for.
+#
+# PROVENANCE_ANSWERED_JQ below is that predicate as a jq prelude, because its
+# consumer (bin/scheduler's issues_counts) reads `gh issue list --json`. It
+# defines `is_stamped` and `is_answered($owner)`, and is the ONE place either
+# is written in this repo -- the same predicate as chezz's
+# scripts/answered-issues.mjs, ecosim's lib/sensors/blocked.py and
+# realisateur's bin/gh-comment.sh, reused as a CONVENTION, not imported.
+#
 # CONTRACT
-#   provenance_is_stamped BODY               -- 0 if BODY's last non-blank
+#   provenance_is_stamped BODY             -- 0 if BODY's last non-blank
 #                                                line is a stamp, 1 otherwise
 #   provenance_format_stamp PROJECT JOB [WHEN] -- prints the stamp line
 #   provenance_stamp_body BODY PROJECT JOB [WHEN] -- prints BODY with the
 #                                                stamp appended
 # WHEN overrides the timestamp (testing only); default is `date -u` at
 # second precision.
+
+# jq prelude. Use with `--arg owner <repo owner login>` over a
+# `gh issue list --json labels,comments` array. The `answered` label is
+# honoured as an optional override where someone bothered to apply it, and is
+# never required -- nothing but `scheduler -q`'s push path ever applies it.
+PROVENANCE_ANSWERED_JQ='
+def is_stamped:
+  ((. // "") | split("\n") | map(sub("^\\s+";"") | sub("\\s+$";""))
+   | map(select(length > 0)) | last // "")
+  | test("^<!--\\s*agent:\\s*\\S+/\\S+\\s+\\S+\\s*-->$");
+def is_answered($owner):
+  (([(.labels // [])[].name] | index("answered")) != null)
+  or ((.comments // []) | any(.author.login == $owner
+                              and ((.body // "") | is_stamped | not)));
+'
 
 provenance_is_stamped() {
   local body="$1" last
