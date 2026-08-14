@@ -257,6 +257,16 @@ usage: scheduler [command] [project]
                          leaving the placeholder line untouched and
                          quitting cancels instead of committing an empty
                          entry.
+  idea --receipt <project> "text", -i --receipt
+                         file a RECEIPT, not an idea: a record that
+                         something already happened, with no decision in
+                         it (hf7y/scheduler#41). N receipts land as N
+                         comments on ONE open `receipts`-labelled issue
+                         per project instead of N separate issues --
+                         opens that issue on the first receipt, comments
+                         on it thereafter. Use this for "X is now
+                         installed at Y" notices; use plain `-i` for
+                         anything a human must actually decide.
   sweep, -s              reactive backstop for the vim auto-commit hook --
                          scans every registered repo (+ scheduler itself)
                          for uncommitted/unpushed/diverged state the hook
@@ -1402,6 +1412,68 @@ cmd_idea() {
   fi
   rm -f "$bf"
   echo "filed as a GitHub issue on $slug (labels: idea, $from_label)"
+  echo "  $text"
+  printf '  %s\n' "$url"
+  return 0
+}
+
+# cmd_idea_receipt -- `scheduler -i --receipt <project> "text"`.
+#
+# hf7y/scheduler#41: most `-i` calls are RECEIPTS -- a record that something
+# already happened, with no decision in it -- and one-issue-per-call buries
+# real asks under them (one verb build filed 29 receipt issues in 132s,
+# hf7y/senechal#33-#61, burying senechal#66/#67/#75). Zach's own suggestion on
+# the issue, "a log or folder", pins the note to whatever host wrote it --
+# the exact host-pinning the GitHub front door above already exists to kill
+# (a receipt channel has no clone-required host to read from). So: same
+# front door, same host-independence, but N receipts become N comments on
+# ONE rolling `receipts`-labelled issue per project instead of N issues --
+# comment on the open one if it exists, else open it. Whoever eventually
+# triages it closes it, and the next receipt opens a fresh one -- no
+# separate close-tracking needed.
+cmd_idea_receipt() {
+  local proj="${1:-}" text="${2:-}"
+  if [ -z "$proj" ] || [ -z "$text" ]; then
+    echo "usage: scheduler idea --receipt <project> \"text\""
+    exit 1
+  fi
+  require_gh || exit 1
+  local slug from_proj from_label today body bf existing url
+  slug="$(gh_repo_slug "$proj")" || exit 1
+  from_proj="$(project_for_path "$PWD")" || from_proj="zach"
+  from_label="from:$from_proj"
+  ensure_gh_labels "$slug" "$from_label"
+  gh label create receipts --repo "$slug" --color BFD4F2 \
+    --description "Filed via scheduler -i --receipt; a record, not a decision -- piles onto ONE issue" \
+    >/dev/null 2>&1 || true
+  today="$(date '+%Y-%m-%d %H:%M')"
+  body="$today ($from_label): $text"
+  bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
+
+  existing="$(gh issue list --repo "$slug" --label receipts --state open \
+                --json url --jq '.[0].url' --limit 1 2>/dev/null)" || existing=""
+  if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+    if ! gh issue comment "$existing" --repo "$slug" --body-file "$bf" >/dev/null 2>&1; then
+      rm -f "$bf"
+      echo "scheduler idea --receipt: gh issue comment FAILED against $existing -- NOTHING was recorded." >&2
+      exit 1
+    fi
+    rm -f "$bf"
+    echo "receipted as a comment on the open receipts issue for $slug"
+    echo "  $text"
+    printf '  %s\n' "$existing"
+    return 0
+  fi
+
+  if ! url="$(gh issue create --repo "$slug" --title "Receipts" \
+                --label receipts --label "$from_label" --body-file "$bf" 2>&1)"; then
+    rm -f "$bf"
+    echo "scheduler idea --receipt: gh issue create FAILED against $slug -- NOTHING was recorded." >&2
+    printf '%s\n' "$url" >&2
+    exit 1
+  fi
+  rm -f "$bf"
+  echo "opened a new rolling receipts issue on $slug (labels: receipts, $from_label)"
   echo "  $text"
   printf '  %s\n' "$url"
   return 0
@@ -3472,7 +3544,13 @@ case "${1:-}" in
     require_project report "${2:-}"
     open_file "$REPORTS_ROOT/$2/LATEST.md"
     ;;
-  idea|-i) cmd_idea "${2:-}" "${3:-}" ;;
+  idea|-i)
+    if [ "${2:-}" = "--receipt" ]; then
+      cmd_idea_receipt "${3:-}" "${4:-}"
+    else
+      cmd_idea "${2:-}" "${3:-}"
+    fi
+    ;;
   ask) cmd_ask "${2:-}" "${3:-}" ;;
   next|-n) cmd_next "${2:-}" ;;
   run) cmd_run "${2:-}" ;;
