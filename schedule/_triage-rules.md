@@ -27,3 +27,13 @@
    with a command before acting on it, and if you write it down, stamp it
    '# verified <date> via <command>'. Several confident surveys in this estate
    have been loudly wrong in exactly this way.
+
+6. PROPOSED, NOT YET ADOPTED (hf7y/scheduler#150, draft): once you have closed
+   every issue whose premise expired (step 2), `bin/next-issue.sh <this repo>`
+   suggests what to pick up next -- oldest open issue first, skipping any
+   issue that names a still-open "Depends on #N" / "Blocked by #N" in its own
+   body. It is a suggestion, not a claim lock: nothing about it is
+   authoritative until #150 is argued and merged, and picking something else
+   is still your call to make. Read the script's own header before trusting
+   it -- it explains why body length and provenance labels were tried and
+   rejected as ranking signals.
