@@ -234,6 +234,27 @@ reconcile_prior_cycles() {
   fi
 }
 
+# Debroussaille sweep (hf7y/scheduler#37). #37 asked for a paced-rotation
+# job that clears provably-recoverable git debris (merged branches, clean
+# recoverable worktrees) without a human -- bin/debroussaille.sh is that
+# mechanism, but nothing called it yet. Wired here, scoped to $SCHED_REPO
+# ONLY: this is scheduler's OWN paced rotation clearing its OWN clone, not
+# the account-wide default scan (which would also reach into sibling
+# clones like ../realisateur that belong to a different project's own
+# rotation to clear). --apply, not --check: a report nobody reads is not
+# the mechanism, and the whole point of debroussaille's contract is that
+# what it clears needs no judgement call. Never fatal to the cycle --
+# missing or failing debris cleanup must not block the actual self-dev
+# work above it.
+run_debroussaille_sweep() {
+  if [ -x "$SCHED_REPO/bin/debroussaille.sh" ]; then
+    "$SCHED_REPO/bin/debroussaille.sh" --apply "$SCHED_REPO" \
+      || echo "debroussaille: nonzero exit (see above) -- not fatal to the cycle"
+  else
+    echo "debroussaille: SKIPPED -- $SCHED_REPO/bin/debroussaille.sh not found or not executable"
+  fi
+}
+
 MAX_TURNS="${MAX_TURNS:-60}"
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
 NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
@@ -507,6 +528,13 @@ Commit each finished change with a clear message. Then append a section for THIS
       echo "merge_mode=$MODE -- leaving $BRANCH unmerged for manual review (manual pause, not the default)"
     fi
   fi
+
+  # Runs every cycle, not just ones with new commits: a PRIOR cycle's
+  # paced/<date> branch can still be sitting merged-and-pushed from an
+  # earlier run (this wiring is new; the backlog of already-merged
+  # branches predates it) and clean stale worktrees accumulate independent
+  # of whether THIS cycle wrote anything.
+  run_debroussaille_sweep
 
   if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
     if [ "$MERGED" = "1" ] && [ "$PUSHED" = "1" ]; then
