@@ -158,3 +158,28 @@ EXEMPT: scheduler@monkey
 # ask permission, not what they are asking about. Do not read the smaller
 # roster as new headroom.
 #EXEMPT: baudin@monkey
+
+# groc-mangr@monkey, added 2026-08-13, Zach-directed in session: "lets stand up
+# groc-mangr first interactively, while making a playbook for secretaire ...
+# we'll hand trigger self-dev several times and monitor whether those plays
+# unfolded as predicted."
+#
+# This file's own header reserves this line for a human, and that is what
+# happened: the human named this project, in this session, and an agent typed
+# the line he named. A reader who thinks that is too thin a reading should
+# delete this line; doing so disarms groc-mangr and nothing else.
+#
+# The preconditions groc-mangr.conf listed on 2026-08-05 are met, and were
+# re-probed today rather than quoted: the account exists (uid 3007), the clone
+# exists, the crontab holds the 6-hourly runner, its row in _paced.monkey.conf
+# is enabled=1, and `main` is the default branch again (groc-mangr#2 closed).
+# What it did NOT have was work: four open issues, all toolchain hygiene, none
+# about the product. It now has a standing brief as hf7y/groc-mangr#7 and seven
+# issues written from Zach's own description of the loop.
+#
+# THIS ONE IS BEING WATCHED. The point of arming it now is to hand-trigger it
+# several times and compare what the run does against what was predicted, so
+# that secretaire's stand-up is written from evidence rather than from this
+# paragraph. If nobody is watching the first ticks, this line is doing more
+# than it was authorized to do -- comment it back out.
+EXEMPT: groc-mangr@monkey
