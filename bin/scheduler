@@ -50,6 +50,8 @@ fi
 REPORTS_ROOT="$HOME/reports"
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/autonomy-merge.sh"
+# shellcheck disable=SC1091
+source "$SCHED_ROOT/lib/provenance.sh"   # PROVENANCE_ANSWERED_JQ -- what counts as an answer
 EDITOR="${EDITOR:-vim}"
 PACED_LOG="$HOME/.local/share/scheduler-paced-runner/run.log"
 # WHICH rotation file, resolved per host by the SAME rule the runner uses --
@@ -178,7 +180,8 @@ usage: scheduler [command] [project]
                          render every open `question`-labelled GitHub issue
                          into ONE buffer shaped like QUESTIONS.md, open it in
                          $EDITOR, and post each filled `> ` slot as a comment
-                         (+ the `answered` label) on save. The buffer is
+                         on save -- the comment IS the answer, the issue
+                         stays open, no label is involved. The buffer is
                          rendered fresh from the API and deleted on exit --
                          nothing about it persists on disk, which is the whole
                          point: the old symlinked file went stale on every
@@ -188,7 +191,11 @@ usage: scheduler [command] [project]
                          the top of the file. With no project, print the
                          questions overview: every project with any open
                          questions as unanswered/total, `*` where the file
-                         changed since you last opened it, unread first.
+                         changed since you last opened it, unread first, and
+                         `?` where the count could not be READ at all (BLIND,
+                         which is never the same as nothing open). On the
+                         issues channel a question counts as ANSWERED once
+                         you have commented on it -- leave it open, no label.
   report [project], -r  open a project's latest report (LATEST.md)
   next [n], -n           what usage-paced-runner.sh will actually dispatch
                          next, in real rotation order (reads its rotation
@@ -812,10 +819,14 @@ resolve_questions_path() {
 #
 # Semantics carried over from the file channel, now as labels:
 #   agents file with `--label question`; a human answer is a COMMENT (never
-#   a body edit, so the ask survives verbatim and history is free) plus the
-#   `answered` label; the nightly reads label:question,answered, acts, and
-#   CLOSES the issue -- the same "removes the block once it has acted"
-#   contract the file channel had.
+#   a body edit, so the ask survives verbatim and history is free), and that
+#   is the whole contract. Zach leaves the issue OPEN and applies no label,
+#   so neither STATE nor LABEL says anything about whether he answered --
+#   an issue is ANSWERED iff the repo owner left a comment on it that is not
+#   agent-stamped (lib/provenance.sh, PROVENANCE_ANSWERED_JQ). This was
+#   written down as a `question`+`answered` label contract until 2026-08-14
+#   and that contract was never real: nothing ever applied the label, so
+#   issues_counts reported every answer Zach ever wrote as UNANSWERED.
 #
 # Per BUILD-DISCIPLINE this must FAIL LOUD if `gh` errors. A questions
 # command that silently renders an empty buffer is indistinguishable from
@@ -883,20 +894,48 @@ require_gh() {
 # command wait on GitHub. The answer BUFFER is never cached -- see the
 # header note. A stale count costs you a slightly wrong number in a
 # summary view; a stale buffer costs you a lost answer.
+#
+# UNANSWERED here means "no unstamped comment from the repo owner", never
+# "not labelled `answered`" -- see the header note and lib/provenance.sh.
+# The QUERY is deliberately not gated on --state: an answer sits on an OPEN
+# issue as often as a closed one, and either gate drops half of them. The
+# `.state == "OPEN"` filter below is about which questions still occupy the
+# queue you are being shown -- it decides what is COUNTED, never what counts
+# as an ANSWER.
+#
+# Every failure path below returns 1 rather than "0 0". A count that reads
+# clean when nothing was reached is this ecosystem's named worst case:
+# BLIND reported as OK. Callers render `?` for it.
 issues_counts() {
-  local proj="$1" slug cache out
-  slug="$(gh_repo_slug "$proj")" || { echo "0 0"; return 0; }
+  local proj="$1" slug owner cache raw out
+  slug="$(gh_repo_slug "$proj")" || return 1
+  owner="${slug%%/*}"
   cache="${XDG_CACHE_HOME:-$HOME/.cache}/scheduler/questions-count-$proj"
   if [ -f "$cache" ] && [ "$(( $(date +%s) - $(stat -c %Y "$cache" 2>/dev/null || echo 0) ))" -lt 300 ]; then
     cat "$cache"; return 0
   fi
-  out="$(gh issue list --repo "$slug" --label question --state open \
-          --limit 200 --json number,labels 2>/dev/null \
-        | jq -r '[.[] | select([.labels[].name] | index("answered") | not)] | length,
-                 (length)' 2>/dev/null | paste -sd' ')" || true
+  if ! command -v gh >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    echo "scheduler: $proj: gh and/or jq missing -- the question count is BLIND, not zero." >&2
+    return 1
+  fi
+  if ! raw="$(gh issue list --repo "$slug" --label question --state all \
+                --limit 200 --json number,state,labels,comments 2>&1)"; then
+    printf 'scheduler: %s: `gh issue list` failed against %s -- the question count is BLIND, not zero:\n%s\n' \
+      "$proj" "$slug" "$raw" >&2
+    return 1
+  fi
+  if ! out="$(printf '%s' "$raw" | jq -r --arg owner "$owner" \
+        "$PROVENANCE_ANSWERED_JQ"'
+         [.[] | select(.state == "OPEN")]
+         | "\([.[] | select(is_answered($owner) | not)] | length) \([.[] | select(is_answered($owner))] | length)"' 2>&1)"; then
+    printf 'scheduler: %s: jq failed over %s issue JSON -- the question count is BLIND, not zero:\n%s\n' \
+      "$proj" "$slug" "$out" >&2
+    return 1
+  fi
   case "$out" in
     [0-9]*' '[0-9]*) ;;
-    *) echo "0 0"; return 0 ;;
+    *) echo "scheduler: $proj: could not derive a question count for $slug -- BLIND, not zero." >&2
+       return 1 ;;
   esac
   mkdir -p "$(dirname "$cache")"
   printf '%s\n' "$out" > "$cache"
@@ -977,17 +1016,17 @@ cmd_questions_issues() {
   {
     printf '# Questions for %s — GitHub issues (%s)\n\n' "$proj" "$slug"
     printf 'Answer under each question on lines starting with `> `.\n'
-    printf 'On save+exit each non-empty answer is posted as a COMMENT on its issue\n'
-    printf 'and the issue is labelled `answered`. Empty slots are skipped.\n\n'
+    printf 'On save+exit each non-empty answer is posted as a COMMENT on its issue.\n'
+    printf 'The comment IS the answer; the issue stays open. Empty slots are skipped.\n\n'
     printf 'This buffer is rendered fresh from the API and DELETED on exit.\n'
     printf 'Editing anything other than a `> ` line changes nothing.\n'
   } > "$QBUF"
 
-  printf '%s' "$json" | jq -r '
+  printf '%s' "$json" | jq -r --arg owner "${slug%%/*}" "$PROVENANCE_ANSWERED_JQ"'
     sort_by(.number)[] |
     "\n<!-- scheduler:issue \(.number) -->\n" +
     "## #\(.number) — \(.title)\n" +
-    (if ([.labels[].name] | index("answered")) then "_(already labelled `answered` — a further comment just adds to the thread)_\n" else "" end) +
+    (if is_answered($owner) then "_(you have already answered this one — a further comment just adds to the thread)_\n" else "" end) +
     "\n" + ((.body // "") | rtrimstr("\n")) + "\n" +
     ((.comments // []) | map("\n---\n**\(.author.login // "?") commented:**\n\n" + ((.body // "") | rtrimstr("\n")) + "\n") | join("")) +
     "\n### answer\n> \n"
@@ -1046,7 +1085,7 @@ cmd_questions_issues() {
 
   rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/scheduler/questions-count-$proj"
   echo
-  echo "$posted answer(s) posted to $slug; $proj's next run reads label:question,answered."
+  echo "$posted answer(s) posted to $slug; $proj's next run reads the comments."
   [ "$failed" -eq 0 ] || exit 1
 }
 
@@ -1147,8 +1186,8 @@ cmd_ask() {
       "" \
       "Answer by commenting on this issue (\`scheduler -q $proj\` renders every" \
       "open question into one buffer and posts your replies as comments), or" \
-      "just reply here. Adding the \`answered\` label is what tells $proj's next" \
-      "run to act; it closes this issue once it has.")"
+      "just reply here. A comment is the answer — leave the issue open, no" \
+      "label needed.")"
     # --body-file, not --body: a question containing a backtick or \$( is a
     # question, not a command. Same reason CLAUDE.md requires `git commit -F`.
     local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
@@ -2079,11 +2118,18 @@ cmd_questions_list() {
   # one question "does anything need my answer", nothing more.
   echo "scheduler questions — $(date '+%Y-%m-%d %H:%M')"
   echo
-  local rows="" quiet="" n_unanswered=0 n_unopened=0 n_projects=0
+  local rows="" quiet="" blind="" n_unanswered=0 n_unopened=0 n_projects=0 n_blind=0
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
-    local qu qa
-    read -r qu qa <<<"$(project_questions_counts "$proj")"
+    local qu qa counts
+    # A project we could not COUNT is not a project with nothing open. It
+    # gets its own row and its own tally line -- BLIND reported as OK is
+    # the failure this whole channel exists to avoid.
+    if ! counts="$(project_questions_counts "$proj")"; then
+      blind="$blind $proj"; n_blind=$(( n_blind + 1 ))
+      continue
+    fi
+    read -r qu qa <<<"$counts"
     local total=$(( qu + qa ))
     if [ "$total" -eq 0 ]; then
       quiet="$quiet $proj"
@@ -2105,13 +2151,15 @@ cmd_questions_list() {
       "$score" "$star" "$proj" "$qu/$total" "$note")"$'\n'
   done < <(projects)
 
-  if [ "$n_projects" -eq 0 ]; then
+  if [ "$n_projects" -eq 0 ] && [ "$n_blind" -eq 0 ]; then
     # Nothing open anywhere: the counts and the n/m legend below would all
     # be zeroes explaining a table that isn't there.
     echo "  no open questions on any project."
     echo
     echo "-> scheduler -q <project>   open one anyway (answered/resolved history)"
     return 0
+  elif [ "$n_projects" -eq 0 ]; then
+    echo "  no open questions on any project this could READ -- see BLIND below."
   else
     # sed trims the trailing pad left by the fixed-width count column on
     # rows with no note -- invisible in a terminal, but it turns a copied
@@ -2124,8 +2172,12 @@ cmd_questions_list() {
   echo "  $n_unanswered unanswered across $n_projects project(s); $n_unopened with unread changes (*)."
   echo "  n/m = unanswered/total; total includes replies your project run hasn't processed yet."
   [ -n "$quiet" ] && echo "  nothing open:$quiet"
+  [ -n "$blind" ] && echo "  BLIND — could not read (see the errors above), NOT 'nothing open':$blind"
   echo
   echo "-> scheduler -q <project> [n]   open one (with n, jump straight to bullet n)"
+  # Exit status carries it too, so a script that only reads $? still learns
+  # this overview was incomplete.
+  [ "$n_blind" -eq 0 ]
 }
 
 cmd_questions_jump() {
@@ -2189,8 +2241,13 @@ cmd_glance() {
     local qlabel="-"
     # An issues-channel project has no local file to gate on -- gating the
     # count on one is exactly how it would silently render "-" forever.
+    local q_blind=0 q_counts
     if [ -f "$qfile" ] || [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
-      read -r q_unanswered q_answered <<<"$(project_questions_counts "$proj")"
+      # Could-not-look renders `?`, never `-`. `-` means "nothing open".
+      if ! q_counts="$(project_questions_counts "$proj")"; then
+        q_blind=1; q_counts="0 0"
+      fi
+      read -r q_unanswered q_answered <<<"$q_counts"
       local q_total=$(( q_unanswered + q_answered ))
       local q_star=""
       if [ "$q_total" -gt 0 ] 2>/dev/null; then
@@ -2208,7 +2265,9 @@ cmd_glance() {
     # not the star is present (flagged 2026-07-22: "formatting should
     # leave blank spaces so asterisks don't nudge fractions over ...
     # try to get all the / to line up").
-    if [ "$qlabel" = "-" ]; then
+    if [ "$q_blind" -eq 1 ]; then
+      qlabel="  ?"
+    elif [ "$qlabel" = "-" ]; then
       qlabel="  -"
     else
       qlabel="$(printf '%1s%2s/%s' "$q_star" "$q_unanswered" "$q_total")"
@@ -3526,7 +3585,7 @@ case "${1:-}" in
     # name dump (see cmd_questions_list). Deliberately does NOT mark_seen:
     # reading a count is not reading the questions, so `*` survives until
     # you actually open the file.
-    if [ -z "${2:-}" ]; then cmd_questions_list; exit 0; fi
+    if [ -z "${2:-}" ]; then cmd_questions_list; exit $?; fi
     mark_seen "$2"
     # Same command, same fingers: a project whose answer channel is GitHub
     # issues gets the rendered-fresh buffer instead of the stale symlink.
