@@ -2,9 +2,12 @@
 # next-issue.sh -- suggest which open issue to pick up next, gated by
 # explicit "Depends on #N" text an issue's own body already carries.
 #
-# PROPOSAL, per hf7y/scheduler#150 -- not yet wired into any BATCH_PROMPT.
-# This is the draft PR's artifact: read this script's header for the
-# reasoning, or #150 for the fuller research.
+# ADOPTED, per hf7y/scheduler#150 (decided 2026-08-14, landed in #177):
+# schedule/scheduler.conf's own BATCH_PROMPT (TRIAGE step) calls this script
+# directly, dogfooding on the one project this account fully owns. Other
+# projects' confs keep their own triage prose -- adopting the pointer there
+# is each project's own call, not a mandate from #150. Read this script's
+# header for the reasoning, or #150 for the fuller research.
 #
 # WHY THIS SHAPE AND NOT A SCORE. #150's own research (see the PR body)
 # found no reliable size signal in this tracker -- issue body length does
