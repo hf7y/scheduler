@@ -10,19 +10,15 @@ cron jobs.
 
 ## Orient (do this first)
 
-1. Read `.scheduler/QUESTIONS.md` and process any answers. Run
-   `bin/collect-feedback.sh .scheduler/QUESTIONS.md --consume` — it
-   surfaces the user's inline `> ` replies (QUESTIONS.md is append-only by
-   convention, so nothing else reads them back). For each reply: act on it,
-   then delete that question's whole entry (`--consume` does not edit the
-   file at all — it records the reply as read in this account's state dir,
-   so the entry stays exactly where it is). This gap — a written reply nothing ever consumed —
-   is exactly what left a stale, already-resolved question sitting in
-   wtul's own QUESTIONS.md until a human flagged it by hand; don't let the
-   same thing happen here.
-2. Read `.scheduler/FOCUS.md` — it states the current posture, the
-   current focus, AND the backlog (its "Backlog" section). There is no
-   separate `TODO.md` anymore; FOCUS.md is both scope and backlog.
+1. Read the tracker: `gh issue list --repo hf7y/scheduler --limit 200`.
+   This is both the scope and the backlog. **`FOCUS.md`, `QUESTIONS.md`
+   and `BLOCKERS.md` are retired** (#66, 2026-08-07) — they are pointer
+   stubs, and `bin/collect-feedback.sh`'s `--consume` path is retired with
+   them (#193). Do not read, append to, or restore any of them.
+2. Read the **comments** on any issue before treating it as unaddressed.
+   Zach answers by commenting and leaving the issue open, so an open issue
+   is not evidence of unaddressed work, and issue state is never an answer
+   signal.
 3. Read `README.md` — the architecture and the decisions already made, so
    you don't re-litigate or undo them.
 4. Skim recent reports in `~/reports/scheduler/` if any, to see what prior
@@ -30,7 +26,7 @@ cron jobs.
 
 ## Pick work
 
-From `.scheduler/FOCUS.md` (its focus + backlog), choose the
+From the open issues, choose the
 **highest-value, lowest-risk** item(s) you can
 **fully finish and verify tonight**. One well-tested change beats three
 speculative ones. Good candidates are self-contained: a script fix, a new
@@ -54,17 +50,17 @@ tomorrow," or anything that reshapes the engine every job depends on.
   If a change genuinely can't be verified without going live, **don't
   commit it** — write it up as a proposal in tonight's report instead.
 - **Don't invent scope.** If an item is ambiguous or needs a real
-  judgment call, record the question with
-  `scheduler ask scheduler "<the question>"` — not a hand-typed append —
-  and describe it in the report rather than guessing. The command stamps
-  id/date/provenance and puts the question first, which is what makes it
-  legible in `scheduler status`; hand-written entries are FLAGged by
-  `bin/questions-lint.sh` in `scheduler sweep`.
+  judgment call, **file a GitHub issue** (`scheduler -i`, or `gh issue
+  create --repo hf7y/scheduler --body-file <file>`) and describe it in the
+  report rather than guessing. Never hand-type it into a markdown file.
+- **No new markdown files.** `schedule/_standing-rules.md` rule 5 and
+  `bin/markdown-cost.sh` both enforce this: a branch fails if it adds any
+  new top-level `.md`, or if >30% of its added lines are markdown.
+  Deletions are free.
 - Keep `README.md` honest — if you change how something works, update the
   README in the same commit.
-- If you complete a backlog item, remove or check off its line in
-  `.scheduler/FOCUS.md` as part of the same change so it stays
-  accurate.
+- If you complete a backlog item, close its issue in the same change
+  (`Closes #N` in the commit or PR body) so the tracker stays accurate.
 
 ## Finish
 
