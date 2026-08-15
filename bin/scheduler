@@ -2946,35 +2946,6 @@ cmd_sweep() {
     echo "no schedule/*.conf claims a MIGRATED-to destination"
   fi
 
-  # Sixth pass: BLOCKERS.md staleness (bin/blockers-freshness-check.sh,
-  # built 2026-07-24 but never wired into any run cadence until now --
-  # see its own header for the wtul Discogs/fpcalc near-miss that
-  # motivated it, and the Backlog entry that named this exact wiring as
-  # the "natural next step"). Same offline-first, zero-`claude`-cost
-  # discipline as the passes above: findings are SIGNALS a human should
-  # look at, never auto-resolved here.
-  if [ -x "$SCHED_ROOT/bin/blockers-freshness-check.sh" ]; then
-    local blockers_check_out blockers_check_rc
-    blockers_check_out="$("$SCHED_ROOT/bin/blockers-freshness-check.sh" 2>&1)"
-    blockers_check_rc=$?
-    if [ "$blockers_check_rc" -eq 2 ] || [ "$blockers_check_rc" -eq 3 ]; then
-      # Exit 3 is the parse-failure/UNKNOWN case and exit 2 is "BLOCKERS.md is
-      # not there at all" -- neither is a staleness finding. Label them as
-      # such rather than under the "stale entries" header, since the whole
-      # point of those exit codes is that the check could NOT see the file's
-      # sections and must not be read as any statement about them.
-      # 2 was added to this arm on 2026-07-29: until then a check that had
-      # died on a bad SCHED_ROOT and printed "FATAL: ... not found" was
-      # reported to the reader under "stale BLOCKERS.md entries found", which
-      # is a dead check wearing the costume of a live one.
-      echo "== [blockers-freshness] CANNOT READ BLOCKERS.md -- check is BLIND =="
-      echo "$blockers_check_out" | sed 's/^/  /'
-    elif [ "$blockers_check_rc" -ne 0 ]; then
-      echo "== [blockers-freshness] stale BLOCKERS.md entries found =="
-      echo "$blockers_check_out" | sed 's/^/  /'
-    fi
-  fi
-
   # Sixth-b pass: hand-written QUESTIONS.md entries + unstamped state
   # claims (bin/questions-lint.sh, built 2026-07-28). Wired in the same
   # commit that built it, deliberately: the check immediately above spent
