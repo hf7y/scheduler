@@ -1,57 +1,12 @@
 # FREEZE -- the dispatcher allowlist. bin/freeze-check.sh refuses dispatch at
 # exit 1 for any account not named EXEMPT below, on every host, regardless of
 # what any rotation says.
-#
-# HOST-SCOPED ON PURPOSE. `EXEMPT: ecosim` would unfreeze ecosim everywhere,
-# including hosts where its row exists at enabled=0, so one edit there would
-# arm a second host silently. Naming the host means an exemption cannot travel.
-#
-# A COMMENTED LINE GENUINELY DISARMS. freeze-check matches
-# `^[[:space:]]*EXEMPT:`, so a leading `#` is not cosmetic. Commented entries
-# below are paused projects, kept visible so a pause is distinguishable from a
-# project that was never armed.
-#
-# THIS FILE IS SLATED FOR SUNSET -- hf7y/scheduler#187. Its decision history
-# (why each account was armed, the chezz and crt pauses and their conditions,
-# the enforce_admins precondition for realisateur/scheduler) was moved there
-# 2026-08-14 rather than carried here, because prose in a file nobody rereads
-# is how it went stale in the first place. Read the issue, not a comment block.
-#
-# WHAT IT IS STILL DOING, as of 2026-08-15: NOTHING THAT THE ENABLED FLAG DOES
-# NOT ALREADY DO. This block used to claim crt, sequestria and secretaire had
-# enabled=1 rows in _paced.monkey.conf and that "deleting it arms three
-# projects the same tick" -- and that claim was the argument scheduler#187 was
-# waiting on. It was false: #189 set all three to 0 on 2026-08-12. They read
-# crt|0|1, sequestria|0|1, secretaire|0|1. Deleting this file arms nobody.
-#
-# So #187 sat blocked for a week on a sentence written inside the file whose
-# deletion it was blocking, which nothing checked. Retirement is unblocked;
-# seven consumers to repoint first (scheduler-run, freeze-check.sh,
-# roster-diff.sh, dose-project.sh, usage-paced-runner.sh, roster-target.sh,
-# lib/dose-common.sh).
-
 EXEMPT: ecosim@monkey
 EXEMPT: bibliothecaire@monkey
 EXEMPT: vim-arcade@monkey
 EXEMPT: realisateur@monkey
 EXEMPT: scheduler@monkey
 EXEMPT: groc-mangr@monkey
-
-# wtul@monkey, added 2026-08-14, Zach-directed in session ("arm it"). Account
-# uid 3013, stood up the same day; its repo landed once schedule/wtul.conf
-# registered it (#185). Registered, landed, and now armed.
 EXEMPT: wtul@monkey
-
-# PAUSED, NOT UNARMED. Both stay commented until a human uncomments them.
-# chezz@monkey -- paused 2026-08-06, Zach: "For now, pause chezz for 1 week."
-#   The stated return date (2026-08-13) has PASSED and was never acted on.
-#   Before re-arming, know what re-arms: in the chezz account the Playwright
-#   suite cannot launch a browser (missing libatk-1.0.so.0; 123 of 152 tests
-#   fail on a clean main), so its pre-commit hook rejects every gameplay commit
-#   and the night's work is stashed by the next reset --hard.
 #EXEMPT: chezz@monkey
-# crt@monkey -- paused 2026-08-06, Zach: "CRT also needs to pause pending Zach
-#   work." Un-pause condition is a person, not a date. Its row reads crt|0|1
-#   (set to 0 by #189), so uncommenting this line does NOTHING on its own --
-#   the enabled flag is the act. This block said the opposite until 2026-08-15.
 #EXEMPT: crt@monkey
