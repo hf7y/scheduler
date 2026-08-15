@@ -1,75 +1,43 @@
-# FOCUS — scheduler
+# FOCUS — retired 2026-08-15, migrated to GitHub issues
 
-<!-- BOOTSTRAP STAMP. Written by realisateur bin/stamp-agent.sh on 2026-07-29.
-     This file is this agent's WHOLE brief. Anything that was here before
-     is recoverable from git (`git log -p -- .scheduler/FOCUS.md`) and was
-     stripped deliberately, not lost. Do not restore it. Do not append
-     session history here -- that is how the last one reached four
-     thousand lines and stopped directing anybody. -->
+**The backlog now lives at https://github.com/hf7y/scheduler/issues.**
+This file is a pointer, not a second source of truth. Do not add work
+items here — file an issue.
 
-## What this project is
+Retired by [#66](https://github.com/hf7y/scheduler/issues/66) (2026-08-07);
+the estate-wide sweep is
+[hf7y/realisateur#230](https://github.com/hf7y/realisateur/issues/230).
+Note that #66 §1 lists "a mostly static `FOCUS.md`" among what markdown
+keeps — this file is that, reduced to its pointer.
 
-**scheduler is metabolism.** It turns quota into cycles and cycles into commits. It is *pure mechanism* by standing doctrine (2026-07-22, realisateur/UNIVERSE.md): **it enforces weights, it never sets them.** The judgment of WHAT deserves turns is not yours — it belongs to realisateur, and reaches you through your own front door like any other request.
+## What this file was
 
-## The bar for this bootstrap
+A **bootstrap stamp**, written by `realisateur bin/stamp-agent.sh` on
+2026-07-29. The predecessor had reached 4,455 lines and stopped directing
+anybody; the stamp cut it to 43 and stated one bar:
 
-**Install the schedule system on this host, then register `realisateur` into the rotation. That is the entire turn.** There is no crontab to inherit: it was emptied deliberately before this run, so bringing dispatch back up from `schedule/_runner.conf` is step one and not an assumption. Done means the tick line is installed, `realisateur` is in this host's rotation file, and a dispatch has actually fired with a run-log line to show it.
+> Install the schedule system on this host, then register `realisateur`
+> into the rotation. That is the entire turn.
 
-Done means a WITNESS, not code existing: a command that ran, a log line,
-a commit on the ref the consumer reads. Not "it is written."
+The host was **dexter**. That bootstrap is over: self-dev moved to
+`monkey` on 2026-08-03 (`realisateur/MONKEY.md`, milestone met), mandark's
+scheduler self-dev went dark (`58d6495`), and dexter dispatches nothing.
+Nothing in the brief survives as work.
 
-## Current focus
+## Nothing was reaped from it, deliberately
 
-- **Install the tick.** Derive it from `schedule/_runner.conf` and install it with `bin/sync-crontab.sh --apply`. Do not hand-write a crontab line — this host's crontab was hand-installed on 2026-07-24 and has drifted from every conf since. Witness: `crontab -l` shows a line whose text you did not type.
-- **Register realisateur** into this host's rotation file (`schedule/_paced.<host>.conf`). One line. Witness: a `DISPATCH ... realisateur` in `~/.local/share/scheduler-paced-runner/run.log`.
-- **Write your verdict before you run out of room.** `bin/verdict.sh` — `CONTINUE` if the bar is unmet and reachable, `DONE` if met, `IMPOSSIBLE` if you have found a reason it cannot be met from here. An absent verdict means truncated, not failed, and you will simply be dispatched again. Claiming `IMPOSSIBLE` slows the whole ecosystem down, so claim it only with the probe that proves it.
-- **Then stop.** You do not add participants three through N. Every further participant arrives as a request from realisateur, which stamps it first. If you find yourself registering a third project, you have exceeded the turn.
+Read end to end before retiring. It carried a project statement
+("scheduler is metabolism… it enforces weights, it never sets them"), the
+bootstrap bar above, and a short Current-focus list whose items — install
+the tick from `schedule/_runner.conf`, register `realisateur` into
+`schedule/_paced.<host>.conf` — are all about that dead host and its
+hand-drifted crontab.
 
-## Standing constraints
+The one durable thing in it is doctrine, not a task, and it is already
+recorded where doctrine lives (`realisateur/UNIVERSE.md`, 2026-07-22):
+scheduler is pure mechanism; the judgment of *what* deserves turns belongs
+to realisateur and arrives through the front door. #66 §3 is the current
+form of that argument.
 
-- **You are mechanism, not judgment.** You never set a weight, never pick what deserves turns, never decide which project comes online next. Those arrive through the front door.
-- **A control is not data.** `schedule/FREEZE` gates dispatch; `schedule/RUN-MARKER` only records it. Never gate on the marker, never treat the freeze as a note.
-- **The milestone is the merge.** This branch is done when it merges to `main` — not when the work looks finished on the branch.
-
-## Standing constraints (ecosystem-wide)
-
-- A claim about system state is **re-probed, not quoted**.
-- **A dirty tree at exit is a failed run**, not a handoff.
-- Fail **loud**. An exit-0 no-op is worse than a crash.
-- File work you did not ask for through the front door; do not just do it.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-07-29 21:24 (via `scheduler -i`):** PROPOSAL from realisateur /ideate 2026-07-29 (office migration sprint, Zach-directed): can scheduler present an EXECUTE-ONLY surface -- no read, no write -- to a caller who is not its owner? The office vision has scheduler as an ordinary bin utility that office CEO 'brian' calls to get work done: a mechanical turk that FEELS like an agentless API while possibly having agency inside. Concretely: installed under its own uid mode 0711, caller in no group that can read its tree (no confs, no focus/, no questions/, no logs), results returned to the caller as mail from scheduler's own address rather than on stdout. Two things this needs from scheduler itself, which is why it is filed here rather than done to you: (1) a mail-out result path, since today every answer is a file the caller reads; (2) a decision about whether the -x-only boundary is scheduler's to enforce or the office's to impose from outside. NOT DECIDED -- Zach was asked this session and has not answered; realisateur's own recommendation is that the boundary be proven by an acceptance contract as its own work order, because an unenforced permission boundary is a claim and not a boundary. Realisateur's FOCUS.md 244655a carries the full milestone chain this sits inside (blocker 4 on milestone M1).
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-07-30 01:16 (via `scheduler -i`):** PROPOSAL (realisateur, /ideate 2026-07-30, Zach-directed): a branch of this repo becomes 'mete' -- scheduler bashified into a plain utility with no traces of claude or agent, args/flags, enforcing a contract. Filed as courtesy, not a change: realisateur does not hand-edit this engine. Probe found only 5 of 11449 shell LOC actually execute claude; _paced.conf's dispatch payload is already a generic command field; usage-gate.sh's Anthropic quota probe is the one irreducible coupling and the proposal is to make the resource oracle pluggable. Detail in basheur/.scheduler/FOCUS.md aadf558 and realisateur 69846a6.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-07-31 19:32 (via `scheduler -i`):** PROPOSAL from realisateur /ideate 2026-07-31 (Zach present, decided this session): two registrations are due to be RETIRED, and realisateur is filing rather than editing schedule/ directly. (1) bibliothecaire is being retired to a verb work tree -- its agent comes off mandark, its declared footprint is uninstalled through senechal's verbs, its prose is filed into an Obsidian vault, and three verbs (fonde, verse, cueille) replace it, installed via senechal's installe. When its verbs are installed and passing, schedule/bibliothecaire.conf and its _paced.conf row should be removed, and ~/.local/bin/bibliothecaire-nightly-batch-loop.sh retired from PATH (expect installe retire to exit 7 REFUSED -- the script is unowned by installe's manifest; it will be forced deliberately). (2) quatre-vingt-douze MERGES INTO bibliothecaire -- Zach-directed, no longer a recommendation -- so schedule/quatre-vingt-douze.conf retires with it, AFTER bibliothecaire's cueille wing exists. NOT YET: neither should be unregistered before its replacement runs, and both are blocked on a human-only decision (the Obsidian vault does not exist on mandark yet). This is a heads-up so scheduler is not surprised by two conf deletions, not a request to act now. Note also: bibliothecaire is already enabled=0 at weight 2, so nothing is dispatching for it regardless. Full record: bibliothecaire/.scheduler/FOCUS.md 2026-07-31.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-07-31 23:24 (via `scheduler -i`):** UNREGISTER quatre-vingt-douze -- the project folded into bibliothecaire on 2026-07-31 (Zach-directed) and its working checkout has been REMOVED. Two of scheduler's own files still refer to it and only Zach/scheduler should edit them: (1) schedule/quatre-vingt-douze.conf still exists, and (2) schedule/_paced.conf line 225 still carries the row 'quatre-vingt-douze|0|1|/home/zach/.local/bin/quatre-vingt-douze-nightly-batch-loop.sh'. THAT LOOP SCRIPT HAS BEEN DELETED as part of the reap, so the row now points at nothing -- a live registration naming a missing dispatch script. Follow the precedent already in this file for bibliothecaire and secretaire (2026-07-31): delete the conf and replace the row with a dated UNREGISTERED comment. The work now lives as the verbs glane(1) and accroche(1) in bibliothecaire-verbs, on PATH via installe; prose is consigned to the Obsidian vault; history is preserved on github.com/hf7y/quatre-vingt-douze (main + bashified). The focus/ and questions/ symlinks were already swept, and 'for f in focus/*.md questions/*.md; do [ -e $f ] || echo DANGLING: $f; done' is clean.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-08-01 09:12 (via `scheduler -i`):** PROPOSAL (realisateur /ideate, 2026-08-01, Zach-directed): collapse the hardcoded '/home/zach/Documents/Project Archive/scheduler' path to ONE resolved source before any relocation. Probed today: the literal appears in 21 of scheduler's own tracked files (bin/scheduler, bin/usage-gate.sh, bin/usage-paced-runner.sh, bin/morning-report.sh, bin/overnight-dev.sh, bin/scheduler-dev-cycle.sh, bin/scheduler-completion.bash, examples/schedule-entry.conf.template, tests/sched-root-witness.sh, .scheduler/schedule.conf, DESIGN-NOTES.md, BLOCKERS.md) plus 21 files under ~/.local/bin and three symlinks (scheduler, usage-gate.sh, usage-paced-runner.sh). CONTEXT: Zach wants scheduler moved into Documents/Projects/ -- 'Project Archive' is a false name for the live engine. A sed sweep would work once and leave the next relocation just as expensive; Zach chose single-source-first. tests/sched-root-witness.sh already exists as the witness, so this is testable today. This is a proposal for scheduler to judge and schedule, not a change made from outside -- realisateur did not touch engine code. Full context in realisateur .scheduler/FOCUS.md f9711aa, section 'relocation as a verb: transplante'.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-08-01 09:19 (via `scheduler -i`):** CORRECTION to today's realisateur SCHED_ROOT proposal (99c79d8): my count was inflated and re-deriving it shrinks the ask. SCHED_ROOT ALREADY EXISTS and the self-locating convention is already in use -- SCHED_ROOT=${SCHED_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)} appears in bin/questions-lint.sh, bin/blockers-freshness-check.sh, bin/check-witness-lint.sh, bin/rotation-lint.sh and bin/token-usage.sh. In bin/scheduler the archive literal at line 38 is a FALLBACK after self-location, not the primary path. Only 7 files under bin/ still carry the literal: morning-report.sh, overnight-dev.sh, scheduler, scheduler-completion.bash, scheduler-dev-cycle.sh, usage-gate.sh, usage-paced-runner.sh. The remainder of my '21 tracked files' were docs, BLOCKERS.md, DESIGN-NOTES.md, a conf template and a test -- real occurrences, but not engine work. So the proposal is FINISH AN EXISTING CONVENTION across 7 files, not introduce one across 21. SECOND CORRECTION, Zach-caught: the relocation plan will NOT have transplante write cron. transplante declares what moved; scheduler's own bin/sync-crontab.sh regenerates from schedule/*.conf; notify-senechal fires afterward. That follows scheduler's own stated rule at bin/scheduler:324 -- never edit crontab by hand. Nothing outside scheduler will touch the crontab. realisateur .scheduler/FOCUS.md 7ffed7b carries both corrections.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-08-01 10:35 (via `scheduler -i`):** PROPOSAL (realisateur, 2026-08-01, Zach-directed): scheduler has NO SEMANTIC CATEGORY FOR NON-AGENT WORK, and the gap now blocks a real job. Probed today in bin/sync-crontab.sh: the crontab tag is scheduler:<name>:<KIND> and KIND has exactly three values -- RUNNER (line 706), SWEEP (620, 725), BATCH (650, 679). All three are agent work or the dispatch of it: per-project SWEEP/BATCH are prompts (SWEEP_PROMPT, BATCH_PROMPT, *_MAX_TURNS); RUNNER is usage-paced-runner.sh and SWEEP_TICK is 'scheduler sweep', which are plain scripts whose purpose is reaching claude. THE CONSEQUENCE IS NOT COSMETIC. Those jobs are gated by USAGE_CEILING / token usage. A monitoring job wired through any existing kind INHERITS THAT GATE, so it stops reporting exactly when quota is exhausted -- which is when its report matters most. 'Quota exhausted' and 'nothing to report' become one silence, which is the two-states-one-symbol collapse ecosim's own contract exists to prevent, occurring at the scheduling layer rather than the sensor layer. CONCRETE BLOCKED JOB: ecosim.relocation (ecosim cbc0a5b) is an offline, non-agentic sensor that must run on a tick to detect path drift after today's scheduler relocation. It has nowhere to be registered: RUNNER and SWEEP_TICK are both occupied, and a project conf offers only prompt-shaped jobs. PROPOSED: a fourth kind, MONITOR, read from schedule/_monitor.conf with the same shared-then-host override rule as _runner.conf/_sweep.conf (MONITOR_JOB/MONITOR_CMD/MONITOR_CRON, host file blanking MONITOR_CRON to opt out). Its contract, and the reason it is a new kind rather than a reused one: (1) IT NEVER SPENDS, so it is never usage-gated and never suppressed by a ceiling; (2) ITS EXIT CODE IS A FINDING, not a pass/fail of work -- ecosim speaks the Monitoring Plugins codes 0/1/2/3 where 3 is BLIND, and a wrapper that flattens those to 'nonzero' destroys the distinction; (3) it is not a paced participant and must not be suppressed by PACED_SET membership. Zach's framing, which is the actual point: the existing routines are for SELF-DEV work, and non-agentic maintenance deserves to be split off or at minimum semantically distinguished rather than smuggled through a dispatch slot. This is scheduler's engine so it is proposed, not patched -- realisateur did not touch sync-crontab.sh. Context: realisateur .scheduler/FOCUS.md, and today's relocation commit here 54dd369.
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-08-01 11:28 (via `scheduler -i`):** BLOCKERS-CANDIDATE (realisateur /cloture, 2026-08-01): TWO DEFINITIONS OF 'PUSHED' DISAGREE ABOUT THIS REPO, AND THE REAP PHASE TURNS ON WHICH ONE IS AUTHORITATIVE. `transplante check` calls scheduler PUSHED because `git rev-list --count --branches --not --remotes` is 0 -- every COMMIT exists on some remote ref. `fauche check scheduler` refuses it, naming branch 'bootstrap/stamp-2026-07-29' as 8 commits ahead of its OWN upstream, plus 'paced/2026-07-24' and 'paced/2026-07-25' as existing only on this host. Both readings are correct; they answer different questions. The decision Zach owns: for the coming reap of agent-shaped material OFF MANDARK, is a branch that exists only on this host a blocker, or is commit-level recoverability sufficient? If the former, those three paced/* branches need pushing or deleting before anything leaves the host; if the latter, fauche's per-branch test is stricter than the doctrine requires and should say so rather than blocking. Not filed as work: it is a judgment about what 'recoverable elsewhere' means, and fauche's whole contract rests on it. Context: realisateur .scheduler/FOCUS.md 02e2c98; today's relocation of scheduler (54dd369) and wtul, and the 14 documents consigned (vault fbdbae9).
-
-## Ideas (added via `scheduler -i`)
-
-- **2026-08-01 11:36 (via `scheduler -i`):** ANSWERED (Zach, 2026-08-01), re the two-definitions-of-pushed question filed earlier today at 8efc617: A HOST-ONLY BRANCH IS A BLOCKER. Commit-level recoverability is NOT sufficient -- a branch is a name someone chose to keep, and losing the name loses the reason those commits were separated. PROPAGATED AS GUARDS RATHER THAN PROSE, which is this ecosystem's own answer to how doctrine spreads. A survey found exactly ONE live code site still using the weaker test (`rev-list --branches --not --remotes` in gardien-garde/bin/transplante); every other hit for that idiom was prose. fauche already asked correctly. So: transplante now enumerates refs/heads/ and asks about origin/<branch> (gardien-garde 68a527b), realisateur/bin/closeout-lint.sh now does the same instead of reading HEAD alone (realisateur 9d7b279), and BUILD-DISCIPLINE.md carries the settled definition with the exact test and the reason it lives in three places rather than one -- each answers it for a different act: may this be removed (fauche), may it be moved (transplante), did this session strand anything (closeout-lint). THE TEST IS THE REMOTE REF, NEVER THE TRACKING CONFIG: a branch pushed by explicit refspec has no upstream configured and is still safely on origin. The first attempt used @{u} and over-reported by two, which is the same defect class it was fixing. WHAT THIS NOW BLOCKS, and it is scheduler's own: closeout-lint went from 2 FLAGs to 7 and all three instruments agree on the same five branches here -- bootstrap/stamp-2026-07-29 (+8), paced/2026-07-26 (+3), and paced/2026-07-24, paced/2026-07-25, paced/2026-07-28 existing ONLY on mandark. Under the settled doctrine nothing may be reaped off this host until each is pushed or deliberately deleted. That is scheduler's call to make, not realisateur's; realisateur pushed paced/2026-07-27 earlier today at Zach's explicit direction and did not touch the rest.
+Full history — including the 4,455-line predecessor the stamp replaced —
+is in git.

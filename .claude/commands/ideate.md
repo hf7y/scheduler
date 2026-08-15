@@ -1,5 +1,5 @@
 ---
-description: Interactive vision/triage pass for the scheduler project itself -- pull live state, surface blockers and divergence, ask direct design questions, record decisions into DESIGN-NOTES/FOCUS/QUESTIONS and queue work for the nightly self-run. Does NOT build inline unless explicitly told to.
+description: Interactive vision/triage pass for the scheduler project itself -- pull live state, surface blockers and divergence, ask direct design questions, record decisions into DESIGN-NOTES and GitHub issues, and queue work for the nightly self-run. Does NOT build inline unless explicitly told to.
 ---
 
 The interactive counterpart to `/nightly-batch` (unattended). Where the
@@ -13,9 +13,14 @@ request, not a violation of this command.
 
 Ported from chezz's `/ideate` (2026-07-23), adapted to scheduler's own
 file model: this repo is maintained by hand AND runs a review-gated
-nightly self-run (see `.claude/scheduler/FOCUS.md`), so decisions land in
-`DESIGN-NOTES.md` + `.scheduler/FOCUS.md` + `.scheduler/QUESTIONS.md`,
-not a game tracker.
+nightly self-run, so decisions land in `DESIGN-NOTES.md` and the work and
+questions land as **GitHub issues on `hf7y/scheduler`**.
+
+**`FOCUS.md`, `QUESTIONS.md` and `BLOCKERS.md` are retired** (#66,
+2026-08-07). They are pointer stubs. Never append to them, never restore
+them, and do not create a new top-level `.md` — `schedule/_standing-rules.md`
+rule 5 ("NO NEW MARKDOWN FILES") and `bin/markdown-cost.sh` both enforce
+this at merge.
 
 ## 0. Priority-order arguments (if given)
 
@@ -37,8 +42,7 @@ vision > milestone > jobs > blockers > quickfix`), and:
 
 Pull real, current state before saying anything about status:
 - `git log --oneline -10`, `git status`, and `git rev-list --left-right
-  --count origin/main...main` -- sync first if behind (stash/pop around
-  any uncommitted `QUESTIONS.md` answer sitting there).
+  --count origin/main...main` -- sync first if behind.
 - **Live quota**, if the question touches pacing/burndown: `bash
   bin/usage-gate.sh`. It reads whichever account the CLI is logged into.
   Account model (decided 2026-07-24, see DESIGN-NOTES): primary = Claude
@@ -47,9 +51,11 @@ Pull real, current state before saying anything about status:
   but during the transition confirm you're actually on the primary before
   attributing a number to it (an earlier pass misread svc-vaporwave's
   quota as the primary's).
-- `.scheduler/FOCUS.md` (Current focus, Backlog, Vision, Consolidation
-  roadmap), `.scheduler/QUESTIONS.md`, `BLOCKERS.md` -- the existing
-  queue and already-decided direction. Don't re-ask a settled decision.
+- `gh issue list --repo hf7y/scheduler --state all --limit 200` -- the
+  existing queue and already-decided direction. Read the COMMENTS on an
+  open issue before treating it as unaddressed: Zach answers by commenting
+  and leaving the issue open, so issue state is never an answer signal.
+  Don't re-ask a settled decision.
 - `schedule/_paced.conf` weights + `docs/priority-weight.md` if the pass
   is about relative project priority.
 
@@ -62,7 +68,7 @@ Sort what you find into:
   answer, just say so.
 - **Real design forks** -- multiple plausible, conflicting directions.
   These are what `AskUserQuestion` is for. Ground each in real
-  counts/quotes (git history, usage-gate output, FOCUS.md dates), not
+  counts/quotes (git history, usage-gate output, issue dates), not
   vibes.
 - **Already-settled** -- matches DESIGN-NOTES/FOCUS. Note it's unchanged
   and move on; don't re-litigate.
@@ -80,13 +86,14 @@ For each decision (new or re-confirmed):
   future sessions and the nightly self-run need the "why." If it
   corrects an earlier entry, say what changed rather than silently
   overwriting.
-- Update the relevant section of `.scheduler/FOCUS.md` (Current focus,
-  Backlog, or Consolidation roadmap), pointing back at DESIGN-NOTES for
-  detail -- keep FOCUS.md entries short.
+- File the work as a **GitHub issue** (`scheduler -i`, or `gh issue create
+  --repo hf7y/scheduler --body-file <file>`), pointing back at DESIGN-NOTES
+  for detail. One issue per discrete item, with enough context that a fresh
+  agent could execute it.
 - If a decision needs a follow-up only the **user** can do -- scope,
   credentials, a physical/account action, something outside this repo --
-  append a real entry to `.scheduler/QUESTIONS.md`, not just a mention in
-  chat.
+  that is an issue too, not just a mention in chat. Do not write it into a
+  markdown file; that is the failure #66 retired.
 - Mechanical priority changes (`_paced.conf` weights) are fair game to
   apply here when human-directed, but note in the comment that
   realisateur owns re-tuning them over time.
@@ -100,8 +107,8 @@ Named 2026-07-20 (cross-project pattern, originated in this very repo):
 the user generates ideas faster than any implementation cadence can
 stabilize them, so a backlog that only grows is the expected shape of the
 problem, not proof this command is failing. What *would* be failure:
-letting the gap stay invisible. When you touch the Backlog, if it's been
-growing without draining, **say so explicitly** in the step-6 summary --
+letting the gap stay invisible. When you touch the queue, if it's been
+growing without draining, **say so explicitly** in the step-5 summary --
 rough queue depth, oldest un-started item's age, accrual-vs-clear trend
 (intake is zero-cost and unthrottled; clearing is quota-gated and shared
 across paced jobs). The user's own call whether that's fine or a signal
@@ -109,12 +116,12 @@ to re-scope or throttle intake; this command just makes the gap visible.
 
 ## 5. Commit, push, and stop
 
-Commit the `DESIGN-NOTES.md` / `.scheduler/FOCUS.md` /
-`.scheduler/QUESTIONS.md` / `schedule/_paced.conf` changes. Push is
-allowed for this repo without asking (see CLAUDE.md) -- flag the push in
-the summary (what/why/how to revert). End with a short summary: what's
-now queued and in what order, what's still open in `QUESTIONS.md` for the
-user, and explicitly confirm no implementation code was touched (or, if
+Commit the `DESIGN-NOTES.md` / `schedule/_paced.conf` changes on a branch
+and open a PR -- `main` is protected, so a direct push is rejected for
+everyone. Follow `claim-drift --convention` verbatim. End with a short
+summary: what's now queued and in what order, what issues are still open
+for the user, and explicitly confirm no implementation code was touched
+(or, if
 the user asked for an inline fix, what it was and that it's separate from
 the queue). If a priority-order argument was given (step 0), report each
 lens's covered/skipped status by name here.
