@@ -17,7 +17,7 @@ nightly self-run, so decisions land in `DESIGN-NOTES.md` and the work and
 questions land as **GitHub issues on `hf7y/scheduler`**.
 
 **`FOCUS.md`, `QUESTIONS.md` and `BLOCKERS.md` are retired** (#66,
-2026-08-07). They are pointer stubs. Never append to them, never restore
+2026-08-07) and DELETED (hf7y/realisateur#293). Never restore
 them, and do not create a new top-level `.md` — `schedule/_standing-rules.md`
 rule 5 ("NO NEW MARKDOWN FILES") and `bin/markdown-cost.sh` both enforce
 this at merge.
