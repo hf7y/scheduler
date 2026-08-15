@@ -64,6 +64,11 @@ bibliothecaire  | bibliothecaire@monkey  | 2h | live
 vim-arcade      | vim-arcade@monkey      | 2h | live
 realisateur     | realisateur@monkey     | 2h | live
 scheduler       | scheduler@monkey       | 2h | live
+groc-mangr      | groc-mangr@monkey      | 2h | live
+wtul            | wtul@monkey            | 2h | live
+gardien         | gardien@monkey         | 6h | live
+nine-speakers   | nine-speakers@monkey   | 6h | live
+sequestria      | sequestria@monkey      | 6h | live
 
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
@@ -88,3 +93,4 @@ crt             | crt@monkey             | 6h | parked
 # un-pause condition is Zach deciding what baudin is for. Same
 # CRON_HOST/CRON_ACCOUNT gap as crt above: schedule/baudin.conf sets neither.
 baudin          | baudin@monkey          | 6h | parked
+secretaire      | secretaire@monkey      | 6h | parked
