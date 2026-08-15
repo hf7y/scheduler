@@ -17,11 +17,18 @@
 # 2026-08-14 rather than carried here, because prose in a file nobody rereads
 # is how it went stale in the first place. Read the issue, not a comment block.
 #
-# WHAT IT IS STILL DOING, as of 2026-08-14: crt, sequestria and secretaire all
-# have enabled=1 rows in _paced.monkey.conf, accounts, clones and runner ticks
-# -- and no line here. This file is the only thing keeping them dark. Deleting
-# it arms three projects the same tick. That is the argument #187 has to answer
-# before anything is removed.
+# WHAT IT IS STILL DOING, as of 2026-08-15: NOTHING THAT THE ENABLED FLAG DOES
+# NOT ALREADY DO. This block used to claim crt, sequestria and secretaire had
+# enabled=1 rows in _paced.monkey.conf and that "deleting it arms three
+# projects the same tick" -- and that claim was the argument scheduler#187 was
+# waiting on. It was false: #189 set all three to 0 on 2026-08-12. They read
+# crt|0|1, sequestria|0|1, secretaire|0|1. Deleting this file arms nobody.
+#
+# So #187 sat blocked for a week on a sentence written inside the file whose
+# deletion it was blocking, which nothing checked. Retirement is unblocked;
+# seven consumers to repoint first (scheduler-run, freeze-check.sh,
+# roster-diff.sh, dose-project.sh, usage-paced-runner.sh, roster-target.sh,
+# lib/dose-common.sh).
 
 EXEMPT: ecosim@monkey
 EXEMPT: bibliothecaire@monkey
@@ -44,8 +51,7 @@ EXEMPT: wtul@monkey
 #   and the night's work is stashed by the next reset --hard.
 #EXEMPT: chezz@monkey
 # crt@monkey -- paused 2026-08-06, Zach: "CRT also needs to pause pending Zach
-#   work." Un-pause condition is a person, not a date. Its row in
-#   _paced.monkey.conf is already `crt|1|1|` with its runner cron installed, so
-#   uncommenting this line is the WHOLE act -- crt dispatches on the next
-#   even-hour tick with nothing else to do.
+#   work." Un-pause condition is a person, not a date. Its row reads crt|0|1
+#   (set to 0 by #189), so uncommenting this line does NOTHING on its own --
+#   the enabled flag is the act. This block said the opposite until 2026-08-15.
 #EXEMPT: crt@monkey
