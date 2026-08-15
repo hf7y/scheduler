@@ -7,11 +7,13 @@
 # branches piled up (`scheduler blockers`) faster than review capacity.
 # Zach's call: for projects where a bad merge is cheap to revert, replace
 # the human gate with a test gate. Modeled directly on the one real
-# precedent in this repo, bin/scheduler-dev-cycle.sh's merge_mode() (see
-# that file for the "review is revert-based, not a pre-push gate" framing
-# this inherits) -- same push-with-retry, same abort-and-leave-for-review
-# fallback on conflict, generalized from one hardcoded branch/repo to any
-# branch in any dedicated clone.
+# precedent in this repo, bin/scheduler-dev-cycle.sh's merge_mode() (retired
+# 2026-08-15, hf7y/scheduler#190 -- the "review is revert-based, not a
+# pre-push gate" framing this inherits lives on in DESIGN-NOTES.md's
+# 2026-07-24 "push-on-cycle, not push-on-morning-review" entry) -- same
+# push-with-retry, same abort-and-leave-for-review fallback on conflict,
+# generalized from one hardcoded branch/repo to any branch in any dedicated
+# clone.
 #
 # Sourced by lib/sweep-loop-common.sh. One entry point:
 #

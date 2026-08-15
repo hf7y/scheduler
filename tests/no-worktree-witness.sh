@@ -184,10 +184,13 @@ run "$REPO"
 check "R1 this checkout has no production worktree creator" "$rc" "0"
 has   "R1 and the scan was not empty" "$out" "tracked shell file(s)"
 
-# R2 -- and the two scripts #49 names are still the ones doing the work, in a
-# clone. A guard passing because the scripts were deleted would be a different
-# change than the one claimed.
-for f in bin/scheduler-dev-cycle.sh bin/overnight-dev.sh; do
+# R2 -- and the scripts #49 names are still doing the work, in a clone. A
+# guard passing because a script was deleted would be a different change
+# than the one claimed -- true of bin/overnight-dev.sh, still checked below.
+# bin/scheduler-dev-cycle.sh, #49's other named script, is gone: retired
+# entirely rather than ported (hf7y/scheduler#190), so it is no longer a
+# candidate worktree creator to check here at all.
+for f in bin/overnight-dev.sh; do
   if [ -f "$REPO/$f" ] && grep -q 'git clone -q "\$SCHED_REPO" "\$DEV_CLONE"' "$REPO/$f"; then
     ok "R2 $f still runs its cycle, now in a clone"
   else

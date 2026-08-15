@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Witness for lib/registry-lock.sh -- the two-half lockout shared by
-# lib/sweep-loop-common.sh (every project's jobs) and
-# bin/scheduler-dev-cycle.sh (the scheduler's own self-dev cycle).
+# lib/sweep-loop-common.sh (every project's jobs) and, formerly,
+# bin/scheduler-dev-cycle.sh (retired, hf7y/scheduler#190).
 #
 # The bug this exists to prevent is a lockout that reports "free" while
 # someone is working -- failing OPEN. Cases 3/4 are that direction.
@@ -102,12 +102,6 @@ grep -q 'REGISTRY_DEFER_CAPPED' "$SLC" && ok "handles the capped case explicitly
 grep -q 'exit 4' "$SLC" && ok "exit-code contract (4=deferred) preserved" || bad "exit 4 lost"
 c="$(grep -c 'kill -0' "$SLC")"
 [ "$c" -eq 0 ] && ok "no leftover inline pid probe" || bad "$c inline pid probe(s) still in sweep-loop-common"
-
-echo "== 11. dev-cycle participates in BOTH halves"
-DC="$(dirname "$LIB")/../bin/scheduler-dev-cycle.sh"
-grep -q 'registry_claim' "$DC" && ok "takes the project lock" || bad "no registry_claim"
-grep -q 'registry_should_defer' "$DC" && ok "defers to a live human" || bad "no human deferral"
-grep -q 'registry_release' "$DC" && ok "releases on exit" || bad "never releases"
 
 echo
 echo "==== registry-lock witness: $PASS passed, $FAIL failed ===="
