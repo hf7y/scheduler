@@ -47,7 +47,11 @@ line, so a wrapped paragraph reads as a single reply. The shared engine
 anything was found -- prepends it to that run's prompt as "human feedback
 on the previous report, act on this first." The scheduler's own two
 bespoke wrappers (`scheduler-nightly-batch-loop.sh`,
-`scheduler-dev-cycle.sh`) do the same against their own report file.
+`scheduler-dev-cycle.sh`) used to do the same against their own report
+file, before both were retired (the batch loop before this doc's last
+edit; `scheduler-dev-cycle.sh` 2026-08-15, hf7y/scheduler#190). Scheduler's
+own self-dev now goes through the same `lib/sweep-loop-common.sh` path as
+every other project (`.scheduler/schedule.conf`'s `BATCH_PROMPT`).
 
 **A real near-miss that motivated the `> ` support:** a human reply
 written directly into a report's `LATEST.md` (using the same `> `

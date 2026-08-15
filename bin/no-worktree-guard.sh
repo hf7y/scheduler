@@ -214,7 +214,7 @@ if [ "$flags" -gt 0 ]; then
   echo "the estate has already paid for one: gardien's garde.json lived only inside"
   echo "a worktree, a migration removed it, and no backup could be proved for days"
   echo "(hf7y/gardien#7). Clone into \$STATE_DIR and push the branch back instead --"
-  echo "bin/scheduler-dev-cycle.sh is the worked example."
+  echo "bin/overnight-dev.sh is the worked example."
   exit 1
 fi
 echo "0 FLAG(s) -- no production path in $ROOT names 'git worktree add'."

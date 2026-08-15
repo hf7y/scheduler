@@ -7,7 +7,6 @@ bin/blockers-freshness-check.sh	SC2166
 bin/morning-report.sh	SC1090
 bin/overnight-dev.sh	SC2155
 bin/scheduler-completion.bash	SC2207
-bin/scheduler-dev-cycle.sh	SC2155
 bin/sync-crontab.sh	SC1090
 bin/sync-crontab.sh	SC2207
 bin/unprinted-facts.sh	SC2011
