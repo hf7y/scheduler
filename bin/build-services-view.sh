@@ -177,13 +177,12 @@ for conf in "$DIR"/schedule/*.conf; do
     emit_tier SWEEP "Tier 1 · bug-sweep"     "$project" "$repo" "$outdir" && [ -n "${SWEEP_JOB_NAME:-}" ] && tiers+="sweep "
     emit_tier BATCH "Tier 2 · nightly-batch" "$project" "$repo" "$outdir" && [ -n "${BATCH_JOB_NAME:-}" ] && tiers+="batch "
 
-    # live symlinks: status + questions
+    # live symlink: status. There is no questions.md link any more -- open
+    # questions are GitHub issues since #66 (2026-08-07), and the file this
+    # linked to is deleted (hf7y/realisateur#293).
     latest="$REPORTS_DIR/$project/LATEST.md"
     ln -sfn "$latest" "$outdir/status.md"   # self-populates once a run writes LATEST.md
     [ -f "$latest" ] || echo "(no report yet — status.md will resolve once this service's first run writes ~/reports/$project/LATEST.md)" > "$outdir/status-PENDING.txt"
-    if [ -n "$repo" ] && [ -e "$repo/.claude/QUESTIONS.md" ]; then
-      ln -sfn "$repo/.claude/QUESTIONS.md" "$outdir/questions.md"
-    fi
 
     printf '| **%s** | %s | `services/%s/` |\n' "$project" "${tiers:-—}" "$project" >> "$INDEX"
   )

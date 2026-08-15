@@ -1100,7 +1100,7 @@ project_questions_counts() {
   fi
 }
 
-# cmd_ask -- the ONE way an open question gets into a QUESTIONS.md.
+# cmd_ask -- the ONE way an open question gets onto a project's tracker.
 #
 # Built 2026-07-28 (human-directed, /ideate). This exists because the
 # alternative -- a written convention saying "put the question first" --
@@ -1128,9 +1128,9 @@ cmd_ask() {
   if [ -z "$proj" ] || [ -z "$text" ]; then
     echo "usage: scheduler ask <project> \"<the question, in full>\""
     echo
-    echo "  Records ONE open question in <project>'s QUESTIONS.md. Pass the"
+    echo "  Opens ONE question as a GitHub issue on <project>'s repo. Pass the"
     echo "  question text only -- id, date and provenance are stamped for you,"
-    echo "  and the question is placed first so summary views show it."
+    echo "  and the question becomes the issue title so summary views show it."
     echo
     echo "  Provenance defaults to this session's context; override with"
     echo "  SCHEDULER_ASK_VIA=\"<what asked>\"."
@@ -1162,8 +1162,6 @@ cmd_ask() {
     if [ -t 0 ] && [ -t 1 ]; then via="interactive session"; else via="unattended run"; fi
   fi
 
-  local entry="- **${text}**  \`${id}\` ${today}, via ${via}"
-
   # Issues channel: the question IS the issue title, for the same reason
   # the generated file entry puts it first -- the title is what every
   # summary view (gh issue list, the notification mail, this tool) prints.
@@ -1187,7 +1185,23 @@ cmd_ask() {
       "Answer by commenting on this issue (\`scheduler -q $proj\` renders every" \
       "open question into one buffer and posts your replies as comments), or" \
       "just reply here. A comment is the answer — leave the issue open, no" \
-      "label needed.")"
+      "label needed." \
+      "" \
+      "How an answer binds (the ANSWER CONTRACT, rules A-D, 2026-07-29 — carried" \
+      "here since #66 retired the QUESTIONS.md that used to hold it):" \
+      "" \
+      "- **A. Direction, not instruction.** A reply states standing intent;" \
+      "  whoever acts re-derives the concrete action from CURRENT state, not" \
+      "  from the state the question described. So a reply never goes stale." \
+      "- **B. Re-probe the premise.** An instruction carries state claims;" \
+      "  re-probe them. Premise false + action reversible -> act on the intent" \
+      "  and flag the correction. Premise false + action irreversible -> stop" \
+      "  and surface." \
+      "- **C. Extract standing direction silently.** A reply that generalizes" \
+      "  past its question is folded into the tracker, quoted and dated," \
+      "  without asking first." \
+      "- **D. No clean-check reports.** A re-probe that confirms the human was" \
+      "  right produces no output at all.")"
     # --body-file, not --body: a question containing a backtick or \$( is a
     # question, not a command. Same reason CLAUDE.md requires `git commit -F`.
     local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
@@ -1205,53 +1219,16 @@ cmd_ask() {
     return 0
   fi
 
-  local qpath
-  qpath="$(resolve_questions_path "$proj")" || exit 1
 
-  if [ ! -f "$qpath" ]; then
-    mkdir -p "$(dirname "$qpath")"
-    {
-      echo "# Questions for the user"
-      echo
-      echo "Created by \`scheduler ask\`. Entries are generated, not hand-typed:"
-      echo "the question comes first because that is the part summary views show."
-      echo "\`bin/questions-lint.sh\` FLAGs hand-written entries in \`scheduler sweep\`."
-      echo
-      echo "Answer inline, on a new line starting with \`> \` directly under the"
-      echo "question. How an answer binds (rules A-D, 2026-07-29 -- full text in"
-      echo "scheduler's \`examples/QUESTIONS.md.template\`):"
-      echo
-      echo "- **A. Direction, not instruction.** A reply states standing intent;"
-      echo "  whoever acts re-derives the concrete action from CURRENT state, not"
-      echo "  from the state the question described. So a reply never goes stale."
-      echo "- **B. Re-probe the premise.** An instruction carries state claims;"
-      echo "  re-probe them. Premise false + action reversible -> act on the intent"
-      echo "  and flag the correction. Premise false + action irreversible -> stop"
-      echo "  and surface."
-      echo "- **C. Extract standing direction silently.** A reply that generalizes"
-      echo "  past its question is folded into FOCUS.md, quoted and dated, without"
-      echo "  asking first."
-      echo "- **D. No clean-check reports.** A re-probe that confirms the human was"
-      echo "  right produces no output at all."
-      echo
-      echo "## Open"
-      echo
-      echo "$entry"
-    } > "$qpath"
-    echo "created: $qpath"
-  elif grep -qE '^## +Open *$' "$qpath"; then
-    awk -v entry="$entry" '
-      { print }
-      !done && /^## +Open *$/ { print ""; print entry; done=1 }
-    ' "$qpath" > "$qpath.tmp" && mv "$qpath.tmp" "$qpath"
-    echo "inserted under ## Open: $qpath"
-  else
-    { echo; echo "## Open"; echo; echo "$entry"; } >> "$qpath"
-    echo "appended new ## Open section to: $qpath"
-  fi
-
-  echo "  $entry"
-  cmd_commit_file "$qpath" "Question added via \`scheduler ask\`: $id ($proj)"
+  # NO FILE FALLBACK. Until hf7y/realisateur#293 this branch created a
+  # QUESTIONS.md in the target project -- which RECREATED the retired file in
+  # repos that had none, on every ask. #66 (2026-08-07) moved open questions to
+  # GitHub issues; a project that has not been migrated is a config gap to fix,
+  # not a reason to re-grow the channel.
+  echo "scheduler ask: $proj's ANSWER_CHANNEL is not \`issues\`, and the markdown" >&2
+  echo "  channel is retired (#66) -- nothing was recorded. Set ANSWER_CHANNEL=\"issues\"" >&2
+  echo "  (and REPO_URL) in its conf, then ask again." >&2
+  exit 1
 }
 
 # cmd_idea_editor -- the no-text-argument path (`scheduler -i <project>`

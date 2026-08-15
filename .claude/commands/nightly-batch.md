@@ -12,9 +12,9 @@ cron jobs.
 
 1. Read the tracker: `gh issue list --repo hf7y/scheduler --limit 200`.
    This is both the scope and the backlog. **`FOCUS.md`, `QUESTIONS.md`
-   and `BLOCKERS.md` are retired** (#66, 2026-08-07) — they are pointer
-   stubs, and `bin/collect-feedback.sh`'s `--consume` path is retired with
-   them (#193). Do not read, append to, or restore any of them.
+   and `BLOCKERS.md` are retired** (#66, 2026-08-07) — they are deleted
+   (hf7y/realisateur#293), and `bin/collect-feedback.sh`'s `--consume` path
+   is retired with them (#193). Do not restore any of them.
 2. Read the **comments** on any issue before treating it as unaddressed.
    Zach answers by commenting and leaving the issue open, so an open issue
    is not evidence of unaddressed work, and issue state is never an answer

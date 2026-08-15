@@ -94,8 +94,8 @@ Two real gaps, closed the same day as everything above:
   and must never act on or clear a `> ` answer, so the 15-minute loop
   can't race the nightly over the file. Unanswered questions are left
   alone and never re-asked; deleting a line by hand still dismisses one
-  without action. See `examples/QUESTIONS.md.template` for the exact
-  format both tiers write and the user answers in.
+  without action. Retired by #66 (2026-08-07): questions are GitHub
+  issues, and the template that held the format is deleted (#293).
 
   **Amended 2026-07-29 (Zach-directed, four decisions) — how an answer
   BINDS, not just how it is formatted.** Until then a `> ` reply was the
@@ -105,10 +105,10 @@ Two real gaps, closed the same day as everything above:
   is a question asked from a STALE PREMISE — a correct reply directing
   action at a world that no longer exists (a project described as parked
   that was never parked; a branch described as unmerged that had merged
-  four days earlier). Four rules, canonical text in
-  `examples/QUESTIONS.md.template`, bound where they are read (the header
-  `scheduler ask` writes into a fresh QUESTIONS.md, and
-  `examples/nightly-batch.md.template`'s answer-processing step):
+  four days earlier). Four rules, canonical text in the issue body
+  `scheduler ask` writes (moved there from the deleted
+  `examples/QUESTIONS.md.template`), bound where they are read (that body,
+  and `examples/nightly-batch.md.template`'s answer-processing step):
   **A** an answer is direction, not instruction — re-derive the action
   from current state, which is what makes staleness a non-problem by
   construction instead of by expiry timer; **B** re-probe the premise,
@@ -124,8 +124,8 @@ Two real gaps, closed the same day as everything above:
   un-amended text; that fan-out is tracked in `.scheduler/FOCUS.md`.
 
 Both are documented in `examples/bug-sweep.md.template` and
-`examples/nightly-batch.md.template` (and `examples/QUESTIONS.md.template`
-for the file itself) and are live in vkv-inventory's real command files.
+`examples/nightly-batch.md.template` and are live in vkv-inventory's real
+command files.
 **Gap**: chezz's real `bug-sweep.md`/`nightly-batch.md` predate both
 conventions and don't have them yet — same shape of gap as the
 `PROJECT_KEY`/`TIER` one noted below, not fixed here.

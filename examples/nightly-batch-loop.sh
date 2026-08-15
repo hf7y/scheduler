@@ -32,8 +32,9 @@ MAX_TURNS=200
 PROMPT="/nightly-batch
 
 This is a fully unattended overnight run with no human review step.
-Read .scheduler/FOCUS.md FIRST -- everything you do tonight is scoped by
-that file. An accumulated feature idea or report that is not in service
+Read this repo's open GitHub issues FIRST (\`gh issue list --limit 200\`) --
+everything you do tonight is scoped by that tracker. An accumulated feature
+idea or report that is not in service
 of the current focus should be written up as deferred in tonight's
 report, not implemented, no matter how easy it looks.
 

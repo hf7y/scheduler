@@ -131,14 +131,14 @@ BASE="main"   # first cycle branches from main; then chains through productive c
 
 This is the scheduler improving ITSELF overnight, fully unattended, behind a HUMAN REVIEW GATE. Everything you do lands as commits on branch $BRANCH for a person to review and merge in the morning -- nothing goes live automatically. This is one cycle in an overnight CHAIN: earlier cycles tonight may already be committed on this branch. Run 'git log --oneline main..HEAD' FIRST to see what tonight's earlier cycles already did, and CONTINUE from there -- do not redo finished work.
 
-Read .scheduler/FOCUS.md next -- it is this project's scope AND backlog. Pick the NEXT highest-value, LOWEST-RISK improvement you can fully finish AND verify this cycle. This repo is the meta-tool that controls every other project's cron jobs, so correctness beats volume: one well-tested change is worth more than three risky ones.
+Read 'gh issue list --repo hf7y/scheduler --limit 200' next -- the tracker is this project's scope AND backlog. Read the COMMENTS on an issue before treating it as unaddressed; Zach answers by commenting and leaves the issue open, so open is not evidence of unaddressed work. Pick the NEXT highest-value, LOWEST-RISK improvement you can fully finish AND verify this cycle. This repo is the meta-tool that controls every other project's cron jobs, so correctness beats volume: one well-tested change is worth more than three risky ones.
 
 HARD RULES (this is infrastructure, not an app):
   * Make changes ONLY as commits in THIS working directory ($DEV_CLONE) on branch $BRANCH. Touch nothing outside it.
   * NEVER run 'crontab', and NEVER run bin/sync-crontab.sh with --apply. Previewing (no --apply) to validate a schedule change is fine and encouraged.
   * NEVER edit the installed wrapper scripts under ~/.local/bin, or any file outside this repo.
   * Prefer changes verifiable here and now (shellcheck, a dry-run, simulating cron's env with 'env -u SSH_AUTH_SOCK') over changes whose only test is 'wait for tonight'. If a change can't be safely verified without going live, write it up as a proposal in the report instead of committing it.
-  * On a real judgment call or anything needing the user's blessing, append it to .scheduler/QUESTIONS.md and describe it in the report rather than deciding unilaterally.
+  * On a real judgment call or anything needing the user's blessing, file it with 'bin/scheduler ask scheduler \"<the question>\"' (it opens a GitHub issue) and describe it in the report rather than deciding unilaterally.
 
 Commit each finished change with a clear message. Then append a section for THIS cycle to $REPORT (create it if absent) and refresh the LATEST.md pointer by running: bin/publish-report.sh scheduler $(basename "$REPORT") -- do NOT 'cp' onto LATEST.md, it is a symlink and cp follows it straight into a past report (that destroyed 2026-07-27's report). The report should cover: what you changed and why, how you verified it, what you deferred and why, and any open questions. A change that isn't committed on $BRANCH didn't happen."
 
