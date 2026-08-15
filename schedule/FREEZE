@@ -23,17 +23,32 @@
 # it arms three projects the same tick. That is the argument #187 has to answer
 # before anything is removed.
 
-EXEMPT: ecosim@monkey
-EXEMPT: bibliothecaire@monkey
-EXEMPT: vim-arcade@monkey
-EXEMPT: realisateur@monkey
-EXEMPT: scheduler@monkey
-EXEMPT: groc-mangr@monkey
+# ============================================================================
+# PAUSED 2026-08-15 -- ALL SEVEN ARMED ACCOUNTS, 4 DAYS. Zach-directed in
+# session: "pause the dev loops for 4 days".
+#
+# RESUME ON OR AFTER 2026-08-19 by uncommenting the seven EXEMPT lines below.
+# Nothing uncomments them automatically. The chezz pause two blocks down is
+# the standing proof that a stated return date does not act on itself -- its
+# 2026-08-13 return passed unnoticed for two days.
+#
+# Tracked in hf7y/scheduler#195. chezz is paused separately and by a different
+# mechanism: its loops are GitHub Actions, disabled with `gh workflow disable`
+# (Sweep, Nightly Batch), NOT by this file -- chezz runs no monkey account.
+# Re-enable those with `gh workflow enable` on the same date.
+# ============================================================================
+
+# PAUSED 2026-08-15: EXEMPT: ecosim@monkey
+# PAUSED 2026-08-15: EXEMPT: bibliothecaire@monkey
+# PAUSED 2026-08-15: EXEMPT: vim-arcade@monkey
+# PAUSED 2026-08-15: EXEMPT: realisateur@monkey
+# PAUSED 2026-08-15: EXEMPT: scheduler@monkey
+# PAUSED 2026-08-15: EXEMPT: groc-mangr@monkey
 
 # wtul@monkey, added 2026-08-14, Zach-directed in session ("arm it"). Account
 # uid 3013, stood up the same day; its repo landed once schedule/wtul.conf
 # registered it (#185). Registered, landed, and now armed.
-EXEMPT: wtul@monkey
+# PAUSED 2026-08-15: EXEMPT: wtul@monkey
 
 # PAUSED, NOT UNARMED. Both stay commented until a human uncomments them.
 # chezz@monkey -- paused 2026-08-06, Zach: "For now, pause chezz for 1 week."
