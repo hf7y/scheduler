@@ -25,10 +25,16 @@
 #      `examined` the ONLY thing carrying it.
 #
 # The gate is replaced by a counting stub via the runner's own USAGE_GATE knob,
-# so this test spends no quota and dispatches no real work. Participant names
-# are monkey's real three because schedule/FREEZE exempts exactly those on that
-# host and PACED_HOST is pinned to monkey below; a name not in that file would
-# be refused by freeze-check.sh and the test would measure the freeze instead.
+# so this test spends no quota and dispatches no real work.
+#
+# The freeze allowlist is a FIXTURE, not the live schedule/FREEZE. It used to
+# be the live file, with the participants chosen to match whoever happened to
+# be exempt on monkey -- which made this witness fail whenever dispatch was
+# legitimately paused. On 2026-08-15 a 4-day pause commented out all seven
+# EXEMPT lines and CI then refused the pause: "expected 1 DISPATCH, got 0".
+# A paused fleet is a state the repo must be allowed to be in, so the witness
+# supplies its own allowlist and measures probe ordering, which is what it is
+# for -- not the contents of the production file.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,6 +43,18 @@ RUNNER="$REPO/bin/usage-paced-runner.sh"
 [ -x "$RUNNER" ] || { echo "FAIL: no runner at $RUNNER"; exit 1; }
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+
+# The witness's own freeze allowlist -- see the header. freeze-check.sh reads
+# SCHEDULER_FREEZE_FILE when set, so this decouples the test from whatever the
+# live fleet's arm/pause state happens to be.
+mkdir -p "$T/schedule"
+for a in ecosim bibliothecaire vim-arcade; do
+  echo "EXEMPT: $a@monkey" >> "$T/schedule/FREEZE"
+done
+export SCHEDULER_FREEZE_FILE="$T/schedule/FREEZE"
+# The cache is keyed per-uid and would otherwise carry the live file's verdict
+# into this run.
+export SCHEDULER_FREEZE_CACHE="$T/freeze-cache"
 FAILED=0
 fail() { echo "FAIL: $*"; FAILED=1; }
 
@@ -79,6 +97,8 @@ EOF
 
   PROBE_TALLY="$h/probes"; : > "$PROBE_TALLY"; export PROBE_TALLY
   HOME="$h" PACED_CONF="$conf" PACED_HOST=monkey PACED_MAX_PER_TICK=1 \
+    SCHEDULER_FREEZE_FILE="$SCHEDULER_FREEZE_FILE" \
+    SCHEDULER_FREEZE_CACHE="$SCHEDULER_FREEZE_CACHE" \
     USAGE_GATE="$h/gate.sh" "$RUNNER" >/dev/null 2>&1
 
   local log="$h/.local/share/scheduler-paced-runner/run.log"
