@@ -13,9 +13,7 @@ set -uo pipefail
 
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/salvage.sh"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 quiet() { :; }
 
 # shellcheck source=../lib/salvage.sh

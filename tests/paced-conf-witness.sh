@@ -24,9 +24,7 @@ RUNNER="$ROOT/bin/usage-paced-runner.sh"
 [ -f "$RUNNER" ] || { echo "runner not found: $RUNNER"; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # --- fixtures ---------------------------------------------------------------
 # BOTH: a repo with a host-scoped file for "alpha" and a shared file.

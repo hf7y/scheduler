@@ -18,9 +18,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GATE="$ROOT/bin/usage-gate.sh"
 [ -x "$GATE" ] || { echo "not found or not executable: $GATE"; exit 1; }
 
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 echo "usage-gate-free-probe-witness"
 
@@ -113,5 +111,5 @@ case "$out" in *"probe:paid-fallback(free:200)"*) ok "4a unparseable 200 body fa
 [ "$rc" -le 1 ] && ok "4b fallback still reaches a verdict (rc=$rc)" || bad "4b errored (rc=$rc): $out"
 
 echo
-echo "usage-gate-free-probe-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ]
+echo "usage-gate-free-probe-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

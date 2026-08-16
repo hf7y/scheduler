@@ -15,9 +15,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 V="$HERE/../bin/verdict.sh"
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "blocked-vocabulary-witness"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 
@@ -94,5 +92,5 @@ grep -q 'vrc" -eq 4' "$HERE/../bin/usage-paced-runner.sh" \
   && ok "the dispatcher has a vrc -eq 4 branch" \
   || bad "nothing reads exit 4 -- BLOCKED would be computed and discarded, exactly as DONE was"
 
-printf '\nblocked-vocabulary-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\nblocked-vocabulary-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

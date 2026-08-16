@@ -9,9 +9,7 @@ set -uo pipefail
 
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/registry-lock.sh"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 export REGISTRY_DIR="$TMP/registry"; mkdir -p "$REGISTRY_DIR"
 # shellcheck source=../lib/registry-lock.sh

@@ -30,9 +30,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SYNC="$ROOT/bin/sync-crontab.sh"
 [ -x "$SYNC" ] || { echo "sync-crontab.sh not executable: $SYNC"; exit 1; }
 
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # Extract the resolution behaviour by sourcing the same shared-then-host order
 # sync-crontab.sh uses. Kept as a small local model AND cross-checked against

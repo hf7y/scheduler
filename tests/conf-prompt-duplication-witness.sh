@@ -71,9 +71,7 @@ case "${1:-}" in
   *) echo "usage: conf-prompt-duplication-witness.sh [--accept]" >&2; exit 2 ;;
 esac
 
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # Stable ratchet key: the first three fields of a finding.
 keys_of() { cut -f1-3 | sort -u; }

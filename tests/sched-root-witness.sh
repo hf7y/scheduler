@@ -17,9 +17,7 @@ set -uo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/scheduler"
 [ -f "$SRC" ] || { echo "script under test not found: $SRC"; exit 1; }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # Running bin/scheduler outright would run the whole glance, so lift just the
 # resolution block out of it by its markers. If the extraction stops matching,

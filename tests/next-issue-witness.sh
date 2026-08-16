@@ -4,12 +4,9 @@
 # the reasoning this exercises.
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 TARGET="$PWD/bin/next-issue.sh"
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 echo "next-issue-witness"
 
@@ -119,5 +116,5 @@ else
   bad "unreadable queue: rc=$rc out=$out (want rc=6, BLIND: ...)"
 fi
 
-echo "next-issue-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ]
+echo "next-issue-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

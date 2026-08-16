@@ -31,10 +31,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 SCHED="$ROOT/bin/scheduler"
-pass=0; fail=0
-
-ok()  { echo "  ok   $1"; pass=$((pass+1)); }
-bad() { echo "  FAIL $1 -- $2"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 echo "--- gh label description length ---"
 
@@ -66,5 +63,5 @@ if [ "$found" -eq 0 ]; then
   bad "matched zero --description literals in bin/scheduler" "the scan is broken; this run asserted NOTHING"
 fi
 
-echo "from-label: $pass passed, $fail failed ($found description(s) checked)"
-[ "$fail" -eq 0 ]
+echo "from-label: $PASS passed, $FAIL failed ($found description(s) checked)"
+[ "$FAIL" -eq 0 ]

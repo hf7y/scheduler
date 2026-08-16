@@ -38,9 +38,7 @@ SYNC="$ROOT/bin/sync-crontab.sh"
 [ -f "$SYNC" ] || { echo "script under test not found: $SYNC"; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # --- fixture repo -----------------------------------------------------------
 # bin/ and lib/ are copied from the tree under test; schedule/ is entirely

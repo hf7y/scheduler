@@ -5,12 +5,9 @@
 # from a clean disagreement.
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 DIFF=bin/roster-diff.sh
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 TMP="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$TMP"' EXIT
@@ -63,5 +60,5 @@ out="$(SCHED_ROOT="$d" ROSTER_DIFF_HOST=testhost bash "$DIFF" 2>&1)"; rc=$?
 case "$out" in *BLIND*) ok "BLIND is stated, not just a bare exit code" ;; *) bad "no BLIND wording: $out" ;; esac
 
 echo
-echo "roster-diff-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ] || exit 1
+echo "roster-diff-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

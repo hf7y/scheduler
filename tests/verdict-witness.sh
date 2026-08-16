@@ -25,9 +25,7 @@ VERDICT="$ROOT/bin/verdict.sh"
 [ -x "$RUNNER" ]  || { echo "runner not executable: $RUNNER"; exit 1; }
 [ -x "$VERDICT" ] || { echo "verdict.sh not executable: $VERDICT"; exit 1; }
 
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # The classifier's own selftest must pass before the wiring is worth testing.
 if "$VERDICT" --selftest >/dev/null 2>&1; then ok "verdict.sh --selftest"

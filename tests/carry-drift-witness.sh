@@ -23,10 +23,8 @@
 # moment it lands instead of when someone remembers to add it here.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/lib/witness-common.sh"
 cd "$HERE/.." || exit 2
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
 echo "carry-drift-witness"
 
 # origin/main, not main: a CI checkout has no local branches, and the fetch
@@ -62,7 +60,7 @@ carried="$(comm -12 \
   <(git ls-tree -r --name-only "$REF_BASH" -- bin/ lib/ | sort))"
 
 [ -n "$carried" ] || { bad "no file is tracked on both refs -- either nothing is carried, or the refs are wrong"; \
-  printf '\ncarry-drift-witness: %d passed, %d failed\n' "$pass" "$((fail))"; exit 1; }
+  printf '\ncarry-drift-witness: %d passed, %d failed\n' "$PASS" "$((FAIL))"; exit 1; }
 
 n=0
 while IFS= read -r f; do
@@ -80,5 +78,5 @@ done <<<"$carried"
 [ "$n" -gt 0 ] && ok "checked $n carried file(s), derived rather than listed" \
   || bad "derived an empty carried set"
 
-printf '\ncarry-drift-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\ncarry-drift-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

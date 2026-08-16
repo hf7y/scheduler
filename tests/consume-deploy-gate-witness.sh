@@ -35,9 +35,7 @@ COLLECT="$ROOT/bin/collect-feedback.sh"
 [ -x "$COLLECT" ] || { echo "collect-feedback.sh not found/executable: $COLLECT"; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # --- lift the real pull gate out of the dispatcher ---------------------------
 # Running bin/usage-paced-runner.sh outright would take the global flock and
