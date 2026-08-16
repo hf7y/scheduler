@@ -45,7 +45,7 @@ while [ $# -gt 0 ]; do
     --fix)   FIX=1; shift ;;
     --quiet) QUIET=1; shift ;;
     -h|--help)
-      sed -n '2,40p' "$0" | sed 's/^# \?//'
+      sed -n '/^# lint-replies.sh/,/^set -uo/p' "$0" | sed 's/^# \{0,1\}//; $d'
       exit 2 ;;
     *) FILES+=("$1"); shift ;;
   esac
