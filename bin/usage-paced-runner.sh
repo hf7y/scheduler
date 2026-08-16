@@ -415,10 +415,10 @@ if [ ! -f "$PACED_CONF" ]; then
   exit 1
 fi
 while IFS='|' read -r name enabled rest; do
-  case "$name" in ''|\#*) continue ;; esac          # skip blank / comment lines
+  case "$name" in ''|\#*) continue ;; esac
   [ "${enabled// /}" = "1" ] || continue
   name="${name// /}"
-  rest="${rest#"${rest%%[![:space:]]*}"}"   # trim leading whitespace
+  rest="${rest#"${rest%%[![:space:]]*}"}"
   weight=1
   case "$rest" in
     [0-9]*'|'*)
