@@ -26,12 +26,9 @@
 # question for a human or a report, not a gate on every pull request.
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 TARGET=bin/roster-target.sh
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 echo "roster-target-witness -- the sunset is the assertion"
 
@@ -40,7 +37,7 @@ if [ -x "$TARGET" ]; then
   ok "$TARGET exists and is executable"
 else
   bad "$TARGET missing or not executable -- if the redesign landed and it was deleted, delete this witness too"
-  echo; echo "roster-target-witness: $pass passed, $fail failed"; exit 1
+  echo; echo "roster-target-witness: $PASS passed, $FAIL failed"; exit 1
 fi
 
 # --- 1. BEFORE the sunset: --strict is green ------------------------------
@@ -97,5 +94,5 @@ case "$rc" in
 esac
 
 echo
-echo "roster-target-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ] || exit 1
+echo "roster-target-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

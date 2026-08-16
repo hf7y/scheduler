@@ -12,9 +12,7 @@
 # observation is deleted before the next arrives.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "run-ledger-witness"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 export RUN_LEDGER_FILE="$W/ledger.tsv"
@@ -99,5 +97,5 @@ ledger_append q batch 1 NOT-DONE "new work arrived"
 [ "$(ledger_streak q DONE)" = "0" ] && ok "new work resets the DONE streak immediately" \
   || bad "a NOT-DONE did not clear the streak"
 
-printf '\nrun-ledger-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\nrun-ledger-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

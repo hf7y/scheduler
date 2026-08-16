@@ -41,9 +41,7 @@ LINT="$ROOT/bin/rotation-lint.sh"
 [ -f "$LINT" ] || { echo "script under test not found: $LINT"; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # Keep the fixtures' runtime witnesses out of the real ~/.local/share -- a
 # test must not make an unwired check look wired in the next `scheduler sweep`.

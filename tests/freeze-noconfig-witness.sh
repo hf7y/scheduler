@@ -10,9 +10,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 F="$HERE/../bin/freeze-check.sh"
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "freeze-noconfig-witness"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 
@@ -93,5 +91,5 @@ SCHEDULER_FREEZE_FILE="$W/localwins/schedule/FREEZE" SCHEDULER_FREEZE_CACHE="$W/
 [ $? -eq 1 ] && ok "a local FREEZE still freezes, without consulting GitHub" \
   || bad "a local freeze was overridden -- the operator at the machine lost"
 
-printf '\nfreeze-noconfig-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\nfreeze-noconfig-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

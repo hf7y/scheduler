@@ -48,11 +48,10 @@ set -uo pipefail
 
 GUARD="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)/bin/shellcheck-lint.sh"
 [ -f "$GUARD" ] || { echo "guard under test not found: $GUARD"; exit 1; }
-pass=0; fail=0; skipped=0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
+skipped=0
 T="$(mktemp -d)"; trap 'rm -rf "${T:?}"' EXIT
 
-ok()   { echo "  ok   $1"; pass=$((pass+1)); }
-bad()  { echo "  FAIL $1 -- $2"; fail=$((fail+1)); }
 skip() { echo "  skip $1 -- $2"; skipped=$((skipped+1)); }
 check() { # <name> <expected-exit> <actual-exit>
   if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected exit $2, got $3"; fi
@@ -233,5 +232,5 @@ else
   skip "H version stamp" "shellcheck absent"
 fi
 
-echo "shellcheck-lint: $pass passed, $fail failed, $skipped skipped"
-[ "$fail" -eq 0 ]
+echo "shellcheck-lint: $PASS passed, $FAIL failed, $skipped skipped"
+[ "$FAIL" -eq 0 ]

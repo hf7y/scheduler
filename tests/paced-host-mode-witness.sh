@@ -11,9 +11,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUNNER="$HERE/../bin/usage-paced-runner.sh"
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 echo "paced-host-mode-witness"
 
@@ -78,5 +76,5 @@ grep -q 'STATE_DIR="\$HOME/.local/share/\$JOB_NAME"' "$RUNNER" \
   && ok "account mode still uses the \$HOME-scoped state dir" \
   || bad "the account-mode state dir is no longer \$HOME-scoped"
 
-printf '\npaced-host-mode-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\npaced-host-mode-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

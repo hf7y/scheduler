@@ -25,11 +25,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
-pass=0; fail=0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T:?}"' EXIT
-
-ok()  { echo "  ok   $1"; pass=$((pass+1)); }
-bad() { echo "  FAIL $1 -- $2"; fail=$((fail+1)); }
 
 # shellcheck source=lib/deadman-switch.sh
 . "$ROOT/lib/deadman-switch.sh"
@@ -153,5 +150,5 @@ else
   bad "F2 missing STATE_DIR is loud" "expected 2, got $rc"
 fi
 
-echo "deadman-renew: $pass passed, $fail failed"
-[ "$fail" -eq 0 ]
+echo "deadman-renew: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

@@ -38,9 +38,7 @@ RUN="$ROOT/bin/scheduler-run"
 REAL_RULES="$ROOT/schedule/_standing-rules.md"
 [ -f "$RUN" ] || { echo "scheduler-run not found: $RUN"; exit 1; }
 
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 

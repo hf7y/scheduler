@@ -29,9 +29,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 GUARD="$REPO/bin/no-worktree-guard.sh"
 
-pass=0; fail=0
-ok()   { printf '  ok   %s\n' "$*"; pass=$((pass+1)); }
-bad()  { printf '  FAIL %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (want '$3', got '$2')"; fi; }
 has()  { case "$2" in *"$3"*) ok "$1" ;; *) bad "$1 (output lacked '$3')" ;; esac; }
 hasnt(){ case "$2" in *"$3"*) bad "$1 (output contained '$3')" ;; *) ok "$1" ;; esac; }
@@ -199,5 +197,5 @@ for f in bin/overnight-dev.sh; do
 done
 
 echo
-printf 'no-worktree-witness: %d passed, %d failed\n' "$pass" "$fail"
-exit $(( fail > 0 ? 1 : 0 ))
+printf 'no-worktree-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+exit $(( FAIL > 0 ? 1 : 0 ))

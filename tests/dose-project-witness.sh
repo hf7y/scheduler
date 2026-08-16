@@ -4,12 +4,9 @@
 # live estate. See bin/dose-project.sh's own header for the full spec.
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 TARGET="$PWD/bin/dose-project.sh"
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 echo "dose-project-witness"
 
@@ -207,5 +204,5 @@ grep -qF 'scheduler:scheduler-paced-runner:RUNNER' "$CRONFILE" \
 unset FAKE_RUNNER_HOST_MODE FAKE_RUNNER_HOST_CONTENT
 
 echo
-echo "dose-project-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ] || exit 1
+echo "dose-project-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

@@ -10,9 +10,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="$HERE/../lib/dose-common.sh"
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "dose-common-purity-witness"
 
 # --- 1. sourcing succeeds even with no usable gh --------------------------
@@ -47,5 +45,5 @@ else
   ok "no top-level statement runs anything but the two cheap local lookups"
 fi
 
-printf '\ndose-common-purity-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\ndose-common-purity-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

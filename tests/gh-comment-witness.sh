@@ -3,12 +3,9 @@
 # Hermetic: a fake gh on PATH, never the live estate.
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 TARGET="$PWD/bin/gh-comment.sh"
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 echo "gh-comment-witness"
 
@@ -142,5 +139,5 @@ FAKE_GH_MODE=fail "$TARGET" 172 --repo hf7y/scheduler --job issue-triage --body 
 out="$(cat /tmp/gh-comment-witness-out.$$)"; rm -f /tmp/gh-comment-witness-out.$$
 [ "$rc" -eq 5 ] && grep -qi "failed" <<<"$out" && ok "gh failure -> exit 5, says FAILED" || bad "gh failure: rc=$rc out=$out"
 
-echo "gh-comment-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ]
+echo "gh-comment-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

@@ -5,12 +5,9 @@
 # estate. See bin/debroussaille.sh's own header for the full spec.
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 TARGET="$PWD/bin/debroussaille.sh"
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 echo "debroussaille-witness"
 
@@ -134,5 +131,5 @@ grep -q "fake-fauche-verdict-for-$REPO" "$LATEST" 2>/dev/null \
   || bad "published report is missing fauche's verdict: $(cat "$LATEST" 2>&1)"
 
 echo
-echo "debroussaille-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ] || exit 1
+echo "debroussaille-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

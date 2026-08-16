@@ -8,9 +8,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 R="$HERE/../bin/usage-paced-runner.sh"
-pass=0; fail=0
-ok()  { printf '  PASS: %s\n' "$*"; pass=$((pass+1)); }
-bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "roster-participants-witness"
 
 # roster_rows is a function so it can be tested; pull it out rather than run
@@ -52,5 +50,5 @@ grep -q 'Refusing to dispatch rather than fall back to a checkout' "$R" \
 grep -q 'an empty rotation is indistinguishable from a parse failure' "$R" \
   && ok "an empty roster is a refusal, not a quiet no-op" || bad "empty-roster refusal missing"
 
-printf '\nroster-participants-witness: %d passed, %d failed\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+printf '\nroster-participants-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

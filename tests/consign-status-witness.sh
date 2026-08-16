@@ -6,12 +6,9 @@
 # (already removed, the success state), and BLIND (vault unreadable).
 set -uo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 SCRIPT=bin/consign-status.sh
-
-pass=0; fail=0
-ok()  { pass=$((pass+1)); echo "  PASS: $*"; }
-bad() { fail=$((fail+1)); echo "  FAIL: $*"; }
 
 TMP="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$TMP"' EXIT
@@ -78,5 +75,5 @@ out="$(SCHED_ROOT="$repo" CONSIGN_VAULT_ROOT="$vault" bash "$SCRIPT" 2>&1)"; rc=
 case "$out" in *"1 duplicate"*"0 diverged"*"1 already reaped"*) ok "mixed-set counts line up" ;; *) bad "mixed-set counts wrong: $out" ;; esac
 
 echo
-echo "consign-status-witness: $pass passed, $fail failed"
-[ "$fail" -eq 0 ] || exit 1
+echo "consign-status-witness: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

@@ -23,9 +23,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PASS=0; FAIL=0
-ok()  { PASS=$((PASS+1)); echo "  PASS: $1"; }
-bad() { FAIL=$((FAIL+1)); echo "  FAIL: $1"; }
+source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # Only confs that are actually SOURCED. The _paced/_sweep/_runner files are
 # parsed line-wise (`while IFS='|' read`), never sourced, so a stray backtick
