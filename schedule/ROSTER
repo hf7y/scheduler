@@ -24,11 +24,13 @@
 # rows on 2026-08-12, Zach-directed ("up the arithmetic to increase pace").
 #
 # THE ARITHMETIC, so the next reader can redo it rather than trust it.
-# 5 live accounts, PACED_MAX_PER_TICK=1, and each account can only execute its
-# OWN row (the other homes are 0700), so a tick is one dispatch per account:
+# PACED_MAX_PER_TICK=1 and each account can only execute its OWN row (the other
+# homes are 0700), so a tick is one dispatch per account. At the 2026-08-12
+# raise there were 5 live rows; there are 10 now, 7 at 2h and 3 at 6h:
 #
-#   6h  ->  4 ticks/day x 5 =  20 dispatches/day   (before)
-#   2h  -> 12 ticks/day x 5 =  60 dispatches/day   (now, 3x)
+#   6h  ->  4 ticks/day x 5 =  20 dispatches/day   (before 2026-08-12)
+#   2h  -> 12 ticks/day x 5 =  60 dispatches/day   (that raise, 3x)
+#   today, 10 live rows      =  96 dispatches/day  (7x12 + 3x4)
 #
 # Note PACED_MAX_PER_TICK is NOT a lever here: it is capped by the number of
 # rows an account can actually run, which is one. Under host dispatch
@@ -54,6 +56,35 @@
 # means the observable outcome of this change may be "burns hard, then pauses"
 # rather than "burns evenly". Dial the rate here if that is not wanted.
 #
+# realisateur 2h -> 30m, 2026-08-16, Zach-directed: "so realisateur burns down
+# its issues backlog in proportion to its length". The rate is now SHARE, not
+# pace -- the gate below is at 88% of the 7d window, so a faster ask buys no new
+# quota, it takes a bigger slice of a fixed one. Sized to the backlog, measured
+# `gh issue list --repo hf7y/<p> --state open --limit 500 -q length`, 2026-08-16:
+#
+#   realisateur 63  wtul 26  gardien 25  scheduler 15  bibliothecaire 12
+#   groc-mangr  11  ecosim 10  nine-speakers 7  vim-arcade 6  sequestria 6
+#   total across the 10 live rows: 181
+#
+#   realisateur's share of the backlog   63/181  = 35%
+#   its share of dispatch at 2h          12/96   = 12.5%   <- the mismatch
+#   at 30m: 48/day, fleet 48+72+12 = 132, 48/132 = 36%     <- matches
+#
+# 20m was the other candidate and overshoots (72/156 = 46%). No other row moves:
+# one row changed is one thing to revert.
+#
+# PUT IT BACK WHEN THE BACKLOG CLEARS -- _runner.monkey.conf's own retired raise
+# is the precedent ("raise it for a known backlog and put it back when the
+# backlog clears"): once realisateur's open count is near the fleet median
+# (~11 today), 30m is buying share it no longer needs. Redo the arithmetic above
+# rather than trusting this line.
+#
+# WHAT THE GATE SAID WHEN THIS WAS SET, measured not assumed:
+#   verdict=RUN binding=7d ceiling=0.9 util=0.880 burnline=0.903 slack=+0.023
+#   resets_in_min=975
+# 2 points of headroom with 16h to the roll. Expect the first day to be "wins
+# most of the remaining grants, then everyone holds", not 4x more work.
+#
 # Derived 2026-08-11 from _paced.monkey.conf (enabled==1), FREEZE (uncommented
 # EXEMPT: <p>@monkey), and each schedule/<p>.conf's CRON_HOST/CRON_ACCOUNT --
 # live only where all three agree. Re-verify, don't trust this comment:
@@ -62,7 +93,7 @@
 ecosim          | ecosim@monkey          | 2h | live
 bibliothecaire  | bibliothecaire@monkey  | 2h | live
 vim-arcade      | vim-arcade@monkey      | 2h | live
-realisateur     | realisateur@monkey     | 2h | live
+realisateur     | realisateur@monkey     | 30m | live
 scheduler       | scheduler@monkey       | 2h | live
 groc-mangr      | groc-mangr@monkey      | 2h | live
 wtul            | wtul@monkey            | 2h | live
