@@ -21,6 +21,13 @@
 # DERIVED, NOT LISTED. The carried set is computed as "tracked on both
 # branches" rather than hardcoded, so carrying a fourth script is covered the
 # moment it lands instead of when someone remembers to add it here.
+#
+# hf7y/scheduler#222 added two things on top of the byte-identical check
+# above: a carried file's OWN sibling references must resolve on the branch
+# that ships it too (see the dependency check inside the loop below), and on
+# a pull request the "main" side is the PR's proposed HEAD, not origin/main
+# (see REF_MAIN below) -- comparing against origin/main is exactly why #219's
+# broken carry passed its own PR and only went red on main after merging.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/witness-common.sh"
@@ -32,7 +39,20 @@ echo "carry-drift-witness"
 # fetch successfully and then go BLIND looking for a ref it had not created --
 # caught by CI on this witness's own first run, which is the correct place for
 # a check about deploy drift to be caught.
-REF_MAIN="${CARRY_REF_MAIN:-origin/main}"
+#
+# ON A PULL REQUEST, though, origin/main does not yet carry the change under
+# test -- actions/checkout for `pull_request` leaves HEAD at the PR's own
+# content (GitHub's merge of the PR into its base), which is exactly "what
+# main would look like if this merged". Diffing THAT against origin/bashified
+# moves the failure to where it can be fixed before landing, instead of
+# guaranteeing a red main the instant a carried file's PR merges (#222).
+if [ -n "${CARRY_REF_MAIN:-}" ]; then
+  REF_MAIN="$CARRY_REF_MAIN"
+elif [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+  REF_MAIN="HEAD"
+else
+  REF_MAIN="origin/main"
+fi
 REF_BASH="${CARRY_REF_BASHIFIED:-origin/bashified}"
 
 # CI CHECKOUTS ARE SHALLOW. actions/checkout fetches the one ref under test, so
@@ -62,6 +82,27 @@ carried="$(comm -12 \
 [ -n "$carried" ] || { bad "no file is tracked on both refs -- either nothing is carried, or the refs are wrong"; \
   printf '\ncarry-drift-witness: %d passed, %d failed\n' "$PASS" "$((FAIL))"; exit 1; }
 
+# KNOWN, TRACKED gaps -- not a silent exemption list. hf7y/scheduler#210
+# specifically rejects a drift detector that quietly tolerates a copy staying
+# wrong; these two rows are the opposite of that: still printed every run,
+# just not counted as this WITNESS's failure because the open question is
+# named and owned elsewhere. hf7y/scheduler#130 found usage-gate.sh names
+# vendor vocabulary (bashify/lib/surface.sh's list: it reads `claude-*` model
+# names and `~/.claude/...` paths) and sync-crontab.sh is a clone-only tool --
+# neither is a mechanical carry like tempo.sh (#220) or check-witness.sh
+# (#222): carrying either is the "none of which should be picked quietly"
+# decision #130 is still open about. A row here must name the issue that
+# owns it and must be deleted the same PR that resolves it -- an entry for a
+# pair this check no longer flags is stale, same rule bashify's own
+# PURGE-EXEMPT.tsv uses.
+known_dep_gap() {
+  case "$1 -> $2" in
+    "bin/usage-paced-runner.sh -> bin/usage-gate.sh")   echo "#130" ;;
+    "bin/usage-paced-runner.sh -> bin/sync-crontab.sh") echo "#130" ;;
+    *) return 1 ;;
+  esac
+}
+
 n=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
@@ -73,6 +114,35 @@ while IFS= read -r f; do
   else
     bad "$f DRIFTED -- $REF_BASH ships a different file than $REF_MAIN develops. The build carries the bashified one."
   fi
+
+  # A carried file's OWN sibling references must resolve on $REF_BASH too --
+  # byte-identical is not enough if the file reaches for a neighbour the OTHER
+  # branch does not ship (#219 added `$SELF_DIR/tempo.sh` to a carried file
+  # without carrying tempo.sh in the same PR; only caught by hand in #220).
+  # Cheap approximation, not a real dependency graph: grep the AUTHORED text
+  # (REF_MAIN, i.e. what this PR proposes) for the two shapes every script
+  # here actually uses to reach a sibling -- `$SELF_DIR/../lib/<name>` (or any
+  # similarly-derived `$VAR/lib/<name>`) and `$SELF_DIR/<name>` -- and require
+  # the resolved path to exist on REF_BASH. Not a claim that every such
+  # reference is reached unconditionally at runtime; a hit here is a lead to
+  # check, same as this whole witness is a lead and not a full deploy replay.
+  content="$(git show "$REF_MAIN:$f" 2>/dev/null)"
+  deps="$( { grep -oE '\$[A-Za-z_][A-Za-z0-9_]*/(\.\./)?lib/[A-Za-z0-9_.-]+\.sh' <<<"$content" \
+               | sed -E 's#.*/(lib/[A-Za-z0-9_.-]+\.sh)#\1#'
+             grep -oE '\$SELF_DIR/[A-Za-z0-9_.-]+\.sh' <<<"$content" \
+               | sed -E 's#\$SELF_DIR/#bin/#'
+           } | sort -u )"
+  while IFS= read -r dep; do
+    [ -n "$dep" ] || continue
+    [ "$dep" = "$f" ] && continue
+    if git cat-file -e "$REF_BASH:$dep" 2>/dev/null; then
+      ok "$f's reference to $dep resolves on $REF_BASH"
+    elif issue="$(known_dep_gap "$f" "$dep")"; then
+      echo "  KNOWN GAP ($issue): $f references $dep, not carried on $REF_BASH -- open decision, not counted as a failure here"
+    else
+      bad "$f references $dep but $REF_BASH does not ship it -- a carried file's dependency is missing on the branch that runs it"
+    fi
+  done <<<"$deps"
 done <<<"$carried"
 
 [ "$n" -gt 0 ] && ok "checked $n carried file(s), derived rather than listed" \
