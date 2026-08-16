@@ -23,14 +23,16 @@
 # _runner.monkey.conf so that it changed nothing. RAISED TO 2h for the live
 # rows on 2026-08-12, Zach-directed ("up the arithmetic to increase pace").
 #
-# THE ARITHMETIC, so the next reader can redo it rather than trust it.
-# PACED_MAX_PER_TICK=1 and each account can only execute its OWN row (the other
-# homes are 0700), so a tick is one dispatch per account. At the 2026-08-12
-# raise there were 5 live rows; there are 10 now, 7 at 2h and 3 at 6h:
+# THE ARITHMETIC OF THE ASK, so the next reader can redo it rather than trust
+# it. PACED_MAX_PER_TICK=1 and each account can only execute its OWN row (the
+# other homes are 0700), so a tick is at most one dispatch per account:
 #
-#   6h  ->  4 ticks/day x 5 =  20 dispatches/day   (before 2026-08-12)
-#   2h  -> 12 ticks/day x 5 =  60 dispatches/day   (that raise, 3x)
-#   today, 10 live rows      =  96 dispatches/day  (7x12 + 3x4)
+#   6h  ->  4 ticks/day x 5 =  20 asks/day   (before 2026-08-12, 5 live rows)
+#   2h  -> 12 ticks/day x 5 =  60 asks/day   (that raise, 3x)
+#   2h/6h mixed, 10 live    =  96 asks/day   (7x12 + 3x4, until 2026-08-16)
+#   20m -> 72 ticks/day x 10 = 720 asks/day  (now -- but see the CEILING block
+#                              below: an ask is no longer a dispatch, and the
+#                              dispatches land at ~142/day, not 720)
 #
 # Note PACED_MAX_PER_TICK is NOT a lever here: it is capped by the number of
 # rows an account can actually run, which is one. Under host dispatch
@@ -56,30 +58,64 @@
 # means the observable outcome of this change may be "burns hard, then pauses"
 # rather than "burns evenly". Dial the rate here if that is not wanted.
 #
-# realisateur 2h -> 30m, 2026-08-16, Zach-directed: "so realisateur burns down
-# its issues backlog in proportion to its length". The rate is now SHARE, not
-# pace -- the gate below is at 88% of the 7d window, so a faster ask buys no new
-# quota, it takes a bigger slice of a fixed one. Sized to the backlog, measured
-# `gh issue list --repo hf7y/<p> --state open --limit 500 -q length`, 2026-08-16:
+# ===========================================================================
+# `rate` IS A CEILING, NOT A SETPOINT (2026-08-16, hf7y/scheduler#219)
+# ===========================================================================
+# It used to be the pace itself: whatever interval a row named was the interval
+# the account dispatched at, so changing a project's pace meant a human editing
+# a row here. That happened this morning -- realisateur 2h -> 30m, by hand,
+# because its queue had grown to 63 open issues -- and it is the last time it
+# should have to.
 #
-#   realisateur 63  wtul 26  gardien 25  scheduler 15  bibliothecaire 12
-#   groc-mangr  11  ecosim 10  nine-speakers 7  vim-arcade 6  sequestria 6
-#   total across the 10 live rows: 181
+# bin/tempo.sh now derives each project's interval from the work it can
+# actually do:
 #
-#   realisateur's share of the backlog   63/181  = 35%
-#   its share of dispatch at 2h          12/96   = 12.5%   <- the mismatch
-#   at 30m: 48/day, fleet 48+72+12 = 132, 48/132 = 36%     <- matches
+#   actionable = open issues MINUS those labelled needs-human/deferred/blocked/question
+#   want_min   = clamp( 120 * 12 / max(1, actionable), 20, 1440 )
 #
-# 20m was the other candidate and overshoots (72/156 = 46%). No other row moves:
-# one row changed is one thing to revert.
+# and usage-paced-runner.sh holds the row until that many minutes have passed
+# since its last DISPATCH. So the two numbers do different jobs:
 #
-# PUT IT BACK WHEN THE BACKLOG CLEARS -- _runner.monkey.conf's own retired raise
-# is the precedent ("raise it for a known backlog and put it back when the
-# backlog clears"): once realisateur's open count is near the fleet median
-# (~11 today), 30m is buying share it no longer needs. Redo the arithmetic above
-# rather than trusting this line.
+#   this file  -> how often the account may ASK          (the ceiling, cron)
+#   tempo      -> how many of those asks become work     (the setpoint)
 #
-# WHAT THE GATE SAID WHEN THIS WAS SET, measured not assumed:
+# ALL LIVE ROWS ARE 20m FOR THAT REASON, and it is not a fleet-wide speed-up.
+# A ceiling coarser than the setpoint quantises it: at a 30m ask, tempo's 34
+# min answer for realisateur becomes 60 min of real spacing, i.e. the hand edit
+# would have been UNDONE by switching the thermostat on. 20m is not a taste
+# call either -- it is TEMPO_MIN_MIN, the fastest pace tempo can ever ask for,
+# so the ceiling is derived from a knob rather than picked.
+#
+# WHAT EACH ROW ACTUALLY PACES AT, measured 2026-08-16 by running
+# `bin/tempo.sh <project>` against every live row -- this is its output, not a
+# calculation, and `bin/tempo.sh <project>` reprints it on demand:
+#
+#   realisateur    42 actionable -> 34 min  -> ~36/day    (was 48 at the 30m ask)
+#   wtul           26 -> 55 min             -> ~24/day
+#   gardien        24 -> 60 min             -> ~24/day
+#   scheduler      15 -> 96 min             -> ~14/day
+#   groc-mangr     11 -> 131 min            -> ~10/day
+#   bibliothecaire 10 -> 144 min            -> ~9/day
+#   ecosim          8 -> 180 min            -> ~8/day
+#   nine-speakers   6 -> 240 min            -> ~6/day
+#   sequestria      6 -> 240 min            -> ~6/day
+#   vim-arcade      5 -> 288 min            -> ~5/day
+#
+#   fleet ~142 attempts/day vs 96 before, but the 7d quota gate is unchanged
+#   and already binding at 88%, so what actually moves is the SHARE: 25% of
+#   dispatch to realisateur against 24% of the fleet's actionable backlog.
+#
+# TO CHANGE THE FLEET'S PACE, EDIT TEMPO_BASE_MIN in schedule/_tempo.conf, not
+# a row here. One knob moves every project proportionally and needs no --apply.
+# Editing a rate here now only decides how coarse that project's ceiling is.
+#
+# ORDER OF OPERATIONS, because getting it backwards is a runaway: tempo must be
+# present in an account's clone BEFORE its ceiling is raised. A clone still on
+# an older commit runs a dispatcher with no regulator, and would take the 20m
+# ask literally. Check `ls bin/tempo.sh` in the account's checkout, then
+# `dose <project> --apply`.
+#
+# WHAT THE GATE SAID WHEN THE CEILINGS WERE RAISED, measured not assumed:
 #   verdict=RUN binding=7d ceiling=0.9 util=0.880 burnline=0.903 slack=+0.023
 #   resets_in_min=975
 # 2 points of headroom with 16h to the roll. Expect the first day to be "wins
@@ -90,16 +126,16 @@
 # live only where all three agree. Re-verify, don't trust this comment:
 #   bash bin/roster-diff.sh
 
-ecosim          | ecosim@monkey          | 2h | live
-bibliothecaire  | bibliothecaire@monkey  | 2h | live
-vim-arcade      | vim-arcade@monkey      | 2h | live
-realisateur     | realisateur@monkey     | 30m | live
-scheduler       | scheduler@monkey       | 2h | live
-groc-mangr      | groc-mangr@monkey      | 2h | live
-wtul            | wtul@monkey            | 2h | live
-gardien         | gardien@monkey         | 6h | live
-nine-speakers   | nine-speakers@monkey   | 6h | live
-sequestria      | sequestria@monkey      | 6h | live
+ecosim          | ecosim@monkey          | 20m | live
+bibliothecaire  | bibliothecaire@monkey  | 20m | live
+vim-arcade      | vim-arcade@monkey      | 20m | live
+realisateur     | realisateur@monkey     | 20m | live
+scheduler       | scheduler@monkey       | 20m | live
+groc-mangr      | groc-mangr@monkey      | 20m | live
+wtul            | wtul@monkey            | 20m | live
+gardien         | gardien@monkey         | 20m | live
+nine-speakers   | nine-speakers@monkey   | 20m | live
+sequestria      | sequestria@monkey      | 20m | live
 
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
