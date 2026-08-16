@@ -95,10 +95,17 @@ EOF
 
   echo "$seed" > "$h/.local/share/scheduler-paced-runner/rotation.idx"
 
+  # TEMPO_ENABLED=0 for the same reason the freeze allowlist is a fixture: this
+  # witness measures GATE PROBE ORDERING, and the rows it uses are real project
+  # names, so a live tempo would read those projects' real trackers over the
+  # network and hold on whatever their backlogs happen to be today. That is a
+  # second regulator's verdict deciding a test about the first one, and it
+  # would make this suite non-hermetic. tests/tempo-witness.sh owns tempo.
   PROBE_TALLY="$h/probes"; : > "$PROBE_TALLY"; export PROBE_TALLY
   HOME="$h" PACED_CONF="$conf" PACED_HOST=monkey PACED_MAX_PER_TICK=1 \
     SCHEDULER_FREEZE_FILE="$SCHEDULER_FREEZE_FILE" \
     SCHEDULER_FREEZE_CACHE="$SCHEDULER_FREEZE_CACHE" \
+    TEMPO_ENABLED=0 \
     USAGE_GATE="$h/gate.sh" "$RUNNER" >/dev/null 2>&1
 
   local log="$h/.local/share/scheduler-paced-runner/run.log"
