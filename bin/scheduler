@@ -3212,14 +3212,12 @@ build_status_report() {
 
   echo
   echo "-- pending feedback (collect-feedback.sh) --"
-  local fb="" bb=""
+  local fb=""
   [ -f "$REPORTS_ROOT/$proj/LATEST.md" ] && fb="$("$SCHED_ROOT/bin/collect-feedback.sh" "$REPORTS_ROOT/$proj/LATEST.md" 2>/dev/null)"
-  [ -f "$SCHED_ROOT/BLOCKERS.md" ] && bb="$("$SCHED_ROOT/bin/collect-feedback.sh" "$SCHED_ROOT/BLOCKERS.md" --section "$proj" 2>/dev/null)"
-  if [ -z "$fb" ] && [ -z "$bb" ]; then
+  if [ -z "$fb" ]; then
     echo "none pending"
   else
     [ -n "$fb" ] && printf '%s\n' "$fb"
-    [ -n "$bb" ] && printf '%s\n' "$bb"
   fi
 
   echo
