@@ -199,60 +199,14 @@ attempt (background the command with a bare `&`, no `setsid`/detachment)
 was confirmed to hang vim indefinitely — the tested form here is what
 avoids that.
 
-## One cross-project file: BLOCKERS.md
+## The retired cross-project channel: BLOCKERS.md
 
-`BLOCKERS.md` (repo root) lists human-owned action items across every
-project, one `## <project_key>` section each. `collect-feedback.sh`
-supports two extra flags for this case:
-
-- `--section "<project_key>"` -- only collect tags anchored under a
-  heading matching that text (case-insensitive, `#`s/whitespace ignored),
-  so one shared file can be scanned separately per project without
-  leaking another project's tags into the wrong run.
-- `--consume` -- after collecting, record the matched entries as read so
-  the next run is not handed them again. Use this for `BLOCKERS.md` (and
-  any other persistent, hand-maintained file) since -- unlike `LATEST.md`
-  -- nothing else naturally clears an acted-on entry from it.
-
-`lib/sweep-loop-common.sh` and the scheduler's own two bespoke wrappers
-all check `BLOCKERS.md --section "$PROJECT_KEY" --consume` right after
-the `LATEST.md` check, prepending it to the prompt the same way. The
-blocker's plain-text description line is untouched by `--consume` --
-delete that by hand once the underlying problem is actually resolved.
-
-### `--consume` does not write the file (changed 2026-08-11, #61/#70)
-
-The consumption record lives in the running account's own state dir, at
-`~/.local/share/scheduler-glance/consumed-entries.tsv` (same directory and
-same `SCHEDULER_RECEIPT_DIR` override as `consumed-receipts.log`), one line
-per entry: `<consumed-at> <file> <section> <anchor> <kind> <text>`.
-**The scanned file is never modified.**
-
-It used to be: `%%TAG` lines were deleted and a matched `> reply` was
-demoted to `>> reply` under a dated `>> _[consumed ...]_` header. On a
-dispatcher host that file is the repo's own **tracked** `BLOCKERS.md`, and
-`bin/usage-paced-runner.sh` gates its pull-before-dispatch on
-`git status --porcelain --untracked-files=no` — so consuming a tag dirtied
-the exact file the deploy gate refuses to pull past, and the first consumed
-tag froze that host's code permanently. "This host's run already saw this
-entry" is per-host runtime state, not project content; it belongs beside the
-rotation pointer, not in the repo.
-
-Two consequences worth knowing:
-
-- `>>` blocks written by the old behaviour are still skipped, so nothing
-  re-collects; and a `--consume` pass **seeds** them into the ledger, which
-  is what makes `git restore` safe on a clone still carrying an uncommitted
-  in-file marker.
-- an account that cannot write the file can now consume correctly. It
-  previously could not, and was re-handed the same feedback every run.
-
-To see what a run has already read — the question the in-file `>>` marker
-used to answer — ask the ledger:
-
-```
-bin/collect-feedback.sh BLOCKERS.md --list-consumed
-```
+`collect-feedback.sh`'s `--section`/`--consume` flags (documented in its
+own header comment) existed for `BLOCKERS.md`, the former cross-project blocker
+board. `lib/sweep-loop-common.sh` no longer calls them: BLOCKERS.md is
+retired (#66, 2026-08-07 -- human-owned items moved to GitHub issues) and
+nothing wires this file into a prompt anymore. The per-report `%%TAG`
+channel above (reading `~/reports/<proj>/LATEST.md`) is unaffected.
 
 ## Reusing this elsewhere
 

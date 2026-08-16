@@ -6,7 +6,6 @@
 # RUNNER: tests/no-worktree-witness.sh
 # GUARD-TEST: tests/no-worktree-witness.sh
 # GATE: default
-# VERIFIED: 2026-08-11 via bash bin/no-worktree-guard.sh (37 files scanned, 0 FLAGs) and its witness
 #
 # ---------------------------------------------------------------------------
 # WHY THIS EXISTS
