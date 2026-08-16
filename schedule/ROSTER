@@ -136,6 +136,7 @@ wtul            | wtul@monkey            | 20m | live
 gardien         | gardien@monkey         | 20m | live
 nine-speakers   | nine-speakers@monkey   | 20m | live
 sequestria      | sequestria@monkey      | 20m | live
+senechal        | senechal@monkey        | 20m | live
 
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
