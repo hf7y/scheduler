@@ -9,7 +9,6 @@
 #        CRON_HOST/CRON_ACCOUNT -- same projects, same account@host, same
 #        live/parked state?
 # RUNNER: tests/roster-diff-witness.sh
-# VERIFIED: 2026-08-11 via bash bin/roster-diff.sh against the live tree
 #
 # CONTRACT
 #   exit 0  -- old and new derive the IDENTICAL set. Checked in BOTH

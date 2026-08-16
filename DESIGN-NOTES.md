@@ -17,8 +17,8 @@ Starting point dumped here from a working session (2026-07-17) on
 chezz's Tier 1 bug-sweep loop is the first real migration onto
 `lib/sweep-loop-common.sh` (previously a hand-duplicated copy, same as
 vkv-inventory's still is) and chezz also has a built (not yet
-crontab-installed) Tier 2 nightly-batch on top of the same library — see
-"Existing infrastructure" below. Everything else here is still design +
+crontab-installed) Tier 2 nightly-batch on top of the same library.
+Everything else here is still design +
 example snippets to build from, not yet a running system for
 vkv-inventory. See `~/WORKFLOW.md` for the original narrower write-up
 this was distilled from.
@@ -33,34 +33,19 @@ service (a project registry, its own scheduler) would pay off once
 there are enough projects that per-project cron-entry sprawl itself is
 the bottleneck — not yet, at 2 projects (chezz, vkv-inventory).
 
-## Four standardized pieces, not two
+## Two standardized pieces
 
-The two tiers below are the *jobs*. Standardizing them properly also
-meant standardizing what they read from and write to — four pieces total,
-all meant to be the SAME shape across every project from here on:
+Standardizing the two tiers properly also meant standardizing what they
+read from and write to, meant to be the SAME shape across every project
+from here on:
 
-1. **Web intake** — the tracker's own read/write HTTP contract (`GET
-   ?scope=bugs...`, `POST {type:...}`). Already independently converged
-   on by chezz and vkv-inventory; now written down once, formally, in
-   `INTAKE.md`, so a *new* project's backend has something concrete to
-   implement against instead of reverse-engineering it from an existing
-   project's source.
-2. **Bug Sweeper** (Tier 1) — fast, frequent, narrow, fixed daytime
+1. **Bug Sweeper** (Tier 1) — fast, frequent, narrow, fixed daytime
    window. Mechanical fixes only.
-3. **Overnight Batch** (Tier 2) — slow, thorough, broad, scoped by a
+2. **Overnight Batch** (Tier 2) — slow, thorough, broad, scoped by a
    per-project "what's actually live right now" marker (`FOCUS.md`) so
    accumulated ideas that aren't the current focus get deferred (logged
    in the report) rather than acted on just because they were sitting in
    a queue.
-4. **Running list of features** — deliberately **not** a fourth file.
-   `INTAKE.md` documents this directly: a `type=feature` tracker report
-   *is* a feature-backlog entry. A separate `FEATURES.md` would just be a
-   second place the same information could drift out of sync with the
-   tracker — `GET ?scope=bugs&type=feature` (or `type=all`) is the one
-   source of truth Tier 2 reads from. Nightly *reads* every feature idea
-   (for its report) but does not implement any of them without the user
-   weighing in first — unchanged, still deliberate, not something this
-   pass altered.
 
 ## Two more standard pieces: the big-bug handoff, and QUESTIONS.md
 
@@ -124,11 +109,7 @@ Two real gaps, closed the same day as everything above:
   un-amended text; that fan-out is tracked in `.scheduler/FOCUS.md`.
 
 Both are documented in `examples/bug-sweep.md.template` and
-`examples/nightly-batch.md.template` and are live in vkv-inventory's real
-command files.
-**Gap**: chezz's real `bug-sweep.md`/`nightly-batch.md` predate both
-conventions and don't have them yet — same shape of gap as the
-`PROJECT_KEY`/`TIER` one noted below, not fixed here.
+`examples/nightly-batch.md.template`.
 
 Tying 2 and 3 together is a genuinely new mechanism this pass added:
 **runtime registration**. Every job (either tier, any project) now writes
@@ -173,8 +154,8 @@ the real crontab.
 - `bin/sync-crontab.sh` — reads every `schedule/*.conf`, checks each job's
   existing expiry state (the same `~/.local/share/<JOB_NAME>/expires_at`
   file `lib/sweep-loop-common.sh` already writes) so an expired job gets
-  pruned here instead of editing crontab itself (see the Gap note below),
-  and rewrites *only* a marked block in the real crontab — anything else
+  pruned here instead of editing crontab itself, and rewrites *only* a
+  marked block in the real crontab — anything else
   already there, including a not-yet-migrated raw entry, is left alone.
   Prints a preview and exits by default; `--apply` backs up the current
   crontab (to `.crontab-backups/`) and actually writes it. Warns (doesn't
@@ -266,31 +247,13 @@ since it's a real installed script outside this directory.
 
 **Tier 1 — Bug Sweeper**: fast, frequent, narrow, fixed daytime window.
 Mechanical fixes only. Existing, real, already running (chezz) or built
-(vkv-inventory) — see "Existing infrastructure" below.
+(vkv-inventory).
 
 **Tier 2 — Overnight Batch**: slow, thorough, broad, scoped by `FOCUS.md`
 (see above). One long run per project per night. Proven once, informally
 — the `drilldown-browse-redesign` overnight run (6 commits, 3 real bugs
 found, ~30min, `--max-turns 200`) — and now also built (not yet
-crontab-installed) for chezz on the same shared-library shape; see
-"Existing infrastructure" below.
-
-## Existing infrastructure (real, on disk, as of 2026-07-17)
-
-| What | Where |
-|---|---|
-| chezz bug-sweep loop script | `~/.local/bin/chezz-bug-sweep-loop.sh` — on `lib/sweep-loop-common.sh`, `PROJECT_KEY="chezz"`/`TIER="bug-sweep"` set. |
-| chezz `/bug-sweep` command | `~/Documents/Project Archive/chezz/.claude/commands/bug-sweep.md` — predates the `NIGHTLY:`/`QUESTIONS.md` conventions, doesn't have them yet (chezz's own `QUESTIONS.md` already flags this as a to-do). |
-| chezz crontab entry | scheduler-managed: `*/15 9-21 * * *` (sweep), `auto`-batched to `0 1 * * *` (nightly) — via `schedule/chezz.conf`, applied. |
-| chezz Tier 2 nightly-batch | `~/Documents/Project Archive/chezz/.claude/FOCUS.md` + `.claude/commands/nightly-batch.md` + `~/.local/bin/chezz-nightly-batch-loop.sh` (`MAX_TURNS=200`) — installed, running. |
-| chezz sweep-status readout | the live page shows "Bug sweep last ran Xm/h/d ago · N fixed", read from a `sweep-status` record `/bug-sweep` (and `/nightly-batch`) POST every run — see `leaderboard/Code.gs` in that repo. |
-| vkv-inventory bug-sweep + nightly-batch loop scripts | `~/.local/bin/vkv-inventory-{bug-sweep,nightly-batch}-loop.sh` — both migrated onto `lib/sweep-loop-common.sh` with `PROJECT_KEY="vkv-inventory"` set; `examples/vkv-inventory-bug-sweep-loop.sh` is now stale as a "not-yet-adopted" example (the real script matches it). |
-| vkv-inventory `/bug-sweep` + `/nightly-batch` commands | `~/Documents/vkv/inv/inventory-app/.claude/commands/` — real, live implementation of the `NIGHTLY:` handoff and `QUESTIONS.md` conventions (see above). |
-| vkv-inventory crontab entry | scheduler-managed: `*/15 9-21 * * *` (sweep), `auto`-batched to `0 2 * * *` (nightly) — via `schedule/vkv-inventory.conf`, applied. |
-| home-assistant | Tier 2 only (no web tracker, no Tier 1). `~/.local/bin/home-assistant-nightly-batch-loop.sh`, `PROJECT_KEY="home-assistant"`. Introduces the `SECRETS_SRC_DIR` pattern (see "Secrets that can't survive a clone" above). `auto`-batched to `30 1 * * *` via `schedule/home-assistant.conf`, applied. |
-| wtul | Tier 2 only, weekly-ish cadence, `EXPIRY_DAYS=14`. `~/.local/bin/wtul-batch-loop.sh`. Explicit (non-`auto`) `BATCH_CRON` in `schedule/wtul.conf` — actively being revised, leave it alone. |
-| one-off nightly-batch prototype | `~/Documents/vkv/inv/schedule-drilldown-wakeup.sh` (the one-off `at`-job pattern `examples/nightly-batch-loop.sh` generalized). |
-| original narrower design doc | `~/WORKFLOW.md` |
+crontab-installed) for chezz on the same shared-library shape.
 
 ## What's in this directory
 
@@ -305,16 +268,9 @@ crontab-installed) for chezz on the same shared-library shape; see
 - `lib/sweep-loop-common.sh` — the shared engine (lock/expiry/heartbeat/
   clone/invoke-claude/push-verification/cross-job registry). A
   per-project wrapper sets a handful of variables and sources this
-  instead of repeating ~90 lines of boilerplate. Chezz's two real scripts
-  (`~/.local/bin/chezz-bug-sweep-loop.sh`, `~/.local/bin/chezz-nightly-batch-loop.sh`)
-  are the reference real wrappers, now including `PROJECT_KEY`/`TIER` —
-  see the Gap note above; vkv-inventory's own script still hand-duplicates
-  the logic (see `examples/vkv-inventory-bug-sweep-loop.sh` for the
-  not-yet-adopted rewrite).
-- `examples/vkv-inventory-bug-sweep-loop.sh` — what the *existing*
-  vkv-inventory script would look like rewritten on top of the shared
-  library, including registration, for comparison against the real,
-  currently-duplicated version at `~/.local/bin/vkv-inventory-bug-sweep-loop.sh`.
+  instead of repeating ~90 lines of boilerplate.
+- `examples/vkv-inventory-bug-sweep-loop.sh` — a wrapper built on the
+  shared library, including registration.
 - `examples/nightly-batch-loop.sh` — the Tier 2 generalization of
   `schedule-drilldown-wakeup.sh`'s one-off pattern into a real recurring
   script, using the same shared library and the same `PROJECT_KEY` as its
@@ -333,8 +289,7 @@ crontab-installed) for chezz on the same shared-library shape; see
   template; copy to `schedule/<project>.conf` (see "Schedule registry"
   above).
 - `schedule/*.conf` — the live per-project schedule config
-  `bin/sync-crontab.sh` reads (`chezz`, `vkv-inventory`, `home-assistant`,
-  `wtul` all registered and applied as of this writing). `schedule/_batch.conf`
+  `bin/sync-crontab.sh` reads. `schedule/_batch.conf`
   is the one non-project file in here (global auto-batch base time/stagger,
   leading underscore keeps it out of the per-project glob) — see
   "Schedule registry" above.
@@ -348,63 +303,6 @@ crontab-installed) for chezz on the same shared-library shape; see
   `~/reports/<project>/LATEST.md`, then also prints any `questions/*.md`
   that has a real entry (silently skips ones that are still just the
   template header).
-
-## To actually stand this up for a new project
-
-1. Make sure the project's tracker backend implements `INTAKE.md`'s
-   contract (copy `Bugs.gs`/`leaderboard/Code.gs`'s shape if it's Apps
-   Script; the contract itself is backend-agnostic if it isn't).
-2. Copy `examples/vkv-inventory-bug-sweep-loop.sh`, change the config
-   vars at the top (`JOB_NAME`, **`PROJECT_KEY`** — pick something unique
-   to this project, no other project's wrapper should ever reuse it —
-   `REPO_URL`, `REPO_SUBDIR`), point `PROMPT` at that project's own
-   `/bug-sweep` command (`examples/bug-sweep.md.template` if it doesn't
-   have one yet).
-3. Same for `examples/nightly-batch-loop.sh` if you want Tier 2 for that
-   project too — **same `PROJECT_KEY` as step 2's wrapper**, that's the
-   whole mechanism — plus drop a real `.claude/FOCUS.md` (from
-   `FOCUS.md.template`) and `.claude/commands/nightly-batch.md` (from
-   `nightly-batch.md.template`) into the project.
-4. Drop a `schedule/<project>.conf` (see
-   `examples/schedule-entry.conf.template`) with each tier's `JOB_NAME`,
-   script path, and cron expression, then run `bin/sync-crontab.sh` to
-   preview and `bin/sync-crontab.sh --apply` to actually install it.
-   Nothing is written to the real crontab until `--apply` is passed;
-   that's still a deliberate, explicit step every time — it just lives in
-   one script instead of a raw `crontab -e` per project now.
-5. `bin/morning-report.sh` needs no per-project setup — it just globs
-   whatever's under `~/reports/`.
-
-## Open decisions (yours, not assumed here)
-
-- Bug-sweeper window and overnight batch time are *configurable* per
-  project (`schedule/<project>.conf`'s `SWEEP_CRON`/`BATCH_CRON`) — the
-  daytime sweep window (`*/15 9-21 * * *`) is still this README's example
-  numbers applied as a default for chezz/vkv-inventory, not an
-  independently confirmed decision; edit and re-`--apply` once real hours
-  are picked (or confirm these are fine as-is).
-- ~~Staggering Tier 2 across projects if two land on the same time~~ —
-  automatic now via `BATCH_CRON=auto` + `schedule/_batch.conf` (see
-  "Schedule registry" above). Still a human call for any project that
-  wants an explicit, non-auto time instead (like `wtul`).
-- Report location: `~/reports/<project>/` assumed throughout these
-  examples — change `REPORTS_DIR` in `morning-report.sh` if you want
-  somewhere else.
-- Whether `bin/morning-report.sh` gets wired into `.bashrc`/`.profile` to
-  print automatically on shell start, or stays a manual command.
-- ~~Whether to backport `PROJECT_KEY`/`TIER` onto chezz's and
-  vkv-inventory's real scripts~~ — done for both; see "Existing
-  infrastructure" above.
-- Backporting the `NIGHTLY:`/`QUESTIONS.md` conventions onto chezz's real
-  `bug-sweep.md`/`nightly-batch.md` (flagged as a to-do in chezz's own
-  `QUESTIONS.md`), and the reverse — chezz's own `FOCUS.md` ideas
-  (work-oldest-first fairness, a 4-outcome triage, stop-by-report-time
-  turn budgeting, an irreversibility gate on new external service
-  dependencies) backported into vkv-inventory's `FOCUS.md` and the shared
-  templates.
-- Whether any project's `nightly-batch` wrapper should set `PRECHECK_CMD`
-  yet (see "Cost of an idle run" above) — deferred until a real idle-night
-  pattern shows up in that project's own reports.
 
 ## 2026-07-20 — the vision session, then the real-world hardening pass
 
@@ -1047,7 +945,7 @@ where an unreachable `REPO_URL` was reachable-in-practice enough to hit it.
 Both steps are now checked, `notify-send` on failure, no-ops on the success
 path so mandark is unaffected.
 
-### crt: pin confirmed, dispatch blocked, enabled=0
+### crt: pin confirmed
 
 **Re-verified, not carried over.** The 2026-07-20 confirmation was against
 the old full VM's networking, and WSL2's NAT does not automatically
@@ -1056,60 +954,6 @@ replicate it. Checked live from this environment: ICMP to `192.168.0.43` at
 carrying `x-clacks-overhead: GNU Terry Pratchett` — i.e. **identified as
 OctoPrint**, not merely a port that happened to answer. The hardware
 evidence for pinning crt to dexter holds.
-
-**But crt cannot actually run here yet, and the reason is repo access, not
-network.** `schedule/crt.conf` sets `REPO_URL="/home/zach/git-remotes/crt.git"` —
-a bare repo on *mandark's* filesystem, deliberately local so crt's VM
-password never leaves that machine (crt.conf's own comment). dexter has no
-such path and crt has no mirror; the deploy key crt.conf mentions "if a
-private GitHub mirror is wanted later" was never set up. Confirmed by
-running it: `bin/scheduler-run crt batch` → `fatal: repository
-'/home/zach/git-remotes/crt.git' does not exist`.
-
-So `schedule/_paced.dexter.conf` records the pin with `enabled=0` and the
-unblock condition inline. Getting crt's source to dexter is a human call
-with a real security dimension (that bare repo is local *on purpose*) — filed
-to QUESTIONS.md rather than guessed at. dexter's rotation is therefore
-empty, which the runner now logs explicitly on every rotation change:
-an idle-because-blocked host and a misconfigured one must not look alike.
-
-Also corrected in passing: dexter's crt line calls
-`bin/scheduler-run crt batch`, not mandark's
-`~/.local/bin/crt-nightly-batch-loop.sh`. crt.conf sets `BATCH_PROMPT` and no
-`BATCH_SCRIPT`, so the generic entrypoint is the correct caller and **no
-per-host wrapper needs to exist on dexter at all** — the wrapper in
-mandark's line is legacy that `MIGRATION.md` is already retiring.
-
-### `bin/scheduler-dev-cycle.sh`: made host-agnostic, deliberately not enabled
-
-Asked directly whether dexter needs its own wrapper or whether the script
-should stop hardcoding `SCHED_REPO="/home/zach/Documents/Project Archive/scheduler"`.
-**Chose host-agnostic**, same resolution ladder as the runner (env override →
-the repo the script itself lives in, symlinks resolved → mandark's original
-path as fallback), identified by `.git` *plus* `bin/usage-paced-runner.sh` so
-an unrelated parent git repo can't be mistaken for the scheduler checkout.
-
-Reasoning: a dexter-specific wrapper would duplicate ~130 lines of worktree,
-branch, lock and merge-policy logic whose whole point is being subtle and
-correct, and it would drift the moment either copy changed. That is the same
-per-host-wrapper sprawl `MIGRATION.md` and `bin/scheduler-run` exist to
-retire — reintroducing it at the host level while retiring it at the project
-level would be incoherent. The hardcoded path was also just a latent
-portability bug: the script lives *inside* the repo it operates on, so the
-location was always derivable.
-
-**Making it runnable is not the same as running it, and `scheduler` is
-deliberately absent from dexter's rotation.** Two hosts self-developing one
-scheduler git history, each auto-merging to its own local `main`, is a
-stronger version of the divergence that bit this repo earlier the same day —
-two worktrees on a *single* host drifting far enough apart that a paced cycle
-refused to reconcile them and escalated it to QUESTIONS.md. That entry was
-cleared by `558c1c1` while this session was running, but by **fast-forward**,
-which is available only while one side has not independently advanced. Two
-hosts pushing to one `origin` is exactly the condition that removes it, so the
-resolution does not generalize — it mostly documents what the cheap fix
-depends on. Capability now, activation after the human call. Self-development
-stays single-host.
 
 ### `bin/sync-crontab.sh` is not host-scoped — tick installed by hand
 
@@ -1147,7 +991,7 @@ else on this list.
 Prepared on branch `dexter/drop-crt-from-mandark-paced` rather than committed
 to `main`. **Merging it now would create a gap, not prevent a double-dispatch.**
 The change is only correct once dexter can actually dispatch crt; today it
-can't (repo access, above), so landing it would stop crt running *anywhere* —
+can't (repo access), so landing it would stop crt running *anywhere* —
 and crt is the highest-weight participant in the rotation (weight 3, ~211
 commits/7d). The double-dispatch it guards against is currently impossible
 for the same reason it can't be merged.
@@ -1223,77 +1067,6 @@ Symmetric by construction -- same script both hosts run, so this closes
 the gap on dexter too, not just mandark. Deployed to
 `~/.local/bin/usage-paced-runner.sh` same session; `scheduler pacing`'s
 drift check confirms OK.
-
-## 2026-07-24 (same session, fourth follow-up): crt's bare-repo access -- dexter clones mandark over SSH
-
-Resolves QUESTIONS.md item #1 from the dexter self-build (how does dexter
-reach `crt.git`, a bare repo deliberately kept local to mandark so the VM
-password in HANDOFF.md never leaves that machine). Of the four options
-listed there, chose **(b): dexter clones mandark over SSH**, explicitly
-parking (c) "host crt on dexter instead, invert the direction" as the
-eventual direction once dexter's own git hosting is proven out --
-human-directed, not guessed: smaller and reversible now, bigger change
-later once there's more confidence in dexter as a peer.
-
-**Built, mandark side (this session, interactive, on mandark):**
-- `openssh-server` installed and enabled (previously entirely absent --
-  confirmed via `systemctl`/`dpkg` before assuming). Listens on
-  `0.0.0.0:22`/`[::]:22`; mandark has exactly one real network interface
-  (`192.168.0.27`, LAN), so this is LAN-scoped in practice despite the
-  bind address. `sudo apt-get install`/`systemctl enable` needed an
-  interactive password, so the human ran those two commands directly; this
-  session only verified the result (`systemctl is-active`, `ss -tlnp`).
-- A dedicated key pair (`dexter_mandark_deploy`, generated ON dexter, never
-  touched mandark) added to mandark's `~/.ssh/authorized_keys` with
-  `command="git-shell -c \"$SSH_ORIGINAL_COMMAND\"",no-port-forwarding,
-  no-agent-forwarding,no-X11-forwarding,no-pty` -- restricted to git
-  protocol only, same "own key per machine, independently revocable,
-  narrowly scoped" pattern as every other deploy key in this repo
-  ([[scheduler-cron-ssh-auth]]), not a general login key.
-- `schedule/crt.conf`'s `REPO_URL` changed from the bare local path to
-  `ssh://mandark-lan/home/zach/git-remotes/crt.git`. Safe because crt now
-  runs on dexter exclusively (see below) -- mandark reaching itself over
-  SSH here would be dead code, not a real case this needs to support.
-- Merged dexter's prepared `dexter/drop-crt-from-mandark-paced` branch
-  (crt dropped from `schedule/_paced.conf`) -- landed now rather than left
-  pending, since the REPO_URL half of "DO NOT LAND ALONE" is now also
-  done. mandark's own AUTONOMY/rotation is otherwise unaffected.
-
-**Deliberately NOT done yet: `_paced.dexter.conf`'s `crt` line stays
-`enabled=0`.** SSH access is provisioned but not live-verified from
-dexter's actual environment -- same "verified by running it, not assumed"
-standard dexter itself used to find this gap in the first place. Real
-remaining steps, written directly into `_paced.dexter.conf`'s crt comment
-so whoever does this next doesn't have to reconstruct them: dexter needs
-the `mandark-lan` Host alias in its own `~/.ssh/config`, then
-`ssh -T git@mandark-lan` (expected to drop the connection immediately --
-git-shell has no interactive shell, so that's success) and
-`git ls-remote ssh://mandark-lan/home/zach/git-remotes/crt.git` (the real
-test -- should list crt's refs) before flipping `enabled` to `1`.
-
-**Accepted gap in the interim:** crt currently runs on NEITHER host --
-dropped from mandark, not yet enabled on dexter. Chosen deliberately over
-bundling an unverified enable into this same change (which would couple
-"drop from mandark" to a flip nobody could test yet, and crt is the
-highest-weight participant in `_paced.conf`, so getting that coupling
-wrong would be a real throughput cost, not a cosmetic one). Visible and
-traceable to "waiting on live dexter verification" via the comment left
-in place, not a silent gap.
-
-## 2026-07-24 (same session, fifth follow-up): crt live-verified from dexter, enabled
-
-Closes out QUESTIONS.md item #1 for real. From dexter itself:
-`git ls-remote ssh://mandark-lan/home/zach/git-remotes/crt.git` returned
-real refs (`HEAD`/`refs/heads/main`), and the SSH host key fingerprint
-(`SHA256:L8eHLUaeERW+6p428gZ+V6LjoHqUAlYvuTgEXQyD3Eg`) was cross-checked
-against mandark's actual `/etc/ssh/ssh_host_ed25519_key.pub` and matches --
-not just "something answered on port 22," confirmed to actually be
-mandark. `crt` flipped to `enabled=1` in `schedule/_paced.dexter.conf`.
-
-crt now runs on exactly one host (dexter), reachable over the restricted
-git-shell-only key, source never leaving the LAN. The interim "runs on
-neither host" gap noted in the previous entry is closed as of this
-commit.
 
 ## 2026-07-24 (same session, sixth follow-up): push-on-cycle, not push-on-morning-review — durable policy correction
 

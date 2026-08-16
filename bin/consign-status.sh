@@ -15,8 +15,6 @@
 # GUARD: which vault-consigned files are still byte-identical duplicates
 #        sitting in this repo, unactioned?
 # RUNNER: tests/consign-status-witness.sh
-# VERIFIED: 2026-08-14 via bash bin/consign-status.sh (5 DUPLICATE, 3
-#           DIVERGED, 2 REAPED against the live tree / live vault)
 #
 # CONTRACT
 #   exit 0 -- no file is a byte-identical duplicate right now (queue empty)

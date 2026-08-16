@@ -13,7 +13,6 @@
 # GUARD: is any shell file in this tree carrying a shellcheck finding it did not carry when the ratchet was last accepted?
 # RUNNER: tests/shellcheck-lint-witness.sh
 # GATE: default
-# VERIFIED: 2026-08-11 via bash bin/shellcheck-lint.sh (0 new, 17 baselined, 63 files, shellcheck 0.9.0)
 #
 # Ported from hf7y/realisateur (bin/shellcheck-lint.sh, PR #133/#136) per
 # hf7y/scheduler#77. The MECHANISM is that file's; .shellcheckrc's disable

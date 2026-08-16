@@ -76,7 +76,6 @@ done)"
 
 pairs_file="$(mktemp)"; trap 'rm -f "$pairs_file"' EXIT
 
-# main working copy, per project
 for conf in "$SCHED_ROOT"/schedule/*.conf; do
   b="$(basename "$conf" .conf)"
   [[ "$b" == _* ]] && continue
@@ -136,7 +135,6 @@ cutoff = None
 if days:
     cutoff = now_dt.timestamp() - float(days) * 86400
 
-# project -> set of dirs
 proj_dirs = {}
 with open(pairs_path) as f:
     for line in f:

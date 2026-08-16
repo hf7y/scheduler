@@ -13,7 +13,6 @@
 #   redesign lands, and a suite that is permanently red is a suite nobody
 #   reads. From 2026-08-24 --strict goes red on every run and the ONLY thing
 #   that clears it is deleting this file.
-# VERIFIED: 2026-08-10 via bash bin/roster-target.sh (0/6 met, 6 to go, 0 blind)
 #
 # ############################################################################
 # WHY THIS EXISTS WHEN realisateur/bin/served-not-cloned.sh ALREADY PROBES IT
@@ -176,13 +175,10 @@ probe_oneroster() {
 probe_onekey() {
   [ -d "$SCHED_ROOT/schedule" ] || { row BLIND onekey "no schedule/ dir under $SCHED_ROOT"; return; }
   local kinds=() n
-  # (a) an `enabled` column in any _paced*.conf
   n="$(cat "$SCHED_ROOT"/schedule/_paced*.conf 2>/dev/null | grep -cE '^[a-zA-Z0-9_-]+\|[01]\|' || true)"
   [ "${n:-0}" -gt 0 ] && kinds+=("_paced*.conf enabled column ($n row(s))")
-  # (b) EXEMPT lines in FREEZE
   n="$(grep -cE '^[[:space:]]*EXEMPT:' "$SCHED_ROOT/schedule/FREEZE" 2>/dev/null || true)"
   [ "${n:-0}" -gt 0 ] && kinds+=("FREEZE EXEMPT ($n line(s))")
-  # (c) CRON_HOST/CRON_ACCOUNT in per-project confs
   n="$(grep -lE '^CRON_(HOST|ACCOUNT)=' "$SCHED_ROOT"/schedule/*.conf 2>/dev/null | grep -cv '/_' || true)"
   [ "${n:-0}" -gt 0 ] && kinds+=("CRON_HOST/CRON_ACCOUNT ($n conf(s))")
 
