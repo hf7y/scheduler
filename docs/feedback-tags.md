@@ -67,11 +67,12 @@ experience looks identical on both — worth remembering:
 - **`QUESTIONS.md`**: `> ` replies read directly by `/nightly-batch`'s own
   prompt instructions (not by this script at all) — durable, append-only,
   the one built for judgment calls.
-- **`LATEST.md`/`BLOCKERS.md`**: `> ` replies (now) AND `%%TAG` lines both
-  read by this script before the prompt is built. `LATEST.md` itself is
-  ephemeral (overwritten wholesale each run) — a reply there only survives
-  long enough to be read ONCE, on the very next dispatch; it is not a
-  durable record the way a `QUESTIONS.md` entry is.
+- **`LATEST.md`**: `> ` replies (now) AND `%%TAG` lines both read by this
+  script before the prompt is built. Ephemeral (overwritten wholesale each
+  run) — a reply there only survives long enough to be read ONCE, on the
+  very next dispatch; it is not a durable record the way a `QUESTIONS.md`
+  entry is. (`BLOCKERS.md` used to be a second file read the same way; see
+  "The retired cross-project channel" below -- nothing reads it now.)
 
 No separate "mark as read" step is needed: each run overwrites
 `LATEST.md` with its own fresh report, so a tag naturally disappears once
