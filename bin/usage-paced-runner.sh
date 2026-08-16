@@ -366,7 +366,6 @@ roster_rows() {
   done
 }
 
-LEGACY_PACED_CONF="/home/zach/Documents/Projects/scheduler/schedule/_paced.conf"
 PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -n "${PACED_CONF:-}" ]; then
   PACED_CONF_SRC="explicit PACED_CONF"
@@ -395,9 +394,8 @@ elif [ -f "$REPO_ROOT/schedule/_paced.conf" ]; then
   PACED_CONF="$REPO_ROOT/schedule/_paced.conf"
   PACED_CONF_SRC="shared (no _paced.$PACED_HOST.conf)"
 else
-  # Last resort: a copied-not-symlinked install whose repo we can't locate.
-  PACED_CONF="$LEGACY_PACED_CONF"
-  PACED_CONF_SRC="legacy absolute path (repo not found from $SELF_DIR)"
+  echo "usage-paced-runner: no schedule/_paced.$PACED_HOST.conf and no schedule/_paced.conf under $REPO_ROOT. Refusing." >&2
+  exit 2
 fi
 # <<< paced conf resolution
 
