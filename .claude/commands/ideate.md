@@ -70,7 +70,7 @@ Sort what you find into:
   These are what `AskUserQuestion` is for. Ground each in real
   counts/quotes (git history, usage-gate output, issue dates), not
   vibes.
-- **Already-settled** -- matches DESIGN-NOTES/FOCUS. Note it's unchanged
+- **Already-settled** -- matches DESIGN-NOTES. Note it's unchanged
   and move on; don't re-litigate.
 
 ## 3. Ask, don't guess
