@@ -29,3 +29,18 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
 5. NO NEW MARKDOWN FILES. Do not write a handoff, session record, design
    note, sprint summary, or retrospective. Prose is not a deliverable.
    Findings go in the issue they belong to, and then you close it.
+
+6. WORK THAT BELONGS TO ANOTHER REPO GOES THERE AS A DRAFT PR, NOT AS A
+   NOTE. If the fix is in someone else's repository, do the work: clone it,
+   make the change, open a DRAFT pull request there carrying the actual
+   diff, and open an issue in that same repo asking its self-dev to
+   validate, ready and merge it. Filing an issue that only DESCRIBES the
+   fix, when you could have written it, is rule 0 across a repo boundary.
+
+   Mark it draft and leave it draft. A draft claims nothing, so you are not
+   asserting done on behalf of a project you do not own -- and you must not
+   merge another project's PR yourself. Their self-dev readies it.
+
+   Filing an issue is a front door and needs no busy check. Writing
+   directly into another project's files needs `check-project-busy
+   <project>` first; defer on BUSY and say what you deferred.
