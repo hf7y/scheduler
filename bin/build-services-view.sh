@@ -9,7 +9,8 @@
 #   - schedule + knobs .... schedule/<project>.conf + the wrapper script
 #   - task / prompt ....... the wrapper's PROMPT + the .claude/commands file
 #   - status (live) ....... symlink to ~/reports/<project>/LATEST.md
-#   - questions (live) .... symlink to <repo>/.claude/QUESTIONS.md
+#     (no questions.md link -- open questions are GitHub issues since #66,
+#     2026-08-07)
 #
 # Read-only w.r.t. everything except services/ (which it owns and rebuilds
 # from scratch each run). Never touches crontab, wrappers, or reports.
