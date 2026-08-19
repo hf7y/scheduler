@@ -106,7 +106,7 @@ Knobs, resolved env > schedule/_tempo.<host>.conf > schedule/_tempo.conf > defau
   TEMPO_PIVOT_ISSUES    12       the backlog that maps to BASE_MIN
   TEMPO_MIN_MIN         20       never faster than this
   TEMPO_MAX_MIN         1440     never slower than this
-  TEMPO_BLOCKED_LABELS  needs-human,deferred,blocked,question
+  TEMPO_BLOCKED_LABELS  needs-human,deferred,question
   TEMPO_CACHE_MIN       30       how long a tracker count may be reused
 
 This utility cannot spend money. It has no --summon flag.
@@ -180,7 +180,7 @@ knob TEMPO_PIVOT_ISSUES 12;  PIVOT="$KNOB_VAL";    PIVOT_SRC="$KNOB_SRC"
 knob TEMPO_MIN_MIN 20;       MIN_MIN="$KNOB_VAL"
 knob TEMPO_MAX_MIN 1440;     MAX_MIN="$KNOB_VAL"
 knob TEMPO_CACHE_MIN 30;     CACHE_MIN="$KNOB_VAL"
-knob TEMPO_BLOCKED_LABELS 'needs-human,deferred,blocked,question'
+knob TEMPO_BLOCKED_LABELS 'needs-human,deferred,question'
 BLOCKED_LABELS="$KNOB_VAL"
 
 if [ "$ENABLED" = "0" ]; then
