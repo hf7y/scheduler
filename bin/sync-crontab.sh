@@ -564,11 +564,6 @@ resolve_cmd() {
   RESOLVE_OUT="$SCHEDULER_RUN $PROJECT $sub"; return 0
 }
 
-QUESTIONS_DIR="$SCHED_DIR/questions"
-QUESTIONS_LINKS=()   # "project|target_path" pairs, built alongside the crontab lines below
-FOCUS_DIR="$SCHED_DIR/focus"
-FOCUS_LINKS=()       # "project|target_path" pairs -- mirrors QUESTIONS_LINKS
-
 for conf in "${CONF_FILES[@]}"; do
   # Reset every field this format understands so a conf file missing a
   # var can't silently inherit the previous file's value.
@@ -579,26 +574,13 @@ for conf in "${CONF_FILES[@]}"; do
   unset REPO_URL SWEEP_PROMPT BATCH_PROMPT SCHEDULER_SUBDIR
   # Scoping axes -- reset so one conf's account/host can't leak into the next.
   unset CRON_ACCOUNT CRON_HOST
-  # ANSWER_CHANNEL was missing from this block until 2026-08-06, and the omission
-  # was invisible because its effect is a file that ISN'T created. Confs are
-  # sourced in glob order, so bibliothecaire.conf's ANSWER_CHANNEL="issues" was
-  # inherited by every conf after it in the alphabet -- chezz, crt, gardien,
-  # groc-mangr, nine-speakers, realisateur, scheduler, senechal, sequestria --
-  # each silently treated as migrated to the issues channel and given no
-  # questions/ or focus/ symlink at all. Only `baudin`, which sorts ahead of
-  # `bibliothecaire`, ever saw the default "file" channel. Witnessed by
-  # tests/sync-crontab-questions-witness.sh ("ANSWER_CHANNEL ... does not leak
-  # forward").
-  unset ANSWER_CHANNEL
   # shellcheck disable=SC1090
   source "$conf"
 
   name=$(basename "$conf" .conf)
   PROJECT="${PROJECT:-$name}"
 
-  # Host gate: a conf pinned to another box contributes nothing here. Note
-  # this runs BEFORE the symlink/QUESTIONS work below too -- a job that
-  # doesn't run on this host shouldn't claim this host's questions/ slot.
+  # Host gate: a conf pinned to another box contributes nothing here.
   if [ -n "${CRON_HOST:-}" ] && [ "$CRON_HOST" != "$SHORT_HOST" ]; then
     echo "skipping [$name]: CRON_HOST=$CRON_HOST, this is $SHORT_HOST" >&2
     continue
@@ -647,52 +629,6 @@ for conf in "${CONF_FILES[@]}"; do
   # not be read as double dispatch").
   if [ "$conf_account" != "$LOCAL_ACCOUNT" ] && is_paced_enabled "$PROJECT"; then
     echo "note [$name]: state owned by $conf_account; paced participant in ${PACED_CONF:-rotation} ($PACED_CONF_SRC) -- fixed cron suppressed, dispatched by the paced runner" >&2
-  fi
-
-  # Symlink this project's .claude/QUESTIONS.md into questions/<PROJECT>.md
-  # -- "does scheduler know about this" for the one thing a human actually
-  # wants to browse across every project in one place, without duplicating
-  # the file (a symlink, not a copy, so either path edits the same file).
-  # PROJECT_REPO_PATH is optional -- a project with no local working copy
-  # in this exact shape just doesn't get one.
-  #
-  # ANSWER_CHANNEL="issues" (2026-07-28) suppresses the symlink entirely.
-  # Leaving one in place for a migrated project is worse than having none:
-  # it is a file that LOOKS like the answer surface, sits in the same
-  # directory as every other project's real one, and silently is not where
-  # anyone reads or writes any more. The staleness this migration exists to
-  # escape would come straight back wearing the old file's name.
-  #
-  # And PROJECT_REPO_PATH must actually BE there. It is an absolute path, so it
-  # is a claim about THIS host's filesystem as THIS account -- and every
-  # self-dev conf writes it as "$HOME/Documents/Projects/<p>", which resolves
-  # under whichever account is running the sync. On an account with no clone of
-  # that project the claim is simply false, and the --apply path below used to
-  # answer that by `mkdir -p`ing the claim true and writing a header into it.
-  # It produced /home/chezz/Documents/Projects/baudin/ (2026-08-05) and
-  # /home/crt/Documents/Projects/baudin/ (2026-08-06): one file each, no .git,
-  # never committed from, never read again -- and a questions/baudin.md symlink
-  # in each account's checkout pointing confidently at the phantom.
-  #
-  # Same rule bin/scheduler's require_repo_path() already states: an absolute
-  # path that is not there is a WRONG path, never a path to create. Skip, and
-  # say which path and which conf, because a silent drop here is
-  # indistinguishable from the sync forgetting the project exists.
-  if [ -n "${PROJECT_REPO_PATH:-}" ] && [ ! -d "$PROJECT_REPO_PATH" ]; then
-    echo "skipping [$name] questions/focus links: PROJECT_REPO_PATH=$PROJECT_REPO_PATH does not exist as $LOCAL_ACCOUNT on $SHORT_HOST -- not creating it (fix PROJECT_REPO_PATH in schedule/$name.conf, or clone it here, if this account is meant to have one)" >&2
-  elif [ -n "${PROJECT_REPO_PATH:-}" ] && [ "${ANSWER_CHANNEL:-file}" != "issues" ]; then
-    # Self-contained-folder model: a migrated project sets
-    # SCHEDULER_SUBDIR=".scheduler" -- a TOP-LEVEL dir, deliberately OUTSIDE
-    # .claude/ -- so its FOCUS/QUESTIONS group under one folder it owns.
-    # Not-yet-migrated projects default to ".claude", which is exactly the
-    # legacy shape that hits the unattended "sensitive file" permission gate
-    # on writes (confirmed 2026-07-20, see FOCUS.md "Permission gate" note)
-    # -- SCHEDULER_SUBDIR=".scheduler" is the fix, not just a naming choice.
-    sdir="${SCHEDULER_SUBDIR:-.claude}"
-    QUESTIONS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/$sdir/QUESTIONS.md")
-    # Same idea for FOCUS.md -- the per-project scope-input a nightly run
-    # reads, browsable/editable from one place (../focus/) without copying.
-    FOCUS_LINKS+=("$PROJECT|$PROJECT_REPO_PATH/$sdir/FOCUS.md")
   fi
 
   # --- Tier 1 (sweep): no auto-scheduling concept for this tier -- it's
@@ -874,86 +810,6 @@ fi
 
 if [ "$ERRORS" -gt 0 ]; then
   echo "-- $ERRORS error(s) above; the affected tier(s) were left OUT of the generated crontab, everything else proceeded --" >&2
-fi
-
-# Sync questions/<PROJECT>.md symlinks -- same preview-by-default,
-# --apply-to-write rule as the crontab itself below. Each symlink points
-# at a project's own .claude/QUESTIONS.md so it's browsable from one
-# place (this directory) without duplicating the file.
-QUESTIONS_HEADER='# Questions for the user
-
-Running log, appended to (never overwritten or trimmed) by `/bug-sweep`
-and `/nightly-batch` whenever something bigger than a routine tracker note
-comes up. Clear an entry by deleting its line once you'"'"'ve actually read
-and dealt with it; that'"'"'s the only thing that should ever remove
-something from this file.
-'
-
-if [ "${#QUESTIONS_LINKS[@]}" -gt 0 ]; then
-  if [ "$APPLY" -eq 0 ]; then
-    echo "--- questions/ symlinks that would be created/updated (pass --apply to actually do this) ---"
-    for entry in "${QUESTIONS_LINKS[@]}"; do
-      proj="${entry%%|*}"; target="${entry#*|}"
-      echo "questions/$proj.md -> $target$([ -f "$target" ] || echo "  (target does not exist yet -- would be created with a header)")"
-    done
-  else
-    mkdir -p "$QUESTIONS_DIR"
-    for entry in "${QUESTIONS_LINKS[@]}"; do
-      proj="${entry%%|*}"; target="${entry#*|}"
-      # Backstop for the fabrication above. The collector already refuses to
-      # queue a project whose PROJECT_REPO_PATH is absent, but that check is
-      # 200 lines away from this mkdir and the next edit that appends to
-      # QUESTIONS_LINKS will not see it. target is
-      # <repo>/<subdir>/QUESTIONS.md, so <repo> is two levels up: creating the
-      # SUBDIR inside a real checkout is the intended behaviour, creating the
-      # CHECKOUT is the bug. Loud, because reaching this means the collector's
-      # gate was bypassed rather than a project merely lacking a clone.
-      repo_root="$(dirname "$(dirname "$target")")"
-      if [ ! -d "$repo_root" ]; then
-        echo "ERROR [$proj]: refusing to fabricate a checkout at $repo_root to hold $target -- an absolute PROJECT_REPO_PATH that is not there is a wrong path, not one to create; no questions/$proj.md link written" >&2
-        ERRORS=$((ERRORS + 1))
-        continue
-      fi
-      if [ ! -f "$target" ]; then
-        mkdir -p "$(dirname "$target")"
-        printf '%s' "$QUESTIONS_HEADER" > "$target"
-        echo "created $target"
-      fi
-      ln -sfn "$target" "$QUESTIONS_DIR/$proj.md"
-      echo "linked questions/$proj.md -> $target"
-    done
-  fi
-fi
-
-# Sync focus/<PROJECT>.md symlinks -- the per-project scope-input each
-# nightly run reads (.claude/FOCUS.md), browsable/editable from one place.
-# Unlike QUESTIONS.md this is NOT auto-created: FOCUS content is
-# project-specific and fabricating an empty one would mislead a nightly run
-# into thinking it has scope. A project without a real FOCUS.md is just
-# noted and skipped here.
-if [ "${#FOCUS_LINKS[@]}" -gt 0 ]; then
-  if [ "$APPLY" -eq 0 ]; then
-    echo "--- focus/ symlinks that would be created/updated (pass --apply to actually do this) ---"
-    for entry in "${FOCUS_LINKS[@]}"; do
-      proj="${entry%%|*}"; target="${entry#*|}"
-      if [ -f "$target" ]; then
-        echo "focus/$proj.md -> $target"
-      else
-        echo "focus/$proj.md -> $target  (target does not exist yet -- skipped; add a .claude/FOCUS.md to link it)"
-      fi
-    done
-  else
-    mkdir -p "$FOCUS_DIR"
-    for entry in "${FOCUS_LINKS[@]}"; do
-      proj="${entry%%|*}"; target="${entry#*|}"
-      if [ -f "$target" ]; then
-        ln -sfn "$target" "$FOCUS_DIR/$proj.md"
-        echo "linked focus/$proj.md -> $target"
-      else
-        echo "skipped focus/$proj.md -- no FOCUS.md at $target yet"
-      fi
-    done
-  fi
 fi
 
 WRITE_ERRORS=0

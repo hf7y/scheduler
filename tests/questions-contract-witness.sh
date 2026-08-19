@@ -22,14 +22,9 @@
 # asserts the REFUSAL that replaced the copy, because a re-grown QUESTIONS.md
 # in a repo that had none is the exact failure the sunset exists to stop.
 #
-# The fourth assertion block is the regression that this contract's own
-# rollout caused and that must never come back: the rule bullets are
-# `- **A. ...**`-shaped, which is exactly the shape `bin/questions-lint.sh`
-# treats as an ENTRY, so the amended header produced 4 findings on a file
-# holding one real question. A check that cries wolf per project, forever,
-# is worse than no check -- so the lint learned that pre-`## ` preamble is
-# header prose. Its fail-open guard is asserted right alongside, because
-# "went quiet" and "found nothing" must stay distinguishable.
+# A fourth assertion block used to cover bin/questions-lint.sh's own entry-
+# parsing regression; that tool was retired with the rest of the QUESTIONS.md
+# machinery (hf7y/scheduler#234) and its coverage retired with it.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -84,55 +79,6 @@ if [ ! -e "$GEN" ]; then ok "no QUESTIONS.md was created"
 else bad "\`scheduler ask\` re-grew a retired file at $GEN"; fi
 if grep -qi 'retired' "$TMP/ask.out"; then ok "the refusal says why (retired channel)"
 else bad "the refusal does not explain itself: $(head -3 "$TMP/ask.out")"; fi
-
-echo "== 4. bin/questions-lint.sh: header prose is not an entry, and it did not go blind"
-mkdir -p "$TMP/lint/questions" "$TMP/lint/lib"
-cp "$ROOT/lib/check-witness.sh" "$TMP/lint/lib/" 2>/dev/null
-run_lint() { SCHED_ROOT="$TMP/lint" bash "$ROOT/bin/questions-lint.sh" 2>&1; }
-
-# (a) the generated file: one real question, and the rule bullets above the
-#     first `## ` heading must be invisible to the lint.
-rm -f "$TMP/lint/questions"/*.md
-printf '# Questions\n\n- **A. Direction, not instruction.** header prose\n- **D. No clean-check reports.** header prose\n\n## Open\n\n- **Does header prose still lint clean?**  `q-abc123` 2026-07-29, via witness\n' \
-  > "$TMP/lint/questions/witnessproj.md"
-out="$(run_lint)"; rc=$?
-if [ "$rc" -eq 0 ]; then ok "generated header lints clean (was 4 false findings)"
-else bad "generated header still produces findings (rc=$rc): $out"; fi
-if printf '%s' "$out" | grep -q 'across 1 entr'; then
-  ok "the one real question is still counted as an entry"
-else
-  bad "entry count wrong -- the lint may be skipping the whole file: $out"
-fi
-
-# (b) FAIL-OPEN GUARD: a legacy file with entries and NO heading at all must
-#     still be linted from line 1. This is the assertion that keeps the fix
-#     above from turning into "the check went quiet."
-rm -f "$TMP/lint/questions"/*.md
-printf '# Questions\n\n- **2026-07-01 (nightly): a hand-written entry**\n' \
-  > "$TMP/lint/questions/headingless.md"
-out="$(run_lint)"; rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'leads with a date'; then
-  ok "headingless legacy file is still linted from line 1"
-else
-  bad "hand-written entry in a headingless file was NOT flagged (rc=$rc): $out"
-fi
-
-# (c) header prose AND a real hand-written entry under `## Open`: skip the
-#     prose, still catch the entry.
-rm -f "$TMP/lint/questions"/*.md
-printf '# Questions\n\n- **A. Direction, not instruction.** header prose\n\n## Open\n\n- **2026-07-01 (nightly): a hand-written entry**\n' \
-  > "$TMP/lint/questions/withheading.md"
-out="$(run_lint)"; rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'leads with a date'; then
-  ok "entry under \`## Open\` is still flagged when header prose precedes it"
-else
-  bad "hand-written entry under \`## Open\` was NOT flagged (rc=$rc): $out"
-fi
-if printf '%s' "$out" | grep -q 'across 1 entr'; then
-  ok "the header-prose bullet is not counted as an entry"
-else
-  bad "header-prose bullet is still being counted as an entry: $out"
-fi
 
 echo
 echo "== $PASS passed, $FAIL failed =="
