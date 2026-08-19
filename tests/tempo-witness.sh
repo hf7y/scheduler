@@ -89,6 +89,23 @@ out="$(run_tempo p)"
 [ "$(want_of "$out")" = "60" ] || fail "40 open minus 16 blocked = 24 actionable should want 60, got: $out"
 pass "a human-gated tracker dispatches LESS, not more"
 
+echo "case 3b -- the blocked vocabulary is ONE label, and it is the derived one"
+# Narrowed 2026-08-18 on Zach's call. Pinned here by NAME because widening it
+# back is a silent 2x-3x change in dispatch rate across the estate, visible
+# nowhere except this knob: hf7y/verbs went 1440 -> 480 min on this edit alone,
+# because all three of its open issues carried `deferred` -- a label `defere`
+# writes for AGENT work. A brake that engages on the presence of a backlog is
+# not a brake, it is a stall.
+want_default='needs-human'
+got_default="$(sed -n "s/^knob TEMPO_BLOCKED_LABELS '\\(.*\\)'$/\\1/p" "$HERE/../bin/tempo.sh")"
+[ "$got_default" = "$want_default" ] \
+  || fail "TEMPO_BLOCKED_LABELS default is '$got_default', want '$want_default' -- adding a label here brakes every repo that carries it; say why in schedule/_tempo.conf first"
+case "$got_default" in
+  *deferred*) fail "'deferred' is back in the blocked set. It is written by \`defere\` for AGENT work; it does not mean a human is in the way" ;;
+  *question*) fail "'question' is back in the blocked set. It was in use as a TOPIC label (chezz #4/#5/#6)" ;;
+esac
+pass "the default brakes on one label, and it is the one that means a human is in the way"
+
 echo "case 4 -- HOLD below want_min, RUN at or above"
 set_counts 12 0; : > "$LEDGER"; row 10
 out="$(run_tempo p)"; rc=$?
