@@ -17,7 +17,9 @@
 # witness rather than a comment.
 #
 # WHAT IS ASSERTED
-#   1. A rotation whose next rows are foreign costs ZERO probes to walk past.
+#   1. A rotation whose other rows are foreign costs ZERO probes. Since
+#      2026-08-19 those rows are filtered at load, so there is nothing to
+#      walk past at all -- the guarantee is met earlier, not differently.
 #   2. A rotation with exactly one runnable row costs exactly ONE probe.
 #   3. A rotation with NO runnable row still terminates, in one lap, having
 #      probed zero times -- this is the guarantee the `examined` counter
@@ -115,7 +117,10 @@ EOF
   local nprobe ndisp nexh
   nprobe="$(wc -l < "$PROBE_TALLY")"
   ndisp="$(grep -c ' DISPATCH ' "$log" 2>/dev/null || true)"
-  nexh="$(grep -c 'ROTATION EXHAUSTED' "$log" 2>/dev/null || true)"
+  # Either terminator counts: the pre-2026-08-19 walk logged ROTATION
+  # EXHAUSTED after a full lap; the runner now filters foreign rows at load
+  # and never enters the loop at all. Both mean "ended, did not spin".
+  nexh="$(grep -cE 'ROTATION EXHAUSTED|no runnable participant' "$log" 2>/dev/null || true)"
   echo "${nprobe:-0} ${ndisp:-0} ${nexh:-0} $log"
 }
 
@@ -131,11 +136,14 @@ read -r probes disp _exh LAST_LOG <<< "$(tick 0 2)"
 [ "$probes" = "1" ] || fail "own row first: expected 1 probe, got $probes"
 [ "$disp" = "1" ]   || fail "own row first: expected 1 DISPATCH, got $disp"
 
-# (3) NOTHING runnable: zero probes, one full lap, loop terminates.
+# (3) NOTHING runnable: zero probes, no dispatch, and it TERMINATES.
+# Since 2026-08-19 foreign rows are dropped at load ("every runner runs only
+# itself"), so this exits before the loop rather than walking a full lap. The
+# guarantee under test is unchanged and strictly cheaper to meet.
 read -r probes disp exh LAST_LOG <<< "$(tick -1 2)"
 [ "$probes" = "0" ] || fail "no runnable row: expected 0 probes, got $probes"
 [ "$disp" = "0" ]   || fail "no runnable row: expected 0 DISPATCH, got $disp"
-[ "$exh" = "1" ]    || fail "no runnable row: expected ROTATION EXHAUSTED (the loop must end after one lap, not spin)"
+[ "$exh" = "1" ]    || fail "no runnable row: expected a termination line (ROTATION EXHAUSTED, or the load-time no-runnable-participant exit) -- it must end, not spin"
 
 if [ "$FAILED" -ne 0 ]; then
   echo "--- last tick's log ---"

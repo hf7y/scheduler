@@ -562,10 +562,18 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
 
   name="${names[$idx]}"; cmd="${cmds[$idx]}"
 
-  # The runnability test that used to stand here (2026-08-06, "RUNNABILITY
+  # The runnability TEST that used to stand here (2026-08-06, "RUNNABILITY
   # BEFORE THE PROBE") moved to load time -- see "EVERY RUNNER RUNS ONLY
   # ITSELF" above. Every row still in the pool is one this account can run,
   # so there is no foreign row left to detect, skip or log.
+  #
+  # `prog` STAYS. It is not test scaffolding: the dead-man switch derives the
+  # job's state directory from it a few lines below, and so does the GAVE-UP
+  # brake at the bottom of this loop. Deleting it along with the test left
+  # job_state="$HOME/.local/share/" -- so a project that reported IMPOSSIBLE
+  # would have been stamped in the wrong place and re-dispatched forever,
+  # while still logging METABOLISM as though it had braked.
+  prog="${cmd%% *}"
 
   if [ "${PACED_FORCE:-0}" = "1" ]; then
     log "PACED_FORCE=1 -- skipping usage gate"
