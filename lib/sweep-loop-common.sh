@@ -118,23 +118,7 @@ set -uo pipefail
 : "${SECRETS_SRC_DIR:=}"
 : "${SECRETS_DEST_SUBDIR:=.session-handoff}"
 : "${PRECHECK_CMD:=}"
-#   AUTONOMY_TIER  default unset. "high" turns on lib/autonomy-merge.sh's
-#                  test-gated auto-merge at the end of this run (see that
-#                  file). Anything else (including unset) leaves branches
-#                  for manual review, today's existing behavior, unchanged.
-#                  bin/scheduler-run exports this from the conf directly.
-#                  A legacy *_SCRIPT wrapper never sources the conf, so it
-#                  won't be set here -- this file falls back to reading
-#                  schedule/<PROJECT_KEY>.conf itself, below, rather than
-#                  requiring every wrapper to be edited to pass it through.
-#   TEST_CMD       default unset (ungated merge). Optional shell command,
-#                  eval'd on each candidate branch before autonomy-merge
-#                  will touch it; non-zero exit leaves that branch alone.
-: "${AUTONOMY_TIER:=}"
-: "${TEST_CMD:=}"
 LIB_DIR_EARLY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "$LIB_DIR_EARLY/autonomy-merge.sh"
 # shellcheck source=lib/salvage.sh
 source "$LIB_DIR_EARLY/salvage.sh"
 # shellcheck source=lib/run-record.sh
@@ -144,23 +128,6 @@ source "$LIB_DIR_EARLY/run-record.sh"
 # in this change rather than resolved inside it.
 # shellcheck source=lib/deadman-switch.sh
 source "$LIB_DIR_EARLY/deadman-switch.sh"
-if [ -z "$AUTONOMY_TIER" ] && [ -n "${PROJECT_KEY:-}" ]; then
-  LEGACY_CONF="$LIB_DIR_EARLY/../schedule/$PROJECT_KEY.conf"
-  if [ -f "$LEGACY_CONF" ]; then
-    AUTONOMY_TIER="$(grep -E '^AUTONOMY_TIER=' "$LEGACY_CONF" | tail -1 | sed -E 's/^AUTONOMY_TIER=//; s/^"(.*)"$/\1/')"
-    : "${PREFIX:=}"
-    if [ -z "$PREFIX" ]; then
-      case "$TIER" in
-        nightly-batch|batch) PREFIX="BATCH" ;;
-        bug-sweep|sweep) PREFIX="SWEEP" ;;
-      esac
-    fi
-    if [ -n "$PREFIX" ]; then
-      TEST_CMD="$(grep -E "^${PREFIX}_TEST_CMD=" "$LEGACY_CONF" | tail -1 | sed -E "s/^${PREFIX}_TEST_CMD=//; s/^\"(.*)\"\$/\1/")"
-    fi
-  fi
-fi
-
 STATE_DIR="$HOME/.local/share/${JOB_NAME}"
 
 # --- where the work happens (2026-08-06, Zach: "this should happen today") ---
@@ -773,7 +740,17 @@ $PROMPT"
   # failure mid-run) shows up as a distinct WARNING instead of silently
   # reading as "pushed".
   AFTER_SHA=$(git rev-parse HEAD)
-  REMOTE_SHA=$(git ls-remote origin -h "refs/heads/$BRANCH" | cut -f1)
+  # COMPARE AGAINST THE BRANCH WE ARE ACTUALLY ON (2026-08-19), not $BRANCH.
+  # $BRANCH is the job's configured branch -- effectively always "main". But
+  # main is PROTECTED on every hf7y repo, so the mandated workflow is branch,
+  # push, open a PR, and a correct run therefore ENDS on a feature branch.
+  # Comparing its HEAD to origin/main could only ever say "not pushed": wtul
+  # and bibliothecaire both sat on clean, fully-pushed feature branches on
+  # 2026-08-19 and both were recorded FAILED, with this file's own diagnostic
+  # printing "a plain push would succeed right now (dry-run OK)" underneath.
+  HEAD_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$BRANCH")"
+  [ "$HEAD_BRANCH" = "HEAD" ] && HEAD_BRANCH="$BRANCH"   # detached: fall back
+  REMOTE_SHA=$(git ls-remote origin -h "refs/heads/$HEAD_BRANCH" | cut -f1)
   ELAPSED=$(( $(date +%s) - START_TS ))
 
   if [ "$AFTER_SHA" = "$BEFORE_SHA" ]; then
@@ -789,7 +766,7 @@ $PROMPT"
     # returning 1 here costs nothing and is the difference between a
     # failure that is visible in run.log and one that isn't.
     RUN_RC=1
-    echo "WARNING: local commit made but NOT pushed to origin (local=$AFTER_SHA remote=$REMOTE_SHA)"
+    echo "WARNING: local commit made but NOT pushed to origin/$HEAD_BRANCH (local=$AFTER_SHA remote=$REMOTE_SHA)"
     # WHY, not just THAT -- distinguish the recurring causes instead of
     # leaving every unpushed commit looking like the same generic no-op
     # (this is the "stale/incomplete-push visibility" stability-milestone
@@ -801,32 +778,24 @@ $PROMPT"
     elif [ "$STATUS" = "FAILED" ]; then
       echo "push reason: claude -p itself exited non-zero (see above) -- most likely cut off (turn/spend limit) before it reached a push step, not a push failure per se"
     elif [ -z "$REMOTE_SHA" ]; then
-      echo "push reason: could not read origin/$BRANCH at all (git ls-remote returned nothing) -- looks like an SSH/auth/network failure reaching origin, not a push rejection"
+      echo "push reason: could not read origin/$HEAD_BRANCH at all (git ls-remote returned nothing) -- looks like an SSH/auth/network failure reaching origin, not a push rejection"
     elif git merge-base --is-ancestor "$REMOTE_SHA" "$AFTER_SHA" 2>/dev/null; then
-      DRY_RUN_OUT="$(git push --dry-run origin "HEAD:$BRANCH" 2>&1)"
+      DRY_RUN_OUT="$(git push --dry-run origin "HEAD:$HEAD_BRANCH" 2>&1)"
       if [ $? -eq 0 ]; then
         echo "push reason: a plain push would succeed right now (dry-run OK) -- claude's own run likely never attempted git push at all this cycle, not a credential/conflict failure"
       else
         echo "push reason: dry-run push failed -- $(echo "$DRY_RUN_OUT" | grep -m1 -v '^$')"
       fi
     else
-      echo "push reason: origin/$BRANCH has commit(s) local doesn't (diverged) -- would need a merge/rebase before push, not a credential issue"
+      echo "push reason: origin/$HEAD_BRANCH has commit(s) local doesn't (diverged) -- would need a merge/rebase before push, not a credential issue"
     fi
   fi
 
   # Resume breadcrumb for the NEXT run, if this one was cut off by
   # --max-turns -- see write_ceiling_breadcrumb above. No-op for every other
   # STATUS/STATUS_DETAIL. Placed after push status is known (the breadcrumb
-  # names the commit range) and before autonomy_sweep_repo below, which walks
-  # branches and could otherwise leave BEFORE_SHA/AFTER_SHA meaning something
-  # different than "this run's own commits" by the time it runs.
+  # names the commit range).
   write_ceiling_breadcrumb
-
-  # AUTONOMY_TIER="high" gate (lib/autonomy-merge.sh) -- runs regardless of
-  # whether THIS run's own subagent created a branch, so it also catches
-  # anything left over from an earlier run/turn-limit cutoff. No-op for
-  # any other tier value; see that file for the merge/push/fallback logic.
-  autonomy_sweep_repo "$REPO" "$BRANCH" "$AUTONOMY_TIER" "$TEST_CMD" "$JOB_NAME"
 
   if [ "$STATUS" = "FAILED" ]; then
     RUN_RC=1
@@ -849,8 +818,8 @@ $PROMPT"
   # The agent's prose rides along in claimed_verdict/claimed_reason and
   # populates nothing.
   #
-  # cd first: autonomy_sweep_repo above walks branches and is not guaranteed to
-  # leave us in the work tree the shas were taken from.
+  # cd first: nothing above is guaranteed to leave us in the work tree the
+  # shas were taken from.
   cd "$REPO/$REPO_SUBDIR" || echo "WARNING: cannot re-enter $REPO/$REPO_SUBDIR for the run record"
   # A computed FAILED that does not change the run's exit status is just
   # another self-report, so it folds into RUN_RC -- which is what lands in

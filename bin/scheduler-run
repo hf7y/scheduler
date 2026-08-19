@@ -161,7 +161,7 @@ REPO_SUBDIR="${REPO_SUBDIR:-.}"
 
 # Optional per-tier knobs -- only keep them set when the conf actually gave
 # a value, so the engine's own defaults apply otherwise.
-for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH TEST_CMD; do
+for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH; do
   val="$(field "$knob")"
   if [ -n "$val" ]; then
     printf -v "$knob" '%s' "$val"
@@ -267,7 +267,6 @@ if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_APP_CONF" ] && [ -x "$GH_APP_HELPER" ]; t
 fi
 
 export JOB_NAME PROJECT_KEY TIER PREFIX REPO_URL REPO_SUBDIR PROMPT AUTONOMY_TIER
-[ -n "${TEST_CMD:-}" ] && export TEST_CMD
 
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/sweep-loop-common.sh"

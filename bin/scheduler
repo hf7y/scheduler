@@ -49,7 +49,6 @@ fi
 # <<< SCHED_ROOT resolution
 REPORTS_ROOT="$HOME/reports"
 # shellcheck disable=SC1091
-source "$SCHED_ROOT/lib/autonomy-merge.sh"
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/provenance.sh"   # PROVENANCE_ANSWERED_JQ -- what counts as an answer
 EDITOR="${EDITOR:-vim}"
@@ -2669,51 +2668,6 @@ extra_branches_detail() {
   done < <(extra_branches "$repo")
 }
 
-# cmd_autonomy_sweep [project] -- one-off run of lib/autonomy-merge.sh's
-# AUTONOMY_TIER="high" gate against a project's dedicated clone(s), or
-# every high-tier project if no name given. Built 2026-07-25 alongside the
-# gate itself, to clear the EXISTING branch backlog under the same policy
-# going forward, rather than only affecting branches created after this
-# was wired into lib/sweep-loop-common.sh. Not a cron job itself -- run by
-# hand.
-cmd_autonomy_sweep() {
-  local only_proj="${1:-}"
-  local proj tier job_name repo test_cmd did_any=0
-  while IFS= read -r proj; do
-    if [ -n "$only_proj" ] && [ "$proj" != "$only_proj" ]; then
-      continue
-    fi
-    tier="$(conf_field "$proj" AUTONOMY_TIER)"
-    if [ "$tier" != "high" ]; then
-      [ -n "$only_proj" ] && echo "$proj: AUTONOMY_TIER=${tier:-<unset>}, not 'high' -- nothing to sweep"
-      continue
-    fi
-    local swept_one=0
-    for prefix in BATCH SWEEP; do
-      job_name="$(conf_field "$proj" "${prefix}_JOB_NAME")"
-      [ -n "$job_name" ] || continue
-      repo="$HOME/.local/share/$job_name/repo"
-      if [ ! -d "$repo/.git" ]; then
-        echo "$proj ($job_name): no dedicated clone at $repo -- skipping"
-        continue
-      fi
-      test_cmd="$(conf_field "$proj" "${prefix}_TEST_CMD")"
-      echo "== $proj ($job_name): sweeping $repo (gate: ${test_cmd:-ungated}) =="
-      autonomy_sweep_repo "$repo" "" "$tier" "$test_cmd" "$job_name"
-      swept_one=1
-      did_any=1
-    done
-    [ "$swept_one" = "1" ] || [ -z "$only_proj" ] || echo "$proj: AUTONOMY_TIER=high but no BATCH_JOB_NAME/SWEEP_JOB_NAME set -- nothing to sweep"
-  done < <(projects)
-  if [ "$did_any" = "0" ]; then
-    if [ -n "$only_proj" ]; then
-      echo "nothing swept for '$only_proj'"
-    else
-      echo "no high-tier project with an active job found to sweep"
-    fi
-  fi
-}
-
 cmd_sweep() {
   echo "scheduler sweep -- $(date '+%Y-%m-%d %H:%M')"
   echo "(reactive backstop: catches uncommitted/unpushed/diverged state the vim"
@@ -3545,7 +3499,6 @@ case "${1:-}" in
     cmd_commit_file "${2:-}" "${3:-}"
     ;;
   sweep|-s) cmd_sweep ;;
-  autonomy-sweep) cmd_autonomy_sweep "${2:-}" ;;
   status|-c)
     require_project status "${2:-}"
     cmd_status "$2" "${3:-}"

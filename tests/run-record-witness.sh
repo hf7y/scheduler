@@ -173,6 +173,26 @@ RR_ISSUES_OPENED=2; RR_ISSUES_CLOSED=2; run_record_compute_verdict 0
 RR_ISSUES_OPENED=0; RR_ISSUES_CLOSED=2; run_record_compute_verdict 0
 [ "$RR_VERDICT" = "WORKED" ] && ok "closing 2 and opening 0 is WORKED" || bad "verdict=$RR_VERDICT"
 
+echo "== 6b. rc DOES NOT MASK EFFECTS (2026-08-19, gardien)"
+# gardien 2026-08-19: 43 commits pushed, 2 PRs merged, 2 issues closed, then
+# hit its turn ceiling. It recorded FAILED, byte-identical to a run that did
+# nothing at all. Effects must survive a nonzero rc.
+RR_TODAY="2026-08-07"
+RR_PUSHED=true; RR_COMMITS_ADDED=43; RR_PRS_MERGED=2
+RR_ISSUES_OPENED=0; RR_ISSUES_CLOSED=2; RR_GH=ok
+run_record_compute_verdict 1
+[ "$RR_VERDICT" = "WORKED-CUTOFF" ] && ok "shipped-then-cut-off is WORKED-CUTOFF, not FAILED" || bad "verdict=$RR_VERDICT"
+grep -q "exited rc=1" <<<"$RR_REASONS" && ok "and the rc is still named in the reasons" || bad "rc hidden: $RR_REASONS"
+grep -q "merged 2 PR" <<<"$RR_REASONS" && ok "and the effects are still counted" || bad "effects lost: $RR_REASONS"
+
+echo "== 6c. a nonzero rc with NO effects is still FAILED"
+RR_PUSHED=false; RR_COMMITS_ADDED=0; RR_PRS_MERGED=0
+RR_ISSUES_OPENED=0; RR_ISSUES_CLOSED=0
+run_record_compute_verdict 1
+[ "$RR_VERDICT" = "FAILED" ] && ok "shipped nothing and broke -> FAILED" || bad "verdict=$RR_VERDICT"
+# reset what this block set, so the cases below see the state they expect
+unset RR_PUSHED; RR_COMMITS_ADDED=0; RR_PRS_MERGED=0
+
 echo "== 7. THE TRIAL EXPIRES ON ITS OWN (2026-08-21) -- it does not become policy by default"
 RR_ISSUES_OPENED=9; RR_ISSUES_CLOSED=0
 RR_TODAY="2026-08-22"; run_record_compute_verdict 0
