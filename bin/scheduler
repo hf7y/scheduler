@@ -242,14 +242,11 @@ usage: scheduler [command] [project]
                          before yielding back to cron even if usage-gate.sh
                          still says RUN), re-sync + apply, and commit
   ask <project> "<question>"
-                         record ONE open question in that project's
-                         QUESTIONS.md. Pass the question text only -- the
-                         id, date and provenance are stamped for you, and
-                         the question is placed FIRST so summary views
-                         show the question rather than the date. This is
-                         the only supported way to add an entry;
-                         bin/questions-lint.sh FLAGs hand-written ones in
-                         `scheduler sweep`.
+                         open ONE question as a GitHub issue on that
+                         project's repo. Pass the question text only --
+                         the id, date and provenance are stamped for you,
+                         and the question becomes the issue title so
+                         summary views show it rather than the date.
   idea <project> ["text"], -i
                          drop a new idea/feature-request for a project.
                          realisateur gets a new .idea file (its own real
@@ -1112,17 +1109,10 @@ project_questions_counts() {
 # order; a generator can. The caller supplies ONLY the question text.
 # Everything else -- id, date, provenance -- is stamped here, which is
 # what makes "the question is the first thing on the line" a structural
-# fact rather than a thing to remember.
-#
-# Emitted shape, and each part's reason:
-#   - **<question>**  `q-ab12cd` 2026-07-28, via <provenance>
-#     ^ bold span opens at col 5 and CLOSES ON THE SAME LINE, because
-#       that span is exactly what the summary renderer prints.
-#                       ^ stable short id, so a resolve/archive step and a
-#                         cross-reference have something to name that
-#                         survives the entry being reworded.
-# `bin/questions-lint.sh` FLAGs any entry not matching, so a hand-written
-# entry is a loud finding in `scheduler sweep` rather than silent decay.
+# fact rather than a thing to remember. #66 (2026-08-07) moved the
+# destination from a QUESTIONS.md entry to a GitHub issue titled with the
+# question text -- same id/date/provenance stamping, now carried in the
+# issue body instead of a bold-span line.
 cmd_ask() {
   local proj="${1:-}" text="${2:-}"
   if [ -z "$proj" ] || [ -z "$text" ]; then
@@ -2946,28 +2936,6 @@ cmd_sweep() {
     echo "no schedule/*.conf claims a MIGRATED-to destination"
   fi
 
-  # Sixth-b pass: hand-written QUESTIONS.md entries + unstamped state
-  # claims (bin/questions-lint.sh, built 2026-07-28). Wired in the same
-  # commit that built it, deliberately: the check immediately above spent
-  # two days built-but-unwired and its own header says so. Same
-  # offline-first, zero-`claude`-cost discipline; exit 3 is BLIND, not
-  # clean.
-  if [ -x "$SCHED_ROOT/bin/questions-lint.sh" ]; then
-    local qlint_out qlint_rc
-    qlint_out="$("$SCHED_ROOT/bin/questions-lint.sh" 2>&1)"
-    qlint_rc=$?
-    if [ "$qlint_rc" -eq 3 ]; then
-      echo "== [questions-lint] CANNOT READ QUESTIONS.md -- check is BLIND =="
-      echo "$qlint_out" | sed 's/^/  /'
-    elif [ "$qlint_rc" -ne 0 ]; then
-      echo "== [questions-lint] hand-written entries / unstamped state claims =="
-      echo "$qlint_out" | tail -25 | sed 's/^/  /'
-      echo "  (full list: bin/questions-lint.sh -- new entries should come from \`scheduler ask\`)"
-    fi
-  else
-    echo "== [questions-lint] MISSING or not executable -- a wired check vanished =="
-  fi
-
   # Seventh pass: tripped dead-man switches (expires_at stamps). FOCUS.md
   # EXPIRY_DAYS finding 3 (2026-07-25): 5 of 14 jobs sat expired,
   # discoverable only by hand-scanning ~/.local/share/*/expires_at or by
@@ -3258,7 +3226,7 @@ build_status_report() {
           else
             print span
         } else {
-          print buf "   <-- hand-written entry: question not in a closing bold span (see questions-lint)"
+          print buf "   <-- hand-written entry: question not in a closing bold span"
         }
       }
       BEGIN { infence=0; dead=0 }
