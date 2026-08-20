@@ -126,7 +126,7 @@ while IFS= read -r name; do
   o="${old_repr[$name]:-}"
   n="${new_repr[$name]:-}"
   if [ -z "$o" ]; then
-    echo "DIFF: $name -- in schedule/ROSTER (new) but not derivable from _paced.$HOST.conf/FREEZE (old)"
+    echo "DIFF: $name -- in schedule/ROSTER (new) but not derivable from _paced.$HOST.conf (old)"
     disagree=1
   elif [ -z "$n" ]; then
     echo "DIFF: $name -- derived from old files (old=$o) but absent from schedule/ROSTER"
