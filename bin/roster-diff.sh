@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # roster-diff.sh -- mechanical proof that schedule/ROSTER derives the SAME
-# live/parked set as the three files it is meant to replace. hf7y/scheduler#79's
+# live/parked set as the files it is meant to replace. hf7y/scheduler#79's
 # losslessness requirement: "write the comparison as a script that reads old
 # and new and diffs the derived set -- not by eye."
 #
+# schedule/FREEZE was retired 2026-08-20 (hf7y/scheduler#246/#187, "kill
+# freeze it's redundant") -- it is no longer one of the "old" files: deleting
+# it did not merely stop the probe, it changed what dispatch actually reads,
+# so comparing against it here would compare ROSTER against a file nothing
+# consults anymore. What's left of "old" is _paced.<host>.conf's enabled
+# column plus CRON_HOST/CRON_ACCOUNT.
+#
 # GUARD: does schedule/ROSTER agree with schedule/_paced.<host>.conf +
-#        schedule/FREEZE + each schedule/<project>.conf's
-#        CRON_HOST/CRON_ACCOUNT -- same projects, same account@host, same
-#        live/parked state?
+#        each schedule/<project>.conf's CRON_HOST/CRON_ACCOUNT -- same
+#        projects, same account@host, same live/parked state?
 # RUNNER: tests/roster-diff-witness.sh
 #
 # CONTRACT
@@ -27,7 +33,6 @@ SCHED_ROOT="${SCHED_ROOT:-$ROOT}"
 HOST="${ROSTER_DIFF_HOST:-monkey}"
 
 PACED="$SCHED_ROOT/schedule/_paced.$HOST.conf"
-FREEZE="$SCHED_ROOT/schedule/FREEZE"
 ROSTER="$SCHED_ROOT/schedule/ROSTER"
 
 blind=0
@@ -42,16 +47,14 @@ report_blind() {
 }
 
 [ -f "$PACED" ] && [ -r "$PACED" ]   || blind_at "cannot read $PACED"
-[ -f "$FREEZE" ] && [ -r "$FREEZE" ] || blind_at "cannot read $FREEZE"
 [ -f "$ROSTER" ] && [ -r "$ROSTER" ] || blind_at "cannot read $ROSTER"
 [ "$blind" -eq 1 ] && report_blind
 
 # ---------------------------------------------------------------------------
-# OLD side: derive from _paced.$HOST.conf + FREEZE + per-project confs.
+# OLD side: derive from _paced.$HOST.conf + per-project confs.
 # ---------------------------------------------------------------------------
 declare -A paced_enabled     # name -> "0"/"1", only set where a row exists
-declare -A freeze_exempt     # name -> "1" iff an UNCOMMENTED EXEMPT names it for $HOST
-declare -A is_candidate      # name -> 1 for any name seen in either file
+declare -A is_candidate      # name -> 1 for any name seen in the paced file
 declare -A cron_host         # name -> CRON_HOST from schedule/<name>.conf
 declare -A cron_account      # name -> CRON_ACCOUNT from schedule/<name>.conf
 declare -A old_repr          # name -> "account@host|state"
@@ -64,20 +67,6 @@ while IFS= read -r line; do
   paced_enabled["$name"]="$enabled"
   is_candidate["$name"]=1
 done < "$PACED"
-
-while IFS= read -r line; do
-  commented=0
-  [[ "$line" =~ ^[[:space:]]*# ]] && commented=1
-  body="${line#*EXEMPT:}"
-  for tok in $body; do
-    tname="${tok%@*}"
-    thost="$HOST"
-    [[ "$tok" == *@* ]] && thost="${tok#*@}"
-    [ "$thost" = "$HOST" ] || continue
-    is_candidate["$tname"]=1
-    [ "$commented" -eq 0 ] && freeze_exempt["$tname"]=1
-  done
-done < <(grep -E '^[[:space:]]*#?[[:space:]]*EXEMPT:' "$FREEZE")
 
 for name in "${!is_candidate[@]}"; do
   conf="$SCHED_ROOT/schedule/$name.conf"
@@ -94,11 +83,10 @@ done
 
 for name in "${!is_candidate[@]}"; do
   en="${paced_enabled[$name]:-0}"
-  fe="${freeze_exempt[$name]:-0}"
   ch="${cron_host[$name]:-}"
   ca="${cron_account[$name]:-}"
   state="parked"
-  [ "$en" = "1" ] && [ "$fe" = "1" ] && [ "$ch" = "$HOST" ] && [ -n "$ca" ] && state="live"
+  [ "$en" = "1" ] && [ "$ch" = "$HOST" ] && [ -n "$ca" ] && state="live"
   acct="${ca:-$name}"
   host="${ch:-$HOST}"
   old_repr["$name"]="$acct@$host|$state"

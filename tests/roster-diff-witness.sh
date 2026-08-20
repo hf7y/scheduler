@@ -24,7 +24,6 @@ echo "roster-diff-witness"
 # --- 1. agree: one live project, old and new say the same thing -----------
 d="$(fixture agree)"
 printf 'alpha|1|1|/home/alpha/bin/scheduler-run alpha batch\n' > "$d/schedule/_paced.testhost.conf"
-printf 'EXEMPT: alpha@testhost\n' > "$d/schedule/FREEZE"
 printf 'CRON_HOST="testhost"\nCRON_ACCOUNT="alpha"\n' > "$d/schedule/alpha.conf"
 printf 'alpha | alpha@testhost | 6h | live\n' > "$d/schedule/ROSTER"
 out="$(SCHED_ROOT="$d" ROSTER_DIFF_HOST=testhost bash "$DIFF" 2>&1)"; rc=$?
@@ -33,7 +32,6 @@ out="$(SCHED_ROOT="$d" ROSTER_DIFF_HOST=testhost bash "$DIFF" 2>&1)"; rc=$?
 # --- 2. ROSTER marks live what the old files park -------------------------
 d="$(fixture roster-over-claims)"
 printf 'beta|0|1|/home/beta/bin/scheduler-run beta batch\n' > "$d/schedule/_paced.testhost.conf"
-printf '#EXEMPT: beta@testhost\n' > "$d/schedule/FREEZE"
 printf 'CRON_HOST="testhost"\nCRON_ACCOUNT="beta"\n' > "$d/schedule/beta.conf"
 printf 'beta | beta@testhost | 6h | live\n' > "$d/schedule/ROSTER"
 out="$(SCHED_ROOT="$d" ROSTER_DIFF_HOST=testhost bash "$DIFF" 2>&1)"; rc=$?
@@ -44,7 +42,6 @@ case "$out" in *beta*) ok "beta is named in the mismatch" ;; *) bad "beta not na
 # --- 3. the other direction: old files say live, ROSTER parks it ----------
 d="$(fixture old-over-claims)"
 printf 'gamma|1|1|/home/gamma/bin/scheduler-run gamma batch\n' > "$d/schedule/_paced.testhost.conf"
-printf 'EXEMPT: gamma@testhost\n' > "$d/schedule/FREEZE"
 printf 'CRON_HOST="testhost"\nCRON_ACCOUNT="gamma"\n' > "$d/schedule/gamma.conf"
 printf 'gamma | gamma@testhost | 6h | parked\n' > "$d/schedule/ROSTER"
 out="$(SCHED_ROOT="$d" ROSTER_DIFF_HOST=testhost bash "$DIFF" 2>&1)"; rc=$?
