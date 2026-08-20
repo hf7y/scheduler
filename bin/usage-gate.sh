@@ -48,8 +48,9 @@
 #   2. schedule/_usage.<host>.conf   per-host override. Two hosts (mandark,
 #                              dexter) now share ONE account budget, so a
 #                              per-host ceiling is a real want, not
-#                              hypothetical -- see DESIGN-NOTES.md
-#                              "multi-machine parallelism". Same host-scoped
+#                              hypothetical -- see
+#                              vault:scheduler/DESIGN-NOTES.md "multi-machine
+#                              parallelism". Same host-scoped
 #                              convention schedule/_paced.<host>.conf uses.
 #   3. schedule/_usage.conf    the shared base, and the normal place to set
 #                              these -- edit it and the next tick picks it up,

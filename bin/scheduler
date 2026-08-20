@@ -2878,8 +2878,8 @@ cmd_sweep() {
   # schedule/<proj>.conf sometimes documents itself as "MIGRATED to
   # <host>'s own crontab" (aedile, vkv-inventory, both 2026-07-20) --
   # exactly the claim that sat WRONG for 4 days undetected (the migration
-  # was never actually completed; see DESIGN-NOTES.md's "silently-orphaned
-  # finding", root-caused 2026-07-24). A stranded-commit sweep can't catch
+  # was never actually completed; see vault:scheduler/DESIGN-NOTES.md's
+  # "silently-orphaned finding", root-caused 2026-07-24). A stranded-commit sweep can't catch
   # this class of drift at all -- there's no local git state to look at,
   # the whole point is the job moved OUTSIDE this scheduler's view. This
   # re-checks the claim every sweep instead of trusting it was ever true.
