@@ -5,11 +5,12 @@ feature/maintenance batches and frequent bug sweeps — on top of plain cron.
 It is **not a daemon**: cron is the coordinator. This repo is a shared engine
 + a config registry + a report aggregator.
 
-For the *why* behind every decision here (and the dated history), see
-[`DESIGN-NOTES.md`](DESIGN-NOTES.md). The one-time move off the legacy
-per-project wrapper scripts is **complete** — see "Backwards compatibility"
-below for the witness, and `ecosystem1/scheduler/MIGRATION.md` in the vault
-for how it was done.
+For the *why* behind past decisions (dated history through 2026-07-29), see
+`vault:scheduler/DESIGN-NOTES.md` — reaped out of this repo once its content
+was fully superseded by this README and safely archived (#238/#240). The
+one-time move off the legacy per-project wrapper scripts is **complete** —
+see "Backwards compatibility" below for the witness, and
+`ecosystem1/scheduler/MIGRATION.md` in the vault for how it was done.
 
 ## The two job tiers
 
@@ -137,4 +138,5 @@ whether or not there's work. Two levers keep that cheap:
 - **`MODEL`** cuts *what each run costs* — e.g. run a mechanical sweep on a
   cheaper model.
 
-See `DESIGN-NOTES.md` → "Cost of an idle run" for the measured numbers.
+See `vault:scheduler/DESIGN-NOTES.md` → "Cost of an idle run" for the
+measured numbers behind those two levers.

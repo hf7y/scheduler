@@ -1,5 +1,5 @@
 ---
-description: Interactive vision/triage pass for the scheduler project itself -- pull live state, surface blockers and divergence, ask direct design questions, record decisions into DESIGN-NOTES and GitHub issues, and queue work for the nightly self-run. Does NOT build inline unless explicitly told to.
+description: Interactive vision/triage pass for the scheduler project itself -- pull live state, surface blockers and divergence, ask direct design questions, record decisions as GitHub issues, and queue work for the nightly self-run. Does NOT build inline unless explicitly told to.
 ---
 
 The interactive counterpart to `/nightly-batch` (unattended). Where the
@@ -13,14 +13,17 @@ request, not a violation of this command.
 
 Ported from chezz's `/ideate` (2026-07-23), adapted to scheduler's own
 file model: this repo is maintained by hand AND runs a review-gated
-nightly self-run, so decisions land in `DESIGN-NOTES.md` and the work and
-questions land as **GitHub issues on `hf7y/scheduler`**.
+nightly self-run, so decisions AND their rationale land as **GitHub
+issues on `hf7y/scheduler`** — nothing is a prose accumulator.
 
 **The old FOCUS / QUESTIONS / BLOCKERS coordinator files are retired**
-(#66, 2026-08-07) and DELETED (hf7y/realisateur#293). Never restore
-them, and do not create a new top-level `.md` — `schedule/_standing-rules.md`
-rule 5 ("NO NEW MARKDOWN FILES") and `bin/markdown-cost.sh` both enforce
-this at merge.
+(#66, 2026-08-07) and DELETED (hf7y/realisateur#293); `DESIGN-NOTES.md`
+followed them (#238/#240, 2026-08-20) once its content was fully
+superseded by `README.md` and safely archived at
+`vault:scheduler/DESIGN-NOTES.md`. Never restore any of them, and do not
+create a new top-level `.md` — `schedule/_standing-rules.md` rule 5
+("NO NEW MARKDOWN FILES") and `bin/markdown-cost.sh` both enforce this at
+merge.
 
 ## 0. Priority-order arguments (if given)
 
@@ -45,8 +48,9 @@ Pull real, current state before saying anything about status:
   --count origin/main...main` -- sync first if behind.
 - **Live quota**, if the question touches pacing/burndown: `bash
   bin/usage-gate.sh`. It reads whichever account the CLI is logged into.
-  Account model (decided 2026-07-24, see DESIGN-NOTES): primary = Claude
-  Max, **always logged in**, pools all personal work; svc-vaporwave =
+  Account model (decided 2026-07-24, see `vault:scheduler/DESIGN-NOTES.md`
+  "account model decided"): primary = Claude Max, **always logged in**,
+  pools all personal work; svc-vaporwave =
   nonprofit only. So a primary reading is now stable and trustworthy --
   but during the transition confirm you're actually on the primary before
   attributing a number to it (an earlier pass misread svc-vaporwave's
@@ -70,8 +74,8 @@ Sort what you find into:
   These are what `AskUserQuestion` is for. Ground each in real
   counts/quotes (git history, usage-gate output, issue dates), not
   vibes.
-- **Already-settled** -- matches DESIGN-NOTES. Note it's unchanged
-  and move on; don't re-litigate.
+- **Already-settled** -- matches a decision already recorded on a closed
+  or answered issue. Note it's unchanged and move on; don't re-litigate.
 
 ## 3. Ask, don't guess
 
@@ -82,14 +86,15 @@ waiting -- the answer changes the shape of the work, not just priority.
 ## 4. Record and queue, don't build
 
 For each decision (new or re-confirmed):
-- Write the decision **and its rationale** into `DESIGN-NOTES.md` --
-  future sessions and the nightly self-run need the "why." If it
-  corrects an earlier entry, say what changed rather than silently
-  overwriting.
 - File the work as a **GitHub issue** (`scheduler -i`, or `gh issue create
-  --repo hf7y/scheduler --body-file <file>`), pointing back at DESIGN-NOTES
-  for detail. One issue per discrete item, with enough context that a fresh
-  agent could execute it.
+  --repo hf7y/scheduler --body-file <file>`), with the decision **and its
+  rationale** in the issue body itself -- future sessions and the nightly
+  self-run need the "why," and an issue is where it stays discoverable
+  (`gh issue list`/`gh issue view`), not a growing prose file nobody
+  greps. If it corrects an earlier decision, comment on that issue (or
+  link it) saying what changed rather than leaving two answers findable.
+  One issue per discrete item, with enough context that a fresh agent
+  could execute it.
 - If a decision needs a follow-up only the **user** can do -- scope,
   credentials, a physical/account action, something outside this repo --
   that is an issue too, not just a mention in chat. Do not write it into a
@@ -116,7 +121,7 @@ to re-scope or throttle intake; this command just makes the gap visible.
 
 ## 5. Commit, push, and stop
 
-Commit the `DESIGN-NOTES.md` / `schedule/_paced.conf` changes on a branch
+Commit any `schedule/_paced.conf` changes on a branch
 and open a PR -- `main` is protected, so a direct push is rejected for
 everyone. Follow `claim-drift --convention` verbatim. End with a short
 summary: what's now queued and in what order, what issues are still open
