@@ -253,7 +253,7 @@ run_record_debt_rule() {
 }
 
 # --- THE VERDICT, COMPUTED -------------------------------------------------
-# Sets: RR_VERDICT (WORKED|IDLE|FAILED) RR_REASONS (newline-separated)
+# Sets: RR_VERDICT (WORKED|WORKED-CUTOFF|IDLE|FAILED) RR_REASONS (newline-separated)
 #
 # Reads only RR_* values set by the probes above and the wrapper's own rc.
 # There is deliberately no parameter through which prose could reach this.
@@ -273,8 +273,17 @@ run_record_compute_verdict() {
     failed=1
   fi
 
-  if [ "$failed" = "1" ]; then RR_VERDICT="FAILED"; return 0; fi
-
+  # RC NO LONGER MASKS EFFECTS (2026-08-19). This used to `return` here, so a
+  # nonzero rc decided the verdict before a single effect was read. gardien's
+  # 2026-08-19 run pushed 43 commits, merged 2 PRs and closed 2 issues, then
+  # hit its turn ceiling -- and recorded FAILED, byte-identical to a run that
+  # did nothing. The point of this file is that describing is free and effects
+  # are not; discarding the effects because of an exit code gives that up.
+  #
+  # So fall through and let the WORKED checks below run. A run that shipped
+  # AND then broke is WORKED-CUTOFF: distinguishable from both FAILED (shipped
+  # nothing) and WORKED (finished clean), which is what the ledger needs to
+  # tell them apart later. The reasons already name the rc.
   # WORKED requires something a consumer can see: pushed commits, a merged PR,
   # or a closed issue. Note what is NOT on this list -- issues opened, files
   # touched but uncommitted, and every word the agent wrote about itself.
@@ -296,8 +305,16 @@ run_record_compute_verdict() {
   fi
 
   if [ -z "$RR_VERDICT" ]; then
-    RR_VERDICT="IDLE"
-    rr_add_reason "nothing observable changed: no pushed commit, no merged PR, no closed issue"
+    # Nothing observable AND something went wrong -> FAILED, as before.
+    if [ "$failed" = "1" ]; then
+      RR_VERDICT="FAILED"
+    else
+      RR_VERDICT="IDLE"
+      rr_add_reason "nothing observable changed: no pushed commit, no merged PR, no closed issue"
+    fi
+  elif [ "$failed" = "1" ]; then
+    # Shipped something, then failed. Not clean, but not nothing.
+    RR_VERDICT="WORKED-CUTOFF"
   fi
   return 0
 }
