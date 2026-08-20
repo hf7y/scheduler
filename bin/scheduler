@@ -1912,6 +1912,12 @@ cmd_overview() {
   local ffile="$SCHED_ROOT/focus/$proj.md"
   echo "scheduler overview: $proj -- $(date '+%Y-%m-%d %H:%M')"
   echo
+  if [ ! -d "$SCHED_ROOT/focus" ]; then
+    echo "cannot read -- the local focus/*.md mirror was retired with"
+    echo "  sync-crontab.sh's symlink farm (#244); this is BLIND, not 'no"
+    echo "  FOCUS.md'. See $proj's own repo directly."
+    return
+  fi
   if [ ! -f "$ffile" ]; then
     echo "no FOCUS.md at $ffile yet"
     return
@@ -2195,6 +2201,16 @@ cmd_glance() {
   local global_eta_secs=0 global_eta_proj="" any_unknown_eta=0
   local any_unpushed=0
   local unpushed_list=""
+  # The local focus/*.md mirror sync-crontab.sh --apply used to symlink was
+  # retired whole (#244) with no replacement read path (every other
+  # project's home is 0700, so this account cannot read FOCUS.md by path --
+  # verified 2026-08-20). NEXT UP/ETA must render `?` (BLIND), never `-`,
+  # while that is true -- `-` already means "read fine, genuinely nothing
+  # there" for the QUESTIONS/BLOCKERS columns above, and reusing it here for
+  # "could not look at all" is exactly the "BLIND reported as OK" failure
+  # this file's own QUESTIONS column comment warns against.
+  local focus_mirror_available=0
+  [ -d "$SCHED_ROOT/focus" ] && focus_mirror_available=1
   # Rows are collected as "<score>\t<rendered line>" and sorted by score
   # descending after the loop, so projects with open questions/blockers
   # float to the top instead of showing in registration/conf-file order
@@ -2292,6 +2308,7 @@ cmd_glance() {
     # crashed the whole glance under set -u (if it came first) or silently
     # inherited the PREVIOUS project's backlog count for its own ETA.
     local next="-" ffile="$SCHED_ROOT/focus/$proj.md" f_total="" f_keyword=""
+    [ "$focus_mirror_available" -eq 0 ] && next="?"
     if [ -f "$ffile" ]; then
       IFS=$'\t' read -r f_total f_keyword <<<"$(awk -F'\t' '
         /<!--/ { incomment=1 }
@@ -2427,6 +2444,7 @@ cmd_glance() {
     # of some global rate, since cadence already reflects this project's
     # rotation weight and how often the gate has actually let it run.
     local etalabel="-"
+    [ "$focus_mirror_available" -eq 0 ] && etalabel="?"
     if [ -n "$f_total" ] && [ "$f_total" -gt 0 ] 2>/dev/null; then
       local cadence
       cadence="$(project_cadence_seconds "$proj" 2>/dev/null)"
@@ -3190,14 +3208,55 @@ build_status_report() {
 
   echo
   echo "-- next up ($SCHED_ROOT/focus/$proj.md) --"
-  local proj_cadence
-  proj_cadence="$(project_cadence_seconds "$proj" 2>/dev/null)"
-  if [ -z "$proj_cadence" ]; then
-    echo "(no ETA yet -- fewer than 2 recorded paced dispatches for $proj)"
+  if [ ! -d "$SCHED_ROOT/focus" ]; then
+    echo "BLIND -- the local focus/*.md mirror was retired with sync-crontab.sh's"
+    echo "  symlink farm (#244) and nothing replaced the cross-account read; this"
+    echo "  is not the same as $proj having no backlog. See $proj's own repo."
+  else
+    local proj_cadence
+    proj_cadence="$(project_cadence_seconds "$proj" 2>/dev/null)"
+    if [ -z "$proj_cadence" ]; then
+      echo "(no ETA yet -- fewer than 2 recorded paced dispatches for $proj)"
+    fi
+    extract_next_items "$SCHED_ROOT/focus/$proj.md" "$proj_cadence"
   fi
-  extract_next_items "$SCHED_ROOT/focus/$proj.md" "$proj_cadence"
 
   echo
+  if [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
+    # Fixed 2026-08-20: this used to fall straight into the file branch
+    # below against $SCHED_ROOT/questions/$proj.md, a path that has not
+    # existed since #244 retired the local symlink mirror -- so an
+    # issues-channel project's real open questions (there is no other
+    # source for them; they were never a local file) silently rendered
+    # as "no QUESTIONS.md symlink found" here, in the one view meant to
+    # surface them. Same slug/label query cmd_questions_issues uses, read
+    # only -- no editor, no posting, this is a summary.
+    local slug
+    if slug="$(gh_repo_slug "$proj" 2>/dev/null)" && command -v gh >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+      local json
+      echo "-- open questions (GitHub issues, $slug) --"
+      if json="$(gh issue list --repo "$slug" --label question --state open \
+                    --limit 200 --json number,title,comments 2>&1)"; then
+        local lines
+        lines="$(printf '%s' "$json" | jq -r --arg owner "${slug%%/*}" \
+          "$PROVENANCE_ANSWERED_JQ"'
+           .[] | "#\(.number) \(.title)" + (if is_answered($owner) then "  [already answered — awaiting the next run]" else "" end)')"
+        if [ -n "$lines" ]; then printf '%s\n' "$lines"; else echo "none open"; fi
+      else
+        echo "BLIND -- gh issue list failed against $slug:" >&2
+        printf '%s\n' "$json" >&2
+      fi
+    else
+      echo "-- open questions (GitHub issues) --"
+      echo "BLIND -- gh and/or jq unavailable to query $proj's issues" >&2
+    fi
+  elif [ ! -d "$SCHED_ROOT/questions" ]; then
+    echo "-- open questions ($SCHED_ROOT/questions/$proj.md) --"
+    echo "BLIND -- the local questions/*.md mirror was retired with"
+    echo "  sync-crontab.sh's symlink farm (#244); $proj's ANSWER_CHANNEL is"
+    echo "  not 'issues' so there is no other source here. Not the same as"
+    echo "  nothing being open -- check $proj's own QUESTIONS.md directly."
+  else
   echo "-- open questions ($SCHED_ROOT/questions/$proj.md) --"
   local qfile="$SCHED_ROOT/questions/$proj.md"
   if [ -f "$qfile" ]; then
@@ -3272,6 +3331,7 @@ build_status_report() {
     fi
   else
     echo "no QUESTIONS.md symlink found"
+  fi
   fi
 
   echo
