@@ -162,3 +162,19 @@ crt             | crt@monkey             | 6h | parked
 # CRON_HOST/CRON_ACCOUNT gap as crt above: schedule/baudin.conf sets neither.
 baudin          | baudin@monkey          | 6h | parked
 secretaire      | secretaire@monkey      | 6h | parked
+
+# ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
+# roster. get read[y] to onboard others."). Not derivable from
+# _paced.monkey.conf or any schedule/dcp-gate-site.conf -- neither exists --
+# so bin/roster-diff.sh will name this row as a DIFF (in ROSTER, not in the
+# old files) and that is expected, not a bug: #228 found dcp-gate-site was in
+# a FOURTH state the old files have no vocabulary for at all (absent, not
+# merely parked), holding 15 of the estate's 37 open needs-human/question
+# issues uncounted by anything that walks the roster. `parked` here is
+# option 1 of #228's three -- "cheapest, and makes the absence a decision" --
+# not a decision to dispatch agents at client work. No unix account, no
+# _paced.monkey.conf row, no schedule/dcp-gate-site.conf: those are the
+# actual onboarding cost (realisateur#102's uid 3000-3099 convention) and are
+# NOT done here. account@host below is aspirational, matching baudin/crt's
+# staging convention above, not a claim the account exists.
+dcp-gate-site   | dcp-gate-site@monkey   | 6h | parked
