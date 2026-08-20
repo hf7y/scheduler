@@ -293,9 +293,10 @@ fi
 
 # --- which participants file? (host-scoped, 2026-07-24) ---------------------
 # Two hosts now run this dispatcher out of ONE git-tracked repo (mandark and
-# dexter -- see DESIGN-NOTES.md "multi-machine parallelism"). A single shared
-# schedule/_paced.conf can't express that: the hosts pin different projects,
-# and that file already has an AUTOMATED writer (weight-audit.sh rewrites
+# dexter -- see vault:scheduler/DESIGN-NOTES.md "multi-machine
+# parallelism"). A single shared schedule/_paced.conf can't express that: the
+# hosts pin different projects, and that file already has an AUTOMATED
+# writer (weight-audit.sh rewrites
 # weights and commits them), so aiming both hosts at one file means two
 # machines rewriting the same lines. So each host MAY own its own file:
 #
