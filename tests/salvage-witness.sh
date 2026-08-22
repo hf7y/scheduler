@@ -89,6 +89,29 @@ fi
 git log --oneline --all | grep -q "salvage: uncommitted work" \
   && ok "work is committed locally on the salvage branch, recoverable" || bad "work left uncommitted"
 
+echo "== 5b. HEAD on its OWN already-pushed feature branch -> no duplicate salvage (hf7y/realisateur#533)"
+fresh
+git checkout -q -b in-flight-pr
+echo "already reviewed" > pr-work.txt && git add pr-work.txt && git commit -q -m "in-flight PR work"
+git push -q -u origin in-flight-pr
+BEFORE_SALVAGE_REFS="$(git -C "$TMP/origin.git" for-each-ref --format='%(refname)' 'refs/heads/salvage/*' | wc -l)"
+salvage_then_restore main testjob quiet && ok "returns 0" || bad "failed: $SALVAGE_ERROR"
+[ -z "$SALVAGE_REF" ] && ok "no duplicate salvage branch for an already-pushed PR branch" || bad "invented $SALVAGE_REF for work already safe on origin"
+[ "$(git -C "$TMP/origin.git" for-each-ref --format='%(refname)' 'refs/heads/salvage/*' | wc -l)" = "$BEFORE_SALVAGE_REFS" ] \
+  && ok "origin grew no new salvage ref" || bad "origin grew a salvage ref anyway"
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] && ok "workspace restored to origin/main" || bad "workspace not restored"
+git -C "$TMP/origin.git" cat-file -e "refs/heads/in-flight-pr:pr-work.txt" 2>/dev/null \
+  && ok "the PR branch itself is untouched on origin" || bad "PR branch content missing"
+
+echo "== 5c. HEAD on a feature branch with a LOCAL-ONLY commit still salvages (not a free pass)"
+fresh
+git checkout -q -b in-flight-pr
+echo "pushed" > pr-work.txt && git add pr-work.txt && git commit -q -m "pushed part"
+git push -q -u origin in-flight-pr
+echo "not pushed yet" > pr-work2.txt && git add pr-work2.txt && git commit -q -m "local-only commit"
+salvage_then_restore main testjob quiet && ok "returns 0" || bad "failed: $SALVAGE_ERROR"
+[ -n "$SALVAGE_REF" ] && ok "still salvages when HEAD is ahead of the pushed branch too" || bad "silently dropped a genuinely unpushed commit"
+
 echo "== 6. origin/<branch> missing -> refuse rather than guess a base"
 fresh
 if salvage_then_restore nosuchbranch testjob quiet; then
