@@ -42,12 +42,63 @@
 # shellcheck disable=SC2034
 SALVAGE_REF=""
 SALVAGE_ERROR=""
+SALVAGE_ISSUE_URL=""
 : "${SALVAGE_EXCLUDE:=}"
+: "${SALVAGE_GH_BIN:=gh}"
+: "${SALVAGE_GH_TIMEOUT:=20}"
+
+# owner/name from origin -- same shape as lib/run-record.sh's
+# run_record_repo_slug (self-dev accounts point origin at a per-repo SSH host
+# alias, not literal github.com).
+salvage_repo_slug() {
+  local url; url="$(git remote get-url origin 2>/dev/null)" || return 1
+  case "$url" in
+    *github.com*|*github-*) ;;
+    *) return 1 ;;
+  esac
+  printf '%s' "$url" | sed -E 's#^.*[:/]([^/:]+/[^/]+)$#\1#; s#\.git$##'
+}
+
+# A salvage branch nobody reads is the same class of silent failure as work
+# that was never preserved at all (hf7y/scheduler#257 -- 47 unread branches on
+# realisateur, two of them finished work that sat stranded for days). Give the
+# branch a reader. Best-effort and never fatal: filing failing must not turn a
+# successful salvage into an aborted run, so every failure path here only warns.
+salvage_file_issue() {
+  local ref="$1" label="$2" changed="$3" branch="$4" log_fn="${5:-echo}" slug body
+  slug="$(salvage_repo_slug)" || {
+    "$log_fn" "salvage: issue not filed -- origin is not a GitHub remote"
+    return 1
+  }
+  if ! command -v "$SALVAGE_GH_BIN" >/dev/null 2>&1; then
+    "$log_fn" "salvage: issue not filed -- '$SALVAGE_GH_BIN' not on PATH"
+    return 1
+  fi
+  body="A previous run ($label) left work behind and it was salvaged rather than discarded.
+
+branch:  $ref
+files:   $changed changed path(s)
+
+Review \`git log origin/$branch..origin/$ref\` and either open a PR from it or
+fold the changes in by hand, then delete the branch. Filed automatically by
+lib/salvage.sh (hf7y/scheduler#257) -- a branch nobody reads is the same class
+of silent failure as work that was never preserved."
+  SALVAGE_ISSUE_URL="$(timeout "$SALVAGE_GH_TIMEOUT" "$SALVAGE_GH_BIN" issue create -R "$slug" \
+      --title "salvage: $ref caught $changed changed path(s)" \
+      --body "$body" 2>/dev/null)" || {
+    "$log_fn" "WARNING: salvage branch '$ref' pushed but issue creation failed -- review it by hand"
+    SALVAGE_ISSUE_URL=""
+    return 1
+  }
+  "$log_fn" "salvage: filed $SALVAGE_ISSUE_URL"
+  return 0
+}
 
 salvage_then_restore() {
   local branch="$1" label="$2" log_fn="${3:-echo}"
   SALVAGE_REF=""
   SALVAGE_ERROR=""
+  SALVAGE_ISSUE_URL=""
 
   if ! git rev-parse --verify --quiet "origin/$branch" >/dev/null; then
     SALVAGE_ERROR="origin/$branch does not exist -- refusing to guess a base"
@@ -88,6 +139,7 @@ salvage_then_restore() {
     fi
     SALVAGE_REF="$ref"
     "$log_fn" "salvaged: origin/$ref -- review it; this run continues from origin/$branch"
+    salvage_file_issue "$ref" "$label" "$changed" "$branch" "$log_fn" || true
   fi
 
   # Only now, with anything worth keeping visible on origin, move the
