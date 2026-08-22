@@ -646,7 +646,7 @@ fi
     exit 1
   fi
   if [ -n "$SALVAGE_REF" ]; then
-    notify -u critical "$JOB_NAME" "previous run left work behind -- pushed to origin/$SALVAGE_REF for review"
+    notify -u critical "$JOB_NAME" "previous run left work behind -- pushed to origin/$SALVAGE_REF for review${SALVAGE_ISSUE_URL:+ ($SALVAGE_ISSUE_URL)}"
   fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"

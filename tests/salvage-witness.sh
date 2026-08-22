@@ -119,6 +119,39 @@ salvage_then_restore main testjob quiet && ok "returns 0" || bad "failed: $SALVA
 [ -z "$SALVAGE_REF" ] && ok "no salvage branch for secrets-only dirt" || bad "salvaged $SALVAGE_REF for nothing"
 SALVAGE_EXCLUDE=""
 
+echo "== 9. a salvage branch gets a reader: files an issue naming it (hf7y/scheduler#257)"
+fresh
+git remote set-url origin "git@github.com:testorg/testrepo.git"
+git remote set-url --push origin "$TMP/origin.git"
+echo work > important.txt
+GH_CALLS_LOG="$TMP/gh-calls.log"; : > "$GH_CALLS_LOG"
+export GH_CALLS_LOG
+STUBBIN="$TMP/bin"; mkdir -p "$STUBBIN"
+cat > "$STUBBIN/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "$@" >> "$GH_CALLS_LOG"
+echo "https://github.com/testorg/testrepo/issues/999"
+EOF
+chmod +x "$STUBBIN/gh"
+SALVAGE_GH_BIN="$STUBBIN/gh"
+salvage_then_restore main testjob quiet && ok "returns 0" || bad "failed: $SALVAGE_ERROR"
+[ "$SALVAGE_ISSUE_URL" = "https://github.com/testorg/testrepo/issues/999" ] \
+  && ok "captured the filed issue's URL" || bad "no issue URL captured: $SALVAGE_ISSUE_URL"
+grep -q "issue create -R testorg/testrepo" "$GH_CALLS_LOG" \
+  && ok "filed against the repo the branch was pushed to" || bad "wrong call: $(cat "$GH_CALLS_LOG")"
+grep -q "$SALVAGE_REF" "$GH_CALLS_LOG" \
+  && ok "the issue names the salvage branch" || bad "issue does not name the branch"
+unset SALVAGE_GH_BIN GH_CALLS_LOG
+
+echo "== 10. gh missing or failing does not turn a successful salvage into a failed run"
+fresh
+echo work > important.txt
+SALVAGE_GH_BIN="$TMP/no-such-gh-binary"
+salvage_then_restore main testjob quiet && ok "still returns 0 -- salvage succeeded even though filing could not" || bad "failed: $SALVAGE_ERROR"
+[ -n "$SALVAGE_REF" ] && ok "still salvaged the work" || bad "salvage itself was skipped"
+[ -z "$SALVAGE_ISSUE_URL" ] && ok "no issue URL when filing was impossible" || bad "invented an issue URL: $SALVAGE_ISSUE_URL"
+unset SALVAGE_GH_BIN
+
 cd /
 echo
 echo "salvage-witness: $PASS passed, $FAIL failed"
