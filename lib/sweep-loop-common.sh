@@ -396,17 +396,12 @@ $PROMPT"
 #
 # Globals in: REPO_URL. Writes nothing. tests/label-reconcile-witness.sh lifts
 # this function out of the engine and drives it directly.
-reconcile_own_labels() {
-  local slug out rc
-  if ! command -v etiquette >/dev/null 2>&1; then
-    echo "labels: SKIPPED -- \`etiquette\` is not on PATH, so this project's labels were NOT reconciled. It ships in realisateur's verb build."
-    return 0
-  fi
-  # STRICTLY owner/repo, or nothing. A first draft tested only for a slash,
-  # which crt's bare local remote (/srv/git/crt.git) passes -- it would have
-  # handed `etiquette` a filesystem path as a repo slug. Require the host, and
-  # require exactly two non-empty halves after it.
-  slug=""
+# own_repo_slug -- this project's owner/repo, or rc 1. STRICTLY owner/repo: a
+# first draft tested only for a slash, which crt's bare local remote
+# (/srv/git/crt.git) passes -- it would have handed `etiquette` a filesystem
+# path as a repo slug. Require the host, and exactly two non-empty halves.
+own_repo_slug() {
+  local slug=""
   case "$REPO_URL" in
     *github.com[:/]*)
       slug="${REPO_URL%.git}"; slug="${slug##*github.com[:/]}"
@@ -415,10 +410,93 @@ reconcile_own_labels() {
         *) slug="" ;;
       esac ;;
   esac
-  if [ -z "$slug" ]; then
-    echo "labels: SKIPPED -- REPO_URL '$REPO_URL' names no GitHub owner/repo (a local or bare remote has no tracker to reconcile)"
+  [ -n "$slug" ] || return 1
+  printf '%s\n' "$slug"
+}
+
+# apply_decision_defaults -- act on a decision nobody answered.
+#
+# WHY. Measured across hf7y 2026-08-22: 36 open `needs-human` issues. Each one
+# subtracts from its repo's `actionable` count in bin/tempo.sh, so an
+# unanswered question is also a BRAKE ON THE REPO THAT ASKED IT. #262 named the
+# consequence exactly: the only brake in the whole loop was a person's
+# attention, "which is why the estate could not be left alone".
+#
+# So a DECISION body may say what happens if nobody answers
+# (realisateur#536):
+#
+#     DEFAULT-AFTER 14d: <the reversible thing to do>
+#
+# Past the window, this comments the default on the issue, drops `needs-human`,
+# and labels it `defaulted`. It does NOT do the work -- the owning account
+# picks the issue up as ordinary backlog on a later tick, and Zach can reverse
+# it by saying so, because the issue stays OPEN.
+#
+# A DECISION WITH NO DEFAULT-AFTER IS LEFT ALONE, FOREVER, ON PURPOSE. That is
+# the correct outcome for an irreversible call. `gh --default-after` exits 1
+# for that case and 6 when it could not read the grammar; those must not be
+# confused, so only exit 0 acts.
+#
+# OWN REPO ONLY, and never fatal -- same rules as reconcile_own_labels above.
+# Globals in: REPO_URL. tests/decision-default-witness.sh drives it directly.
+apply_decision_defaults() {
+  local slug now issues n num body days action age created
+  command -v gh >/dev/null 2>&1 || { echo "defaults: SKIPPED -- no gh on PATH"; return 0; }
+  slug="$(own_repo_slug)" || { echo "defaults: SKIPPED -- no GitHub owner/repo in REPO_URL '$REPO_URL'"; return 0; }
+
+  issues="$(gh issue list -R "$slug" --state open --label needs-human \
+              --limit 100 --json number,createdAt --jq '.[]|"\(.number) \(.createdAt)"' 2>/dev/null)" || {
+    echo "defaults: BLIND -- could not list $slug's needs-human issues; none applied"; return 0; }
+  [ -n "$issues" ] || return 0
+
+  now="$(date -u +%s)"
+  n=0
+  while read -r num created; do
+    [ -n "$num" ] || continue
+    body="$(gh issue view "$num" -R "$slug" --json body --jq .body 2>/dev/null)" || continue
+    # exit 0 ONLY. 1 = blocks forever by design; 6 = could not read.
+    read -r days action <<<"$(printf '%s' "$body" | gh --default-after - 2>/dev/null | tr '\t' ' ')" || continue
+    case "$days" in ''|*[!0-9]*) continue ;; esac
+    created="$(date -u -d "$created" +%s 2>/dev/null)" || continue
+    age=$(( (now - created) / 86400 ))
+    [ "$age" -ge "$days" ] || continue
+    gh issue comment "$num" -R "$slug" --body "No answer in ${days}d, so this proceeds on the default it declared:
+
+> $action
+
+**Reversible, and the issue stays open.** Say the word and it goes back. If the
+default was wrong, that is worth knowing -- the window is a guess, not a policy.
+
+Applied by the dispatch that reads this tracker (realisateur#536), because an
+unanswered decision also brakes this repo: \`needs-human\` is subtracted from
+\`actionable\` before bin/tempo.sh divides." >/dev/null 2>&1 || continue
+    # TWO CALLS, NOT ONE. `gh issue edit --remove-label X --add-label Y` is a
+    # single request: if Y does not exist in that repo, GitHub rejects the
+    # whole thing and X SURVIVES -- so the brake this exists to release would
+    # stay on, silently, on exactly the repos that never got the label
+    # provisioned. Dropping needs-human is the load-bearing half; do it first
+    # and alone. (`defaulted` is declared in realisateur's bin/lib/labels.tsv
+    # and provisioned by `etiquette --apply`, which reconcile_own_labels runs
+    # immediately above -- but a repo can still be one tick behind.)
+    gh issue edit "$num" -R "$slug" --remove-label needs-human >/dev/null 2>&1 || true
+    gh issue edit "$num" -R "$slug" --add-label defaulted      >/dev/null 2>&1 || true
+    echo "  defaults: #$num proceeded on its ${days}d default after ${age}d"
+    n=$((n + 1))
+  done <<<"$issues"
+  [ "$n" -eq 0 ] || echo "defaults: $n decision(s) proceeded on their declared default"
+  return 0
+}
+
+reconcile_own_labels() {
+  local slug out rc
+  if ! command -v etiquette >/dev/null 2>&1; then
+    echo "labels: SKIPPED -- \`etiquette\` is not on PATH, so this project's labels were NOT reconciled. It ships in realisateur's verb build."
     return 0
   fi
+  slug="$(own_repo_slug)" || {
+    echo "labels: SKIPPED -- REPO_URL '$REPO_URL' names no GitHub owner/repo (a local or bare remote has no tracker to reconcile)"
+    return 0
+  }
   out="$(etiquette "$slug" --apply 2>&1)"; rc=$?
   # rc 1 is ORDINARY: it means findings, and an UNDECLARED body is a finding
   # this cannot fix. rc 6 is the one that matters -- it could not look.
@@ -716,6 +794,7 @@ fi
   # own backlog. See reconcile_own_labels() above for why a stale label
   # lengthens this project's dispatch interval.
   reconcile_own_labels
+  apply_decision_defaults
 
   LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
