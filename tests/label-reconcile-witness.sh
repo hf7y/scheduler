@@ -35,9 +35,17 @@ hasnt() { case "$2" in *"$3"*) bad "$1 -- unexpected [$3] in: $2" ;; *) ok "$1" 
 # lift just the one function out -- same technique as
 # verdict-closeout-witness.sh. An extraction that stops matching is a FAILURE,
 # not a pass by absence.
-awk '/^reconcile_own_labels\(\) \{$/,/^\}$/' "$LIB" > "$TMP/fn.sh"
+# own_repo_slug() too: reconcile_own_labels calls it, and lifting only the
+# caller made this suite fail with `own_repo_slug: command not found` the
+# moment the slug derivation was factored out for apply_decision_defaults to
+# share. An extraction that silently loses a dependency reports the FUNCTION
+# as broken when the TEST is.
+awk '/^own_repo_slug\(\) \{$/,/^\}$/'          "$LIB" >  "$TMP/fn.sh"
+awk '/^reconcile_own_labels\(\) \{$/,/^\}$/'   "$LIB" >> "$TMP/fn.sh"
 grep -q 'etiquette' "$TMP/fn.sh" \
   || { echo "FAIL: could not extract reconcile_own_labels() from $LIB"; exit 1; }
+grep -q '^own_repo_slug()' "$TMP/fn.sh" \
+  || { echo "FAIL: could not extract own_repo_slug() from $LIB"; exit 1; }
 # shellcheck disable=SC1090
 . "$TMP/fn.sh"
 
