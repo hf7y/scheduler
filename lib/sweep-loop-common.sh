@@ -369,6 +369,67 @@ $PROMPT"
 # Same shape as notify() above, and for the same reason -- tests/
 # verdict-closeout-witness.sh lifts this function out of the engine and drives
 # it directly, which it cannot do to code buried in the run body.
+# reconcile_own_labels -- clear `needs-human` from decisions the human has
+# ALREADY ANSWERED, on this project's own tracker and no other.
+#
+# WHY IT IS NOT COSMETIC. The label is derived from line 1 of the body
+# (realisateur's `etiquette`, bin/lib/labels.tsv) and is cleared when
+# issue_answered() finds a human comment. bin/tempo.sh subtracts it from
+# `actionable` BEFORE dividing -- the subtraction #262 deliberately kept when
+# it capped drive at closures. So a label left on an answered decision
+# LENGTHENS this project's own dispatch interval: the human's answer applies
+# the brake it was meant to release. Measured across hf7y 2026-08-22: 12 of 48
+# `needs-human` issues had already been answered, 7 of them in one repo, and
+# nothing anywhere ran `etiquette` -- no cron, no CI, no brief. The mechanism
+# was correct and had no invoker.
+#
+# NOT A NEW CLOCK. It rides the dispatch that already happens, which is also
+# the only moment the label's braking effect matters.
+#
+# OWN REPO ONLY, derived from REPO_URL, which every conf already sets. An
+# account reconciling another project's labels is a cross-account write with
+# no owner, and self-dev containment forbids it.
+#
+# NEVER FATAL, NEVER SILENT. Aborting a dev run over a label sweep is worse
+# than a stale label; failing quietly is how this went unnoticed in the first
+# place, so a missing verb and a BLIND read each say so on their own line.
+#
+# Globals in: REPO_URL. Writes nothing. tests/label-reconcile-witness.sh lifts
+# this function out of the engine and drives it directly.
+reconcile_own_labels() {
+  local slug out rc
+  if ! command -v etiquette >/dev/null 2>&1; then
+    echo "labels: SKIPPED -- \`etiquette\` is not on PATH, so this project's labels were NOT reconciled. It ships in realisateur's verb build."
+    return 0
+  fi
+  # STRICTLY owner/repo, or nothing. A first draft tested only for a slash,
+  # which crt's bare local remote (/srv/git/crt.git) passes -- it would have
+  # handed `etiquette` a filesystem path as a repo slug. Require the host, and
+  # require exactly two non-empty halves after it.
+  slug=""
+  case "$REPO_URL" in
+    *github.com[:/]*)
+      slug="${REPO_URL%.git}"; slug="${slug##*github.com[:/]}"
+      case "$slug" in
+        ?*/?*) case "${slug#*/}" in */*) slug="" ;; esac ;;
+        *) slug="" ;;
+      esac ;;
+  esac
+  if [ -z "$slug" ]; then
+    echo "labels: SKIPPED -- REPO_URL '$REPO_URL' names no GitHub owner/repo (a local or bare remote has no tracker to reconcile)"
+    return 0
+  fi
+  out="$(etiquette "$slug" --apply 2>&1)"; rc=$?
+  # rc 1 is ORDINARY: it means findings, and an UNDECLARED body is a finding
+  # this cannot fix. rc 6 is the one that matters -- it could not look.
+  if [ "$rc" = 6 ]; then
+    echo "labels: BLIND -- etiquette could not read $slug; labels NOT reconciled this run"
+    return 0
+  fi
+  printf '%s\n' "$out" | grep -E 'label\(s\) reconciled|^ +[-+]label' || true
+  return 0
+}
+
 append_verdict_closeout() {
   case "${TIER:-}" in
     nightly-batch|batch) ;;
@@ -650,6 +711,11 @@ fi
   fi
   BEFORE_SHA=$(git rev-parse HEAD)
   echo "start commit: $BEFORE_SHA"
+
+  # Release the brake the human already released, before this run reads its
+  # own backlog. See reconcile_own_labels() above for why a stale label
+  # lengthens this project's dispatch interval.
+  reconcile_own_labels
 
   LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
