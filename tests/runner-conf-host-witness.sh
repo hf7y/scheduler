@@ -84,7 +84,14 @@ resolve "$TMP/s" bravo
 
 echo "case 5 -- the REAL committed dexter files reproduce dexter's actual crontab"
 resolve "$ROOT/schedule" dexter
-[ "$RUNNER_CRON" = "*/30 * * * *" ] && ok "dexter cadence is */30 (matches its pre-run-3 crontab)" || bad "dexter cadence is '$RUNNER_CRON', not the */30 it actually ran"
+# RUNNER_CRON RETIRED 2026-08-22 (hf7y/scheduler#81): this used to assert the
+# literal */30 cadence dexter's pre-run-3 crontab ran. That premise expired
+# on purpose -- the field is gone from every committed _runner*.conf now,
+# rate lives in schedule/ROSTER instead -- so the assertion worth keeping is
+# that dexter's conf really did drop it, not a specific value it can no
+# longer state. tests/sync-crontab-runner-cron-retired-witness.sh covers the
+# carry-forward mechanism that makes the retirement itself safe.
+[ -z "$RUNNER_CRON" ] && ok "dexter's committed conf no longer sets RUNNER_CRON (retired to schedule/ROSTER)" || bad "dexter still resolves a RUNNER_CRON of '$RUNNER_CRON' -- was it supposed to be retired?"
 case "$RUNNER_ENV" in *"PACED_MAX_PER_TICK=1"*) ok "dexter per-tick cap is 1" ;; *) bad "dexter per-tick cap is '$RUNNER_ENV'" ;; esac
 case "$RUNNER_ENV" in *"USAGE_CEILING"*) bad "USAGE_CEILING baked onto dexter's cron line -- belongs in _usage.dexter.conf" ;; *) ok "no USAGE_CEILING on the cron line" ;; esac
 [ -z "$SWEEP_TICK_CRON" ] && ok "dexter has no sweep tick (matches its actual crontab)" || bad "dexter would get a sweep tick it never ran"
@@ -159,10 +166,30 @@ fi
 
 echo "case 7 -- the real script agrees (not just this witness's local model)"
 # SYNC_HOST is the script's own override hook; preview mode writes nothing.
-got="$(SYNC_HOST=dexter timeout 60 "$SYNC" 2>/dev/null | grep -E "usage-paced-runner|scheduler sweep" || true)"
+# RUNNER_CRON is retired, so the real script's runner-tier output for
+# LOCAL_ACCOUNT now depends on whatever tick is already installed there
+# (the carry-forward mechanism -- see
+# tests/sync-crontab-runner-cron-retired-witness.sh for that in full), not
+# on anything SYNC_HOST=dexter can pin. A stubbed, empty crontab keeps THIS
+# case hermetic: with nothing to carry forward, the runner tier should emit
+# nothing and no ERROR, so what's left to check here is dexter's own
+# tiers -- no stale */30 literal, no sweep tick, no mandark cap.
+STUB7="$TMP/stub7"; mkdir -p "$STUB7"
+cat > "$STUB7/crontab" <<'EOF'
+#!/bin/sh
+[ "$1" = "-l" ] && { echo "no crontab for fake account" >&2; exit 1; }
+exit 9
+EOF
+chmod +x "$STUB7/crontab"
+got="$(PATH="$STUB7:$PATH" SYNC_HOST=dexter timeout 60 "$SYNC" 2>/dev/null | grep -E "usage-paced-runner|scheduler sweep" || true)"
+err="$(PATH="$STUB7:$PATH" SYNC_HOST=dexter timeout 60 "$SYNC" 2>&1 >/dev/null)"
+case "$err" in
+  *"ERROR [runner]"*) bad "dexter's retired RUNNER_CRON is refused as an ERROR: $err" ;;
+  *)                  ok "dexter's retired RUNNER_CRON produces no ERROR" ;;
+esac
 case "$got" in
-  *"*/30 * * * *"*) ok "script preview for dexter emits the */30 tick" ;;
-  *)                bad "script preview for dexter did not emit */30; got: ${got:-<nothing>}" ;;
+  *"*/30 * * * *"*) bad "script preview for dexter still emits the retired */30 cadence -- did RUNNER_CRON come back?" ;;
+  *)                ok "script preview for dexter does not resurrect the retired */30 cadence" ;;
 esac
 case "$got" in
   *"scheduler sweep"*) bad "script preview for dexter still emits a sweep tick" ;;
