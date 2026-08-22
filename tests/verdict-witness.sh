@@ -78,6 +78,14 @@ stamped && bad "expires_at stamped on a merely-truncated run (metabolism reduced
 # "said keep going" read identically in the log forever. This was the first
 # live case: scheduler on dexter, 2026-07-29, max-turns with no verdict.
 grep -q 'NO-VERDICT alpha' <<<"$log" && ok "absent verdict logged as NO-VERDICT" || { bad "silent run not distinguished from CONTINUE in the log"; echo "$log" | tail -5; }
+# hf7y/scheduler#261: the NO-VERDICT case above is named in the run log, but
+# the ledger row it writes carried an empty reason column -- indistinguishable
+# from an account that is quietly fine. The reason is known at the moment the
+# row is written (this is exactly that case), so it must not be blank.
+ledger_row="$(tail -1 "$TMP/.local/share/scheduler-paced-runner/ledger.tsv" 2>/dev/null)"
+ledger_reason="$(cut -f8 <<<"$ledger_row")"
+[ -n "$ledger_reason" ] && ok "ledger reason is not blank on a no-verdict run ($ledger_reason)" \
+  || bad "ledger row has an empty reason column for a NO-VERDICT run: $ledger_row"
 rm -rf "$TMP"
 
 echo "case 2 -- explicit IMPOSSIBLE must be GAVE-UP, and MUST brake"
