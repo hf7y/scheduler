@@ -744,6 +744,30 @@ if [ -n "$RUNNER_JOB" ] || [ -n "$RUNNER_CMD" ] || [ -n "$RUNNER_CRON" ]; then
     # host does not run is a real difference from every other host, and the
     # only place it is visible is right here.
     echo "note [runner]: _runner.$SYNC_HOST.conf blanks RUNNER_CRON -- this host opts OUT of the runner tick _runner.conf arms" >&2
+  elif [ -n "$RUNNER_JOB" ] && [ -n "$RUNNER_CMD" ] && [ -z "$RUNNER_CRON" ]; then
+    # RUNNER_CRON retired (hf7y/scheduler#81): the rate now lives in
+    # schedule/ROSTER, applied by `dose <project> --apply`, not here. An
+    # account already converged by dose owns its RUNNER line OUTSIDE this
+    # managed block (see the tag-collision guard below), so there is
+    # nothing to carry forward there -- KEPT preserves it untouched either
+    # way. An account whose tick still lives INSIDE this managed block from
+    # before dose ever ran would otherwise lose it the instant RUNNER_CRON
+    # disappears from conf, because the block is always rebuilt from
+    # scratch: carry that exact line forward unchanged instead, so retiring
+    # the global field can never silently drop a tick dose hasn't taken
+    # over yet.
+    runner_tag="# scheduler:$RUNNER_JOB:RUNNER (usage-paced dispatch)"
+    old_runner_line="$(awk -v b="$MARK_BEGIN" -v e="$MARK_END" -v tag="$runner_tag" '
+      $0==b {inblock=1; next}
+      $0==e {inblock=0; next}
+      inblock && index($0, tag) {print}
+    ' <<<"$(read_crontab_for "$LOCAL_ACCOUNT")")"
+    if [ -n "$old_runner_line" ]; then
+      echo "note [runner]: RUNNER_CRON is retired in conf -- carrying forward the already-installed tick unchanged: $old_runner_line" >&2
+      add_managed_line "$LOCAL_ACCOUNT" "$old_runner_line"
+    else
+      echo "note [runner]: RUNNER_CRON is retired in conf and no previously-installed tick was found for '$RUNNER_JOB' -- nothing to carry forward (use 'dose <project> --apply' to install one)" >&2
+    fi
   elif [ -z "$RUNNER_JOB" ] || [ -z "$RUNNER_CMD" ] || [ -z "$RUNNER_CRON" ]; then
     echo "ERROR [runner]: _runner.conf needs RUNNER_JOB, RUNNER_CMD and RUNNER_CRON all set -- runner tick omitted" >&2
     ERRORS=$((ERRORS + 1))
