@@ -38,10 +38,16 @@ COUNTS="$T/counts"; CALLS="$T/gh-calls"
 cat > "$T/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 echo call >> "$GH_CALLS"
+# Two distinct questions since 2026-08-22: the open counts, and how many issues
+# closed in the last 7 days. The stub answers by which one was asked, because
+# answering both from one file is what let the closure term read as BLIND in
+# every case here without any of them saying so.
+for a in "$@"; do [ "$a" = closed ] && { cat "$GH_CLOSED" 2>/dev/null; exit 0; }; done
 cat "$GH_COUNTS"
 EOF
 chmod +x "$T/bin/gh"
-export GH_COUNTS="$COUNTS" GH_CALLS="$CALLS"
+CLOSEDF="$T/closed"
+export GH_COUNTS="$COUNTS" GH_CALLS="$CALLS" GH_CLOSED="$CLOSEDF"
 export PATH="$T/bin:$PATH"
 
 LEDGER="$T/ledger.tsv"
@@ -50,6 +56,10 @@ mkdir -p "$STATE_DIR"
 
 # open<TAB>blocked, the two numbers gh's --jq prints.
 set_counts() { printf '%s\t%s\n' "$1" "$2" > "$COUNTS"; rm -f "$STATE_DIR"/tempo-*.count; }
+# how many issues closed in the last 7d; no argument = the read fails (BLIND)
+set_closed() { if [ $# -eq 0 ]; then : > "$CLOSEDF"; else printf '%s\n' "$1" > "$CLOSEDF"; fi
+               rm -f "$STATE_DIR"/tempo-*.count; }
+set_closed
 # a dispatch row <n> minutes ago
 row() { printf '%s\tmonkey\tacct\t%s\tbatch\t%s\t%s\tr\n' \
           "$(date -Is -d "-$1 min")" "${2:-p}" "${3:-0}" "${4:-WORKED}" >> "$LEDGER"; }
@@ -68,6 +78,39 @@ set_counts 6 0
 out="$(run_tempo p)"
 [ "$(want_of "$out")" = "240" ] || fail "6 actionable should want 240, got: $out"
 [ "$FAILED" = 0 ] && pass "want_min = BASE*PIVOT/actionable"
+
+echo "case 1b -- filing buys nothing; closing buys the pace"
+# THE SIGN OF THE LOOP. Until 2026-08-22 drive was `actionable` alone, so more
+# open issues meant a shorter interval meant more runs meant more issues filed.
+# Over 7 days the estate opened 380 and closed 364, retiring only 76 that
+# predated the window: +56/week against 405 merged PRs. drive is now
+# min(actionable, closed7d+1) -- a tracker that only grows cannot buy dispatch.
+set_counts 60 0; set_closed 0; : > "$LEDGER"
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "1440" ] || fail "60 open and nothing closed must fall to MAX_MIN, got: $out"
+grep -q 'drive=1 ' <<<"$out" || fail "drive should be closed7d+1 = 1, got: $out"
+
+set_counts 60 0; set_closed 23
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "60" ] || fail "60 open with 23 closed should want 60 (drive 24), got: $out"
+
+# ...and you cannot claim more pace than you have work for: min() binds both ways.
+set_counts 6 0; set_closed 200
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "240" ] || fail "6 actionable caps drive at 6 however much closed, got: $out"
+[ "$FAILED" = 0 ] && pass "drive = min(actionable, closed7d+1)"
+
+echo "case 1c -- an unreadable closure count fails OPEN, and says so"
+# Failing closed would collapse drive to 1 and freeze the whole fleet at daily
+# on one bad gh call -- "could not look" read as "nothing to do", in the
+# direction that hurts most. It falls back to the old term and names it.
+set_counts 24 0; set_closed
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "60" ] || fail "a BLIND closure count must pace on actionable, got: $out"
+grep -q 'closed7d=BLIND' <<<"$out" || fail "the line must admit the closure count is BLIND, got: $out"
+grep -q 'fell back' <<<"$out" || fail "the line must name the fallback, got: $out"
+[ "$FAILED" = 0 ] && pass "BLIND on closures is a fallback that announces itself, not a stop"
+set_closed
 
 echo "case 2 -- clamps"
 set_counts 400 0
@@ -133,14 +176,20 @@ out="$(TEMPO_REPO='' TEMPO_CONF_DIR="$T/nope" "$TEMPO" ghost 2>&1)"; rc=$?
 pass "an unreadable tracker is never an empty one"
 
 echo "case 7 -- the cache spares a held tick its round-trip"
+# TWO round-trips per FETCH since 2026-08-22, not one: the setpoint needs a
+# second fact (closures in the last 7d) and it cannot ride the first call --
+# `--state all` would have to be capped, and a cap drops OLD OPEN issues, which
+# is the number the pace divides by. The contract this case exists to hold is
+# unchanged: a second tempo inside the TTL adds NO round-trip at all.
 set_counts 12 0; : > "$LEDGER"; row 1; : > "$CALLS"
 TEMPO_CACHE_MIN=30 "$TEMPO" p >/dev/null 2>&1
+first="$(wc -l < "$CALLS")"
 TEMPO_CACHE_MIN=30 "$TEMPO" p >/dev/null 2>&1
 n="$(wc -l < "$CALLS")"
-[ "$n" = "1" ] || fail "two calls within the TTL should fetch once, gh was called $n time(s)"
+[ "$n" = "$first" ] || fail "a second call within the TTL must add no round-trip, went $first -> $n"
 out="$(TEMPO_CACHE_MIN=30 "$TEMPO" p 2>&1)"
 grep -q 'counts=cache' <<<"$out" || fail "a reused reading must say so on the verdict line, got: $out"
-pass "one fetch, and the line admits which reading it used"
+pass "the TTL costs nothing extra, and the line admits which reading it used"
 
 echo "case 8 -- wired into the runner: TEMPO holds, and writes no ledger row"
 H="$T/home"; mkdir -p "$H/.local/share/scheduler-paced-runner"
