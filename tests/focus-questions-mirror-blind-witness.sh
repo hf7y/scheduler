@@ -54,8 +54,8 @@ row="$(printf '%s\n' "$out" | grep -E '^\s*witnessproj\s')"
 if [ -z "$row" ]; then
   bad "glance printed no row for witnessproj -- output: $out"
 else
-  # Columns: PROJECT QUESTIONS BLOCKERS LAST RUN ETA NEXT UP -- ETA and NEXT
-  # UP are the last two fields.
+  # Columns: PROJECT QUESTIONS LAST RUN ETA NEXT UP -- ETA and NEXT UP are
+  # the last two fields.
   eta="$(printf '%s' "$row" | awk '{print $(NF-1)}')"
   next="$(printf '%s' "$row" | awk '{print $NF}')"
   if [ "$eta" = "?" ]; then ok "ETA column is '?' (BLIND)"; else bad "ETA column is '$eta', not '?' -- row: $row"; fi

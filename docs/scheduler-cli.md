@@ -24,8 +24,8 @@ mean, where each number comes from, the conventions (`*`, `> ` replies,
 ## DESCRIPTION
 
 `scheduler` is a thin, offline-first wrapper over the scheduler repo's
-own tracking files (`focus/`, `questions/`, `BLOCKERS.md`,
-`~/reports/<project>/`) and the paced runner's logs. It is not a parser
+own tracking files (`focus/`, `questions/`, `~/reports/<project>/`) and
+the paced runner's logs. It is not a parser
 or database: subcommands mostly open the real file in `$EDITOR` or print
 a screen assembled by `grep`/`awk`. Nothing here spends an AI call
 unless you explicitly ask (`status --claude` / `--interactive`) — see
@@ -34,10 +34,10 @@ unless you explicitly ask (`status --claude` / `--interactive`) — see
 ## THE GLANCE (no arguments)
 
 One screen: every registered project (from `schedule/*.conf`), one row
-each, **sorted by open question count + blocker count descending** —
-whatever most needs a human floats to the top; registration/conf-file
-order is deliberately not used. Below the table, footer lines appear
-only when they have something to say (see FOOTER LINES).
+each, **sorted by open question count descending** — whatever most
+needs a human floats to the top; registration/conf-file order is
+deliberately not used. Below the table, footer lines appear only when
+they have something to say (see FOOTER LINES).
 
 ### Columns
 
@@ -49,10 +49,6 @@ only when they have something to say (see FOOTER LINES).
   consumed yet; *unanswered* is the count still waiting on you. Bullets
   marked RESOLVED/ACKNOWLEDGED are excluded entirely. `-` = none open.
   See `docs/feedback-tags.md` for how replies round-trip.
-
-- **BLOCKERS** — open bullets under this project's `## <project>`
-  section of `BLOCKERS.md`, excluding ones marked RESOLVED/PARKED
-  inline. `-` = none.
 
 - **LAST RUN** — age of `~/reports/<project>/LATEST.md` (the same file
   `scheduler report <project>` opens): a proxy for "last completed run"
@@ -74,10 +70,9 @@ only when they have something to say (see FOOTER LINES).
 
 ### Conventions
 
-- **`*` prefix** (QUESTIONS/BLOCKERS) — that file/section changed since
-  you last opened it via this tool (`scheduler questions <project>`,
-  `scheduler status <project>`, …). Approximate — file mtime (or a
-  per-project section hash, for BLOCKERS.md) against a "last opened"
+- **`*` prefix** (QUESTIONS) — that file changed since you last opened
+  it via this tool (`scheduler questions <project>`, `scheduler status
+  <project>`, …). Approximate — file mtime against a "last opened"
   timestamp in `~/.local/share/scheduler-glance/seen.tsv` — not a real
   read-receipt. No `*` means an open count you've already seen and just
   haven't gotten to.
@@ -91,8 +86,6 @@ only when they have something to say (see FOOTER LINES).
   single-project ETA above (they burn concurrently under the rotation,
   so the max, not the sum, bounds the total). Projects showing
   `no history` aren't in the estimate, and the line says so.
-- **`-> scheduler blockers`** — shown when any project has open
-  blockers.
 - **stranded local commits** — some project's dedicated clone
   (`~/.local/share/<job>/repo`) has commits ahead of origin: its run
   committed but the push silently failed or never ran (e.g. a
@@ -167,8 +160,6 @@ against: which facts the machinery records and which views print them.
 - `focus/<project>.md`, `questions/<project>.md` — symlinks into each
   project's own scheduler-owned files (usually `.scheduler/` or
   `.claude/` in that project's repo).
-- `BLOCKERS.md` — cross-project items needing a human, one `##
-  <project>` section each.
 - `~/reports/<project>/LATEST.md` — each project's newest report.
 - `~/.local/share/scheduler-paced-runner/run.log` — the paced runner's
   dispatch log (feeds ETA and `scheduler next`).
