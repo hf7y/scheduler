@@ -133,6 +133,28 @@ else
   bad "could not locate the call site (call=${CALL_LN:-none} feedback=${FB_LN:-none}) -- this check has stopped checking"
 fi
 
+echo "== 7. the closeout warns against ending on a promise to check back later"
+# THE BUG THIS CASE EXISTS TO PREVENT, observed live on scheduler@monkey
+# 2026-08-22T15:54:31 (hf7y/scheduler#275, group B): the agent's last line
+# was "Waiting for the CI checks on PR #270 to complete -- I'll merge and
+# close #81 once that notification lands." and the run then ended with no
+# further tool calls -- never reaching this closeout's own instruction.
+# 9 of the 55 scheduler batch runs in run.log's history (2026-08-13 through
+# 2026-08-22) show this exact shape: rc=1, no verdict written, and no
+# --max-turns cutoff message near the run -- so it is not the truncation
+# case the rest of this file already covers. The agent believed a future
+# moment existed to come back to; the next dispatch is a fresh session with
+# no memory of what it was waiting on.
+TIER="batch"; PROJECT_KEY="scheduler"; PROMPT="do the thing"
+VERDICT_BIN="$ROOT/bin/verdict.sh"
+append_verdict_closeout >/dev/null
+grep -qi 'waiting' <<<"$PROMPT" \
+  && ok "closeout names the 'waiting for X' trap" \
+  || bad "closeout says nothing about ending a turn on a promise to check back later"
+grep -qi 'fresh session\|no memory' <<<"$PROMPT" \
+  && ok "and explains WHY: the next dispatch will not remember" \
+  || bad "does not explain why 'I'll check later' fails"
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]
