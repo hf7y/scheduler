@@ -157,22 +157,13 @@ usage() {
 usage: scheduler [command] [project]
 
   (no args)             one-screen glance: every registered project,
-                         sorted by open question/blocker count (most
-                         pressing first), a `*` marking anything changed
-                         since you last opened it via this tool. Also
-                         shows a rough per-project ETA (FOCUS.md backlog
-                         size x that project's own recent paced-dispatch
-                         cadence) and an overall "time to burn down every
-                         backlog" estimate -- real history, not a promise.
-  blockers [project] [n], -b
-                         open BLOCKERS.md; with a project + number, jump vim
-                         straight to that project's Nth open blocker bullet.
-                         --claude: first run a one-shot claude tidy pass
-                         (edits scoped to BLOCKERS.md only) that reconciles
-                         each entry's dated RESOLVED/RETRACTED/SUPERSEDED
-                         sub-notes, moves fully-resolved entries down to
-                         Recently resolved, and prints a "needs you now"
-                         digest -- then opens the tidied file as usual
+                         sorted by open question count (most pressing
+                         first), a `*` marking anything changed since you
+                         last opened it via this tool. Also shows a rough
+                         per-project ETA (FOCUS.md backlog size x that
+                         project's own recent paced-dispatch cadence) and
+                         an overall "time to burn down every backlog"
+                         estimate -- real history, not a promise.
   focus [project], -f   open a project's FOCUS.md (list projects if omitted)
   questions [project] [n], -q
                          for a project whose conf sets ANSWER_CHANNEL="issues",
@@ -309,7 +300,7 @@ usage: scheduler [command] [project]
                          a live `claude` session in the project's repo
                          preloaded with it as starting context.
 
-Examples: scheduler -b   |   scheduler -b --claude   |   scheduler focus crt
+Examples: scheduler focus crt   |   scheduler questions crt
           scheduler -i realisateur "a browser extension that ..."
           scheduler -i wtul "add a --dry-run flag to wtul-rip"
           scheduler -s
@@ -398,9 +389,9 @@ WHERE SCOPE AND QUESTIONS LIVE, AND HOW A REPLY ROUND-TRIPS
 WHAT `scheduler` (THIS TOOL) DOES AND DOESN'T DO
   It is a thin, read-only-by-default navigation wrapper around the real
   files above -- `scheduler` with no args prints one glance screen built
-  fresh from questions/*.md, BLOCKERS.md, and each project's FOCUS.md
-  every time you run it (no cache, no daemon); `scheduler <verb>
-  [project]` just execs $EDITOR on the real file. `scheduler sweep` is
+  fresh from questions/*.md and each project's FOCUS.md every time you
+  run it (no cache, no daemon); `scheduler <verb> [project]` just execs
+  $EDITOR on the real file. `scheduler sweep` is
   the one exception that writes on its own: a reactive backstop that
   auto-commits (and, where safe, auto-pushes) dirty *.md files a vim
   autocmd hook may have missed -- it never touches non-.md files and
@@ -416,10 +407,9 @@ WHAT'S NOT BUILT YET (don't assume these exist)
   - AUTONOMY_TIER (a per-project push/merge/deploy trust dial) is
     designed in FOCUS.md but no conf sets it yet -- push/merge policy
     today lives only in each project's prose + the toggle file above.
-  - A single merged report+questions file per project, and a `scheduler
-    blockers` that's a live aggregated view instead of a hand-maintained
-    BLOCKERS.md, are both designed but not built -- BLOCKERS.md today is
-    a real separate file someone has to remember to update.
+  - A single merged report+questions file per project is designed but
+    not built. `scheduler blockers`/BLOCKERS.md itself is retired
+    (#193) -- blockers are filed as GitHub issues now, no CLI verb.
   - No project has moved off having a local checkout; the
     "scheduler owns scope, runs from anywhere" design is groundwork only.
 EOF
@@ -1737,19 +1727,19 @@ cmd_commit_file() {
     fi
   fi
   # --- multi-writer files go through the atomic guard, not bare git ---------
-  # FOCUS.md / QUESTIONS.md / BLOCKERS.md are written by independent systems
-  # (this tool, the vim auto-commit hook, nightly-batch, and interactive
-  # sessions) with no coordination between them. Five divergences in three
-  # days (realisateur, home-assistant, scheduler, bibliothecaire, wtul), most
+  # FOCUS.md / QUESTIONS.md are written by independent systems (this tool,
+  # the vim auto-commit hook, nightly-batch, and interactive sessions)
+  # with no coordination between them. Five divergences in three days
+  # (realisateur, home-assistant, scheduler, bibliothecaire, wtul), most
   # of them "clean" -- different sections, silent merge, nobody notices until
   # someone re-probes. The fetch/ff/commit/push below is exactly the bare
   # sequence that loses those races; `focus-commit` (realisateur-owned, on
   # PATH) is the same operation made indivisible: stage exactly the named
   # file, rebase on rejection, and VERIFY the rebase did not change what the
-  # commit means. Everything that is not one of these three files stays on
+  # commit means. Everything that is not one of these two files stays on
   # the path below -- it is safe for single-writer state.
   case "$(basename "$path")" in
-    FOCUS.md|QUESTIONS.md|BLOCKERS.md)
+    FOCUS.md|QUESTIONS.md)
       local rel fc_msgfile fc_rc
       if ! command -v focus-commit >/dev/null 2>&1; then
         # A missing guard is a finding, not an excuse to hand-roll the racy
@@ -2171,22 +2161,6 @@ cmd_questions_jump() {
   exec "$EDITOR" "+$lineno" "$qfile"
 }
 
-cmd_blockers_jump() {
-  local proj="$1" idx="$2"
-  [ -f "$SCHED_ROOT/BLOCKERS.md" ] || { echo "scheduler: no BLOCKERS.md yet" >&2; exit 1; }
-  local lineno
-  lineno="$(awk -v want_proj="$proj" -v want="$idx" '
-    BEGIN{insec=0; n=0}
-    /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want_proj) "$")); next }
-    insec && /^- \*\*/ { n++; if (n==want) { print NR; exit } }
-  ' "$SCHED_ROOT/BLOCKERS.md")"
-  if [ -z "$lineno" ]; then
-    echo "scheduler: no blocker #$idx for '$proj' in BLOCKERS.md" >&2
-    exit 1
-  fi
-  exec "$EDITOR" "+$lineno" "$SCHED_ROOT/BLOCKERS.md"
-}
-
 cmd_glance() {
   echo "scheduler — $(date '+%Y-%m-%d %H:%M') (paced rotation, dispatched whenever usage-gate.sh has spare quota)"
   echo
@@ -2195,8 +2169,7 @@ cmd_glance() {
   # 2026-07-22: "move all this text to a man page, reduce to a single
   # line summary above the column headers."
   echo "  (* = new since you last opened it here; column details: scheduler man)"
-  printf '  %-16s %-10s %-9s %-10s %-10s %s\n' "PROJECT" "QUESTIONS" "BLOCKERS" "LAST RUN" "ETA" "NEXT UP"
-  local any_blockers=0
+  printf '  %-16s %-10s %-10s %-10s %s\n' "PROJECT" "QUESTIONS" "LAST RUN" "ETA" "NEXT UP"
   local global_eta_secs=0 global_eta_proj="" any_unknown_eta=0
   local any_unpushed=0
   local unpushed_list=""
@@ -2205,18 +2178,18 @@ cmd_glance() {
   # project's home is 0700, so this account cannot read FOCUS.md by path --
   # verified 2026-08-20). NEXT UP/ETA must render `?` (BLIND), never `-`,
   # while that is true -- `-` already means "read fine, genuinely nothing
-  # there" for the QUESTIONS/BLOCKERS columns above, and reusing it here for
-  # "could not look at all" is exactly the "BLIND reported as OK" failure
-  # this file's own QUESTIONS column comment warns against.
+  # there" for the QUESTIONS column above, and reusing it here for "could
+  # not look at all" is exactly the "BLIND reported as OK" failure this
+  # file's own QUESTIONS column comment warns against.
   local focus_mirror_available=0
   [ -d "$SCHED_ROOT/focus" ] && focus_mirror_available=1
   # Rows are collected as "<score>\t<rendered line>" and sorted by score
-  # descending after the loop, so projects with open questions/blockers
-  # float to the top instead of showing in registration/conf-file order
-  # (flagged 2026-07-22: "why hasn't anything run" shouldn't require
-  # reading top-to-bottom hunting for the one row that needs you). Score
-  # is just q_unanswered + bn -- a rough stand-in for the fuller
-  # quota/ETA-aware ordering still queued in FOCUS.md's backlog.
+  # descending after the loop, so projects with open questions float to
+  # the top instead of showing in registration/conf-file order (flagged
+  # 2026-07-22: "why hasn't anything run" shouldn't require reading
+  # top-to-bottom hunting for the one row that needs you). Score is just
+  # q_unanswered -- a rough stand-in for the fuller quota/ETA-aware
+  # ordering still queued in FOCUS.md's backlog.
   local rows=""
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
@@ -2253,42 +2226,6 @@ cmd_glance() {
       qlabel="  -"
     else
       qlabel="$(printf '%1s%2s/%s' "$q_star" "$q_unanswered" "$q_total")"
-    fi
-
-    # Excludes bullets already marked RESOLVED/PARKED inline (BLOCKERS.md's
-    # own convention -- e.g. crt's "- **OctoPrint** — **RESOLVED
-    # 2026-07-20**: ...") -- a bare bullet count was showing crt as "7"
-    # blockers when most of that section was already resolved/parked,
-    # same "meaningless count" bug class as the questions fix above
-    # (found 2026-07-22).
-    local bn=0 bsection=""
-    if [ -f "$SCHED_ROOT/BLOCKERS.md" ]; then
-      bn="$(awk -v want="$proj" '
-        BEGIN{c=0; insec=0}
-        /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
-        insec && /^- \*\*/ { if (tolower($0) !~ /resolved|parked/) c++ }
-        END { print c }
-      ' "$SCHED_ROOT/BLOCKERS.md")"
-      # Hashed per-project (not whole-file mtime, fixed 2026-07-22): the old
-      # check flagged EVERY project with `*` whenever anyone's blocker entry
-      # was edited anywhere in BLOCKERS.md -- e.g. updating crt's "DAC
-      # arriving Tuesday" ETA note used to mark aedile's row stale too, even
-      # though aedile's own section hadn't changed. Only this project's own
-      # section content now drives its `*`.
-      bsection="$(awk -v want="$proj" '
-        /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
-        insec { print }
-      ' "$SCHED_ROOT/BLOCKERS.md" | md5sum | cut -d" " -f1)"
-    fi
-    # Same reserved-star-slot treatment as QUESTIONS above, so a `*`
-    # never nudges the count out of column.
-    local blabel=" -"
-    if [ "$bn" -gt 0 ] 2>/dev/null; then
-      any_blockers=1
-      local bseen bstar=""
-      bseen="$(get_seen "blockers:$proj")"
-      [ -n "$bsection" ] && [ "$bsection" != "$bseen" ] && bstar="*"
-      blabel="$(printf '%1s%s' "$bstar" "$bn")"
     fi
 
     # Cheap "what's coming" approximation: total bulleted backlog items
@@ -2459,18 +2396,15 @@ cmd_glance() {
       fi
     fi
 
-    local score=$(( ${q_unanswered:-0} + ${bn:-0} ))
+    local score=$(( ${q_unanswered:-0} ))
     local row
-    row="$(printf '  %-16s %-10s %-9s %-10s %-10s %s' "$proj" "$qlabel" "$blabel" "$lastrun" "$etalabel" "$next")"
+    row="$(printf '  %-16s %-10s %-10s %-10s %s' "$proj" "$qlabel" "$lastrun" "$etalabel" "$next")"
     rows="$rows$score"$'\t'"$row"$'\n'
   done < <(projects)
   printf '%s' "$rows" | sort -t $'\t' -k1,1rn | cut -f2-
   echo
   if [ "$global_eta_secs" -gt 0 ]; then
     echo "est. time to burn down every project's current FOCUS.md backlog: ~$(fmt_duration "$global_eta_secs") (bound by $global_eta_proj's own backlog x pace)$([ "$any_unknown_eta" = "1" ] && echo " -- some projects show 'no history' and aren't in this estimate")"
-  fi
-  if [ "$any_blockers" = "1" ]; then
-    echo "-> scheduler blockers   (or: scheduler -b)"
   fi
   if [ "$any_unpushed" = "1" ]; then
     echo "-> stranded local commits in a dedicated clone (push likely failed silently): ${unpushed_list%, }"
@@ -3400,110 +3334,8 @@ Use this as your starting context for looking into $proj -- feel free to dig int
   esac
 }
 
-cmd_blockers_tidy() {
-  # `scheduler -b --claude` -- a one-shot claude pass that tidies
-  # BLOCKERS.md in place BEFORE it opens, so the file you land in shows at
-  # a glance what actually still needs you. BLOCKERS.md's own header
-  # reserves the active->resolved sweep for "human / /ideate triage" --
-  # this command is that human triage: Zach invoking it interactively is
-  # the human doing the sweep, with claude as the editor. The
-  # machine-append restrictions still bind UNATTENDED runs; nothing here
-  # is wired into any cron/paced path, and must not be.
-  #
-  # Same layering as cmd_status --claude: the AI step is opt-in per
-  # invocation, never the default (`scheduler -b` alone stays a zero-token
-  # plain `exec $EDITOR`). Edit permission is scoped to this ONE file via
-  # the permission rule pattern -- an attempted edit anywhere else hits a
-  # permission prompt, which `-p` (non-interactive) auto-denies.
-  local bfile="$SCHED_ROOT/BLOCKERS.md"
-  [ -f "$bfile" ] || { echo "scheduler: no BLOCKERS.md yet" >&2; exit 1; }
-  echo "scheduler blockers --claude: tidying BLOCKERS.md (one-shot, edits scoped to this one file)..."
-  echo
-  if ! (cd "$SCHED_ROOT" && claude -p "$(cat <<'EOF'
-Tidy exactly one file, in place: BLOCKERS.md at this repo's root. Read it
-fully first.
-
-Context: Zach just ran `scheduler blockers --claude` by hand. This pass is
-the human-invoked active->resolved triage sweep the file's own header
-describes and reserves for humans / `/ideate` -- you are the editor for a
-human-directed sweep, so condensing and moving entries IS authorized here
-(the machine-append policy's move/prune restrictions bind unattended
-agents, not this command). You have Edit permission for BLOCKERS.md only.
-
-Do, in place:
-1. Any entry in an active `## <project>` section whose own dated sub-notes
-   mark the WHOLE entry RESOLVED / RETRACTED / SUPERSEDED: condense it to
-   a short dated bullet (keep the resolution date and its witness) and
-   move it under `## Recently resolved`.
-2. Any partially-resolved entry: rewrite it so the still-open remainder
-   leads, with the already-resolved parts collapsed into one short
-   trailing note. Nothing still open may be dropped or softened.
-3. Where a later dated note corrects an earlier claim inside an entry,
-   keep the corrected version plus one line naming what it superseded.
-4. Preserve the file's structural conventions exactly: project headings
-   stay literal `## <PROJECT_KEY>` (other tooling matches on them),
-   entries stay `- **...` bullets, resolved items live only under
-   `## Recently resolved`. Don't rewrite the header prose, don't reorder
-   the project sections, don't delete dates/witnesses/links, and never
-   invent or infer a resolution that isn't already recorded in the file --
-   this pass verifies nothing externally.
-
-Then, as your final message, print a digest titled "needs you now": one
-line per genuinely-open item -- project, what's needed from Zach, and the
-concrete next action. Skip projects with nothing open. Keep it under ~12
-lines: it's shown in the terminal right before the file opens, not a
-report.
-EOF
-)" --allowedTools "Read,Grep,Glob,Edit(BLOCKERS.md)" --max-turns 30); then
-    echo
-    echo "WARNING: tidy pass failed (claude exited nonzero -- not logged in, or out of quota?)."
-    echo "Opening BLOCKERS.md untouched instead."
-    return 1
-  fi
-  cmd_commit_file "$bfile" "BLOCKERS.md: reconcile/tidy via \`scheduler -b --claude\`"
-}
-
-mark_blockers_seen() {
-  # Snapshots every project's own section hash at open-time (see the
-  # per-project freshness fix in cmd_glance) so `*` only reappears for a
-  # project once ITS section changes again, not on every BLOCKERS.md edit.
-  [ -f "$SCHED_ROOT/BLOCKERS.md" ] || return 0
-  while IFS= read -r proj; do
-    local h
-    h="$(awk -v want="$proj" '
-      /^##[ \t]/ { insec = (tolower($0) ~ ("## *" tolower(want) "$")); next }
-      insec { print }
-    ' "$SCHED_ROOT/BLOCKERS.md" | md5sum | cut -d" " -f1)"
-    mark_seen "blockers:$proj" "$h"
-  done < <(projects)
-}
-
 case "${1:-}" in
   ""|glance) cmd_glance ;;
-  blockers|-b)
-    if [ "${2:-}" = "--claude" ]; then
-      # Tidy first, THEN snapshot seen-hashes -- so `*` freshness in the
-      # glance reflects the tidied sections you're about to read, not the
-      # pre-tidy ones. A failed tidy falls through to opening the file
-      # as-is (never let a claude hiccup stand between you and your file).
-      cmd_blockers_tidy || true
-      mark_blockers_seen
-      echo
-      # Prompt on STDOUT explicitly: `read -p` writes its prompt to stderr,
-      # and the 2>/dev/null non-tty guard below was swallowing it -- the
-      # script sat on an invisible pause that looked like a silent exit
-      # (diagnosed live 2026-07-25). The redirect stays, on the read alone.
-      printf 'press Enter to open BLOCKERS.md (Ctrl-C to stop at the digest) '
-      read -r _ 2>/dev/null || true
-      open_file "$SCHED_ROOT/BLOCKERS.md"
-    fi
-    mark_blockers_seen
-    if [ -n "${2:-}" ] && [ -n "${3:-}" ]; then
-      cmd_blockers_jump "$2" "$3"
-    else
-      open_file "$SCHED_ROOT/BLOCKERS.md"
-    fi
-    ;;
   focus|-f)
     require_project focus "${2:-}"
     open_file "$SCHED_ROOT/focus/$2.md"
