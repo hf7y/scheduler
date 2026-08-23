@@ -48,6 +48,7 @@ FILED="$TMP/filed.log"
 { printf '#!/usr/bin/env bash\n'
   printf 'printf "%%s\\n" "$*" >> %s\n' "$FILED"; } > "$TMP/bin/scheduler"
 chmod +x "$TMP/bin/scheduler"
+ORIG_PATH="$PATH"
 export PATH="$TMP/bin:$PATH"
 
 GATE="$TMP/bin/gate.sh"
@@ -144,6 +145,25 @@ tick
 if [ "$(count_in_log 'PULL RECOVERED')" -eq "$before" ]; then
   ok "a healthy tick stays silent (this runs every 5 minutes)"
 else bad "logs RECOVERED on every healthy tick"; fi
+
+# --- 5. `scheduler` is not resolvable at all -- must be LOUD, not silent -----
+# (hf7y/scheduler#276: `command -v scheduler` was the only check, with no
+# `else` -- on a host where `scheduler` is not on PATH, the escalation
+# dropped with zero log output, indistinguishable from a healthy tick.)
+echo "== 5. scheduler not on PATH and not at \$REPO_ROOT/bin/scheduler -> loud failure, not silence"
+FILED_BEFORE="$(wc -l < "$FILED" 2>/dev/null || echo 0)"
+rm -f "$PSTATE"
+echo "a human edit nothing else has a copy of" >> "$CLONE/code.sh"
+( export PATH="$ORIG_PATH"  # real PATH, minus the stub dir -- keeps git etc. working
+  for _ in 1 2 3; do "$GATE" "$STATE" "$CLONE" >/dev/null 2>&1; done )
+if lastlog | grep -q 'PULL FROZEN'; then ok "still escalates to FROZEN with no scheduler on PATH"
+else bad "did not reach FROZEN: $(lastlog)"; fi
+if grep -q 'FILED FAILED -- scheduler command not found' "$STATE/run.log"; then
+  ok "names the missing command instead of going silent"
+else bad "silent (or wrong) failure with no scheduler resolvable: $(lastlog)"; fi
+if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
+  ok "no phantom filing recorded -- nothing was actually sent"
+else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
 echo
 echo "pull-escalation-witness: $PASS passed, $FAIL failed"
