@@ -117,6 +117,33 @@ salvage_then_restore() {
   working_state="$(git status --porcelain "${scope[@]}" 2>/dev/null)"
   ahead="$(git rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
 
+  # HEAD may be sitting on its OWN already-pushed feature branch, left there
+  # by a run that opened a PR and simply never switched back -- not abandoned
+  # work. hf7y/realisateur#533/#532: a single in-flight PR branch
+  # (fix-blind-exit-code-334, PR #513) got re-salvaged into a NEW duplicate
+  # branch on two separate subsequent ticks before the PR finally merged,
+  # because this function only ever compared HEAD against origin/$branch and
+  # had no notion of "already safe under a different name." Nothing was
+  # lost either time -- the duplicates were the symptom, not the risk -- but
+  # a salvage branch nobody reads is exactly the silent-failure class
+  # salvage_file_issue() exists to prevent, and three copies of the same
+  # content is three chances for a reader to act on a stale one.
+  #
+  # Narrow on purpose: only skips when the tree is clean AND HEAD is the
+  # exact tip already pushed to origin under the current branch's own name.
+  # Any uncommitted diff, or any commit not yet reachable from that origin
+  # ref, still falls through to the ordinary salvage path below.
+  if [ -z "$working_state" ] && [ "$ahead" -gt 0 ]; then
+    local cur_branch
+    cur_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [ -n "$cur_branch" ] && [ "$cur_branch" != "HEAD" ] && [ "$cur_branch" != "$branch" ] &&
+       git rev-parse --verify --quiet "origin/$cur_branch" >/dev/null &&
+       [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$cur_branch")" ]; then
+      "$log_fn" "salvage: HEAD is already pushed to origin/$cur_branch ($ahead commit(s) ahead of origin/$branch) -- an in-flight PR branch, not abandoned work; skipping a duplicate salvage branch"
+      ahead=0
+    fi
+  fi
+
   if [ -n "$working_state" ] || [ "$ahead" -gt 0 ]; then
     changed="$(printf '%s\n' "$working_state" | grep -c .)"
     ref="salvage/${label}-$(date +%Y%m%d%H%M%S)"
