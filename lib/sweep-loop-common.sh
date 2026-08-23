@@ -548,7 +548,17 @@ only signal that can ever stop this job being dispatched again.
              reason and the command refuses it without one.
 
 If you ran out of room mid-task, write NOTHING: silence already classifies as
-NOT-DONE, which is the correct reading of a truncated run."
+NOT-DONE, which is the correct reading of a truncated run.
+
+DO NOT END YOUR TURN ON A PROMISE TO CHECK BACK LATER. \"I'll merge once CI
+passes\" or \"waiting for X, will follow up\" with no further tool calls is
+not a pause -- it is the end of this run. There is no later moment inside
+THIS session: the next dispatch starts a fresh session with no memory of
+what you were waiting on. If you are waiting on something external (CI, a
+human, another run), check it now if the tool to check is available, and
+if it genuinely is not ready yet, record BLOCKED naming what you are
+waiting on (or CONTINUE if other actionable work remains) -- never end
+silently on an intention to look later."
   echo "verdict closeout: appended to the brief (participant $PROJECT_KEY, via $VERDICT_BIN)"
 }
 
