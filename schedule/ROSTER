@@ -5,9 +5,9 @@
 # each schedule/<project>.conf are still what dispatch actually reads today;
 # this file is a parallel derivation of the same set, kept honest by
 # `bash bin/roster-diff.sh`. It becomes authoritative only when the
-# retirement PR (hf7y/scheduler#79) removes those three as liveness sources
-# -- bin/roster-target.sh's `onekey` probe is what measures that landing,
-# not this file merely existing with rows in it (`oneroster`).
+# retirement PR (hf7y/scheduler#79) removes those three as liveness sources,
+# tracked at hf7y/scheduler#282 -- not this file merely existing with rows
+# in it (`oneroster`, already MET).
 #
 # ONLY ZACH EDITS THIS FILE. schedule/FREEZE's header reserves its
 # human-adds-the-line guard for exactly this reason ("a row added ... by an

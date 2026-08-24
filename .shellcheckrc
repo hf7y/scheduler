@@ -42,7 +42,7 @@ disable=SC2034
 # quotes are the CORRECT spelling in every one: printf format strings that
 # must emit a literal backtick or `> ` (bin/scheduler:975-979, :1919), sed
 # programs (bin/deploy-drift-check.sh), grep patterns matching source text
-# that literally contains `$expires_at_file` (bin/roster-target.sh:284), and
+# that literally contains a shell variable name, and
 # -- the sharpest example -- bin/scheduler:631, where `'$HOME'|'$HOME'/*)` is
 # a CASE PATTERN matching a conf value that is literally the string `$HOME`.
 # Expanding there would break the normaliser it belongs to.
