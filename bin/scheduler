@@ -3338,6 +3338,18 @@ case "${1:-}" in
   ""|glance) cmd_glance ;;
   focus|-f)
     require_project focus "${2:-}"
+    if [ ! -d "$SCHED_ROOT/focus" ]; then
+      # Same BLIND framing as cmd_overview/cmd_next: the local focus/*.md
+      # mirror was retired with sync-crontab.sh's symlink farm (#244) and
+      # nothing replaced the cross-account read, so this call site fails
+      # unconditionally now -- fail loud with the reason instead of
+      # open_file's generic "no file yet", which reads as "$2 has no
+      # backlog" rather than "this command can no longer see one".
+      echo "scheduler focus: cannot read -- the local focus/*.md mirror was" >&2
+      echo "  retired with sync-crontab.sh's symlink farm (#244); this is BLIND," >&2
+      echo "  not '$2 has no FOCUS.md'. See $2's own repo directly." >&2
+      exit 1
+    fi
     open_file "$SCHED_ROOT/focus/$2.md"
     ;;
   questions|-q)
