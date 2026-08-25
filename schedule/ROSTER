@@ -160,17 +160,18 @@ abletim         | abletim@monkey         | 20m | live
 #
 # Account uid 3016 and both clones are provisioned before this row lands, for
 # the same do_live reason as abletim above.
-# PARKED AT BIRTH, 2026-08-25. The account, both clones, schedule/apms.conf and
-# the Canvas guard are all provisioned -- this row is the ONLY thing held back,
-# and it is held back for a concurrent-writer reason, not a readiness one:
-# Zach was running a Claude session against apms on mandark as this landed
-# ("I'll close out that session and tell you when it's safe to start in that
-# repo"). Two writers pushing hf7y/apms-2173 is the shape that strands work.
+# UN-PARKED 2026-08-25, Zach-directed: "../apms no longer has an agent working.
+# safe for you to stand up on monkey." Parked at birth earlier the same day for
+# a concurrent-writer reason only -- Zach was running a Claude session against
+# apms-2173 on mandark -- and that session is closed. Everything else was
+# already provisioned: account 3016, both clones, schedule/apms.conf, the git
+# credential helper, and the Canvas guard (hf7y/apms-2173#31).
 #
-# UN-PARK CONDITION IS A PERSON, NOT A DATE, same as crt's was: Zach saying the
-# mandark session is closed. Then flip this row to `live` and run
-# `sudo dose apms --apply` on monkey -- one field, one command.
-apms            | apms@monkey            | 20m | parked
+# THE CANVAS GUARD IS WHAT MAKES THIS SAFE, in three independent layers:
+# schedule/apms.conf exports APMS_READ_ONLY=1; canvas.py's _guard refuses every
+# non-GET while it is set; and the account's clone has no canvas.token at all.
+# Reads work, writes do not. Do not "tidy" any of the three.
+apms            | apms@monkey            | 20m | live
 
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
