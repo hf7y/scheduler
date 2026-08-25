@@ -40,6 +40,15 @@ fi
 
 CONF="$SCHED_ROOT/schedule/$PROJECT.conf"
 [ -f "$CONF" ] || { echo "scheduler-run: no such conf: $CONF" >&2; exit 2; }
+
+# Deliver what this project was waiting on, BEFORE it picks tonight's issue --
+# so an issue unblocked since the last tick is visible in the queue this run
+# reads, not the next one (hf7y/scheduler#299). NEVER fatal: routing is a
+# courtesy to the tracker, and a gh hiccup must not cost a dispatch.
+if [ -x "$SCHED_ROOT/bin/route-deliveries.sh" ]; then
+  "$SCHED_ROOT/bin/route-deliveries.sh" "$PROJECT" --apply || \
+    echo "scheduler-run: route-deliveries returned $? -- continuing to dispatch" >&2
+fi
 # shellcheck disable=SC1090
 source "$CONF"
 
