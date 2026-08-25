@@ -150,6 +150,18 @@ senechal        | senechal@monkey        | 20m | live
 # pace. bin/tempo.sh sets the real interval from abletim's own backlog.
 abletim         | abletim@monkey         | 20m | live
 
+# ADDED 2026-08-25, Zach-directed: "yes stand up but ensure it has a no publish
+# to canvas guard." The guard is the precondition, not a follow-up: apms writes
+# into a LIVE Tulane course, its own NeverDelete rule means a wrong write can
+# only be followed up rather than withdrawn, and it reaches five students.
+# schedule/apms.conf exports APMS_READ_ONLY=1 and hf7y/apms-2173#23 is the
+# canvas.py guard that refuses every non-GET while it is set. A run that reads
+# Canvas and cannot change it is the whole shape of this row.
+#
+# Account uid 3016 and both clones are provisioned before this row lands, for
+# the same do_live reason as abletim above.
+apms            | apms@monkey            | 20m | live
+
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
 # libatk-1.0.so.0), so no gameplay commit can land there. UN-PAUSE ON OR
