@@ -1,7 +1,7 @@
 # /nightly-batch — the scheduler improving itself
 
-This is the scheduler's own Tier 2 job, run unattended overnight by
-`~/.local/bin/scheduler-nightly-batch-loop.sh`. You are working in a
+This is the scheduler's own Tier 2 job, run unattended overnight. You are
+working in a
 **throwaway git worktree on a `nightly/<date>` branch**, behind a **human
 review gate** — your commits are inspected and merged by a person in the
 morning, not activated automatically. Treat this like changing production
@@ -53,10 +53,10 @@ tomorrow," or anything that reshapes the engine every job depends on.
   judgment call, **file a GitHub issue** (`scheduler -i`, or `gh issue
   create --repo hf7y/scheduler --body-file <file>`) and describe it in the
   report rather than guessing. Never hand-type it into a markdown file.
-- **No new markdown files.** `schedule/_standing-rules.md` rule 5 and
-  `bin/markdown-cost.sh` both enforce this: a branch fails if it adds any
-  new top-level `.md`, or if >30% of its added lines are markdown.
-  Deletions are free.
+- **No new markdown files.** `schedule/_standing-rules.md` rule 5 and the
+  `prose` CI check both enforce this: a branch fails if it adds any new
+  top-level `.md`, or if >30% of its added lines are markdown. Deletions
+  are free.
 - Keep `README.md` honest — if you change how something works, update the
   README in the same commit.
 - If you complete a backlog item, close its issue in the same change

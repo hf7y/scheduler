@@ -22,8 +22,8 @@ followed them (#238/#240, 2026-08-20) once its content was fully
 superseded by `README.md` and safely archived at
 `vault:scheduler/DESIGN-NOTES.md`. Never restore any of them, and do not
 create a new top-level `.md` — `schedule/_standing-rules.md` rule 5
-("NO NEW MARKDOWN FILES") and `bin/markdown-cost.sh` both enforce this at
-merge.
+("NO NEW MARKDOWN FILES") and the `prose` CI check (the estate-wide guard,
+maintained in `hf7y/etalon`) both enforce this at merge.
 
 ## 0. Priority-order arguments (if given)
 
