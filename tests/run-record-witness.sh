@@ -262,6 +262,62 @@ grep -q 'RUN_RC=1' <<<"$(sed -n "${CALL_LINE},$((CALL_LINE+2))p" "$ENG")" \
   && ok "a computed FAILED sets RUN_RC -- it changes the run's exit status" \
   || bad "computed FAILED does not reach RUN_RC, so it is just another self-report"
 
+echo "== 14. a conf whose own prompt already names verdict.sh still gets a run record"
+# hf7y/scheduler#259: crt and chezz both showed runs=0 in the fleet sensor
+# (~/.local/share/scheduler-runs/<key>.jsonl did not exist) on a night both
+# ran and finished. The issue's own diagnosis names the cause: their
+# BATCH_PROMPT already contains the literal string "verdict.sh" (the
+# hand-pasted `$HOME/.../verdict.sh set <key> ...` line, same as every conf
+# predating append_verdict_closeout), so append_verdict_closeout's own
+# grep -q 'verdict\.sh' skips APPENDING ITS CLOSEOUT TEXT -- see case 3
+# above and tests/verdict-closeout-witness.sh case 3, both of which assert
+# that skip is correct and intentional.
+#
+# What this case checks is a DIFFERENT question: does that skip also stop
+# run_record_closeout from writing the ledger line? It must not -- the two
+# are unrelated mechanisms (append_verdict_closeout edits $PROMPT before
+# `claude -p` runs; run_record_closeout runs AFTER, unconditionally, per
+# lib/sweep-loop-common.sh:982 / case 13 above) -- but the issue was filed
+# on the theory that they are coupled, and nothing before this asserted
+# they are not.
+awk '/^append_verdict_closeout\(\) \{$/,/^\}$/' "$ROOT/lib/sweep-loop-common.sh" > "$TMP/avc.sh"
+grep -q 'verdict\.sh\|VERDICT_BIN' "$TMP/avc.sh" \
+  || bad "could not extract append_verdict_closeout() from lib/sweep-loop-common.sh"
+# shellcheck disable=SC1090
+. "$TMP/avc.sh"
+
+fresh
+B="$(git rev-parse HEAD)"
+echo real >> file.txt && git commit -qam "real work" && git push -q origin main
+A="$(git rev-parse HEAD)"
+REMOTE_SHA="$(git ls-remote origin -h refs/heads/main | cut -f1)"
+BEFORE_SHA="$B"; AFTER_SHA="$A"
+git remote set-url origin git@github.com:test/fixture.git
+
+VERDICT_BIN="$ROOT/bin/verdict.sh"
+TIER="nightly-batch"; PROJECT_KEY="crt"
+PROMPT='Work the queue.
+  $HOME/Documents/Projects/scheduler/bin/verdict.sh set crt <VERDICT> "..."'
+AVC_OUT="$(append_verdict_closeout)"
+grep -q 'skipped' <<<"$AVC_OUT" \
+  && ok "append_verdict_closeout skipped, as crt's real conf triggers" \
+  || bad "setup did not reproduce the skip -- test is not exercising the claim"
+
+JOB_NAME=crt-nightly-batch; BRANCH=main
+START_TS=$(( $(date +%s) - 5 )); RUN_RC=0; STATUS=done
+RUN_LEDGER_FILE="$TMP/state/scheduler-runs/crt.jsonl"
+STUB_ISSUES_OPENED=0 STUB_ISSUES_CLOSED=0 STUB_PRS_OPENED=0 STUB_PRS_MERGED=0 \
+  run_record_closeout > "$TMP/closeout14.out" 2>&1
+
+[ -f "$RUN_LEDGER_FILE" ] \
+  && ok "the ledger file exists despite the closeout-text skip" \
+  || bad "hf7y/scheduler#259 REPRODUCED: no ledger written when the conf's own prompt names verdict.sh"
+if [ -f "$RUN_LEDGER_FILE" ]; then
+  LINE="$(tail -1 "$RUN_LEDGER_FILE")"
+  grep -q "\"participant\":\"crt\"" <<<"$LINE" \
+    && ok "and it is a real record for this participant" || bad "wrong/garbled record: $LINE"
+fi
+
 cd /
 echo
 echo "run-record-witness: $PASS passed, $FAIL failed"
