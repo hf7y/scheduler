@@ -138,6 +138,18 @@ nine-speakers   | nine-speakers@monkey   | 20m | live
 sequestria      | sequestria@monkey      | 20m | live
 senechal        | senechal@monkey        | 20m | live
 
+# ADDED 2026-08-25, Zach-directed: "stand up abletim and crt". Unlike the
+# dcp-gate-site row below, this one is NOT aspirational -- the uid 3000-3099
+# account, both clones and schedule/abletim.conf are provisioned before this
+# row lands, in that order and deliberately: dose-project.sh's do_live exits 5
+# BROKEN ("names account 'abletim' but no such account exists") on a live row
+# whose account is missing, so merging this first would arm a break, not a
+# project. Re-verify with `bash bin/roster-diff.sh`, do not trust this comment.
+#
+# 20m is TEMPO_MIN_MIN, per the CEILING block above -- the ceiling, not the
+# pace. bin/tempo.sh sets the real interval from abletim's own backlog.
+abletim         | abletim@monkey         | 20m | live
+
 # PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
 # Playwright cannot launch a browser in that account (missing
 # libatk-1.0.so.0), so no gameplay commit can land there. UN-PAUSE ON OR
@@ -147,13 +159,26 @@ senechal        | senechal@monkey        | 20m | live
 # also be uncommented. Both, or it stays dark, same as always.
 chezz           | chezz@monkey           | 6h | parked
 
-# PAUSED 2026-08-06, Zach-directed: "CRT also needs to pause pending Zach
-# work." UN-PAUSE CONDITION IS A PERSON, NOT A DATE -- no 2026-08-13 here.
-# Note: schedule/crt.conf sets no CRON_HOST/CRON_ACCOUNT at all (unlike
-# chezz's, which does); the account@host below is staged from its
-# _paced.monkey.conf row and FREEZE's commented EXEMPT line, not from a
-# third file that agrees -- that third leg has simply never been filled in.
-crt             | crt@monkey             | 6h | parked
+# UN-PAUSED 2026-08-25, Zach-directed: "stand up abletim and crt and use the
+# ecosystem's native way to trigger them to develop unattended." The pause
+# recorded here on 2026-08-06 ("CRT also needs to pause pending Zach work")
+# named a PERSON as its un-pause condition, not a date; this is that person
+# saying so, which is the only thing that was ever going to move this row.
+#
+# The note this block used to carry -- that schedule/crt.conf sets no
+# CRON_HOST/CRON_ACCOUNT -- was true when it was written and is not now: that
+# file sets CRON_HOST="monkey" and CRON_ACCOUNT="crt", so the third leg
+# bin/roster-diff.sh wants is filled in and this row is corroborated rather
+# than staged. The FREEZE half of the same note is moot: schedule/FREEZE was
+# deleted 2026-08-20 (hf7y/scheduler#246/#187).
+#
+# 20m, not the 6h this row carried while parked, for the reason the CEILING
+# block above gives: the ceiling quantises tempo's setpoint, and at 6h
+# bin/tempo.sh's measured 120 min answer for crt would become 360. Measured
+# 2026-08-25, not assumed:
+#   verdict=RUN project=crt open=12 blocked=0 actionable=12 closed7d=30
+#   drive=12 want_min=120
+crt             | crt@monkey             | 20m | live
 
 # PAUSED 2026-08-06, Zach-directed, INDEFINITELY: "Baudin should come
 # offline until I can figure out what it is and what it's supposed to do. A
