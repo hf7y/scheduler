@@ -15,6 +15,12 @@
 # This witness asserts the fix: with no focus/ or questions/ directory
 # present, these three surfaces say so (BLIND) instead of implying an
 # empty backlog / no open questions.
+#
+# Section 4 (added 2026-08-25, #234) covers a fourth site the original fix
+# missed: the bare `scheduler focus <project>` verb itself still called
+# open_file() unconditionally and failed with open_file's generic "no file
+# yet at ..." -- which reads as "$proj has no FOCUS.md", not "this command
+# can no longer see one". Same BLIND framing now applied there too.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -74,6 +80,21 @@ if printf '%s' "$out" | grep -q 'no QUESTIONS.md symlink found'; then
 else
   ok "status does not claim nothing is open when it never looked"
 fi
+
+echo "== 4. bare 'scheduler focus <project>' verb: BLIND, not open_file's generic 'no file yet'"
+out="$(run focus witnessproj 2>&1)"
+rc=0; run focus witnessproj >/dev/null 2>&1 || rc=$?
+if printf '%s' "$out" | grep -qi 'blind'; then
+  ok "focus verb says BLIND when the focus/ mirror is absent"
+else
+  bad "focus verb did not say BLIND -- output: $out"
+fi
+if printf '%s' "$out" | grep -q 'no file yet at'; then
+  bad "focus verb still uses open_file's generic 'no file yet at ...' (implies empty, not unreadable)"
+else
+  ok "focus verb does not fall through to open_file's generic missing-file message"
+fi
+[ "$rc" -ne 0 ] && ok "focus verb exits non-zero on BLIND" || bad "focus verb exited 0 on BLIND"
 
 echo
 echo "== $PASS passed, $FAIL failed =="
