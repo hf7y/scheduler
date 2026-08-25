@@ -232,6 +232,16 @@ do_now() {
 
   [ "$ROW_STATE" = live ] || echo "note: '$PROJECT' is $ROW_STATE in the roster -- dispatching anyway, because you asked for one run, not for arming"
 
+  # ALREADY RUNNING IS NOT A DISPATCH. The witness below is a pgrep, and a
+  # pgrep cannot tell a run we just started from one that started an hour ago
+  # -- so without this check a launch that died on its first line would report
+  # success on the strength of the previous run. scheduler-run has its own
+  # mutex and would refuse anyway; this makes the refusal legible.
+  if pgrep -u "$ROW_ACCT" -f 'claude -p' >/dev/null 2>&1; then
+    echo "kept: '$PROJECT' is ALREADY running as $ROW_ACCT -- not starting a second one"
+    return 0
+  fi
+
   # PULL FIRST, ALWAYS. The paced runner pulls on its tick; a hand-run never
   # did, so a clone one commit behind died with `no such conf: <project>.conf`
   # on a project registered that same hour. Measured 2026-08-25, apms.
