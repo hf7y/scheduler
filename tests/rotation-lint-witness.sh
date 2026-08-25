@@ -162,9 +162,16 @@ echo "== 8. the enabled predicate still agrees with the live dispatcher"
 # asserts the runner's parse has not moved out from under it. If the runner
 # changes how it reads `enabled`, this fails loud rather than letting the
 # check quietly disagree with what dispatches.
+#
+# Since hf7y/scheduler#282, the runner's enabled decision is no longer this
+# bare conf-column test alone -- schedule/ROSTER is consulted first
+# (participant_enabled) and this is now only the FALLBACK for a project
+# ROSTER names no row for. rotation-lint.sh has no ROSTER awareness at all
+# (by design -- see its own header), so it can only ever mirror this
+# fallback/raw-conf test, not the ROSTER-aware decision. Assert it still does.
 RUNNER="$ROOT/bin/usage-paced-runner.sh"
-if grep -qF '[ "${enabled// /}" = "1" ] || continue' "$RUNNER"; then
-  ok "bin/usage-paced-runner.sh still tests \${enabled// /} = 1"
+if grep -qF '[ "${enabled// /}" = "1" ]' "$RUNNER"; then
+  ok "bin/usage-paced-runner.sh still tests \${enabled// /} = 1 (participant_enabled's ROSTER-less fallback)"
 else
   bad "the dispatcher's enabled test changed -- re-derive bin/rotation-lint.sh against it"
 fi
