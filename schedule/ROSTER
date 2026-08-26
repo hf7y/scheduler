@@ -203,12 +203,13 @@ chezz           | chezz@monkey           | 6h | parked
 #   drive=12 want_min=120
 crt             | crt@monkey             | 20m | live
 
-# PAUSED 2026-08-06, Zach-directed, INDEFINITELY: "Baudin should come
-# offline until I can figure out what it is and what it's supposed to do. A
-# run blocked on human-input should stop triggering." No date, no trigger --
-# un-pause condition is Zach deciding what baudin is for. Same
-# CRON_HOST/CRON_ACCOUNT gap as crt above: schedule/baudin.conf sets neither.
-baudin          | baudin@monkey          | 6h | parked
+# UN-PAUSED 2026-08-26, Zach-directed. The pause stated its own release
+# condition -- "un-pause condition is Zach deciding what baudin is for" -- and
+# he decided it: baudin's Home Assistant instance is the store and the MCP
+# surface for the voice -> shopping-list loop (hf7y/baudin#42,
+# hf7y/groc-mangr#59). The CRON_HOST/CRON_ACCOUNT gap named here is closed in
+# schedule/baudin.conf in this same change.
+baudin          | baudin@monkey          | 6h | live
 secretaire      | secretaire@monkey      | 6h | parked
 
 # ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
