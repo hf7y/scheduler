@@ -161,27 +161,12 @@ MODEL="$RES_VAL"
 command -v curl >/dev/null 2>&1 || emit_error no_curl
 command -v python3 >/dev/null 2>&1 || emit_error no_python
 
-# THREE PLACES A TOKEN CAN LIVE, and until 2026-08-03 this read only one of
-# them -- the one that does NOT work on an unattended host.
-#
+# TRAP: THREE PLACES A TOKEN CAN LIVE, and until 2026-08-03 this read only the one that does NOT work on an unattended host:
 #   1. $CLAUDE_CODE_OAUTH_TOKEN        exported in the environment
 #   2. ~/.claude/settings.json .env    written from `claude setup-token`
 #   3. ~/.claude/.credentials.json     the interactive OAuth login
-#
 # (3) was the only one supported, and it is the login that EXPIRES and that a
-# headless host cannot perform. `monkey` -- the self-dev host stood up this
-# date, one unix user per project, no browser -- authenticates with a
-# long-lived setup-token in (2), because that is the only shape `claude`
-# itself reads with no session bus and no env inherited through cron.
-#
-# So the gate held every dispatch at `verdict=ERROR reason=no_token` on a host
-# where `claude -p` worked perfectly. The ecosystem's unattended-auth story
-# and its quota gate disagreed about where a credential lives, and the gate
-# was the half that got to decide. Same class as conf_field reading a conf
-# two ways: one fact, two readers.
-#
-# Order is deliberate: an explicitly exported token wins, because a caller
-# that set it meant it.
+# headless host cannot perform.
 TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
 TOKEN_SRC="env"
 if [ -z "$TOKEN" ]; then
@@ -200,30 +185,13 @@ fi
 HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
 
 # --- try the FREE probe first, fall back to the paid one -------------------
-# GET /api/oauth/usage costs nothing, but it only answers for an INTERACTIVE
-# OAuth credential (~/.claude/.credentials.json). A `claude setup-token`
-# credential (every monkey self-dev account) gets 403 -- confirmed live
-# 2026-08-13, error body `permission_error: OAuth token does not meet scope
-# requirement user:profile`. hf7y/scheduler#110 made this endpoint the ONLY
-# path and it 403'd on every setup-token account at once -- ERROR is HOLD by
-# design, so that stopped ALL self-dev dispatch until #132 reverted it back
-# to paid-always. This is the fallback #133 asked for, not a repeat of #110:
-# free is attempted, but ANY doubt -- non-200, or a 200 body that doesn't
-# parse into a usable window -- falls straight through to the paid probe
-# below, unchanged. A wrong guess about the free body's shape degrades to
-# "pay for this tick" rather than to a silently wrong verdict.
-#
-# 429 falls through like every other non-200. It used to be walled off from
-# the fallback on the reasoning that the paid endpoint shares the same budget
-# and would likely 429 too, so the call would buy nothing. Live on monkey
-# 2026-08-13 that reasoning was wrong in the direction that costs the most:
-# the FREE endpoint rate-limits on its own, independently of account quota,
-# and every 429 became reason=no_headers -> ERROR -> HOLD. realisateur, ecosim
-# and vim-arcade drew it on every tick from 08:50 onward and dispatched
-# nothing for 14h with quota to spare -- bibliothecaire, alternating between
-# the two paths in the same hours, reported binding=7d NOT binding at 14:12.
-# A 429 that does share the budget still costs exactly one call to find out,
-# and answers with a real verdict instead of a hold that measured nothing.
+# TRAP: GET /api/oauth/usage is free but answers only for an INTERACTIVE OAuth
+# credential. A `claude setup-token` credential -- every monkey self-dev
+# account -- gets 403 (`OAuth token does not meet scope requirement
+# user:profile`). scheduler#110 made it the ONLY path, it 403d on every
+# setup-token account at once, and ERROR is HOLD by design, so that stopped
+# ALL self-dev dispatch until #132 reverted to paid-always. This is #133s
+# fallback, not a repeat of #110.
 FREE_BODY="$(mktemp)"; trap 'rm -f "$HDR" "$FREE_BODY"' EXIT
 FREE_CODE=$(curl -sS -o "$FREE_BODY" -w '%{http_code}' --max-time 15 \
   https://api.anthropic.com/api/oauth/usage \

@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
 # cli-guard.sh -- the argument contract, in one place.
 #
-# TRAPS (the rest of this header is in the vault):
-#   1. THE SILENT FULL RUN. `ecosystem-survey.sh --not-a-real-flag` ignored the
-#      flag and printed a complete, authoritative-looking survey. The reader
-#      has no way to tell that the flag they thought they passed did nothing.
-#   2. THE SILENT WRITE. `weight-audit.sh` takes no flags at all and REWRITES
-#      AND PUSHES schedule/_paced.conf. So `weight-audit.sh --dry-run` -- a
-#      flag a careful operator would plausibly reach for, and which does not
-#      exist -- was silently a live apply-and-push. That is the exit-0 no-op
-#      inverted into an exit-0 no-op that changes the ecosystem's weights.
-# USAGE. Set the four CLI_* variables, source this, call `cli_guard "$@"`
-# BEFORE doing any work. The guard validates and returns; it never consumes
-# arguments, so each script keeps parsing its own exactly as before.
+# USAGE: set the four CLI_* variables, source this, call `cli_guard "$@"` BEFORE
+# doing any work. It validates and returns; it never consumes arguments, so each
+# script keeps parsing its own exactly as before.
 #
-# exit 0)". realisateur's own sensors scored 0 of 8 against it: eleven of the
+# TRAP: THE SILENT FULL RUN. `ecosystem-survey.sh --not-a-real-flag` ignored the
+#   flag and printed a complete, authoritative-looking survey.
+# TRAP: THE SILENT WRITE. `weight-audit.sh` took no flags and REWROTE AND PUSHED
+#   schedule/_paced.conf -- so `weight-audit.sh --dry-run`, a flag a careful
+#   operator would reach for and which does not exist, was a live apply-and-push.
+#
 # EXIT CODES, uniform across every script that sources this:
 
 cli_die() {

@@ -29,8 +29,7 @@ SSH_DIR="$HOME/.ssh"
 KEY="$SSH_DIR/deploy_$REPO"
 INC="$SSH_DIR/config.selfdev"
 ALIAS="github-$REPO"
-# The deploy key title GitHub shows. Host and account are IN the title because
-# the next person revoking one needs to know which machine loses access.
+# The title carries host and account: whoever revokes one needs to know which machine loses access.
 TITLE="$HOST_NAME-$USER_NAME-$REPO"
 
 PASS=0; GAPS=0; BAD=0
@@ -43,10 +42,7 @@ echo "== wire-selfdev-git $OWNER/$REPO ($MODE, $ACCESS) -- $USER_NAME@$HOST_NAME
 
 [ "$(id -u)" -ne 0 ] || { bad "running as root -- these credentials belong to the PROJECT user, and root's copy would be unreadable to it"; exit 5; }
 
-# --- 1. known_hosts ----------------------------------------------------------
-# A fresh account has no known_hosts, and an unattended `git clone` against an
-# unknown host key does not prompt -- it FAILS. This is the step whose absence
-# looks like a broken key.
+# TRAP: a fresh account has no known_hosts, and an unattended `git clone` against an unknown host key does not prompt -- it FAILS. Absence of this step looks like a broken key.
 if [ -f "$SSH_DIR/known_hosts" ] && grep -q '^github.com ' "$SSH_DIR/known_hosts" 2>/dev/null; then
   ok "github.com host key already trusted"
 elif [ "$MODE" = --check ]; then
@@ -72,10 +68,7 @@ else
   else bad "ssh-keygen failed for $REPO"; fi
 fi
 
-# --- 3. ssh config -----------------------------------------------------------
-# Written to a SEPARATE file that ~/.ssh/config Includes, so this script never
-# rewrites a config a human may also be editing -- the multi-writer reason
-# exists: two writers, one file, is how content gets lost.
+# TRAP: written to a SEPARATE file that ~/.ssh/config Includes -- two writers, one file, is how content gets lost.
 if [ -f "$INC" ] && grep -q "^Host $ALIAS\$" "$INC" 2>/dev/null; then
   ok "ssh alias $ALIAS present"
 elif [ "$MODE" = --check ]; then
@@ -92,9 +85,7 @@ EOF
   } >> "$INC" && chmod 600 "$INC" && ok "ssh alias written" || bad "could not write $INC"
 fi
 
-# `Include` must be present, and FIRST: ssh takes the first value it sees for
-# any keyword, so an Include placed after a matching Host block is silently
-# outranked by it.
+# TRAP: `Include` must be FIRST -- ssh takes the first value it sees for a keyword, so an Include after a matching Host block is silently outranked.
 if [ -f "$SSH_DIR/config" ] && grep -q 'config.selfdev' "$SSH_DIR/config" 2>/dev/null; then
   ok "~/.ssh/config includes config.selfdev"
 elif [ "$MODE" = --check ]; then
@@ -107,8 +98,7 @@ else
     || bad "could not write ~/.ssh/config"
 fi
 
-# NO url.insteadOf here any more (#171): it shadowed the App helper, so
-# re-adding it would quietly undo the push-path switch.
+# NO url.insteadOf (#171): it shadowed the App helper, so re-adding it quietly undoes the push-path switch.
 
 # --- 5. register the deploy key with GitHub ----------------------------------
 # The one step that needs a credential this script cannot mint. If gh is not

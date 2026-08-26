@@ -40,9 +40,7 @@ for c in git python3 node claude; do
   else gap "$c is not on PATH"; fi
 done
 
-# Ubuntu's ~/.profile only prepends ~/.local/bin if the directory EXISTS at
-# login. Created later, it is not on PATH until the next login -- which is how
-# a verb that is installed correctly still cannot be found.
+# TRAP: ~/.local/bin must EXIST at login or Ubuntu ~/.profile does not add it -- a correctly-installed verb that cannot be found.
 if [ -d "$HOME/.local/bin" ]; then ok "~/.local/bin exists"
 else gap "~/.local/bin does not exist -- create it BEFORE the next login or .profile will not add it to PATH"; fi
 case ":$PATH:" in *":$HOME/.local/bin:"*) ok "~/.local/bin is on PATH" ;;
@@ -51,23 +49,16 @@ case ":$PATH:" in *":$HOME/.local/bin:"*) ok "~/.local/bin is on PATH" ;;
 if systemctl --user show-environment >/dev/null 2>&1; then ok "systemd --user is running"
 else gap "systemd --user is not available to this session"; fi
 
-# Linger is not needed for cron, but it is what lets a --user unit survive
-# logout later. Cheap to have, expensive to add (needs root) once you need it.
+# Linger is not needed for cron; it is what lets a --user unit survive logout later. Cheap now, needs root later.
 linger="$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null || true)"
 case "$linger" in yes) ok "linger enabled" ;; *) gap "linger is not enabled (needs root: loginctl enable-linger $(id -un))" ;; esac
 
-# THE ONE THAT SILENTLY DISPATCHES THE WRONG ROTATION.
-# scheduler resolves schedule/_paced.$(hostname -s).conf and falls back to the
-# SHARED _paced.conf when there is no host file. On a new host that fallback is
-# not a default, it is another machine's rotation.
+# TRAP: THE ONE THAT SILENTLY DISPATCHES THE WRONG ROTATION. scheduler falls back from _paced.$(hostname -s).conf to the SHARED _paced.conf; on a new host that is not a default, it is another machine's rotation. What matters is WHAT would be inherited -- mandark reads the shared one deliberately.
 HOST="$(hostname -s)"
 SHARED_PACED="$PROJECTS/scheduler/schedule/_paced.conf"
 if [ -f "$PROJECTS/scheduler/schedule/_paced.$HOST.conf" ]; then
   ok "schedule/_paced.$HOST.conf exists -- this host has its own rotation"
 elif [ -d "$PROJECTS/scheduler" ]; then
-  # The fallback is not wrong by itself: mandark deliberately has no host file
-  # and reads the shared one, which is documented in _paced.dexter.conf's own
-  # header. What matters is WHAT would be inherited. Falling back onto a file
   enabled=$(grep -cE '^[a-z][^|]*\|1\|' "$SHARED_PACED" 2>/dev/null || echo 0)
   if [ "${enabled:-0}" -gt 0 ]; then
     bad "no schedule/_paced.$HOST.conf, and the shared _paced.conf has $enabled ENABLED row(s) -- this host would silently dispatch another machine's rotation"
@@ -78,9 +69,6 @@ else
   gap "scheduler not cloned yet; cannot check for _paced.$HOST.conf"
 fi
 
-# THREE WAYS THIS USER CAN BE AUTHENTICATED, and the check must know all of
-# them or it reports a false gap on the shape we actually use.
-#
 CRED="$HOME/.claude/.credentials.json"
 SETTINGS="$HOME/.claude/settings.json"
 auth=""
@@ -101,8 +89,7 @@ fi
 # read as more than it is.
 [ -n "$auth" ] && printf '  ..      the witness is a live call, not this file: claude -p "reply ok"\n'
 
-# Read AND write. A key existing is not the same fact as GitHub accepting it,
-# and this ecosystem has already lost four days to that exact distinction.
+# Read AND write: a key existing is not GitHub accepting it -- four days lost to that distinction.
 if git ls-remote "https://github.com/$GH_OWNER/realisateur.git" HEAD >/dev/null 2>&1; then
   ok "GitHub read path works"
 else gap "cannot read https://github.com/$GH_OWNER/realisateur.git"; fi
@@ -133,8 +120,6 @@ WIRE="$(dirname "$0")/wire-selfdev-git.sh"
 wire_repo() {
   local name="$1" access=""
   [ -x "$WIRE" ] || { gap "$name: wire-selfdev-git.sh not found beside $(basename "$0") -- clone will use whatever credential happens to exist"; return 0; }
-  # READ-WRITE only for the account's OWN repo. The account is named for its
-  # project, which is the whole reason one unix user per project buys anything.
   [ "$name" = "$(id -un)" ] && access="--rw"
   # NOT piped into sed: a pipeline's status is the LAST command's, so `| sed`
   # would swallow every failure this script exists to surface.
@@ -163,9 +148,7 @@ clone_or_update() {
 clone_or_update realisateur "https://github.com/$GH_OWNER/realisateur.git"
 clone_or_update scheduler   "https://github.com/$GH_OWNER/scheduler.git"
 
-# EVERY OTHER REPO IS DERIVED, NOT TYPED. schedule/<p>.conf already declares
-# REPO_URL per project -- that IS the registry. A typed list here would be a
-# second source that drifts from it, which is the failure realisateur's own
+# EVERY OTHER REPO IS DERIVED, NOT TYPED: schedule/<p>.conf declares REPO_URL and IS the registry. A typed list here would be a second source that drifts.
 for p in ${SELFDEV_PROJECTS:-senechal ecosim}; do
   conf="$PROJECTS/scheduler/schedule/$p.conf"
   if [ ! -f "$conf" ]; then bad "$p: no schedule/$p.conf -- not a registered project"; continue; fi
@@ -189,11 +172,7 @@ if ! command -v installe >/dev/null 2>&1; then
   fi
 else ok "installe already on PATH"; fi
 
-# NO SHIM STEP. #264 got off shims (2026-08-18) and #511 deleted the installer;
-# this block outlived both and was the last thing in the estate still trying to
-# run it. User commands and hooks ride the verb build instead -- carried in
-# bin/lib/carries.tsv, installed by install-verb-build.sh below -- and the
-# settings.json half is selfdev-hooks-provision.sh, run by root as its own step.
+# NO SHIM STEP: #264 got off shims and #511 deleted the installer. Commands and hooks ride the verb build (bin/lib/carries.tsv); settings.json is selfdev-hooks-provision.sh, run by root.
 if [ -x "$PROJECTS/realisateur/bin/install-verbs.sh" ]; then
   act "install-verbs.sh --apply (every write routed through installe)"
   "$PROJECTS/realisateur/bin/install-verbs.sh" --apply \

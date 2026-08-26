@@ -1,95 +1,50 @@
 #!/usr/bin/env bash
 # Shared engine for per-project bug-sweep / nightly-batch loop scripts.
 #
-# A per-project wrapper sets the variables below, THEN sources this file
-# (does not execute it directly) -- sourcing runs the actual
-# lock/expiry/heartbeat/clone/invoke-claude logic using those variables.
-# See ../examples/ for full per-project wrappers.
+# A per-project wrapper sets the variables below and then SOURCES this file
+# (never executes it): sourcing runs the lock / expiry / heartbeat / clone /
+# invoke-claude logic against them. Full wrappers: ../examples/.
+# The origin story is vault:scheduler/sweep-loop-common-header-20260826.md.
 #
-# This is extracted from two real, independently-written scripts
-# (chezz-bug-sweep-loop.sh and vkv-inventory-bug-sweep-loop.sh) that
-# turned out to be ~90% identical boilerplate -- the only genuine
-# per-project differences were the repo URL, which subdirectory to cd
-# into, the prompt text, and a couple of tunables. Everything else
-# (lock file so overlapping cron fires no-op instead of racing, 7-day
-# auto-expiry that removes its own crontab entry, a 24h heartbeat
-# notification, log rotation, a dedicated clone that's safe to
-# `reset --hard` because it's never the user's real working copy) is
-# exactly the same logic either project needs, so it only needs to exist
-# once.
+# REQUIRED
+#   JOB_NAME    short, unique, matches the wrapper's own filename. Names this
+#               job's state dir (~/.local/share/$JOB_NAME) and MUST match the
+#               SWEEP_JOB_NAME/BATCH_JOB_NAME field in schedule/<project>.conf
+#               -- that is how sync-crontab.sh finds this job's expiry state.
+#               TRAP: this script no longer edits crontab; sync-crontab.sh is
+#               the only writer, so a schedule has one source.
+#   PROJECT_KEY short, unique PER PROJECT, not per job. A project's Tier 1 and
+#               Tier 2 wrappers have different JOB_NAMEs and the SAME
+#               PROJECT_KEY -- that shared key is how they detect and avoid
+#               each other. TRAP: two projects must never share one.
+#   REPO_URL    git clone URL (SSH) for the dedicated clone
+#   REPO_SUBDIR subdirectory to cd into before invoking claude ("." if the
+#               project IS the repo root)
+#   PROMPT      the full prompt text passed to `claude -p`
 #
-# Required variables the wrapper must set before sourcing:
-#   JOB_NAME       short, unique, matches this wrapper's own filename.
-#                  Also names this job's state dir (~/.local/share/$JOB_NAME)
-#                  and must match the SWEEP_JOB_NAME/BATCH_JOB_NAME field
-#                  for this job in this project's ../schedule/<project>.conf
-#                  entry -- that's how bin/sync-crontab.sh finds this job's
-#                  expiry state (see EXPIRY_DAYS below) to prune its
-#                  crontab line once expired. This script no longer edits
-#                  crontab itself -- sync-crontab.sh is the only writer, so
-#                  there's one place a job's schedule actually comes from.
-#   PROJECT_KEY    short, unique PER PROJECT (not per job) -- e.g.
-#                  "vkv-inventory". A project's Tier 1 bug-sweep and Tier 2
-#                  nightly-batch wrappers have DIFFERENT JOB_NAMEs but the
-#                  SAME PROJECT_KEY -- that shared key is what lets them
-#                  detect and avoid each other (see the registry section
-#                  below). Two different projects must never share one.
-#   REPO_URL       git clone URL (SSH) for the dedicated clone
-#   REPO_SUBDIR    subdirectory within the clone to cd into before
-#                  invoking claude ("." if the project IS the repo root,
-#                  e.g. vkv-inventory; something like "inv" if the
-#                  command file lives one level down from the repo root)
-#   PROMPT         the full prompt text to pass to `claude -p`
-#
-# Optional (sensible defaults given):
-#   TIER           default "unspecified" -- free-form label ("bug-sweep",
-#                  "nightly-batch", ...) recorded in the registry marker
-#                  purely for the other tier's own log message and for
-#                  bin/morning-report.sh; not used for any logic decision.
-#   EXPIRY_DAYS    default 7
-#   MAX_TURNS      default 40 (bug-sweep scale -- bump way up, e.g. 200,
-#                  for a Tier 2 nightly-batch wrapper; see
-#                  nightly-batch-loop.sh)
-#   MODEL          default unset -- pass a specific model id to `claude
-#                  -p --model` (e.g. "claude-sonnet-5" for a mechanical
-#                  bug sweep, instead of whatever the CLI default is).
-#                  Unset means no --model flag (CLI default), so this is
-#                  backward-compatible. Pair it with PRECHECK_CMD (below):
-#                  the precheck cuts HOW OFTEN claude runs, MODEL cuts what
-#                  each run costs.
-#   ALLOWED_TOOLS  default "Bash,Read,Write,Edit,Glob,Grep"
-#   NODE_BIN_DIR   default /home/zach/.nvm/versions/node/v25.2.1/bin --
-#                  wherever `claude` actually resolves from on this
-#                  machine; cron's own PATH is minimal and won't find it
-#                  otherwise
-#   BRANCH         default "main" -- branch this job resets to and pushes
-#                  against
-#   SECRETS_SRC_DIR
-#                  default unset (disabled). A local directory of
-#                  non-git secrets (credentials, tokens, keypairs) that
-#                  won't be present in a fresh `git clone` because
-#                  they're gitignored by design, not by accident. If set,
-#                  copied into the dedicated clone's $SECRETS_DEST_SUBDIR
-#                  every run (not just on first clone), so a rotated
-#                  credential is picked up without editing this wrapper.
-#                  `git reset --hard` never touches untracked files, so
-#                  this is safe to copy in before it runs. Pattern
-#                  originated in home-assistant's real wrapper (it
-#                  hand-rolled this ahead of sourcing this file before
-#                  this option existed -- worth migrating once confirmed).
-#   SECRETS_DEST_SUBDIR
-#                  default ".session-handoff" -- subdirectory of the
-#                  clone SECRETS_SRC_DIR's contents get copied into.
-#   PRECHECK_CMD   default unset (always runs). A cheap shell command
-#                  (evaluated after the clone/checkout/reset below, so it
-#                  can inspect fresh repo state) that should exit 0 if
-#                  there's real work to consider and non-zero if this run
-#                  can be skipped without invoking `claude -p` at all --
-#                  e.g. "nothing changed in the tracker or FOCUS.md since
-#                  last time." Exists because a full nightly-batch turn
-#                  budget isn't free even on a night with nothing to do;
-#                  see README's "Cost of an idle run" section. Opt-in --
-#                  no existing wrapper sets this yet.
+# OPTIONAL (defaults in parentheses)
+#   TIER               ("unspecified") free-form label, recorded in the
+#                      registry marker for logging only -- never a decision.
+#   EXPIRY_DAYS        (7)
+#   MAX_TURNS          (40) bug-sweep scale; a nightly-batch wants ~200.
+#   MODEL              (unset -> no --model flag, so CLI default). Pair with
+#                      PRECHECK_CMD: the precheck cuts HOW OFTEN claude runs,
+#                      MODEL cuts what each run costs.
+#   ALLOWED_TOOLS      ("Bash,Read,Write,Edit,Glob,Grep")
+#   NODE_BIN_DIR       (/home/zach/.nvm/versions/node/v25.2.1/bin) wherever
+#                      `claude` resolves from. TRAP: cron's PATH is minimal and
+#                      will not find it otherwise.
+#   BRANCH             ("main") branch this job resets to and pushes against
+#   SECRETS_SRC_DIR    (unset) a local dir of non-git secrets, gitignored by
+#                      design. Copied into the clone EVERY run, not just on
+#                      first clone, so a rotated credential is picked up
+#                      without editing the wrapper. Safe before `git reset
+#                      --hard`, which never touches untracked files.
+#   SECRETS_DEST_SUBDIR (".session-handoff")
+#   PRECHECK_CMD       (unset -> always runs) a cheap command, evaluated AFTER
+#                      the clone so it can inspect fresh repo state: exit 0 if
+#                      there is work, non-zero to skip `claude -p` entirely.
+#                      A nightly turn budget is not free on a quiet night.
 
 set -uo pipefail
 
@@ -319,87 +274,9 @@ $block
 $PROMPT"
 }
 
-# THE VERDICT CLOSEOUT -- appended to every batch brief, by the engine.
-#
-# bin/usage-paced-runner.sh logs, on a run that wrote nothing:
-#
-#   NO-VERDICT <p> -- ran with no verdict written (its brief asks for one)
-#
-# That parenthesis was an assumption, not a fact. Until 2026-08-06 the ONLY
-# thing anywhere that asked for a verdict was one hand-written paragraph
-# inside ONE conf's BATCH_PROMPT (schedule/bibliothecaire.conf, step 6). Every
-# other participant's brief was silent, so bibliothecaire wrote verdicts and
-# nobody else ever had: vim-arcade's $HOME/.local/share/scheduler-verdict/ did
-# not exist AT ALL after weeks of clean, untruncated 6-hourly dispatches
-# (probed on monkey 2026-08-06 -- the 18:00 run finished in 185s, rc=0, with a
-# full closing summary, so it was not truncation). The runner faithfully
-# logged NO-VERDICT every single tick and re-dispatched forever, which is
-# exactly the "retries forever, no braking" failure bin/verdict.sh was written
-# to end.
-#
-# So the instruction belongs HERE, where every dispatch passes, and not in
-# each conf: the contract is the RUNNER's, the runner is shared, and the next
-# account armed into schedule/_paced*.conf is then correct by default rather
-# than correct if someone remembered to paste a paragraph. Putting it here
-# also works regardless of how a conf spells its brief -- an inline prompt
-# (bibliothecaire) or a bare slash command (vim-arcade's "/nightly-batch",
-# which resolves inside the PROJECT's own repo, where this repo cannot reach
-# to add a step).
-#
-# BATCH TIER ONLY. The verdict file is keyed on the ROTATION PARTICIPANT NAME
-# (bin/verdict.sh's header), every row in schedule/_paced*.conf dispatches
-# `scheduler-run <p> batch`, and the runner consumes the file at dispatch. A
-# sweep-tier run writing under the same key between paced ticks would hand the
-# batch run someone else's verdict.
-#
-# A conf that already names verdict.sh itself keeps its own wording, unchanged:
-# bibliothecaire's is strictly more specific than this generic one (it spells
-# out that a request blocked on a human is DONE, not CONTINUE), and two
-# overlapping instructions in one prompt are worse than one good one.
-#
-# CALL IT BEFORE THE FEEDBACK BLOCKS, and only then. The skip test below asks
-# "does this CONF already ask for a verdict?", so its input must be the conf's
-# own brief and nothing else. Called after the feedback prepending instead, it
-# reads the feedback -- and vim-arcade's BLOCKERS.md section contains the
-# string verdict.sh, so on the first real dispatch (2026-08-06) it skipped on
-# the exact participant it was written to fix. tests/verdict-closeout-
-# witness.sh case 6 holds the ordering.
-#
-# Globals in, global out: reads TIER/PROJECT_KEY/VERDICT_BIN, rewrites PROMPT.
-# Same shape as notify() above, and for the same reason -- tests/
-# verdict-closeout-witness.sh lifts this function out of the engine and drives
-# it directly, which it cannot do to code buried in the run body.
-# reconcile_own_labels -- clear `needs-human` from decisions the human has
-# ALREADY ANSWERED, on this project's own tracker and no other.
-#
-# WHY IT IS NOT COSMETIC. The label is derived from line 1 of the body
-# (realisateur's `etiquette`, bin/lib/labels.tsv) and is cleared when
-# issue_answered() finds a human comment. bin/tempo.sh subtracts it from
-# `actionable` BEFORE dividing -- the subtraction #262 deliberately kept when
-# it capped drive at closures. So a label left on an answered decision
-# LENGTHENS this project's own dispatch interval: the human's answer applies
-# the brake it was meant to release. Measured across hf7y 2026-08-22: 12 of 48
-# `needs-human` issues had already been answered, 7 of them in one repo, and
-# nothing anywhere ran `etiquette` -- no cron, no CI, no brief. The mechanism
-# was correct and had no invoker.
-#
-# NOT A NEW CLOCK. It rides the dispatch that already happens, which is also
-# the only moment the label's braking effect matters.
-#
-# OWN REPO ONLY, derived from REPO_URL, which every conf already sets. An
-# account reconciling another project's labels is a cross-account write with
-# no owner, and self-dev containment forbids it.
-#
-# NEVER FATAL, NEVER SILENT. Aborting a dev run over a label sweep is worse
-# than a stale label; failing quietly is how this went unnoticed in the first
-# place, so a missing verb and a BLIND read each say so on their own line.
-#
-# Globals in: REPO_URL. Writes nothing. tests/label-reconcile-witness.sh lifts
-# this function out of the engine and drives it directly.
-# own_repo_slug -- this project's owner/repo, or rc 1. STRICTLY owner/repo: a
-# first draft tested only for a slash, which crt's bare local remote
-# (/srv/git/crt.git) passes -- it would have handed `etiquette` a filesystem
-# path as a repo slug. Require the host, and exactly two non-empty halves.
+# THE VERDICT CLOSEOUT -- appended to every batch brief, BY THE ENGINE, because the contract is the RUNNER's and the runner is shared. Until 2026-08-06 the only thing asking for a verdict was one paragraph in ONE conf, so bibliothecaire wrote verdicts and nobody else ever had -- and usage-paced-runner logged NO-VERDICT every tick and re-dispatched forever, the exact "retries forever, no braking" failure verdict.sh exists to end. Here, the next account armed is correct BY DEFAULT, and it works whether a conf spells its brief inline or as a bare slash command resolved in the project's own repo.
+# TRAP: BATCH TIER ONLY. The verdict file is keyed on the ROTATION PARTICIPANT name and the runner consumes it at dispatch, so a sweep-tier run writing the same key between paced ticks hands the batch run someone else's verdict.
+# A conf that already names verdict.sh keeps its own wording: bibliothecaire's is strictly more specific than this generic one.
 own_repo_slug() {
   local slug=""
   case "$REPO_URL" in

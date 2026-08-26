@@ -3,21 +3,10 @@
 # selfdev-permissions-provision.test.sh -- witness for
 # bin/selfdev-permissions-provision.sh.
 #
-# Cases:
-#   A no permissions key at all        -> DRIFT, and --apply writes the block
-#   B a PARTIAL permissions key        -> DRIFT, not "ok" (the shape
-#     bibliothecaire actually had: {"allow":[...]} with no defaultMode and no
-#     deny -- a key that exists and grants nothing, which is #294's "a guard
-#     that exists and grades nothing" in config form)
-#   C already correct                  -> ok, and --apply rewrites nothing
-#   D unparseable settings.json        -> BLIND, never overwritten
-#   E the human's own account (zach)   -> never visited
-#   F --apply PRESERVES env and the other keys (the OAuth token lives in env;
-#     clobbering it takes the account off the air to fix its permissions)
-#   G --apply makes a backup first
-#   H an empty roster                  -> BLIND (3), never a clean 0
-#   I --print emits valid JSON, and the deny floor is non-empty
-#   J bare invocation writes NOTHING
+# The cases are A-J and each is NAMED IN ITS OWN ASSERTION below -- a hand
+# maintained index here would be a second list to keep in step, which is the
+# defect realisateur's tests.yml header records paying for three times in one
+# day. Read `grep '"[A-J]:' ` instead.
 #
 # Usage: bin/tests/selfdev-permissions-provision.test.sh  (exit 0 = all pass)
 set -uo pipefail

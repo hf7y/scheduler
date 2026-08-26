@@ -33,9 +33,7 @@ case "$PROJECT" in ""|-*) echo "usage: $0 <project> [--check|--apply] [--no-key]
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST="$(hostname -s 2>/dev/null || echo unknown)"
-# Whose key, and whose repo checkout, we are working from. Under sudo this is
-# the human; run as root proper it is root, and then --no-key is the only
-# sensible mode because root's authorized_keys is not a project credential.
+# Whose key and whose checkout we work from. Under sudo the invoking user is not the target.
 HANDS="${SUDO_USER:-root}"
 HANDS_HOME="$(getent passwd "$HANDS" | cut -d: -f6)"
 
@@ -102,18 +100,14 @@ run_as() {
     bash -lc "$1"
 }
 
-# STAGE, don't reach across accounts. $HERE is whatever checkout this script
-# was invoked from -- typically an EXISTING project account's own realisateur
-# clone, e.g. bibliothecaire's -- and every project home is 0700 (provisioned
+# STAGE, do not reach across accounts: $HERE is whatever checkout this runs from.
 STAGE="$HOME_DIR/.selfdev-setup"
 install -d -m 700 -o "$PROJECT" -g "$PROJECT" "$STAGE"
 install -m 700 -o "$PROJECT" -g "$PROJECT" \
   "$HERE/wire-selfdev-git.sh" "$HERE/land-selfdev.sh" "$STAGE/"
 
 say "3/8 git credentials, per repo"
-# THE PIPE USED TO EAT THE ANSWER. wire-selfdev-git.sh already fails loud on
-# its own: its "6. the witness" section runs `git ls-remote` against the freshly
-# wired alias and exits 5 on `BAD WITNESS FAILED: ... the wiring is not live`.
+# TRAP: THE PIPE USED TO EAT THE ANSWER -- wire-selfdev-git.sh fails loudly and a pipeline reports its LAST stage.
 wire_failed=""
 for repo in realisateur scheduler senechal "$PROJECT"; do
   access=""
@@ -144,9 +138,6 @@ run_as "'$STAGE/land-selfdev.sh' --land" 2>&1 | tail -25
 # It was inline here, which meant the only way to give an account a clock was
 say "5/8 the GitHub App credential (host-wide)"
 if [ -x "$HERE/selfdev-app-key.sh" ]; then
-  # rc read from the command, not from a pipeline whose last stage is `sed`.
-  # `set -o pipefail` is on here and would carry it, but the 3/4 block in this
-  # same file records what that assumption cost once already.
   appkey_out="$("$HERE/selfdev-app-key.sh" --apply --owner "${SELFDEV_GH_OWNER:-hf7y}" 2>&1)"; appkey_rc=$?
   printf '%s\n' "$appkey_out" | sed 's/^/  /'
   if [ "$appkey_rc" -eq 0 ]; then

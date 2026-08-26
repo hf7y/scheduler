@@ -1,21 +1,4 @@
-#!/usr/bin/env bash
-#
-# NAMING NOTE: this suite's own assertion helpers are prefixed `t_` on
-# purpose. The script under test defines global `ok()`/`gap()`/`bad()`
-# helpers of its own (the estate-wide idiom -- wire-selfdev-git.sh,
-# provision-selfdev-user.sh, selfdev-release-tick.sh all do the same), and
-# sourcing it into this suite's shell REDEFINES any same-named function this
-# file declared first. A first draft used bare ok()/bad() and passed 11/11 --
-# every one of dozens of intentionally-failing assertions had been silently
-# swallowed into the SCRIPT's own BAD counter instead of this suite's `fail`,
-# because the source line runs after the helpers and simply overwrites them.
-# Caught by eye, not by the suite (a suite cannot catch its own silencing);
-# the fix is the naming rule stated here so it cannot recur by accident.
-#
-# selfdev-credentials.test.sh -- witness for bin/selfdev-credentials.sh and
-# bin/lib/selfdev-credentials-set.sh.
-#
-# Usage: bin/tests/selfdev-credentials.test.sh   (exit 0 = all pass)
+# NAMING RULE: this suite prefixes its helpers `t_`. The script under test defines global ok()/gap()/bad() and sourcing it REDEFINES same-named functions -- a first draft passed 11/11 with every failing assertion swallowed into the SCRIPT's counter. A suite cannot catch its own silencing.
 set -uo pipefail
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/harness.sh"
 
@@ -34,9 +17,7 @@ t_rc()    { if [ "$2" = "$3" ]; then t_ok "$1"; else t_bad "$1 (expected exit $2
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 
-# ============================================================================
 echo "-- A. bin/lib/selfdev-credentials-set.sh: the pure baseline functions --"
-# ============================================================================
 # shellcheck source=/dev/null
 . "$LIB"
 
@@ -48,7 +29,6 @@ t_eq "classify: no line at all"      "$(cred_classify_token '')" missing
 t_eq "own_repo: identity mapping"    "$(cred_own_repo ecosim)" ecosim
 t_eq "own_repo: hyphenated account"  "$(cred_own_repo groc-mangr)" groc-mangr
 
-# The shipped table is EMPTY -- no account has a reviewed exception today.
 [ -z "$(cred_list_grants ecosim)" ] && t_ok "grants: shipped CRED_GRANTS has no rows for ecosim" \
                                      || t_bad "grants: shipped CRED_GRANTS unexpectedly has rows"
 if cred_grant_covers ecosim extra-file ecosim.pem; then
@@ -73,21 +53,14 @@ else
   t_ok "grants: a grant does not apply to a different account"
 fi
 t_has "grants: cred_list_grants prints the declared row" "$(cred_list_grants ecosim)" "2026-08-11"
-# Restore the real, empty table for every section below.
-# shellcheck source=/dev/null
 . "$LIB"
 
-# ============================================================================
 echo
 echo "-- B. cred_grade_account: pure grading, no network --------------------"
-# ============================================================================
 # shellcheck source=/dev/null
 . "$SCRIPT"   # BASH_SOURCE guard keeps main()/cmd_audit's ssh call from firing
 
-# grade <account> <row> -- sets GLOBALS GRADE_OUT/GRADE_RC/GRADE_FLAGS/GRADE_GAPS.
-# NOT `res="$(grade ...)"`: a first draft packed everything into one
-# \x1f-delimited string and unpacked it with `read`, which stops at the
-# FIRST NEWLINE regardless of IFS -- cred_grade_account's own output is
+# grade <account> <row> -- sets GLOBALS, not a captured string: `read` stops at the first newline regardless of IFS, and this output is multi-line.
 grade() {
   GRADE_OUT="$(cred_grade_account "$1" "$2" 2>&1)"; GRADE_RC=$?
   GRADE_FLAGS="$(grep -c '^  FLAG \[drift\]' <<<"$GRADE_OUT" || true)"
@@ -107,11 +80,7 @@ t_has "BLIND row: reported as BLIND, not ok" "$GRADE_OUT" "BLIND"
 grade nobody ""
 t_eq "empty row: treated the same as BLIND (exit 2)" "$GRADE_RC" 2
 
-# THE HOST-WIDE KEY, 2026-08-12. The pem column used to grade a per-account
-# file's MODE; it now grades whether this account could READ the one key at
-# /etc/selfdev/app.pem. `unreadable` is the case that mode:644 used to stand
-# in for, and it is the one that actually happens: group membership granted
-# but not yet in effect for that session.
+# pem grades whether the account can READ /etc/selfdev/app.pem (host-wide since 2026-08-12). `unreadable` is the real case: group granted, not yet in effect for the session.
 UNREADABLE_PEM_ROW=$'unreadable\tok\tmatch\tgho\t-\tapp\t0\t0\t0\t'"$CRED_APP_ID"$'\t'"$CRED_GH_OWNER"
 grade x "$UNREADABLE_PEM_ROW"
 t_has "host-wide key present but unreadable: flagged" "$GRADE_OUT" "CANNOT READ IT"
@@ -128,9 +97,7 @@ grade x "$MISSING_CONF_ROW"
 t_has "missing conf: flagged" "$GRADE_OUT" "no host-wide /etc/selfdev/gh-app.conf"
 t_hasnt "missing conf: does NOT also flag appid/owner (nothing to compare)" "$GRADE_OUT" "declares App id"
 
-# A fixture path, not a real filesystem location -- deliberately NOT shaped
-# like /home/<name>/..., which bin/hardcoded-home-lint.sh's own suite scans
-# this repository's TRACKED files for and flags on sight, fixture or not.
+# A fixture path deliberately NOT shaped like /home/<name>/... -- hardcoded-home-lint scans tracked files and flags on sight, fixture or not.
 MISMATCH_ROW=$'ok:600\tok\tmismatch:/var/tmp/selfdev-fixture/OTHER.pem\tgho\t-\tapp\t0\t0\t0\t'"$CRED_APP_ID"$'\t'"$CRED_GH_OWNER"
 grade x "$MISMATCH_ROW"
 t_has "SELFDEV_APP_KEY mismatch: flagged" "$GRADE_OUT" "points at /var/tmp/selfdev-fixture/OTHER.pem"
@@ -165,9 +132,7 @@ grade ecosim "$EXTRA_ROW"
 t_has "leftover private file: flagged" "$GRADE_OUT" "leftover private file 'ecosim.pem'"
 t_has "leftover private file: names why a second copy is drift" "$GRADE_OUT" "a rotation will miss"
 
-# app.pem itself is now a leftover when it appears under ~/.config/selfdev/:
-# the host-wide file is the credential and a private copy beside it is the
-# second source this whole change exists to end.
+# app.pem under ~/.config/selfdev/ is a leftover now: the host-wide file is the credential, a private copy beside it is the second source.
 LEFTOVER_BASELINE_ROW=$'ok:600\tok\tmatch\tgho\tapp.pem,gh-app.conf\tapp\t0\t0\t0\t'"$CRED_APP_ID"$'\t'"$CRED_GH_OWNER"
 grade x "$LEFTOVER_BASELINE_ROW"
 t_has "a private app.pem copy is itself drift now" "$GRADE_OUT" "leftover private file 'app.pem'"
@@ -195,10 +160,8 @@ LEFTOVER_REWRITE_ROW=$'ok:600\tok\tmatch\tgho\t-\tapp\t0\t0\t3\t'"$CRED_APP_ID"$
 grade x "$LEFTOVER_REWRITE_ROW"
 t_has "a leftover insteadOf rewrite is flagged by repo name" "$GRADE_OUT" "senechal still has 3 url.insteadOf rewrite(s)"
 
-# ============================================================================
 echo
 echo "-- C. the CLI contract (cli-guard, --help, unknown flags) -------------"
-# ============================================================================
 "$SCRIPT" --not-a-real-flag >/dev/null 2>&1; t_rc "unknown flag exits 2" 2 $?
 "$SCRIPT" --help >/dev/null 2>&1;            t_rc "--help exits 0" 0 $?
 HELP_OUT="$("$SCRIPT" --help 2>&1)"
@@ -211,10 +174,8 @@ STRAY_OUT="$("$SCRIPT" strayword 2>&1)"; STRAY_RC=$?
 t_rc "a bare positional with no flag exits 2" 2 "$STRAY_RC"
 t_has "the bare-positional error names the offending word" "$STRAY_OUT" "strayword"
 
-# ============================================================================
 echo
 echo "-- D. --audit over a stubbed transport (no live ssh, no live gh) ------"
-# ============================================================================
 STUB="$T/stub"; mkdir -p "$STUB"
 
 # A stub `ssh` that answers fetch_remote's `bash -s -- <args...>` shape (the
@@ -312,10 +273,8 @@ t_has "gh absent: deploy-key section reports BLIND by name" "$O" "not on PATH --
 O="$(STUB_ROWS="$FULL_CLEAN_ROWS" CRED_SSH_BIN="$STUB/ssh" CRED_GH_BIN="$STUB/gh" STUB_GH_AUTH_FAIL=1 "$SCRIPT" --audit 2>&1)"
 t_has "gh unauthenticated: deploy-key section reports BLIND by name" "$O" "not authenticated here"
 
-# ============================================================================
 echo
 echo "-- D2. deploy-key symmetry grading -- the false/null jq regression ----"
-# ============================================================================
 # THE REGRESSION THIS PINS: jq's `//` treats `false` as falsy, same as
 # `null`. A first draft used `.readOnly // empty`, which turned every
 STUB_JSON_solo="$(printf '[{"title":"monkey-solo-solo","readOnly":false}]')"
@@ -335,10 +294,8 @@ O="$(STUB_ROWS='writer	ok:600	ok	match	gho	-	app	0	0	0	4521586	hf7y' \
      "$SCRIPT" --audit 2>&1)"
 t_has "a WRITE key on a SHARED repo is flagged (the cross-repo-push shape)" "$O" "realisateur (SHARED repo) deploy key is WRITE"
 
-# ============================================================================
 echo
 echo "-- D3. deploy-key symmetry grading -- the read_only field-name regression"
-# ============================================================================
 # THE REGRESSION THIS PINS, FOUND LIVE AGAINST THE REAL FLEET (not a fixture):
 # `gh repo deploy-key list --json title,readOnly` on gh 2.45.0 VALIDATES
 STUB_JSON_realword='[{"title":"monkey-realword-realword","read_only":false}]'
@@ -373,10 +330,8 @@ O="$(STUB_ROWS='oddshape	ok:600	ok	match	gho	-	app	0	0	0	4521586	hf7y' \
      "$SCRIPT" --audit 2>&1)"
 t_has "an unrecognized readOnly value is reported BLIND, never silent" "$O" "returned an unreadable readOnly value"
 
-# ============================================================================
 echo
 echo "-- E. --apply: idempotency, converge actions, and refusals ------------"
-# ============================================================================
 # NO FIXTURE SOURCE KEY any more. --apply used to push a private copy of the
 # App key into the account from a local source path, and the source-path knobs
 
@@ -431,10 +386,8 @@ t_has "apply reports the failed step and does not claim success" "$O" "FAILED"
 O="$(STUB_ROWS="" CRED_SSH_BIN="$STUB/ssh" "$SCRIPT" --apply unknown-account 2>&1)"; R=$?
 t_rc "apply against an account outside the uid band exits 5" 5 "$R"
 
-# ============================================================================
 echo
 echo "-- F. source invariants -- what --apply must never even attempt -------"
-# ============================================================================
 SRC_TXT="$(cat "$SCRIPT")"
 t_hasnt "never deletes anything (no rm -f/-r on a credential path)" "$SRC_TXT" 'rm -'
 t_hasnt "never truncates or writes ~/.config/gh/hosts.yml" "$SRC_TXT" 'hosts.yml"'$'\n''>'

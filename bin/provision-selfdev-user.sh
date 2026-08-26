@@ -11,9 +11,7 @@ MODE="${2:---check}"
 case "$PROJECT" in ""|-*) echo "usage: $0 <project> [--check|--apply]" >&2; exit 2 ;; esac
 case "$MODE" in --check|--apply) ;; *) echo "usage: $0 <project> [--check|--apply]" >&2; exit 2 ;; esac
 
-# The uid band vault:realisateur/MONKEY.md reserves for self-dev projects: clear of the human
-# 1000s and of the office's romulus=1001, so a future merge of conventions
-# cannot collide.
+# The uid band vault:realisateur/MONKEY.md reserves for self-dev: clear of the human 1000s and the office romulus=1001.
 UID_MIN="${SELFDEV_UID_MIN:-3000}"
 UID_MAX="${SELFDEV_UID_MAX:-3099}"
 CRED_HOME="$HOME"
@@ -21,10 +19,7 @@ if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
   CRED_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
   [ -n "$CRED_HOME" ] || CRED_HOME="$HOME"
 fi
-# Read FROM the HOST-WIDE copy first, a human's home only as fallback:
-# ~zach/.claude-token on monkey was stale, and a stale token installs CLEAN --
-# mode 600, every --check row OK, dispatching into nothing (realisateur#624).
-# The env overrides still win, and the row below names the file that was read.
+# TRAP: read the HOST-WIDE copy first, a human home only as fallback -- ~zach/.claude-token on monkey was stale, and a stale token installs CLEAN: mode 600, every row OK, dispatching into nothing (#624).
 SRC_HOST="$(selfdev_token_path)"
 SRC_SETTINGS="${SELFDEV_TOKEN_SRC:-$CRED_HOME/.claude/settings.json}"
 SRC_TOKEN_FILE="$CRED_HOME/.claude-token"
@@ -39,9 +34,7 @@ die() { printf 'provision-selfdev-user: FATAL %s\n' "$*" >&2; exit 1; }
 HOME_DIR="/home/$PROJECT"
 echo "== provision-selfdev-user $PROJECT ($MODE) on $(hostname -s) =="
 
-# --- where does the token come from ------------------------------------------
-# Read it now, in --check too, because "there is a credential to copy" is the
-# single fact this script exists to act on. Never printed.
+# Read now, in --check too: "there is a credential to copy" is the fact this acts on. Never printed.
 TOKEN=""
 settings_token() {  # the env-block token in a settings.json, or nothing
   python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("env",{}).get("CLAUDE_CODE_OAUTH_TOKEN",""))' "$1" 2>/dev/null || true
@@ -108,31 +101,18 @@ if ! id "$PROJECT" >/dev/null 2>&1; then
   sudo useradd -u "$NEXT" -m -s /bin/bash "$PROJECT" || die "useradd failed"
 fi
 
-# 0700: repos and working state are isolated per project. SPEND is not, and
-# cannot be, because the credential is shared -- said out loud here because a
-# reader could otherwise mistake this mode for budget isolation.
+# 0700 isolates repos and working state per project. SPEND is NOT isolated -- the credential is shared. Said out loud so this mode is not read as budget isolation.
 act "home 0700, and the WHOLE tree owned by $PROJECT"
 sudo chmod 700 "$HOME_DIR"
-# chown -R, not `install -d -o`: install chowns only the final component, which
-# is exactly how /home/ecosim/.local ended up root-owned and broke the first
-# dispatch. This is the bug this script exists to stop repeating.
+# TRAP: chown -R, not `install -d -o` -- install chowns only the final component, which is how /home/ecosim/.local ended up root-owned and broke the first dispatch.
 sudo chown -R "$PROJECT:$PROJECT" "$HOME_DIR"
 
-# Ubuntu's ~/.profile only prepends ~/.local/bin if it EXISTS AT LOGIN. Created
-# later, it is not on PATH until the next login -- a shim installed correctly
-# that still cannot be found.
+# TRAP: ~/.local/bin must EXIST at login or Ubuntu ~/.profile never adds it.
 act "~/.local/bin, before the account's first login"
 sudo -u "$PROJECT" mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.local/share" "$HOME_DIR/.claude"
 sudo -u "$PROJECT" chmod 700 "$HOME_DIR/.claude"
 
-# PER-TENANT TMPDIR AND A PRIVATE UMASK (#620). Thirteen accounts share one
-# /tmp. On 2026-08-25 gardien's `git commit -F /tmp/commit-msg.txt` silently
-# read ecosim's leftover file of the same name and committed another project's
-# prose, under the wrong author, with no error anywhere -- caught only by a
-# habit of reading `git log -1` back. Two independent holes: a predictable
-# name space shared across tenants, and a default umask that leaves scratch
-# files world-readable. Both close in ~/.profile, which is read by the login
-# shell cron and ssh both start from.
+# PER-TENANT TMPDIR + umask 077 (#620). Thirteen accounts share one /tmp: gardien's `git commit -F /tmp/commit-msg.txt` read ecosim's leftover of the same name and committed another project's prose under the wrong author, silently. Predictable shared names AND a world-readable default umask; both close in ~/.profile.
 act "private TMPDIR and umask 077 in ~/.profile"
 sudo -u "$PROJECT" mkdir -p "$HOME_DIR/tmp"
 sudo -u "$PROJECT" chmod 700 "$HOME_DIR/tmp"
@@ -155,10 +135,7 @@ sudo loginctl enable-linger "$PROJECT" >/dev/null 2>&1 || gap "enable-linger fai
 act "no sudoers entry for $PROJECT (deliberate)"
 sudo rm -f "/etc/sudoers.d/90-$PROJECT"
 
-# --- the credential ----------------------------------------------------------
-# Written as the project user, via a mode-600 temp file, so the token never
-# appears in argv (visible in ps to any local user) and never transits a
-# world-readable path.
+# Written as the project user via a mode-600 temp file, so the token never appears in argv (ps-visible) and never transits a world-readable path.
 act "copy the shared credential into $PROJECT's settings.json"
 TMP="$(mktemp)"; chmod 600 "$TMP"
 printf '%s' "$TOKEN" > "$TMP"
@@ -179,14 +156,10 @@ PY
 # gh, on the same argument as the claude token above.
 GH_SRC="${SELFDEV_GH_HOSTS:-$CRED_HOME/.config/gh/hosts.yml}"
 if [ -r "$GH_SRC" ]; then
-  # No `MODE` guard here: --check has already exited above. Everything from
-  # this point down runs only under --apply.
   act "copy the shared gh credential into $PROJECT's hosts.yml"
   sudo install -d -m 700 -o "$PROJECT" -g "$PROJECT" "$HOME_DIR/.config" "$HOME_DIR/.config/gh"
   sudo install -m 600 -o "$PROJECT" -g "$PROJECT" "$GH_SRC" "$HOME_DIR/.config/gh/hosts.yml"
-  # The witness is gh answering, not the file existing -- `gh auth status`
-  # actually calls GitHub, which is the same distinction the claude witness
-  # below draws between configuration and capability.
+  # The witness is gh ANSWERING, not the file existing -- `gh auth status` calls GitHub. Configuration is not capability.
   if sudo -u "$PROJECT" -H env -i HOME="$HOME_DIR" PATH=/usr/local/bin:/usr/bin:/bin \
        gh auth status >/dev/null 2>&1; then
     ok "$PROJECT can reach GitHub as an authenticated user"
@@ -197,9 +170,7 @@ else
   gap "no gh credential at $GH_SRC -- $PROJECT will not be able to register deploy keys or work an issue queue. Run \`gh auth login\` as ${SUDO_USER:-$(id -un)} first."
 fi
 
-# --- witness -----------------------------------------------------------------
-# Configuration is not capability. The only proof is a call, and it is made
-# under a STRIPPED environment because that is how cron will make it.
+# Configuration is not capability: the proof is a call, made under a STRIPPED environment because that is how cron will make it.
 echo
 act "witness: a real call, as $PROJECT, with nothing inherited"
 if sudo -u "$PROJECT" -H env -i HOME="$HOME_DIR" PATH=/usr/local/bin:/usr/bin:/bin \

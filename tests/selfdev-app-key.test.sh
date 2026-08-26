@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # selfdev-app-key.test.sh -- witness for bin/lib/selfdev-app-key.sh (the
 # resolution every reader shares) and for bin/selfdev-app-key.sh's refusals.
-#
 set -uo pipefail
 # shellcheck source=bin/tests/lib/harness.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/harness.sh"

@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
 # selfdev-credentials-set.sh -- THE SELF-DEV CREDENTIAL BASELINE, in one place.
 #
-# TRAPS (the rest of this header is in the vault):
-# ecosim's `github_pat` (a fine-grained PAT missing the Pull-requests
-# permission) sat unnoticed for two days, returning 403 on the entire
-# Pull-requests API, because every other signal an operator would check
-# (`gh issue list`, a green test run, a pushed branch) kept working. The
-# defect was never "the PAT was wrong" -- a wrong credential is a normal,
-# expected failure mode and every script in this family already reports one
-# loudly. THE DEFECT WAS THAT NOTHING COMPARED THE TEN, so the one account
-# that diverged from its nine siblings had no sensor pointed at the
-# divergence itself, only at each account in isolation.
-# THE REDUNDANCY NOTE (not enforced here, not silently acted on)
-# FORMAT (newline-separated, consumed by `while read`, NOT shell code -- a
-# bare `"` inside a row here would silently truncate this file the same way
-# it once truncated ownership-set.sh, deleted in #514):
+# TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
+# TRAP: THE DEFECT IS NEVER "the credential was wrong" -- that is a normal failure every script here reports loudly. It is that NOTHING COMPARED THE TEN. ecosim's fine-grained PAT missing Pull-requests returned 403 on that whole API for two days while `gh issue list`, green tests and pushed branches all kept working.
+# TRAP: FORMAT is newline-separated rows consumed by `while read`, NOT shell code. A bare `"` in a row silently truncates this file, as it once truncated ownership-set.sh (deleted in #514).
 
 CRED_GRANTS="
 "

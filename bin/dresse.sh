@@ -11,7 +11,6 @@
 # TRAP: it installs no secret unattended -- --install takes a file a human
 #   supplies, so both modes only --check it.
 # TRAP: root is required to CHANGE the host, not to look at it.
-#
 set -uo pipefail
 
 CLI_NAME='dresse'

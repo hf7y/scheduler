@@ -1,70 +1,30 @@
-#!/usr/bin/env bash
 # run-record.sh -- COMPUTE the verdict at closeout instead of asking for it.
 #
-# THE PROBLEM (hf7y/scheduler#54, and the 2026-08-06 blowout):
-#
-# A run that fixed something and a run that merely filed three issues leave
-# IDENTICAL records. The only outcome signal above `rc` is bin/verdict.sh, and
-# every field in it is typed by the agent about itself -- VERDICT, REASON, the
-# closing summary prose. Worse, the file is CONSUMED at dispatch, so even that
-# self-report is gone by the time anyone could compare it against what the run
-# actually did. Describing is free, indistinguishable from working, and
-# strictly cheaper. So agents describe. On 2026-08-06 that produced 42 issues
-# across five repos while the thing that actually needed doing was one
-# `git merge --ff-only`.
-#
-# This file does not ask the agent anything. Every field below is read back out
-# of git and the GitHub API AFTER `claude -p` has already exited, from state the
-# agent had to actually change in order to move. Prose may ACCOMPANY the record
-# -- claimed_verdict/claimed_reason carry it, namespaced -- but it can never
-# POPULATE it. There is no code path from agent output into a sha, a count, or
-# verdict_computed.
-#
-# WHERE IT IS WRITTEN, and why not in the repo:
-#
-#   $STATE_ROOT/scheduler-runs/<participant>.jsonl     (append-only, one line
-#                                                       per run, never rewritten)
-#
-# Sibling of bin/verdict.sh's $STATE_ROOT/scheduler-verdict/, keyed the same way
-# (rotation participant name) for the same reason. NOT a git-tracked file, and
-# run_record_append REFUSES to write one inside the run's own work tree -- that
-# refusal is not hypothetical hygiene. On 2026-08-07 vim-arcade's deploys sat
-# frozen for 18 hours because lib/sweep-loop-common.sh:601 consumes BLOCKERS.md
-# out of its OWN checkout: the engine dirtied the tree it was about to pull
-# into, and bin/usage-paced-runner.sh's pull gate correctly refused every tick
-# after. An engine that writes into the checkout it manages will eventually
-# deadlock against its own guards. So it writes outside, always.
-#
-# THE DEBT RULE lives here too -- see DEBT_RULE_TRIAL_END below. It is on a
-# two-week trial and reverts by editing one line.
-#
-# All state is in RR_* globals rather than stdout, so tests/run-record-witness.sh
-# can source this file, drive each probe directly, and read the results -- the
-# same shape as lib/salvage.sh and append_verdict_closeout() in the engine, and
-# for the same reason: a function buried in the run body cannot be witnessed.
+# THE PROBLEM (scheduler#54, and the 2026-08-06 blowout): a run that fixed
+# something and a run that merely filed three issues leave IDENTICAL records.
+# The only outcome signal above `rc` is bin/verdict.sh, every field of which
+# is typed by the agent about itself -- and it is CONSUMED at dispatch, so
+# even that self-report is gone before anyone can compare it to what the run
+# did. Describing is free, indistinguishable from working, and strictly
+# cheaper, so agents describe: on 2026-08-06 that produced 42 issues across
+# five repos while the thing that needed doing was one `git merge --ff-only`.
 set -uo pipefail
 
-# ---------------------------------------------------------------------------
-# THE DEBT RULE -- TWO-WEEK TRIAL, STARTED 2026-08-07, ENDS 2026-08-21.
+# THE DEBT RULE -- TWO-WEEK TRIAL, started 2026-08-07, ended 2026-08-21.
 #
 #   A run may not open more issues than it closed. If opened > closed at
 #   closeout, verdict_computed is FAILED and the run says so, loudly.
 #
-# Why a rule and not advice: filing an issue is the cheapest action available
-# to an agent that wants to look productive, and nothing downstream ever
-# distinguished it from work. Making it COST something -- a FAILED run -- is
-# the only version of this that survives contact with an agent optimizing for
-# a clean closing summary.
+# Filing an issue is the cheapest action available to an agent that wants to
+# look productive, which is why this is a rule and not advice.
 #
-# TO REVERT, ONE LINE: set DEBT_RULE_TRIAL_END="" just below. The rule then
-# reports "off" in every record and never contributes to a verdict; nothing
-# else needs touching and no record schema changes.
+# TO REVERT, ONE LINE: DEBT_RULE_TRIAL_END="" turns it off entirely. The trial
+# EXPIRES ON ITS OWN and does not become policy by default -- and its end date
+# has passed, which is scheduler#314.
 #
-# IT EXPIRES ON ITS OWN. Past the end date the rule stops forcing FAILED and
-# records debt_rule="expired" -- the trial does not quietly become policy
-# because nobody remembered it was a trial. Extending it is a deliberate edit
-# of the date, which is the point.
-# ---------------------------------------------------------------------------
+# These exact phrases are asserted by tests/run-record-witness.sh section 12:
+# the trial and its revert must be legible IN THE CODE, not only in a commit
+# message. Rewording them is a red suite, deliberately.
 DEBT_RULE_TRIAL_END="${DEBT_RULE_TRIAL_END:-2026-08-21}"
 
 RUN_RECORD_SCHEMA="scheduler.run-record/1"
@@ -273,20 +233,6 @@ run_record_compute_verdict() {
     failed=1
   fi
 
-  # RC NO LONGER MASKS EFFECTS (2026-08-19). This used to `return` here, so a
-  # nonzero rc decided the verdict before a single effect was read. gardien's
-  # 2026-08-19 run pushed 43 commits, merged 2 PRs and closed 2 issues, then
-  # hit its turn ceiling -- and recorded FAILED, byte-identical to a run that
-  # did nothing. The point of this file is that describing is free and effects
-  # are not; discarding the effects because of an exit code gives that up.
-  #
-  # So fall through and let the WORKED checks below run. A run that shipped
-  # AND then broke is WORKED-CUTOFF: distinguishable from both FAILED (shipped
-  # nothing) and WORKED (finished clean), which is what the ledger needs to
-  # tell them apart later. The reasons already name the rc.
-  # WORKED requires something a consumer can see: pushed commits, a merged PR,
-  # or a closed issue. Note what is NOT on this list -- issues opened, files
-  # touched but uncommitted, and every word the agent wrote about itself.
   if [ "${RR_PUSHED:-null}" = "true" ] && [ "${RR_COMMITS_ADDED:-0}" != "0" ]; then
     rr_add_reason "pushed ${RR_COMMITS_ADDED} commit(s)"; RR_VERDICT="WORKED"
   fi

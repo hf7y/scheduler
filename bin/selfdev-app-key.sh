@@ -35,11 +35,7 @@ CLI_USAGE='  selfdev-app-key.sh                          --check (default): repo
   selfdev-app-key.sh --retire-copies          remove each account'"'"'s ~/.config/selfdev/
                                               copy, ONLY once host-wide is proven readable'
 CLI_FLAGS='--check --apply --retire-copies --from --app-id --owner --uid-min --uid-max'
-# `any`, not `none`: cli-guard validates argv BEFORE this script's own parser
-# runs, so with `none` the VALUE of every --from/--app-id/--uid-min is rejected
-# as a stray positional. Caught by bin/tests/selfdev-app-key.test.sh case E2,
-# which could not even reach --check. Stray positionals are still refused --
-# by the parser below, which is the thing that knows which flags take values.
+# CLI_POSITIONAL=any, not none: cli-guard validates argv BEFORE this parser, so `none` rejects the VALUE of every --from/--app-id/--uid-min.
 CLI_POSITIONAL=any
 CLI_EXITS='  0  the host is at the target (or --check found it so)
   1  findings: something is missing or wrong -- read the rows

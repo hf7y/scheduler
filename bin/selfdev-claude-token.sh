@@ -1,29 +1,18 @@
 #!/usr/bin/env bash
 # selfdev-claude-token.sh -- install the shared Claude Code OAuth token in ONE
-# host-wide place, and purge the per-account copies it replaces (realisateur#409).
+# host-wide place, and purge the per-account copies it replaces (#409).
 #
-# usage:
-#   selfdev-claude-token.sh --check              report where the token is, and
-#                                                every stale copy still on disk
-#   selfdev-claude-token.sh --install <file>     write /etc/selfdev/claude-token
-#                                                (0640 root:selfdev) from <file>
-#   selfdev-claude-token.sh --install <f> --force-length   skip the length check
-#   selfdev-claude-token.sh --fanout             LIST the accounts that would
-#                                                be rewritten from the one copy
-#   selfdev-claude-token.sh --fanout --apply     rewrite them
-#   selfdev-claude-token.sh --purge              LIST the copies that would go
-#   selfdev-claude-token.sh --purge --apply      shred them
+#   --check              where the token is, and every stale copy on disk
+#   --install <file>     write /etc/selfdev/claude-token (0640 root:selfdev)
+#   --install <f> --force-length     skip the length check
+#   --fanout [--apply]   list / rewrite the per-account copies from the one file
+#   --purge  [--apply]   list / shred those copies
 #
-# exit: 0 OK  1 BAD (found)  2 usage  4 GAP (to do)  6 BLIND  7 REFUSED
+# exit: 0 OK  1 BAD  2 usage  4 GAP  6 BLIND  7 REFUSED
 #
-# ORDER MATTERS, unenforceable here: rotate, --install, --fanout, prove a
-# dispatch, revoke. Purging first deletes copies of a value still live.
-#
-# --fanout IS TEMPORARY. Nothing reads the host-wide file at dispatch yet, so
-# --install alone changes nothing and revoking first takes the fleet down
-# silently. --fanout derives the per-account copies from the one file: still N
-# copies, one source of truth. Delete it, and --purge the copies, the day
-# dispatch reads /etc/selfdev/claude-token.
+# TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
+# TRAP: ORDER MATTERS and is unenforceable here -- rotate, --install, --fanout, prove a dispatch, revoke. Purging first deletes copies of a live value.
+# TRAP: --fanout IS TEMPORARY. Nothing reads the host-wide file at dispatch yet, so --install alone changes nothing and revoking first takes the fleet down silently. Delete --fanout and --purge the copies the day dispatch reads /etc/selfdev/claude-token.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

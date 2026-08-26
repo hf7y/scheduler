@@ -53,9 +53,7 @@ bad()   { printf '  FLAG [drift] %s\n' "$*"; BAD=$((BAD+1)); }
 blind() { printf '  BLIND %s\n' "$*"; BLIND_N=$((BLIND_N+1)); }
 act()   { printf '  DO    %s\n' "$*"; }
 
-# ============================================================================
 # THE REMOTE PROBE -- the ONLY place this script touches the network.
-# ============================================================================
 fetch_remote() { # fetch_remote [account-filter]
   # THE NO-FILTER SENTINEL: see the header TRAP. Do not pass "".
   local filter="${1:--}"
@@ -87,11 +85,6 @@ probe_one() {
       [ "$dkey" = "$pem" ] && keymatch="match" || keymatch="mismatch:$dkey"
     fi
   fi
-  # ANY surviving file under the retired per-account directory is drift now,
-  # including app.pem and gh-app.conf themselves: the host-wide file is the
-  # credential, and a private copy beside it is a second source that a rotation
-  # will miss. Before 2026-08-12 those two names were the baseline here and
-  # only OTHER files were flagged.
   local extra="-"
   if [ -d "$d" ]; then
     local ex; ex="$(ls -A "$d" 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
@@ -142,13 +135,8 @@ done < "$PWFILE"
 REMOTE_PROBE
 }
 
-# ============================================================================
-# GRADING -- pure given a row; no network. This is the half
-# bin/tests/selfdev-credentials.test.sh exercises directly.
-# ============================================================================
+# GRADING -- pure given a row, no network. cred_grade_account <account> <row>: prints the line(s), returns 0 clean / 1 drift / 2 blind.
 
-# cred_grade_account <account> <tab-separated-row-or-BLIND>
-# Prints the account's line(s) and returns 0 (clean), 1 (drift) or 2 (blind).
 cred_grade_account() {
   local acct="$1" row="$2"
   if [ -z "$row" ] || [ "$row" = "BLIND" ]; then
@@ -233,9 +221,7 @@ cred_grade_account() {
   return "$drift"
 }
 
-# ============================================================================
 # THE SYMMETRY CHECK -- deploy-key READ/WRITE level, from GitHub itself.
-# ============================================================================
 cred_check_deploy_keys() { # cred_check_deploy_keys <account>...
   if ! command -v "$CRED_GH_BIN" >/dev/null 2>&1; then
     blind "deploy-key symmetry: '$CRED_GH_BIN' not on PATH -- could not check GitHub-side read/write permissions"
@@ -249,9 +235,7 @@ cred_check_deploy_keys() { # cred_check_deploy_keys <account>...
     blind "deploy-key symmetry: '$CRED_GH_BIN' is not authenticated here -- could not check GitHub-side read/write permissions"
     return
   fi
-  # AN ACCOUNT'S OWN REPO IS ALWAYS ITS OWN, even when that repo also appears
-  # on the shared list. `realisateur@monkey` and `scheduler@monkey` exist
-  # because one unix user per project is the whole monkey design, and their
+  # AN ACCOUNT OWNS ITS OWN REPO even when that repo is also on the shared list -- one unix user per project is the monkey design.
   local repo acct others
   for repo in $CRED_SHARED_REPOS; do
     others=""
@@ -267,14 +251,10 @@ cred_check_deploy_keys() { # cred_check_deploy_keys <account>...
   done
 }
 
-# cred_check_repo_keys <repo> <ro|rw> <accounts...> -- list a repo's deploy
-# keys ONCE and grade every named account's key against the expected level,
-# so a shared repo (checked for all ten accounts at once) costs one call.
+# cred_check_repo_keys <repo> <ro|rw> <accounts...> -- list a repo's deploy keys ONCE and grade every named account, so a shared repo costs one call.
 cred_check_repo_keys() {
   local repo="$1" want="$2"; shift 2
-  # `--json title,readOnly` is REQUESTED but not, in practice, HONOURED: gh
-  # 2.45.0 validates "readOnly" as a real field name (an unknown one is
-  # refused with a list that names it) and then ignores the filter anyway,
+  # TRAP: gh 2.45.0 VALIDATES `--json readOnly` and then ignores the filter, so the field must be read out of the full object.
   local json; json="$("$CRED_GH_BIN" repo deploy-key list --repo "$CRED_GH_OWNER/$repo" --json title,readOnly 2>/dev/null)"
   if [ -z "$json" ]; then
     blind "deploy-key symmetry: could not list keys on $CRED_GH_OWNER/$repo (no admin access here, or the repo/call failed)"
@@ -282,18 +262,13 @@ cred_check_repo_keys() {
   fi
   local acct want_word; [ "$want" = rw ] && want_word="WRITE" || want_word="READ-ONLY"
   for acct in "$@"; do
-    # TWO jq calls, deliberately, not one with `// empty`. jq's `//` falls
-    # through on `false` as well as `null` -- `.readOnly // empty` silently
-    # turned every legitimate `"readOnly": false` (a WRITE key -- exactly the
+    # TRAP: two jq calls, never `.readOnly // empty` -- jq's `//` falls through on `false` as well as null, which silently turned every WRITE key into "absent". Resolve readOnly-OR-read_only by KEY PRESENCE for the same reason.
     local suf="-$acct-$repo" found
     found="$(printf '%s' "$json" | jq -r --arg suf "$suf" '[.[] | select(.title | endswith($suf))] | length')"
     if [ "${found:-0}" -eq 0 ] 2>/dev/null; then
       bad "$acct: no deploy key registered on $repo (title ending '$suf') -- expected $want_word"
       continue
     fi
-    # readOnly-OR-read_only, resolved by KEY PRESENCE rather than `//`, which
-    # would repeat the exact false-swallowing mistake one paragraph up the
-    # moment the field legitimately holds `false` under either name.
     local ro; ro="$(printf '%s' "$json" | jq -r --arg suf "$suf" '
       [.[] | select(.title | endswith($suf))][0] as $m
       | if ($m | has("readOnly")) then ($m.readOnly | tostring) else ($m.read_only | tostring) end
@@ -303,17 +278,13 @@ cred_check_repo_keys() {
       rw:true)  bad "$acct: $repo (OWN repo) deploy key is READ-ONLY -- cannot push its own work" ;;
       ro:false) bad "$acct: $repo (SHARED repo) deploy key is WRITE -- the symmetry rule says shared repos are read-only; a stray write key here is exactly the cross-repo-push shape Zach flagged" ;;
       *)
-        # FAIL LOUD ON AN UNRECOGNIZED SHAPE. A silent `case` with no default
-        # arm is exactly how this bug hid the first time: `$ro` read the
-        # literal string "null" (the field name gh's own error message calls
+        # TRAP: no default arm is how this hid the first time -- $ro read the literal string "null". Fail loud on an unrecognized shape.
         blind "deploy-key symmetry: $acct on $repo returned an unreadable readOnly value ('$ro') -- gh's JSON shape may have changed" ;;
     esac
   done
 }
 
-# ============================================================================
 # --audit
-# ============================================================================
 cmd_audit() {
   echo "== selfdev-credentials --audit -- $CRED_HOST, uid $CRED_UID_MIN-$CRED_UID_MAX (read-only) =="
   echo "   baseline: bin/lib/selfdev-credentials-set.sh (App $CRED_APP_ID @ $CRED_GH_OWNER, shared repos: $CRED_SHARED_REPOS)"
@@ -325,11 +296,7 @@ cmd_audit() {
     return 6
   fi
 
-  # `read -r acct row` with IFS=tab and MORE than two tab-separated fields on
-  # the line: bash assigns the first field to `acct` and everything else,
-  # delimiters included, to the last-named variable `row` -- which is exactly
-  # the whole-row string cred_grade_account wants. A plain here-string, not a
-  # pipe: this loop must run in the CURRENT shell so `accounts+=` survives it.
+  # TRAP: IFS=tab with MORE than two fields puts the whole rest of the line in the last variable -- which is the row string we want. Here-string, not a pipe, so `accounts+=` survives.
   local accounts=() acct row
   while IFS=$'\t' read -r acct row; do
     [ -n "$acct" ] || continue
@@ -364,13 +331,7 @@ cmd_audit() {
   return 0
 }
 
-# ============================================================================
-# --apply <account>
-# ============================================================================
-#
-# Idempotent, fails loud, NEVER touches ~/.config/gh/hosts.yml and NEVER
-# deletes an "extra" file. Every step is DELEGATED to a script that already
-# exists and is already tested -- no new way to mint a credential here.
+# Idempotent, fails loud, NEVER touches ~/.config/gh/hosts.yml, NEVER deletes an "extra" file. Every step DELEGATES to a tested script -- no new way to mint a credential here.
 cmd_apply() {
   local acct="$1"
   echo "== selfdev-credentials --apply $acct -- $CRED_HOST =="
@@ -448,9 +409,7 @@ cmd_apply() {
   return 0
 }
 
-# ============================================================================
 # main
-# ============================================================================
 main() {
   local mode=audit account=""
   while [ $# -gt 0 ]; do

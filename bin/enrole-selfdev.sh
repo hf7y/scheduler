@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
 # enrole-selfdev.sh -- the two steps setup-selfdev-project.sh prints as prose
-# and leaves to a human, done mechanically, idempotently and reversibly:
-# flip the project's row in schedule/_paced.<host>.conf from |0| to |1|, and
-# sync that host's crontab as the project's own account.
+# and leaves to a human, done mechanically, idempotently and reversibly: flip
+# the project's row in schedule/_paced.<host>.conf from |0| to |1|, and sync
+# that host's crontab as the project's own account.
 #
-#
-# REVERSIBLE means --retire flips the row back to |0|; it does NOT delete the
-# row. Membership in the rotation is what SUPPRESSES the project's fixed
-# nightly cron line, so deleting a row to "clean up" installs a nightly
-# dispatch the rotation no longer controls (the 2026-08-05 five-stray-cron-
-# lines bug). The reverse of "add a row" is "flip a field".
-#
-# IT COMMITS NOTHING. The repo half edits files in a scheduler clone and stops
-# -- no git commit, no push, no gh. The caller reviews the diff and lands it as
-# that repo is landed today. A provisioning script that pushes to a repo
-# fourteen accounts pull from is a blast radius nobody asked for.
-#
-#   [rest: vault:realisateur/guard-archaeology-20260817.md]
+# TRAPS (the rest of this header is in
+# vault:scheduler/provisioning-block-headers-20260826.md):
+# TRAP: --retire flips the row to |0|; it does NOT delete it. Membership is
+#   what SUPPRESSES the project's fixed nightly cron line, so deleting a row
+#   to "clean up" installs a dispatch the rotation no longer controls
+#   (2026-08-05, five stray cron lines). The reverse of "add a row" is "flip
+#   a field".
+# TRAP: IT COMMITS NOTHING. The repo half edits a scheduler clone and stops --
+#   a provisioning script that pushes to a repo fourteen accounts pull from is
+#   a blast radius nobody asked for.
 set -uo pipefail
 
 CLI_NAME='enrole-selfdev.sh'
@@ -68,10 +65,7 @@ CONF="$REPO/schedule/$PROJECT.conf"
 PACED="$REPO/schedule/_paced.$HOST.conf"
 [ -d "$REPO/.git" ]  || die "$REPO is not a git clone -- pass --repo <scheduler clone>"
 [ -f "$CONF" ]       || die "$PROJECT is not registered: no $CONF. Registration is a separate, reviewed act -- copy examples/schedule-entry.conf.template." 3
-# A host with no rotation file falls back to the SHARED _paced.conf, which on a
-# new host is not a default but another machine's rotation (land-selfdev.sh
-# grades the same fact). Writing a row into a file this host does not read is
-# worse than refusing: it looks done.
+# TRAP: a host with no rotation file falls back to the SHARED _paced.conf -- another machine's rotation. Writing a row into a file this host does not read looks done and is not.
 [ -f "$PACED" ]      || die "no $PACED -- this host reads the shared _paced.conf, i.e. another machine's rotation. Give it its own file first."
 
 refuse_if_dirty() {  # <path> <regex of lines this script owns>
@@ -85,9 +79,7 @@ $foreign
 Commit, stash or revert them first -- adopting another writer's in-flight edit
 is not this script's call."
 }
-# --- what the conf must say --------------------------------------------------
-# Field, wanted value, and why it is not optional. Derived from the project
-# name and host; nothing here is a judgement.
+# Field, wanted value, why it is not optional. All derived from project and host; nothing here is a judgement.
 conf_get() { grep -m1 -oP "(?<=^$1=\")[^\"]*" "$CONF" 2>/dev/null || true; }
 
 declare -a FIELD=(CRON_HOST      CRON_ACCOUNT SCHEDULER_SUBDIR BATCH_JOB_NAME             BATCH_CRON)
@@ -109,9 +101,7 @@ ensure_field() {  # <field> <value> -- print nothing if already right
   if grep -qE "^$f=" "$CONF"; then
     sed -i "s|^$f=.*|$f=\"$v\"|" "$CONF"
   else
-    # Appended, not inserted at a guessed line: these confs are SOURCED, so
-    # order is irrelevant to meaning, and an insertion point is a guess that
-    # lands inside a heredoc-shaped BATCH_PROMPT sooner or later.
+    # TRAP: appended, never inserted at a guessed line -- these confs are SOURCED so order is meaningless, and a guessed insertion point lands inside a heredoc-shaped BATCH_PROMPT sooner or later.
     printf '%s="%s"\n' "$f" "$v" >> "$CONF"
   fi
   return 0
@@ -128,11 +118,7 @@ for i in "${!FIELD[@]}"; do
   fi
 done
 
-# The brief location is a FACT ABOUT THE PROJECT'S REPO, not something this
-# script can fix by editing the scheduler conf: setting SCHEDULER_SUBDIR while
-# the files are still under .claude/ points the symlinks at nothing. Reported,
-# never auto-moved -- a git mv in somebody else's repository is a PR, not a
-# side effect of provisioning.
+# The brief location is a FACT ABOUT THE PROJECT REPO, not fixable by editing the scheduler conf. Reported, never auto-moved: a git mv in someone else's repository is a PR, not a side effect of provisioning.
 PRP="$(conf_get PROJECT_REPO_PATH)"; PRP="${PRP/\$HOME/$HOME}"
 if [ -d "$PRP" ]; then
   if [ -f "$PRP/.scheduler/FOCUS.md" ]; then ok "brief at .scheduler/FOCUS.md (writable unattended)"
@@ -143,17 +129,8 @@ else
   gap "PROJECT_REPO_PATH=$PRP is not present here -- cannot check where the brief lives (normal when enrolling from a different account than the one that will run it)"
 fi
 
-# --- the rotation row --------------------------------------------------------
-# One name, three surfaces (unix user, PROJECT, first column here) -- MONKEY.md
-# section 2. The command is built, not copied, so a renamed account cannot leave
-# a stale path behind.
-# HOME_ROOT is a variable and not a literal for two reasons, one real and one
-# mechanical: a host that puts accounts somewhere other than /home is a real
-# configuration, and an absolute path into a
-# named user's home in code -- correctly, since "a path under one user's home
-# is not a default". The rotation column itself MUST stay an absolute literal:
-# _paced*.conf is read by `while IFS='|' read`, not sourced, so $HOME does not
-# expand there (MONKEY.md section 4b). Resolved here, written out expanded.
+# One name, three surfaces (unix user, PROJECT, first column) -- MONKEY.md 2. The command is BUILT, not copied, so a renamed account leaves no stale path.
+# TRAP: the rotation column MUST stay an absolute literal -- _paced*.conf is read by `while IFS=| read`, not sourced, so $HOME does not expand there (MONKEY.md 4b). HOME_ROOT is a variable because a host may put accounts outside /home; it is resolved here and written out expanded.
 HOME_ROOT="${SELFDEV_HOME_ROOT:-/home}"
 ROW_CMD="$HOME_ROOT/$PROJECT/Documents/Projects/scheduler/bin/scheduler-run $PROJECT batch"
 echo "-- rotation row ($PACED)"
@@ -175,8 +152,7 @@ else
   elif [ "$MODE" = --check ]; then act "flip row enabled: $en -> $want_enabled"; GAPS=$((GAPS+1))
   else
     refuse_if_dirty "schedule/_paced.$HOST.conf" "$ROW_MINE"
-    # Anchored to the row's own text so a project name that is a prefix of
-    # another ("crt" vs "crt-cast") cannot be rewritten by accident.
+    # TRAP: anchored to the row own text -- a project name that prefixes another ("crt" vs "crt-cast") must not be rewritten by accident.
     new_row="$PROJECT|$want_enabled|$rest"
     python3 - "$PACED" "$cur_row" "$new_row" <<'PY'
 import sys
@@ -189,10 +165,7 @@ PY
   fi
 fi
 
-# --- the host half -----------------------------------------------------------
-# Separate flag, because it needs a different privilege and a different machine
-# than the repo half: editing a clone works anywhere, installing a crontab must
-# happen ON the host, AS the account.
+# Separate flag: the repo half edits a clone anywhere, the host half installs a crontab ON the host AS the account.
 if [ "$SYNC" -eq 1 ] && [ "$MODE" != --check ]; then
   echo "-- host half (sync-crontab as $PROJECT)"
   if [ "$(id -un)" = "$PROJECT" ]; then RUN=(bash -lc)

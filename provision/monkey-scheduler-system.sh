@@ -27,9 +27,7 @@ HOST="${MONKEY_HOST:-monkey}"
 PREFIX="${SCHEDULER_PREFIX:-/srv/scheduler}"
 KEYDIR="${SCHEDULER_KEYDIR:-/etc/scheduler}"
 REPO="${SCHEDULER_REPO:-git@github.com:hf7y/scheduler.git}"
-# Where to find a read-only deploy key to SEED the system copy. Read once, at
-# install time, and copied to a root-owned path -- after which nothing here
-# reads a project user's home again.
+# A read-only deploy key to SEED the system copy: read once at install time, copied to a root-owned path, after which nothing here reads a project user home again.
 SEED_KEY="${SCHEDULER_SEED_KEY:-/home/ecosim/.ssh/deploy_scheduler}"  # hardcoded-home-ok: ecosim is the provisioning seed account by design; SCHEDULER_SEED_KEY overrides
 
 die() { printf 'scheduler-system: %s\n' "$*" >&2; exit 1; }
