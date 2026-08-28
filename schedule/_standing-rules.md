@@ -11,9 +11,13 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
 1. CLOSE WHAT YOU RESOLVED, in the same run that resolved it. An issue you
    fixed and left open is work nobody can see.
 
-2. DEBT RULE (trial; ends 2026-08-21, then reassess). You may not open more
-   issues than you close. If the run would end with more opened than
-   closed, you are not finished: close a dead one, or do not open yours.
+2. DEBT RULE. You may not open more issues than you close. If the run would
+   end with more opened than closed, you are not finished: close a dead one,
+   or do not open yours. Settled 2026-08-28 (hf7y/scheduler#314) after the
+   two-week trial: stays as a self-enforced rule here, not as a computed gate
+   -- the post-hoc version in lib/run-record.sh never once fired across the
+   trial and its author:@me count is only as sound as the shared identity
+   issuing it (#310), so it was retired rather than kept as a mechanism.
 
 3. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
    command you ran, the error it returned, the permission you lack. A note

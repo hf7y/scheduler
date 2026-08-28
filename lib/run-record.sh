@@ -35,37 +35,11 @@
 # after. An engine that writes into the checkout it manages will eventually
 # deadlock against its own guards. So it writes outside, always.
 #
-# THE DEBT RULE lives here too -- see DEBT_RULE_TRIAL_END below. It is on a
-# two-week trial and reverts by editing one line.
-#
 # All state is in RR_* globals rather than stdout, so tests/run-record-witness.sh
 # can source this file, drive each probe directly, and read the results -- the
 # same shape as lib/salvage.sh and append_verdict_closeout() in the engine, and
 # for the same reason: a function buried in the run body cannot be witnessed.
 set -uo pipefail
-
-# ---------------------------------------------------------------------------
-# THE DEBT RULE -- TWO-WEEK TRIAL, STARTED 2026-08-07, ENDS 2026-08-21.
-#
-#   A run may not open more issues than it closed. If opened > closed at
-#   closeout, verdict_computed is FAILED and the run says so, loudly.
-#
-# Why a rule and not advice: filing an issue is the cheapest action available
-# to an agent that wants to look productive, and nothing downstream ever
-# distinguished it from work. Making it COST something -- a FAILED run -- is
-# the only version of this that survives contact with an agent optimizing for
-# a clean closing summary.
-#
-# TO REVERT, ONE LINE: set DEBT_RULE_TRIAL_END="" just below. The rule then
-# reports "off" in every record and never contributes to a verdict; nothing
-# else needs touching and no record schema changes.
-#
-# IT EXPIRES ON ITS OWN. Past the end date the rule stops forcing FAILED and
-# records debt_rule="expired" -- the trial does not quietly become policy
-# because nobody remembered it was a trial. Extending it is a deliberate edit
-# of the date, which is the point.
-# ---------------------------------------------------------------------------
-DEBT_RULE_TRIAL_END="${DEBT_RULE_TRIAL_END:-2026-08-21}"
 
 RUN_RECORD_SCHEMA="scheduler.run-record/1"
 
@@ -168,17 +142,18 @@ run_record_repo_slug() {
 # Args: <owner/repo> <since ISO8601>
 # Sets: RR_ISSUES_OPENED RR_ISSUES_CLOSED RR_PRS_OPENED RR_PRS_MERGED RR_GH
 #
-# SCOPE, stated plainly because the debt rule is built on it:
+# SCOPE, stated plainly because run_record_compute_verdict's NET-closed check
+# is built on it:
 #   opened  -- author:@me, i.e. attributable to the account this run ran as.
 #   closed  -- everything closed in the window, whoever closed it. GitHub
 #              search has no closed-by: qualifier, so this cannot be narrowed.
-# That asymmetry makes the rule LENIENT (a human closing something in the same
-# window credits the run) and never harsh, which is the right direction for a
-# rule that can fail a run.
+# That asymmetry makes the count LENIENT (a human closing something in the
+# same window credits the run) and never harsh.
 #
 # gh missing, unauthenticated, or erroring is RR_GH != ok and NULL counts --
-# never zero. Unmeasured must not be able to trip a rule; that is the same
-# asymmetry as bin/verdict.sh's "absence of a verdict is never GAVE-UP".
+# never zero. Unmeasured must read as unmeasured, not as a real zero; that is
+# the same asymmetry as bin/verdict.sh's "absence of a verdict is never
+# GAVE-UP".
 run_record_probe_gh() {
   local slug="$1" since="$2"
   RR_ISSUES_OPENED=""; RR_ISSUES_CLOSED=""; RR_PRS_OPENED=""; RR_PRS_MERGED=""
@@ -189,7 +164,7 @@ run_record_probe_gh() {
     return 1
   fi
   if ! command -v "$RR_GH_BIN" >/dev/null 2>&1; then
-    rr_log "WARNING: '$RR_GH_BIN' not on PATH -- issue/PR counts recorded as null, debt rule cannot be evaluated"
+    rr_log "WARNING: '$RR_GH_BIN' not on PATH -- issue/PR counts recorded as null"
     return 1
   fi
 
@@ -226,32 +201,6 @@ rr_gh_count() {
   esac
 }
 
-# --- THE DEBT RULE ---------------------------------------------------------
-# Sets: RR_DEBT_RULE (active|expired|off|unmeasured) RR_DEBT_DELTA
-# Returns 0 if the rule is satisfied (or not applicable), 1 if TRIPPED.
-run_record_debt_rule() {
-  local today="${1:-$(date +%F)}"
-  RR_DEBT_DELTA=""
-
-  if [ -z "$DEBT_RULE_TRIAL_END" ]; then
-    RR_DEBT_RULE="off"; return 0
-  fi
-  if [ -z "${RR_ISSUES_OPENED:-}" ] || [ -z "${RR_ISSUES_CLOSED:-}" ]; then
-    RR_DEBT_RULE="unmeasured"; return 0
-  fi
-
-  RR_DEBT_DELTA=$(( RR_ISSUES_OPENED - RR_ISSUES_CLOSED ))
-
-  # String compare is correct and total for ISO dates, and needs no date(1).
-  if [[ "$today" > "$DEBT_RULE_TRIAL_END" ]]; then
-    RR_DEBT_RULE="expired"; return 0
-  fi
-
-  RR_DEBT_RULE="active"
-  [ "$RR_DEBT_DELTA" -gt 0 ] && return 1
-  return 0
-}
-
 # --- THE VERDICT, COMPUTED -------------------------------------------------
 # Sets: RR_VERDICT (WORKED|WORKED-CUTOFF|IDLE|FAILED) RR_REASONS (newline-separated)
 #
@@ -267,10 +216,6 @@ run_record_compute_verdict() {
   fi
   if [ "${RR_PUSHED:-null}" = "false" ]; then
     rr_add_reason "commits were made and NOT pushed -- work that reached no consumer"; failed=1
-  fi
-  if ! run_record_debt_rule "${RR_TODAY:-$(date +%F)}"; then
-    rr_add_reason "DEBT RULE (trial, ends $DEBT_RULE_TRIAL_END): opened ${RR_ISSUES_OPENED} issue(s), closed ${RR_ISSUES_CLOSED} -- a run may not leave more work behind than it took away"
-    failed=1
   fi
 
   # RC NO LONGER MASKS EFFECTS (2026-08-19). This used to `return` here, so a
@@ -381,9 +326,6 @@ run_record_line() {
   printf '"prs_merged":%s,'      "$(rr_jnum "${RR_PRS_MERGED:-}")"
   printf '"gh":%s,'              "$(rr_jstr "${RR_GH:-unavailable}")"
   printf '"gh_scope":%s,'        "$(rr_jstr 'opened=author:@me; closed=window, any actor')"
-  printf '"debt_rule":%s,'       "$(rr_jstr "${RR_DEBT_RULE:-unmeasured}")"
-  printf '"debt_trial_end":%s,'  "$(rr_jstr "$DEBT_RULE_TRIAL_END")"
-  printf '"debt_delta":%s,'      "$(rr_jnum "${RR_DEBT_DELTA:-}")"
   printf '"verdict_computed":%s,' "$(rr_jstr "${RR_VERDICT:-}")"
   printf '"verdict_reasons":['
   local first=1 r
@@ -446,9 +388,6 @@ run_record_closeout() {
   echo "COMPUTED VERDICT: ${RR_VERDICT} -- $(printf '%s' "${RR_REASONS:-}" | tr '\n' ';' )"
   if [ "$RR_VERDICT" = "FAILED" ]; then
     echo "!!! COMPUTED VERDICT FAILED for $PROJECT_KEY. This is derived from git and the GitHub API after the run, not from anything the run said about itself."
-    if [ "${RR_DEBT_RULE:-}" = "active" ] && [ "${RR_DEBT_DELTA:-0}" -gt 0 ] 2>/dev/null; then
-      echo "!!! Debt rule TRIPPED: opened ${RR_ISSUES_OPENED}, closed ${RR_ISSUES_CLOSED} (delta +${RR_DEBT_DELTA}). Trial ends ${DEBT_RULE_TRIAL_END}; revert by setting DEBT_RULE_TRIAL_END=\"\" in lib/run-record.sh."
-    fi
     return 1
   fi
   return 0
