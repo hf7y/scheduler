@@ -211,13 +211,12 @@ crt             | crt@monkey             | 20m | live
 # hf7y/groc-mangr#59). RATE 6h -> 20m 2026-08-27: un-parking left the
 # parked-era ceiling, 6x coarser than tempo's floor -- 0 dispatches in 24h.
 baudin          | baudin@monkey          | 20m | live
-# UN-PAUSED 2026-08-28, Zach-directed. SAY THE AWKWARD THING FIRST, because
-# schedule/secretaire.conf already says it: hf7y/secretaire is DE-ANIMATED and
-# its whole open queue is issue #1, "decide re-animate, park, or unregister" --
-# a question addressed to Zach. This row will dispatch a run that reads an
-# empty-but-for-that queue and records DONE. That is the honest outcome of the
-# brief in the conf, not a defect to route around, and answering #1 is worth
-# more than the tick. 20m is the ceiling, not the pace.
+# RE-ANIMATED 2026-08-28, Zach-directed: hf7y/secretaire#1 asked "re-animate,
+# park, or unregister" and he answered re-animate. This row was opened before
+# that answer and is correct under it. #1 is now the build ticket, and the
+# conf's brief no longer tells the run to record DONE and stop -- that
+# instruction was right for an empty queue and would otherwise have made every
+# armed run a no-op. 20m is the ceiling, not the pace.
 secretaire      | secretaire@monkey      | 20m | live
 
 # ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
