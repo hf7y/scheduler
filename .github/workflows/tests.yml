@@ -33,7 +33,30 @@ permissions:
   contents: read
 
 jobs:
+  # CARRY FIRST, ON MAIN ONLY (#315). Until now nothing DID the carry the
+  # witness below detects, so a carried file's PR stayed red until a human
+  # pushed bashified by hand -- and it could not be carried before the merge
+  # without putting a version into the build that no branch develops. This
+  # writes to `bashified`, never to `main`.
+  carry:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: git fetch --no-tags origin +refs/heads/bashified:refs/remotes/origin/bashified
+      - name: Give git an identity for the carry commit
+        run: |
+          git config --global user.email "ci@scheduler.invalid"
+          git config --global user.name  "scheduler CI"
+      - run: bash bin/carry.sh --apply
+
   suites:
+    needs: [carry]
+    # `needs` on a job skipped for pull_request would skip this one too.
+    if: always() && (needs.carry.result == 'success' || needs.carry.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
