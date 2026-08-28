@@ -212,18 +212,19 @@ crt             | crt@monkey             | 20m | live
 baudin          | baudin@monkey          | 20m | live
 secretaire      | secretaire@monkey      | 6h | parked
 
-# ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
-# roster. get read[y] to onboard others."). Not derivable from
-# _paced.monkey.conf or any schedule/dcp-gate-site.conf -- neither exists --
-# so bin/roster-diff.sh will name this row as a DIFF (in ROSTER, not in the
-# old files) and that is expected, not a bug: #228 found dcp-gate-site was in
-# a FOURTH state the old files have no vocabulary for at all (absent, not
-# merely parked), holding 15 of the estate's 37 open needs-human/question
-# issues uncounted by anything that walks the roster. `parked` here is
-# option 1 of #228's three -- "cheapest, and makes the absence a decision" --
-# not a decision to dispatch agents at client work. No unix account, no
-# _paced.monkey.conf row, no schedule/dcp-gate-site.conf: those are the
-# actual onboarding cost (realisateur#102's uid 3000-3099 convention) and are
-# NOT done here. account@host below is aspirational, matching baudin/crt's
-# staging convention above, not a claim the account exists.
-dcp-gate-site   | dcp-gate-site@monkey   | 6h | parked
+# ONBOARDED 2026-08-28, Zach-directed ("onboard dcp-gate-site"), closing the
+# FOURTH state hf7y/scheduler#228 found this project in: absent rather than
+# parked, holding 22 open issues uncounted by anything that walks the roster.
+# The row added 2026-08-20 was `parked` and aspirational -- #228's option 1,
+# "cheapest, and makes the absence a decision", explicitly not a decision to
+# dispatch agents at client work. This is that decision, and the three costs
+# it named are now paid, in this order and deliberately: uid 3016 account and
+# both clones provisioned on monkey, then schedule/dcp-gate-site.conf, then
+# this row. do_live exits 5 BROKEN on a live row whose account is missing, so
+# merging this first would arm a break rather than a project.
+#
+# IT IS CLIENT WORK, so the conf carries what the roster cannot: hf7y/
+# dcp-gate-site's CLAUDE.md forbids posting to a forum, sending outreach mail,
+# or registering an account as a person, and the brief points at that file
+# rather than restating it. Its default branch is `master`, not `main`.
+dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
