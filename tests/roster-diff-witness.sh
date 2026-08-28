@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
-# Witness for bin/roster-diff.sh -- cases 1-4 are hermetic: they build fixture
-# files in a temp dir and never touch the live schedule/. They prove the differ
-# can actually reject (not just accept), in both directions, and that BLIND is
-# distinct from a clean disagreement.
-#
-# Case 5 deliberately reads the SHIPPED tree, same shape and same reason as
-# tests/conf-field-witness.sh's last section: the fixtures above all passed
-# while bin/roster-diff.sh reported DISAGREE on main for days, because the
-# defect was three real confs missing CRON_HOST/CRON_ACCOUNT and no fixture
-# can notice that (hf7y/scheduler#328).
+# Witness for bin/roster-diff.sh. Cases 1-4 build fixtures in a temp dir and
+# never touch the live schedule/; they prove the differ can reject in both
+# directions and that BLIND is distinct from disagreement. Case 5 reads the
+# SHIPPED tree, as tests/conf-field-witness.sh's last section does and for the
+# same reason: 1-4 passed for days while main reported DISAGREE (#328).
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
