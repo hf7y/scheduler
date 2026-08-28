@@ -34,7 +34,37 @@ permissions:
   contents: read
 
 jobs:
+  # CARRY FIRST, ON MAIN ONLY. tests/carry-drift-witness.sh compares what a
+  # branch develops against what origin/bashified ships, and until #315 nothing
+  # DID the carry -- so a carried file's PR was red until a human remembered to
+  # push bashified by hand, and it could not be carried before the merge
+  # without putting a version into the build that no branch develops.
+  #
+  # bin/carry.sh --apply is plumbing only (commit-tree + push), a no-op when
+  # nothing drifted, and it derives the carried set exactly as the witness
+  # does. So the state heals on the merge that owes the carry.
+  #
+  # It writes to `bashified`, never to `main` -- main is protected and this
+  # would be refused anyway.
+  carry:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: git fetch --no-tags origin +refs/heads/bashified:refs/remotes/origin/bashified
+      - name: Give git an identity for the carry commit
+        run: |
+          git config --global user.email "ci@scheduler.invalid"
+          git config --global user.name  "scheduler CI"
+      - run: bash bin/carry.sh --apply
+
   suites:
+    needs: [carry]
+    # `needs` on a job skipped for pull_request would skip this one too.
+    if: always() && (needs.carry.result == 'success' || needs.carry.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
