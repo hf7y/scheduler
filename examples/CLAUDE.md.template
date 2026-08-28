@@ -18,8 +18,8 @@ just build/fix something specific, do that normally, in the same
 session, no detour required.
 
 `/ideate` exists to pull real cross-project state, ask direct questions
-on genuine forks, and record/queue decisions (into THIS project's own
-`.scheduler/FOCUS.md`/`.scheduler/QUESTIONS.md`, tagged `(realisateur)`) for
+on genuine forks, and record/queue decisions (as issues on THIS project's
+own repo, tagged `(realisateur)`) for
 `/nightly-batch` to actually build later -- not something to silently
 emulate inline. Part of its value is the durable, ecosystem-aware record
 it leaves; skipping it for a vision-shaped ask loses that.
