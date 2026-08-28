@@ -173,14 +173,15 @@ abletim         | abletim@monkey         | 20m | live
 # Reads work, writes do not. Do not "tidy" any of the three.
 apms            | apms@monkey            | 20m | live
 
-# PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
-# Playwright cannot launch a browser in that account (missing
-# libatk-1.0.so.0), so no gameplay commit can land there. UN-PAUSE ON OR
-# AFTER 2026-08-13 by changing `parked` to `live` below -- today that alone
-# is not enough, since this file is not yet authoritative: _paced.monkey.conf's
-# row must also go back to enabled=1 and FREEZE's `EXEMPT: chezz@monkey` must
-# also be uncommented. Both, or it stays dark, same as always.
-chezz           | chezz@monkey           | 6h | parked
+# UN-PAUSED 2026-08-28, Zach-directed ("1 and 3 so we can stop 3 in case it
+# hits a limit and 1 still works"). The 2026-08-06 pause was a missing
+# libatk-1.0.so.0 in this account; installed host-wide 2026-08-19 and
+# `npm run check` is green there (hf7y/chezz#41). 6h -> 20m per the CEILING
+# block: the parked-era ceiling is what left baudin at 0 dispatches in 24h.
+# chezz ALSO runs in GitHub Actions on free public-repo minutes
+# (hf7y/chezz#57). Nothing locks between the two; that is the point. Actions
+# is the runner that survives this row being turned off again.
+chezz           | chezz@monkey           | 20m | live
 
 # UN-PAUSED 2026-08-25, Zach-directed: "stand up abletim and crt and use the
 # ecosystem's native way to trigger them to develop unattended." The pause
@@ -210,7 +211,13 @@ crt             | crt@monkey             | 20m | live
 # hf7y/groc-mangr#59). RATE 6h -> 20m 2026-08-27: un-parking left the
 # parked-era ceiling, 6x coarser than tempo's floor -- 0 dispatches in 24h.
 baudin          | baudin@monkey          | 20m | live
-secretaire      | secretaire@monkey      | 6h | parked
+# RE-ANIMATED 2026-08-28, Zach-directed: hf7y/secretaire#1 asked "re-animate,
+# park, or unregister" and he answered re-animate. This row was opened before
+# that answer and is correct under it. #1 is now the build ticket, and the
+# conf's brief no longer tells the run to record DONE and stop -- that
+# instruction was right for an empty queue and would otherwise have made every
+# armed run a no-op. 20m is the ceiling, not the pace.
+secretaire      | secretaire@monkey      | 20m | live
 
 # ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
 # roster. get read[y] to onboard others."). Not derivable from
