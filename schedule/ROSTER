@@ -207,9 +207,9 @@ crt             | crt@monkey             | 20m | live
 # condition -- "un-pause condition is Zach deciding what baudin is for" -- and
 # he decided it: baudin's Home Assistant instance is the store and the MCP
 # surface for the voice -> shopping-list loop (hf7y/baudin#42,
-# hf7y/groc-mangr#59). The CRON_HOST/CRON_ACCOUNT gap named here is closed in
-# schedule/baudin.conf in this same change.
-baudin          | baudin@monkey          | 6h | live
+# hf7y/groc-mangr#59). RATE 6h -> 20m 2026-08-27: un-parking left the
+# parked-era ceiling, 6x coarser than tempo's floor -- 0 dispatches in 24h.
+baudin          | baudin@monkey          | 20m | live
 secretaire      | secretaire@monkey      | 6h | parked
 
 # ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
