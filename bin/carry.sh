@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
-# carry.sh -- perform the carries tests/carry-drift-witness.sh detects.
+# carry.sh -- the actuator tests/carry-drift-witness.sh never had (#315).
 #
-# THE GAP THIS FILLS (hf7y/scheduler#315). The witness has never had an
-# actuator, so every carried-file change was a red PR until a human remembered
-# to push `bashified` by hand -- and the carry cannot happen before the merge
-# without putting a version into the build that no branch develops.
+# DERIVED, NOT LISTED, because the detector is: the carried set is "tracked on
+# both refs under bin/ and lib/", read here from the same refs, so the two
+# cannot disagree about what a carry is. A carries.tsv would be a second
+# definition of one fact -- what #210 refuses -- and carried path equals source
+# path here, so it would add nothing.
 #
-# DERIVED, NOT LISTED, because the detector is. It computes the carried set as
-# "tracked on both branches under bin/ and lib/"; this reads it the SAME way,
-# from the same refs, so the two cannot disagree about what a carry is. A
-# carries.tsv here would be a second definition of the same fact, which is what
-# hf7y/scheduler#210 exists to refuse. Carried path == source path in this
-# repo, unlike realisateur's, so there is nothing a table would add.
-#
-# IT MOVES PATHS, NEVER THE BRANCH. realisateur's hand fix for the same defect
-# ran `git push origin main:bashified` on 2026-08-25 and deleted 13 files
-# bashified carries that main does not have.
+# IT MOVES PATHS, NEVER THE BRANCH: realisateur's hand fix for this defect ran
+# `git push origin main:bashified` and deleted 13 bashified-only files.
 set -uo pipefail
 
 CLI_NAME='carry.sh'
@@ -46,13 +39,10 @@ done
 cd "$HERE" || die "cannot enter $HERE"
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 
-# THE REPO AND THE REFS MUST BE OVERRIDDEN TOGETHER. This takes its refs,
-# remote and branch from the environment but its REPO from its own location.
-# On 2026-08-25 those disagreed in silence in realisateur: a suite handed the
-# equivalent script a fixture's CARRY_REMOTE/CARRY_BRANCH while CARRY_REPO was
-# unset, so it resolved the REAL repo, pushed a REAL carry, and reported
-# success. Overriding where to READ without overriding where to WRITE is a
-# usage error here, not a surprise.
+# THE REPO AND THE REFS MUST BE OVERRIDDEN TOGETHER. Refs come from the
+# environment, the REPO from this file's own location. In realisateur those
+# disagreed in silence: a suite set the fixture's refs and not CARRY_REPO, so
+# the script resolved the REAL repo, pushed a REAL carry, and reported success.
 if [ -z "${CARRY_REPO:-}" ]; then
   for v in CARRY_REMOTE CARRY_BRANCH CARRY_REF_MAIN CARRY_REF_BASH; do
     [ -z "${!v:-}" ] || usage "$v is set but CARRY_REPO is not.

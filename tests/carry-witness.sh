@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
 # Witness for bin/carry.sh -- hermetic: every case builds a throwaway repo with
-# a `main`, a `bashified` and a bare remote, and carry.sh is pointed at it with
-# CARRY_REPO. Nothing here touches this repository or origin/bashified.
-#
-# WHAT MUST HOLD
-#   1. no drift -> exit 0, and bashified does not move (an actuator that
-#      commits on every run is a second writer, not a repair)
-#   2. drift -> --check reports it and writes NOTHING; --apply moves bashified
-#   3. --apply carries ONLY the drifted path. realisateur's hand fix for this
-#      same defect ran `git push origin main:bashified` and deleted 13 files
-#      bashified carries that main does not have -- the file below named
-#      bashified-only.txt is that regression, in one line.
-#   4. a file's executable bit survives the carry
-#   5. setting CARRY_REMOTE/CARRY_BRANCH without CARRY_REPO is a usage error,
-#      not a push into the real repo (realisateur, 2026-08-25)
-#   6. an unreadable ref is BLIND (exit 6), never "none drifted"
+# a `main`, a `bashified` and a bare remote, and points carry.sh at it with
+# CARRY_REPO. Nothing here touches this repository or origin/bashified. The
+# section names below say what must hold; bashified-only.txt is the 13-file
+# `git push origin main:bashified` regression, in one file.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/witness-common.sh"
