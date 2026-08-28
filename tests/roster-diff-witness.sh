@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Witness for bin/roster-diff.sh -- hermetic: builds fixture files in a temp
-# dir, never touches the live schedule/. Proves the differ can actually
-# reject (not just accept), in both directions, and that BLIND is distinct
-# from a clean disagreement.
+# Witness for bin/roster-diff.sh -- cases 1-4 are hermetic: they build fixture
+# files in a temp dir and never touch the live schedule/. They prove the differ
+# can actually reject (not just accept), in both directions, and that BLIND is
+# distinct from a clean disagreement.
+#
+# Case 5 deliberately reads the SHIPPED tree, same shape and same reason as
+# tests/conf-field-witness.sh's last section: the fixtures above all passed
+# while bin/roster-diff.sh reported DISAGREE on main for days, because the
+# defect was three real confs missing CRON_HOST/CRON_ACCOUNT and no fixture
+# can notice that (hf7y/scheduler#328).
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
@@ -55,6 +61,23 @@ out="$(SCHED_ROOT="$d" ROSTER_DIFF_HOST=testhost bash "$DIFF" 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] && ok "missing schedule/ exits 2 (BLIND), not 0 or 1" \
   || bad "missing schedule/ exited $rc (want 2): $out"
 case "$out" in *BLIND*) ok "BLIND is stated, not just a bare exit code" ;; *) bad "no BLIND wording: $out" ;; esac
+
+# --- 5. the shipped tree: every live ROSTER row's conf sets both fields ----
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+while IFS='|' read -r name _acct _rate state; do
+  name="${name//[[:space:]]/}"; state="${state//[[:space:]]/}"
+  [ -n "$name" ] && [ "$state" = "live" ] || continue
+  conf="$ROOT/schedule/$name.conf"
+  if grep -qE '^CRON_HOST=' "$conf" && grep -qE '^CRON_ACCOUNT=' "$conf"; then
+    ok "$name.conf sets CRON_HOST and CRON_ACCOUNT"
+  else
+    bad "$name is live in ROSTER but $name.conf leaves CRON_HOST/CRON_ACCOUNT unset -- roster-diff derives parked for it and can never exit 0"
+  fi
+done < <(grep -vE '^[[:space:]]*(#|$)' "$ROOT/schedule/ROSTER")
+
+out="$(bash "$DIFF" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "roster-diff exits 0 against the shipped schedule/" \
+  || bad "roster-diff exited $rc against the shipped schedule/: $out"
 
 echo
 echo "roster-diff-witness: $PASS passed, $FAIL failed"
