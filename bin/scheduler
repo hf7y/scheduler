@@ -1155,8 +1155,15 @@ cmd_ask() {
     # migrated. Creating them here makes the first `ask` on a new project
     # work instead of erroring on a detail nobody would guess.
     ensure_gh_labels "$slug"
+    # Line 1 must declare DECISION or NO-DECISION (bin/lib/body-grammar.sh,
+    # sourced by gh-sign, which gh itself is wrapped to enforce on every
+    # `issue create`) -- an ask IS a decision request, so DECISION is the
+    # honest declaration, naming @hf7y as the decider the grammar requires.
+    # The DEFERRED/DELIVERS ledgers are genuinely empty at file time: filing
+    # a question defers nothing (the question itself isn't deferred work,
+    # it's the ask) and ships nothing outside this repo.
     body="$(printf '%s\n' \
-      "$text" \
+      "DECISION: @hf7y -- $text" \
       "" \
       "---" \
       "\`$id\` · filed $today · via $via" \
@@ -1180,7 +1187,15 @@ cmd_ask() {
       "  past its question is folded into the tracker, quoted and dated," \
       "  without asking first." \
       "- **D. No clean-check reports.** A re-probe that confirms the human was" \
-      "  right produces no output at all.")"
+      "  right produces no output at all." \
+      "" \
+      "<!-- DEFERRED -->" \
+      "- none" \
+      "<!-- /DEFERRED -->" \
+      "" \
+      "<!-- DELIVERS -->" \
+      "- none" \
+      "<!-- /DELIVERS -->")"
     # --body-file, not --body: a question containing a backtick or \$( is a
     # question, not a command. Same reason CLAUDE.md requires `git commit -F`.
     local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
