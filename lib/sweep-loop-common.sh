@@ -274,6 +274,17 @@ $block
 $PROMPT"
 }
 
+read_resume_hint() {
+  [ -n "${SCHEDULER_RESUME_PR:-}" ] && [ -n "${SCHEDULER_RESUME_REPO:-}" ] || return 0
+  echo "dispatcher found an open PR left by a no-verdict run -- prepending a resume instruction"
+  PROMPT="The previous run of this job ended with no verdict, and the dispatcher found open pull request #$SCHEDULER_RESUME_PR on $SCHEDULER_RESUME_REPO still carrying a failing check. Before picking anything new, go finish or fix that PR first.
+
+---
+
+$PROMPT"
+  unset SCHEDULER_RESUME_PR SCHEDULER_RESUME_REPO
+}
+
 # THE VERDICT CLOSEOUT -- appended to every batch brief, BY THE ENGINE, because the contract is the RUNNER's and the runner is shared. Until 2026-08-06 the only thing asking for a verdict was one paragraph in ONE conf, so bibliothecaire wrote verdicts and nobody else ever had -- and usage-paced-runner logged NO-VERDICT every tick and re-dispatched forever, the exact "retries forever, no braking" failure verdict.sh exists to end. Here, the next account armed is correct BY DEFAULT, and it works whether a conf spells its brief inline or as a bare slash command resolved in the project's own repo.
 # TRAP: BATCH TIER ONLY. The verdict file is keyed on the ROTATION PARTICIPANT name and the runner consumes it at dispatch, so a sweep-tier run writing the same key between paced ticks hands the batch run someone else's verdict.
 # A conf that already names verdict.sh keeps its own wording: bibliothecaire's is strictly more specific than this generic one.
@@ -730,6 +741,8 @@ $PROMPT"
   # conf's own brief) and unconditional on TIER, unlike append_verdict_closeout
   # -- a bug-sweep tier can hit --max-turns exactly the same way batch does.
   read_ceiling_breadcrumb
+
+  read_resume_hint
 
   # claude's own output is tee'd to a per-run capture file (as well as
   # flowing into $LOG via the enclosing block redirect) so that a FAILED
