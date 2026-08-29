@@ -39,9 +39,6 @@ while [ "\$#" -gt 0 ]; do
 done
 case "\$path" in
   graphql)
-    # hf7y/scheduler#291's auto-merge arm. FAKE_GH_AUTOMERGE_MODE=fail models
-    # the repo setting being off -- enable_pr_auto_merge must degrade to
-    # "opened, not armed", not treat that as the write having failed.
     if [ "\${FAKE_GH_AUTOMERGE_MODE:-ok}" = "fail" ]; then
       echo "gh: auto-merge is not allowed on this repository" >&2; exit 1
     fi
@@ -68,11 +65,6 @@ case "\$path" in
     dest="roster"
     case "\$path" in */_paced.*.conf*) dest="paced" ;; esac
     if [ -n "\${F[content]:-}" ]; then
-      # write: -X PUT with -f content=<b64> -f sha=... -f branch=... present.
-      # Real gh requires sha=the file's CURRENT sha on that branch; this fake
-      # skips validating it (the sha lookup below already exercised that call
-      # happens at all) and just records what was written, for the test to
-      # inspect byte-for-byte.
       printf '%s' "\${F[content]}" | base64 -d > "\$WORK/written-\$dest"
       printf 'write dest=%s branch=%s\n' "\$dest" "\${F[branch]:-}" >> "\$WORK/gh-calls.log"
     elif [ "\$dest" = "paced" ]; then
@@ -141,9 +133,6 @@ chmod +x "$FAKEBIN/sudo"
 cat > "$FAKEBIN/getent" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1" = "passwd" ] && [ -n "${2:-}" ]; then
-  # FAKE_GETENT_FAIL names ONE account that does not exist -- #291's
-  # --arm account-existence guard needs a way to fail without every
-  # existing dose-project test (which never sets it) having to know.
   if [ "$2" = "${FAKE_GETENT_FAIL:-}" ]; then
     exit 2
   fi
@@ -154,9 +143,6 @@ exit 2
 EOF
 chmod +x "$FAKEBIN/getent"
 
-# uid 3000-3099 is the self-dev range #291's --arm/--park refuses. FAKE_UID
-# defaults to a human's, so every test below except the one that sets it is
-# exercising the "a person is at the terminal" path.
 cat > "$FAKEBIN/id" <<'EOF'
 #!/usr/bin/env bash
 case "$1" in
@@ -283,12 +269,9 @@ grep -qF 'scheduler:scheduler-paced-runner:RUNNER' "$CRONFILE" \
   || bad "an unset host field should not have blanked the shared value: $(cat "$CRONFILE")"
 unset FAKE_RUNNER_HOST_MODE FAKE_RUNNER_HOST_CONTENT
 
-# ============================================================================
-# --arm / --park (hf7y/scheduler#291): the roster stops being hand-edited.
-# ============================================================================
 export FAKE_PACED_CONTENT
 
-# --- 8. a self-dev account (uid 3000-3099) is refused, before any gh write -
+# --- 8-9. --arm/--park (#291) guards, both refused before any gh write -----
 export FAKE_UID=3011
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
 unset FAKE_UID
@@ -299,7 +282,6 @@ grep -qi 'REFUSED' <<<"$out" && ok "the self-dev refusal is named" \
 [ -f "$WORK/gh-calls.log" ] && bad "self-dev refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "self-dev refusal touched gh not at all"
 
-# --- 9. --arm refuses a project whose unix account does not exist ----------
 export FAKE_GETENT_FAIL=ghosttown
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
 unset FAKE_GETENT_FAIL
@@ -310,8 +292,7 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
 [ -f "$WORK/gh-calls.log" ] && bad "missing-account refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "missing-account refusal wrote nothing"
 
-# --- 10. --arm on a parked project: writes both files, opens the PR, arms
-#     auto-merge -- the whole ask (#291: 4 hand-edited PRs -> one command) --
+# --- 10-12. arm/park writes both files together, opens the PR, arms it ----
 rm -f "$WORK/gh-calls.log" "$WORK/written-roster" "$WORK/written-paced"
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm on a parked project exits 0" || bad "--arm exited $rc: $out"
@@ -336,7 +317,6 @@ grep -qF 'ecosim|1|1|' "$WORK/written-paced" \
   && ok "the written paced conf leaves ecosim's row untouched" \
   || bad "an unrelated paced row changed: $(cat "$WORK/written-paced" 2>&1)"
 
-# --- 11. --arm on an already-live project is a no-op, kept -----------------
 rm -f "$WORK/gh-calls.log"
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm on an already-live project exits 0" || bad "--arm exited $rc: $out"
@@ -345,7 +325,6 @@ grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" 
 [ -f "$WORK/gh-calls.log" ] && bad "a no-op --arm still wrote to gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "a no-op --arm wrote nothing"
 
-# --- 12. --park is the same shape, the other direction ---------------------
 rm -f "$WORK/gh-calls.log" "$WORK/written-roster" "$WORK/written-paced"
 out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--park on a live project exits 0" || bad "--park exited $rc: $out"
@@ -355,15 +334,13 @@ grep -qF 'ecosim | ecosim@testhost | 6h | parked' "$WORK/written-roster" \
 grep -qF 'ecosim|0|1|' "$WORK/written-paced" \
   && ok "--park flips the paced conf's enabled flag to 0" \
   || bad "written paced conf does not carry enabled=0: $(cat "$WORK/written-paced" 2>&1)"
-# --park never runs the arm-only account-existence check -- a parked account
-# does not need to exist on this host at all.
 export FAKE_GETENT_FAIL=ecosim
 out2="$("$TARGET" ecosim --park 2>&1)"; rc2=$?
 unset FAKE_GETENT_FAIL
 [ "$rc2" -eq 0 ] && ok "--park does not require the account to exist" \
   || bad "--park with no unix account exited $rc2, want 0: $out2"
 
-# --- 13. auto-merge cannot be armed: PR still opens, degrades not fails ----
+# --- 13-15. degrade/refuse paths: no auto-merge, no paced conf, no paced row
 rm -f "$WORK/gh-calls.log"
 export FAKE_GH_AUTOMERGE_MODE=fail
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
@@ -373,7 +350,6 @@ unset FAKE_GH_AUTOMERGE_MODE
 grep -qF 'opened: PR #42' <<<"$out" && ok "--arm reports opened-not-armed when auto-merge fails" \
   || bad "--arm did not degrade its message: $out"
 
-# --- 14. the two files must be written TOGETHER -- no paced conf, no write -
 rm -f "$WORK/gh-calls.log"
 export FAKE_PACED_MODE=absent
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
@@ -385,7 +361,6 @@ grep -qi 'together' <<<"$out" && ok "the refusal explains the together-or-neithe
 [ -f "$WORK/gh-calls.log" ] && bad "half-written refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "no paced conf: nothing written, not even the roster half"
 
-# --- 15. a roster row with no matching line in the paced conf is refused ---
 rm -f "$WORK/gh-calls.log"
 out="$("$TARGET" orphan-proj --arm 2>&1)"; rc=$?
 [ "$rc" -eq 5 ] && ok "--arm on a project absent from the paced conf exits 5 (broken)" \

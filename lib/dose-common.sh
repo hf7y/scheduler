@@ -153,9 +153,6 @@ fetch_repo_file() {
 # a path, and because the path itself then lives in exactly one place.
 fetch_roster() { fetch_repo_file schedule/ROSTER; }
 
-# --- write path (#291): branch/commit/PR/auto-merge, all via gh api/graphql,
-# no local clone -- same portability contract fetch_repo_file already has.
-
 branch_head_sha() {  # <ref> -> the sha it currently points at
   local ref="${1:?branch_head_sha needs a ref}"
   gh_as api "repos/$REPO_SLUG/git/ref/heads/$ref" --jq '.object.sha' 2>/dev/null
@@ -168,11 +165,7 @@ create_repo_branch() {  # <new-branch> <base-ref>, off base's CURRENT tip
   gh_as api "repos/$REPO_SLUG/git/refs" -f ref="refs/heads/$branch" -f sha="$sha" >/dev/null
 }
 
-# write_repo_file <path> <new-content> <branch> <commit-message> -- one
-# commit. Re-fetches the file's sha on THIS branch first: the contents API
-# refuses a write without it (an optimistic lock), and a stale sha from an
-# earlier read in this run is exactly what that lock exists to catch.
-write_repo_file() {
+write_repo_file() {  # <path> <content> <branch> <commit-msg> -- re-fetches sha first, the API's optimistic lock
   local rel="${1:?write_repo_file needs a path}" content="$2" branch="${3:?needs a branch}" msg="${4:?needs a commit message}"
   local sha
   sha="$(gh_as api "repos/$REPO_SLUG/contents/$rel?ref=$branch" --jq '.sha' 2>/dev/null)"
@@ -189,10 +182,7 @@ open_repo_pr() {  # <branch> <base> <title> <body> -> "<number> <url>"
     --jq '"\(.number) \(.html_url)"'
 }
 
-# enable_pr_auto_merge <pr-number> -- GraphQL only, no REST verb exists for
-# it. Best-effort: failure isn't fatal to the caller, since the PR still
-# exists for a human to merge by hand -- no worse than today's manual edit.
-enable_pr_auto_merge() {
+enable_pr_auto_merge() {  # <pr-number> -- GraphQL only; best-effort, PR still exists if this fails
   local num="${1:?enable_pr_auto_merge needs a PR number}" node_id
   node_id="$(gh_as api "repos/$REPO_SLUG/pulls/$num" --jq '.node_id' 2>/dev/null)"
   [ -n "$node_id" ] || return 1

@@ -4,22 +4,15 @@
 # hf7y/scheduler#80 (this command) + #81 (per-project rate). Frame: realisateur#134.
 #
 # Reads schedule/ROSTER from GITHUB via `gh api`, never a local clone: a clone
-# on this very host can be days behind main (measured 2026-08-11: monkey's own
-# scheduler checkout was 5 days stale), so a clone-reading dose would converge
-# to stale truth on the host the command is typed on. `gh` unauthenticated,
-# unreachable, or the file not existing yet are ALL indistinguishable from here
-# and all mean the same thing: dose cannot see truth. That is BLIND (exit 6),
-# never a silent "no rows found" (exit 4 is reserved for a roster dose COULD
-# read that simply has no row for this project).
+# on this host can be days stale (measured 2026-08-11: 5 days), converging to
+# stale truth. `gh` unauthenticated, unreachable, or the file missing are all
+# indistinguishable from here and BLIND (exit 6) -- never a silent "no rows
+# found" (exit 4 is for a roster dose COULD read that has no row for this).
 #
-# THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming or parking a project
-# is reserved for a human at a terminal -- an agent that could edit the
-# roster and then converge would have self-armed. --check/--apply/--now never
-# write schedule/ROSTER, only converge to whatever it already says.
-#
-# --arm/--park (#291) DO write it -- the one exception -- but refuse a uid
-# 3000-3099 self-dev caller outright, before any network call, so an agent
-# still cannot arm itself.
+# THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming/parking is reserved
+# for a human at a terminal -- an agent that edited the roster and converged
+# would have self-armed. --check/--apply/--now never write schedule/ROSTER;
+# --arm/--park (#291) do, but refuse a uid 3000-3099 self-dev caller outright.
 #
 # RUNNER: tests/dose-project-witness.sh
 set -uo pipefail
@@ -61,8 +54,7 @@ for a in "$@"; do
 done
 [ -n "$PROJECT" ] || { echo "$CLI_NAME: name a project (see --help)" >&2; exit 2; }
 
-# #291: arming/parking is a human action -- refused on the CLI's OWN uid,
-# before any network call, not on who the roster row names.
+# #291: refused on the CLI's OWN uid, before any network call.
 if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   CALLER_UID="$(id -u)"
   if [ "$CALLER_UID" -ge 3000 ] && [ "$CALLER_UID" -le 3099 ]; then
@@ -109,9 +101,8 @@ fi
 ROW_ACCT_HOST="${ROW[1]}"; ROW_RATE="${ROW[2]}"; ROW_STATE="${ROW[3]}"
 ROW_ACCT="${ROW_ACCT_HOST%@*}"; ROW_HOST="${ROW_ACCT_HOST##*@}"
 
-# --- 3a. --arm / --park (#291): write the roster, never converge here. Runs
-# BEFORE the wrong-host check below -- a GitHub write has no "wrong host" to
-# be wrong about, unlike --apply/--now's local crontab write.
+# --- 3a. --arm/--park (#291): write the roster, never converge. Runs before
+# the wrong-host check -- a GitHub write has no "wrong host" to be wrong about.
 roster_with_state() {  # <content> <project> <new-state>
   awk -v proj="$2" -v newstate="$3" '
     $0 ~ /^[[:space:]]*(#|$)/ { print; next }
@@ -139,8 +130,7 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
     exit 0
   fi
 
-  # do_live below exits 5 BROKEN the moment this converges if the account is
-  # missing -- catch it before spending a PR on a row that cannot work.
+  # do_live exits 5 BROKEN if the account is missing -- catch it here first.
   if [ "$NEW_STATE" = "live" ]; then
     ACCT_OK=1
     if [ "$ROW_HOST" = "$HOST" ]; then
