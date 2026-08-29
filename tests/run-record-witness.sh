@@ -15,20 +15,9 @@
 #     deploys for 18 hours on 2026-08-07. A second engine writer inside the
 #     checkout is the same bug again.
 #
-# THE DEBT RULE that used to live here (a run may not open more issues than it
-# closed) ran as a two-week trial, 2026-08-07..2026-08-21, and is RETIRED, not
-# just expired -- hf7y/scheduler#314. Two weeks of this account's own ledger
-# never once showed it tripping (issues_opened was 0 in every trial-window
-# run), and it had no measurable effect on the estate's issue-creation rate at
-# either boundary. Its scoping was also weaker than documented: opened counts
-# were as fresh as `since` allowed, correct for a real run window, but "author:
-# @me" resolves through one shared GitHub identity across all fifteen self-dev
-# accounts (`gh auth status` here shows account hf7y, no per-account token on
-# the write path) -- see hf7y/scheduler#310. The behavioral intent survives as
-# schedule/_standing-rules.md rule 0 (mechanism first) and rule 1 (close what
-# you resolved), which do not depend on that measurement. The NET-closed
-# WORKED credit below (closing more than you opened) is a different,
-# unretired feature and keeps its cases.
+# THE DEBT RULE that used to live here is RETIRED, not just expired --
+# hf7y/scheduler#314 has the trial evidence. The NET-closed WORKED credit
+# below (closing more than you opened) is a different, unretired feature.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
