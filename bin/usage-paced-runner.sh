@@ -633,10 +633,6 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
   fi
 }
 
-# resume_hint_for_project <name> -- #297 step 3/#345. Prints "PR REPO" (bare
-# tokens: $cmd below is unquoted) if this project's MOST RECENT ledger row
-# (not merely its most recent NOT-DONE row, so a later real verdict silences
-# this) is NOT-DONE with a DERIVED-CONTINUE reason (#344); nothing otherwise.
 resume_hint_for_project() {
   local name="${1:?}" last_outcome last_reason
   declare -F ledger_last >/dev/null 2>&1 || return 0
@@ -888,7 +884,6 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       dispatched=$((dispatched + 1))
       continue
     fi
-    # SCHEDULER_RESUME_PR/_REPO ride along too -- sudo -n strips the env otherwise.
     cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin SCHEDULER_RESUME_PR=$_resume_pr SCHEDULER_RESUME_REPO=$_resume_repo $cmd"
   fi
 
