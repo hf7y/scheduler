@@ -244,14 +244,6 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
   case "$prev_filed" in ''|*[!0-9]*) prev_filed=0 ;; esac
   if [ "$prev_reason" = "$reason" ]; then n=$((prev_n + 1)); filed="$prev_filed"; fi
   log "$line [consecutive blocked ticks: $n]"
-  # Write the count back NOW, before any attempt to file -- filing shells
-  # out to `scheduler -i`, which does an UNTIMED `git fetch`/`git push`
-  # against realisateur's own remote (cmd_commit_file) and can hang. #340
-  # measured 91 ticks stuck re-logging "3" forever: the only printf lived
-  # after the filing attempt, so a hang there meant the count on disk never
-  # advanced past whatever the last successful tick wrote, and every
-  # subsequent tick recomputed the same escalated n from that same stale
-  # state and tried (and hung on) the same filing call again.
   printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
   if [ "$n" -ge "$PULL_ESCALATE_AFTER" ]; then
     log "PULL FROZEN -- $REPO_ROOT has not advanced for $n consecutive tick(s) (cause: $reason). Deployed code on this host is STALE and a merged fix cannot reach it. NOT auto-resolved: a dirty tree here can hold the only copy of a record (hf7y/scheduler#61, #75)."
@@ -265,13 +257,6 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
       [ -x "$_sched_bin" ] || _sched_bin="$(command -v scheduler 2>/dev/null || true)"
       if [ -z "$_sched_bin" ]; then
         log "FILED FAILED -- scheduler command not found (checked $REPO_ROOT/bin/scheduler and PATH); the pull freeze exists in this log only"
-      # Bounded: this shells out to `scheduler -i`, which touches
-      # realisateur's remote (fetch + push) with no timeout of its own
-      # (see cmd_commit_file). Without a cap here, that hang becomes THIS
-      # tick's hang, and the tick dies before it can log FILED, log FILED
-      # FAILED, or write $PULL_STATE below -- indistinguishable from the
-      # process being killed outright. 60s covers a slow fetch+push; past
-      # that, treat it as failed and let the next tick retry.
       elif timeout "$PULL_FILE_TIMEOUT" "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
         filed=1
         log "FILED the pull freeze to realisateur's inbox"

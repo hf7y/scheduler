@@ -1805,10 +1805,6 @@ cmd_commit_file() {
   # only case that can be fixed automatically, and a loud stop otherwise.
   local branch behind ahead ff_out stall_reason=""
   branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-  # Timed, same as the pull gate's own `timeout 20 git ... fetch` in
-  # usage-paced-runner.sh (#340): this runs from cron/dispatcher callers
-  # with no TTY, and an untimed fetch against a stalled or unreachable
-  # remote hangs the whole calling tick with no log line to show why.
   timeout 20 git -C "$repo" fetch --quiet 2>/dev/null
   behind="$(git -C "$repo" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
   ahead="$(git -C "$repo" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
@@ -1846,8 +1842,6 @@ cmd_commit_file() {
     # lib/sweep-loop-common.sh's `push reason:` line: say WHY, from the
     # command's own output, rather than offering a plausible diagnosis
     # nobody verified.
-    # Timed for the same reason the fetch above is (#340): an untimed push
-    # against a stalled remote hangs the calling tick with no log line.
     push_out="$(timeout 20 git -C "$repo" push 2>&1)"; push_rc=$?
     if [ "$push_rc" -eq 0 ]; then
       echo "committed + pushed in $repo"

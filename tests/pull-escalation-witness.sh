@@ -165,13 +165,7 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
   ok "no phantom filing recorded -- nothing was actually sent"
 else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
-# --- 6. the filing call hangs -- must not lose the count or hang forever ----
-# (#340: 91 ticks stuck re-logging "3" because the ONLY state-file write sat
-# AFTER the filing attempt, and cmd_commit_file's untimed `git fetch`/`push`
-# let that attempt hang indefinitely. The tick died mid-call: no FILED, no
-# FILED FAILED, no write-back -- so the next tick recomputed the SAME
-# escalated n from the same stale state and hung on the same call again.)
-echo "== 6. a hanging filing call is bounded and does not strand the count"
+echo "== 6. a hanging filing call is bounded and does not strand the count (#340)"
 { printf '#!/usr/bin/env bash\n'
   printf 'sleep 5\n'
   printf 'printf "%%s\\n" "$*" >> %s\n' "$FILED"; } > "$TMP/bin/scheduler"
