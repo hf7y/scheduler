@@ -165,7 +165,6 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
   ok "no phantom filing recorded -- nothing was actually sent"
 else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
-# --- 6. the filing call hangs -- must not hang the tick or lose the count (#340) ---
 echo "== 6. the filing call hangs: the tick bounds itself and the count survives"
 rm -f "$PSTATE"
 cat > "$TMP/bin/scheduler" <<'EOF'

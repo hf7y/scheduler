@@ -229,7 +229,6 @@ log() { echo "$(date -Is) $*" >> "$LOG"; }
 # >>> pull gate
 PULL_STATE="$STATE_DIR/pull-block.state"
 PULL_ESCALATE_AFTER="${PACED_PULL_ESCALATE_AFTER:-3}"
-# Bounds the filing subprocess below (#340: it hung, with nothing to stop it).
 PULL_FILE_TIMEOUT="${PACED_PULL_FILE_TIMEOUT:-30}"
 
 # Records that this tick's pull did NOT advance, and escalates once the same
@@ -245,8 +244,6 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
   case "$prev_filed" in ''|*[!0-9]*) prev_filed=0 ;; esac
   if [ "$prev_reason" = "$reason" ]; then n=$((prev_n + 1)); filed="$prev_filed"; fi
   log "$line [consecutive blocked ticks: $n]"
-  # Written now, not only at the end (#340: a hung filing call below used to
-  # lose this write and the count with it).
   printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
   if [ "$n" -ge "$PULL_ESCALATE_AFTER" ]; then
     log "PULL FROZEN -- $REPO_ROOT has not advanced for $n consecutive tick(s) (cause: $reason). Deployed code on this host is STALE and a merged fix cannot reach it. NOT auto-resolved: a dirty tree here can hold the only copy of a record (hf7y/scheduler#61, #75)."
