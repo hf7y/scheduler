@@ -632,6 +632,46 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
     echo "DERIVED-SILENT: no open PR on $repo, updated since this run started, with a failing check -- nothing to point at"
   fi
 }
+
+# resume_hint_for_project <name> -- prints "PR REPO" (space-separated, two
+# bare tokens) if this project's MOST RECENT ledger row is NOT-DONE with a
+# DERIVED-CONTINUE reason (derive_no_verdict_reason above); prints nothing
+# otherwise.
+#
+# hf7y/scheduler#297 step 3 / #345: derive_no_verdict_reason's classification
+# already lands in the ledger's reason column (#344), but nothing downstream
+# read it -- a run that left PR #14 open and red kept getting re-dispatched to
+# pick a FRESH issue instead of being told to go finish #14. This is the read
+# side of that feed-forward: the caller below exports the two tokens into the
+# dispatched job's environment, and lib/sweep-loop-common.sh's
+# read_resume_hint() turns them into a prompt prefix, the same shape as
+# write_ceiling_breadcrumb/read_ceiling_breadcrumb already use for a
+# --max-turns cutoff -- except the information here only the OUTER dispatcher
+# has (gh visibility into the project's own repo), so it is read from the
+# ledger this script already writes rather than from a file the job itself
+# would have had to write about a PR state it never observed.
+#
+# BARE TOKENS ONLY, not the full sentence: $cmd below is executed unquoted
+# (word-split, not re-parsed by eval), so anything containing a space would
+# silently split into extra argv words instead of surviving as one value. A
+# PR number and an "owner/repo" slug are both single tokens by construction;
+# the English sentence is assembled downstream, in read_resume_hint(), from
+# these two safe pieces.
+#
+# ONLY THE MOST RECENT ROW COUNTS, not merely the most recent NOT-DONE row --
+# ledger_last() is checked FIRST so a DONE/CONTINUE/IMPOSSIBLE recorded since
+# the DERIVED-CONTINUE row correctly silences this hint, even though
+# ledger_reason(..., NOT-DONE, 1) would still find the older row on its own.
+resume_hint_for_project() {
+  local name="${1:?}" last_outcome last_reason
+  declare -F ledger_last >/dev/null 2>&1 || return 0
+  last_outcome="$(ledger_last "$name" 2>/dev/null || true)"
+  [ "$last_outcome" = "NOT-DONE" ] || return 0
+  last_reason="$(ledger_reason "$name" NOT-DONE 1 2>/dev/null || true)"
+  if [[ "$last_reason" =~ ^DERIVED-CONTINUE:\ open\ PR\ \#([0-9]+)\ on\ ([^[:space:]]+)\  ]]; then
+    printf '%s %s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  fi
+}
 dispatched=0
 examined=0
 while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
@@ -849,6 +889,18 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # stamp that reads as current is worse than no stamp.
   "$SELF_DIR/verdict.sh" clear "$name" >/dev/null 2>&1 || true
 
+  # #297 step 3 / #345: hand this project's last DERIVED-CONTINUE (if any)
+  # forward as two bare env tokens -- see resume_hint_for_project() above for
+  # why bare tokens, not a sentence. Exported unconditionally (possibly
+  # empty) so both the account-mode inheritance below and the host-mode `env`
+  # list a few lines down see the same, current answer every iteration; a
+  # stale value from a PRIOR loop iteration must never survive into this one.
+  _resume_pr="" _resume_repo=""
+  if declare -F resume_hint_for_project >/dev/null 2>&1; then
+    read -r _resume_pr _resume_repo <<<"$(resume_hint_for_project "$name")"
+  fi
+  export SCHEDULER_RESUME_PR="$_resume_pr" SCHEDULER_RESUME_REPO="$_resume_repo"
+
   # HOST MODE: run AS the account that owns the row. The account is read off
   # the command's own path (/home/<acct>/...), which is the authority for who
   # runs it -- that path IS the thing being executed, so deriving the uid from
@@ -867,7 +919,13 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       dispatched=$((dispatched + 1))
       continue
     fi
-    cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin $cmd"
+    # SCHEDULER_RESUME_PR/_REPO ride along here too, and for the same reason
+    # HOME/USER/LOGNAME/PATH must be listed explicitly: `sudo -n` strips the
+    # inherited environment, so the export a few lines above is invisible to
+    # this child unless `env` is told about it by name. Both are bare tokens
+    # (digits, "owner/repo") by construction -- see resume_hint_for_project()
+    # -- so embedding them unquoted here cannot split into extra argv words.
+    cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin SCHEDULER_RESUME_PR=$_resume_pr SCHEDULER_RESUME_REPO=$_resume_repo $cmd"
   fi
 
   log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF mode=$([ "$PACED_HOST_MODE" = 1 ] && echo host || echo account))"
@@ -1018,6 +1076,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     unset _sched_bin
   fi
 
+  unset _resume_pr _resume_repo
   dispatched=$((dispatched + 1))
 done
 
