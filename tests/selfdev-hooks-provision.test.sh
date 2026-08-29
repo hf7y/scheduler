@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# HERMETICITY: HOME_ROOT is a throwaway tree under $T, SUDO is empty -- no
-# case touches a real account. Witness for bin/selfdev-hooks-provision.sh,
+# HERMETICITY: HOME_ROOT is a throwaway tree under $T, SUDO is empty, and
+# SELFDEV_HOOK_SRC is pinned off $T too -- a host that has a real build at
+# $PROVISION_HOST_PIN (any provisioned self-dev account does) must not leak
+# a spurious hook-FILE DRIFT into cases A-H, which never create a hooks/
+# fixture and rely on the hook-file check being off. Case J overrides this
+# per-call to test that check on its own. Witness for
+# bin/selfdev-hooks-provision.sh,
 # same shape as selfdev-permissions-provision.test.sh: A no hooks key ->
 # DRIFT+write, B wrong event -> DRIFT not ok, C correct -> ok+no rewrite, D
 # unparseable -> BLIND, E human account skipped, F --apply preserves env/
@@ -11,6 +16,7 @@ SCRIPT="$REPO_BIN/selfdev-hooks-provision.sh"
 [ -x "$SCRIPT" ] || { echo "FAIL: $SCRIPT not executable"; exit 1; }
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+NO_HOOK_SRC="$T/no-hook-src"  # deliberately absent: forces the BLIND/skip path, never a real build
 pass=0; fail=0
 ok()  { echo "  ok   $1"; pass=$((pass+1)); }
 bad() { echo "  FAIL $1"; fail=$((fail+1)); }
@@ -19,7 +25,7 @@ hasnt(){ case "$2" in *"$3"*) bad "$1 (unexpected: $3)" ;; *) ok "$1" ;; esac; }
 rc()  { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (expected exit $2, got $3)"; fi; }
 
 # shellcheck disable=SC1007  # `SUDO= cmd` is deliberate: keeps every case here from invoking sudo
-WANT="$(SUDO= "$SCRIPT" --print)"
+WANT="$(SUDO= SELFDEV_HOOK_SRC="$NO_HOOK_SRC" "$SCRIPT" --print)"
 
 mkhome() { # $1 = root name, $2 = account, $3 = settings content ('' = no file)
   mkdir -p "$T/$1/$2/.claude"
@@ -27,7 +33,7 @@ mkhome() { # $1 = root name, $2 = account, $3 = settings content ('' = no file)
   return 0
 }
 # shellcheck disable=SC1007  # see WANT above: empty SUDO on purpose
-run() { local r="$1"; shift; HOME_ROOT="$T/$r" SUDO= "$SCRIPT" "$@" 2>&1; }
+run() { local r="$1"; shift; HOME_ROOT="$T/$r" SUDO= SELFDEV_HOOK_SRC="$NO_HOOK_SRC" "$SCRIPT" "$@" 2>&1; }
 
 mkhome h1 blank    '{"env":{"CLAUDE_CODE_OAUTH_TOKEN":"secret"},"permissions":{"defaultMode":"auto"}}'
 mkhome h1 otherevt '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo hi"}]}]}}'
@@ -79,7 +85,7 @@ has "C: --apply leaves a correct account alone" "$out" "ok    correct"
 
 mkdir -p "$T/h4"
 # shellcheck disable=SC1007  # empty SUDO on purpose
-HOME_ROOT="$T/h4" SUDO= "$SCRIPT" >/dev/null 2>&1
+HOME_ROOT="$T/h4" SUDO= SELFDEV_HOOK_SRC="$NO_HOOK_SRC" "$SCRIPT" >/dev/null 2>&1
 rc "H: no account found exits 6 BLIND" 6 "$?"
 
 printf '%s' "$WANT" | jq -e . >/dev/null 2>&1 && ok "I: --print emits valid JSON" \

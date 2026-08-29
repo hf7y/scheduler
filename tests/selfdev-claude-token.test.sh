@@ -99,8 +99,12 @@ printf '%s\n' "$GOOD" > "$TMP/etc/claude-token"
 
 # The write needs root, so unprivileged it stops there -- which is the point:
 # a padded value must reach that step, not be refused as the wrong length.
+# SELFDEV_TOKEN_GROUP is pinned to a name guaranteed absent so this is true
+# on every host, including one where the real "selfdev" group exists (any
+# provisioned self-dev account) and the getent check would otherwise pass.
 printf ' %s \n' "$GOOD" > "$TMP/etc/spaced"
-O="$(SELFDEV_TOKEN_FILE="$TMP/etc/claude-token" bash "$TOOL" --install "$TMP/etc/spaced" 2>&1)"
+O="$(SELFDEV_TOKEN_FILE="$TMP/etc/claude-token" SELFDEV_TOKEN_GROUP="no-such-group-$$" \
+     bash "$TOOL" --install "$TMP/etc/spaced" 2>&1)"
 case "$O" in
   *"characters, the one it replaces is"*) bad "a stray space was read as a length mismatch -- whitespace is not being stripped" ;;
   *) ok "a value padded with spaces passes validation (all whitespace stripped, not just \\r\\n)" ;;
