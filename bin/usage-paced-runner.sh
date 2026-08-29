@@ -229,6 +229,12 @@ log() { echo "$(date -Is) $*" >> "$LOG"; }
 # >>> pull gate
 PULL_STATE="$STATE_DIR/pull-block.state"
 PULL_ESCALATE_AFTER="${PACED_PULL_ESCALATE_AFTER:-3}"
+# Bounds the escalation's own filing call below -- see #340: that call shells
+# out to a whole second `scheduler` invocation, and the one moment it fires is
+# exactly the moment something is ALREADY wrong, so the target clone it runs
+# from is no more trustworthy than the one that triggered the freeze.
+# Overridable so a test can make a hang fail fast instead of taking 30s.
+PULL_FILE_TIMEOUT="${PACED_PULL_FILE_TIMEOUT:-30}"
 
 # Records that this tick's pull did NOT advance, and escalates once the same
 # cause has repeated PULL_ESCALATE_AFTER ticks running. State is "<n> <reason>
@@ -243,6 +249,13 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
   case "$prev_filed" in ''|*[!0-9]*) prev_filed=0 ;; esac
   if [ "$prev_reason" = "$reason" ]; then n=$((prev_n + 1)); filed="$prev_filed"; fi
   log "$line [consecutive blocked ticks: $n]"
+  # Written BEFORE the filing attempt below, not just at the end: that attempt
+  # shells out with a timeout but a killed/hung tick must not roll the count
+  # back to zero next time either way. MEASURED (#340): 91 "PULL FROZEN" lines
+  # and 0 "FILED", because this write used to happen only after the filing
+  # call, so a tick that died in that call never persisted its count and the
+  # next tick recomputed from the same stale n forever.
+  printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
   if [ "$n" -ge "$PULL_ESCALATE_AFTER" ]; then
     log "PULL FROZEN -- $REPO_ROOT has not advanced for $n consecutive tick(s) (cause: $reason). Deployed code on this host is STALE and a merged fix cannot reach it. NOT auto-resolved: a dirty tree here can hold the only copy of a record (hf7y/scheduler#61, #75)."
     if [ "$filed" = "0" ]; then
@@ -255,16 +268,16 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
       [ -x "$_sched_bin" ] || _sched_bin="$(command -v scheduler 2>/dev/null || true)"
       if [ -z "$_sched_bin" ]; then
         log "FILED FAILED -- scheduler command not found (checked $REPO_ROOT/bin/scheduler and PATH); the pull freeze exists in this log only"
-      elif "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
+      elif timeout "$PULL_FILE_TIMEOUT" "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
         filed=1
         log "FILED the pull freeze to realisateur's inbox"
+        printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
       else
-        log "FILED FAILED -- could not file the pull freeze to realisateur; it exists in this log only"
+        log "FILED FAILED -- could not file the pull freeze to realisateur (exited $?, or timed out after ${PULL_FILE_TIMEOUT}s); it exists in this log only"
       fi
       unset _sched_bin
     fi
   fi
-  printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
 }
 
 # The clone is current. Silent in the normal case -- this runs every 5 minutes

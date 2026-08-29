@@ -165,6 +165,49 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
   ok "no phantom filing recorded -- nothing was actually sent"
 else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
+# --- 6. the filing call hangs -- must not hang the tick or lose the count ---
+# (hf7y/scheduler#340: MEASURED on scheduler@monkey -- 91 "PULL FROZEN" lines,
+# 0 "FILED", pull-block.state stuck at "2 dirty-tracked 0" while the log kept
+# showing "consecutive blocked ticks: 3". The state write used to happen only
+# at the very end of pull_blocked(), after the filing subprocess call -- so a
+# tick that hung (or was killed) inside that call never persisted its count,
+# and the next tick recomputed from the same stale n forever.)
+echo "== 6. the filing call hangs: the tick bounds itself and the count survives"
+rm -f "$PSTATE"
+cat > "$TMP/bin/scheduler" <<'EOF'
+#!/usr/bin/env bash
+sleep 300
+EOF
+chmod +x "$TMP/bin/scheduler"
+export PACED_PULL_FILE_TIMEOUT=2
+echo "a human edit nothing else has a copy of" >> "$CLONE/code.sh"
+timeout 10 "$GATE" "$STATE" "$CLONE" >/dev/null 2>&1
+if [ "$?" -ne 124 ]; then ok "tick 1 (below threshold) did not need the external safety timeout"
+else bad "tick 1 hung past the external 10s safety timeout -- pull_blocked has no bound at all"; fi
+timeout 10 "$GATE" "$STATE" "$CLONE" >/dev/null 2>&1
+if [ "$?" -ne 124 ]; then ok "tick 2 (below threshold) did not need the external safety timeout"
+else bad "tick 2 hung past the external 10s safety timeout"; fi
+timeout 10 "$GATE" "$STATE" "$CLONE" >/dev/null 2>&1
+rc=$?
+if [ "$rc" -ne 124 ]; then ok "tick 3 (crosses threshold, hits the hanging stub) returned within 10s"
+else bad "tick 3 hung past the external 10s safety timeout -- the filing call has no internal bound"; fi
+if [ -f "$PSTATE" ] && grep -q '^3 dirty-tracked 0$' "$PSTATE"; then
+  ok "count survived the hung filing attempt: state says 3, not lost"
+else bad "count was lost or corrupted by the hung filing attempt: $(cat "$PSTATE" 2>/dev/null || echo '<missing>')"; fi
+timeout 10 "$GATE" "$STATE" "$CLONE" >/dev/null 2>&1
+if [ -f "$PSTATE" ] && grep -q '^4 dirty-tracked 0$' "$PSTATE"; then
+  ok "tick 4 continued counting from the preserved state (4, not reset to 1)"
+else bad "tick 4 did not build on the preserved count: $(cat "$PSTATE" 2>/dev/null || echo '<missing>')"; fi
+if lastlog | grep -q 'FILED FAILED'; then
+  ok "the timed-out filing attempt is named as a failure, not silence"
+else bad "no FILED FAILED line on the tick whose filing call timed out: $(lastlog)"; fi
+git -C "$CLONE" checkout -q -- code.sh
+rm -f "$PSTATE"
+unset PACED_PULL_FILE_TIMEOUT
+{ printf '#!/usr/bin/env bash\n'
+  printf 'printf "%%s\\n" "$*" >> %s\n' "$FILED"; } > "$TMP/bin/scheduler"
+chmod +x "$TMP/bin/scheduler"
+
 echo
 echo "pull-escalation-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
