@@ -713,53 +713,6 @@ is_git_repo() {
   git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
-# A conf's PROJECT_REPO_PATH is an ABSOLUTE path, so it is a claim about THIS
-# host's filesystem -- and every consumer below `mkdir -p`s its way to the
-# file it is about to write. If the claim is false, that mkdir does not fail;
-# it FABRICATES the checkout, and the write lands in a directory tree that
-# looks like a repo and is not one. Nothing is ever committed from it and
-# nobody ever reads it again.
-#
-# Not hypothetical, and not inferred: on 2026-07-29 a paced cycle on dexter
-# ran `scheduler ask scheduler "..."`. scheduler's own .scheduler/schedule.conf
-# still carries mandark's PROJECT_REPO_PATH, and /home/zach/Documents does not
-# exist on dexter at all -- so the command reported
-#   created: /home/zach/Documents/Projects/scheduler/.scheduler/QUESTIONS.md
-# and cheerfully built all four directories to say it. The question was
-# recorded into a phantom checkout, outside every repo, on a run whose own
-# rules forbid writing outside its worktree. It exited 0.
-#
-# So: refuse. An absolute path that is not there is a WRONG path, never a
-# path to create. The message names the conf to fix, because "no such
-# directory" without that is a riddle.
-require_repo_path() {  # $1 = project, $2 = the resolved repo path
-  [ -d "$2" ] && return 0
-  echo "scheduler: $1's PROJECT_REPO_PATH does not exist on this host: $2" >&2
-  echo "scheduler: refusing to create it -- an absolute path that is not there is" >&2
-  echo "  a wrong path, not one to fabricate. Fix PROJECT_REPO_PATH in" >&2
-  echo "  schedule/$1.conf (or .scheduler/schedule.conf for scheduler itself)," >&2
-  echo "  or run this on the host that checkout lives on." >&2
-  return 1
-}
-
-# resolve_focus_path() lived here and was DELETED 2026-08-11 (hf7y/scheduler#25
-# item 1). PR #22 moved the idea front door to GitHub issues and deleted the
-# local FOCUS.md writer that was its only caller, orphaning it; it then sat for
-# a week resolving a path nothing wrote. require_repo_path() below is NOT
-# orphaned by this -- resolve_questions_path() still calls it.
-
-resolve_questions_path() {
-  local proj="$1"
-  local repo_path subdir
-  repo_path="$(conf_field "$proj" PROJECT_REPO_PATH)"
-  if [ -z "$repo_path" ]; then
-    echo "scheduler: no such project '$proj', or it has no PROJECT_REPO_PATH set" >&2
-    return 1
-  fi
-  require_repo_path "$proj" "$repo_path" || return 1
-  subdir="$(conf_field "$proj" SCHEDULER_SUBDIR)"
-  echo "$repo_path/${subdir:-.claude}/QUESTIONS.md"
-}
 
 # --- the GitHub-issues answer channel ----------------------------------
 # Built 2026-07-28 (Zach: "move the full chezz over to test the github issues
@@ -1738,7 +1691,7 @@ cmd_commit_file() {
   # only case that can be fixed automatically, and a loud stop otherwise.
   local branch behind ahead ff_out stall_reason=""
   branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-  git -C "$repo" fetch --quiet 2>/dev/null
+  timeout 20 git -C "$repo" fetch --quiet 2>/dev/null
   behind="$(git -C "$repo" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
   ahead="$(git -C "$repo" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
   if [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
@@ -1775,7 +1728,7 @@ cmd_commit_file() {
     # lib/sweep-loop-common.sh's `push reason:` line: say WHY, from the
     # command's own output, rather than offering a plausible diagnosis
     # nobody verified.
-    push_out="$(git -C "$repo" push 2>&1)"; push_rc=$?
+    push_out="$(timeout 20 git -C "$repo" push 2>&1)"; push_rc=$?
     if [ "$push_rc" -eq 0 ]; then
       echo "committed + pushed in $repo"
     else

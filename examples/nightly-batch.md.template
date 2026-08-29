@@ -1,23 +1,22 @@
 ---
-description: Nightly thorough pass -- feature work, redesigns, refactors too big for the bug sweeper, scoped by FOCUS.md
+description: Nightly thorough pass -- feature work, redesigns, refactors too big for the bug sweeper, scoped by the open issues
 ---
 
 <!-- Copy this to .claude/commands/nightly-batch.md in a project's repo
      (slash commands must live under .claude/commands/ -- that path is
-     fixed by the harness), alongside a real .scheduler/FOCUS.md (see
-     FOCUS.md.template; NOT .claude/FOCUS.md -- the sensitive-file gate
-     makes .claude/ unwritable from inside this very run). Mirrors
+     fixed by the harness). Mirrors
      bug-sweep.md.template's structure and chezz's real, more mature
      nightly-batch.md (2026-07-17) -- read that directly if in doubt,
      this template distills it. Adjust the report path/project name in
      step 5 and the tracker URL in step 1 to match the project this gets
      copied into. -->
 
-Read `.scheduler/FOCUS.md` first -- including its "build maximally
-autonomously" policy. Build first, don't just analyze: pick the most
-reasonable interpretation of an accumulated idea and build it, on its own
-branch if it's not a continuation of the stated focus, flagged in
-`.scheduler/QUESTIONS.md` and the report. Only actually stop and wait for
+Read this repo's open issues first -- `gh issue list --state open` is the
+queue, and it carries the "build maximally autonomously" policy. Build
+first, don't just analyze: pick the most reasonable interpretation of an
+accumulated idea and build it, on its own branch if it's not a
+continuation of the stated focus, flagged on the issue and in the report.
+Only actually stop and wait for
 the user when the action itself can't be reverted -- an ordinary commit,
 branch, or tracker POST never qualifies.
 
@@ -26,8 +25,8 @@ review step until the morning.
 
 ## 1. Orient
 
-`git log --oneline -10`, current branch state, `README.md`, and
-`.scheduler/FOCUS.md`. If the previous nightly run left work in progress
+`git log --oneline -10`, current branch state, `README.md`, and the open
+issue queue. If the previous nightly run left work in progress
 (check the last report under `~/reports/<PROJECT>/`), pick up from there
 rather than starting over. Also fetch the full tracker backlog with
 `&status=all&type=all` (see `../INTAKE.md`) so nothing already resolved
@@ -37,23 +36,20 @@ for the report's summary even though they won't be implemented.
 **Any open report whose `note` starts with exactly `NIGHTLY:`** was
 explicitly handed off by `/bug-sweep` as a real, fixable bug that was
 just too big for a fast sweep (see that command's step 2) -- these are
-ALWAYS in scope tonight, in addition to whatever FOCUS.md says, not
-something FOCUS.md needs to mention by name. Note every one you find
+ALWAYS in scope tonight, in addition to whatever the queue says, not
+something an issue needs to mention by name. Note every one you find
 before moving on, so step 3 doesn't miss one.
 
-**Read `.scheduler/QUESTIONS.md` and process any answers** (this tier owns
-that; `/bug-sweep` only appends). The user replies to a question inline,
-on a line starting with `> ` (a Markdown blockquote) directly under it --
-QUESTIONS.md's own header documents the convention. For every question
-that now has a `> ` answer, treat it as authoritative human direction
-(same standing as `FOCUS.md`): act on it as part of tonight's work, and
-fold a standing scope/policy decision into `FOCUS.md` so it persists.
-Once you have acted on an answered question, remove that question+answer
-block -- git history and tonight's report keep the record. Leave
-unanswered questions untouched; never re-ask or duplicate one.
+**Read the answered question issues and process them** (this tier owns
+that; `/bug-sweep` only files). The user answers in a comment. For every
+question that now has an answer, treat it as authoritative human
+direction: act on it as part of tonight's work, and record a standing
+scope/policy decision as its own issue so it persists. Close an answered
+question once you have acted on it, naming what landed. Leave unanswered
+questions open; never re-ask or duplicate one.
 
-**How an answer binds (rules A-D, 2026-07-29 -- QUESTIONS.md's own header
-carries the same text).** An answer is authoritative *and* re-derived, not
+**How an answer binds (rules A-D, 2026-07-29 -- the issue `scheduler ask`
+opens carries the same text).** An answer is authoritative *and* re-derived, not
 replayed:
 - **A. Direction, not instruction.** The reply states standing intent.
   Re-derive the concrete action from CURRENT state, never from the state
@@ -65,12 +61,12 @@ replayed:
   commit, a branch, a file edit): act on the intent and flag the
   correction plainly in the report. Premise false and the action is
   IRREVERSIBLE (a message to a person, real money, an unbacked delete):
-  stop and surface, per FOCUS.md's existing bar.
+  stop and surface, per this repo's existing bar.
 - **C. Extract the standing direction, silently.** A reply that
-  generalizes past its question ("always merge") gets folded into
-  `FOCUS.md` as a quoted, dated standing decision without asking first.
+  generalizes past its question ("always merge") gets recorded as a
+  quoted, dated standing decision without asking first.
 - **D. No clean-check reports.** A re-probe that confirms the user was
-  right produces NO output -- not in the report, not in QUESTIONS.md.
+  right produces NO output -- not in the report, not on the issue.
   "I checked and you were right" is a cost with zero information.
 
 ## 2. Re-verify anything a previous run touched, from scratch
@@ -81,13 +77,13 @@ harness, and confirm independently before building further on top of it.
 
 ## 3. Push forward, building rather than just analyzing
 
-Scope = FOCUS.md's stated focus, UNION every `NIGHTLY:`-flagged report
-from step 1, UNION the accumulated `type=feature` backlog -- per
-FOCUS.md's autonomy policy, build features too, not just summarize them.
+Scope = the open issue queue, UNION every `NIGHTLY:`-flagged report
+from step 1, UNION the accumulated `type=feature` backlog -- per this
+repo's autonomy policy, build features too, not just summarize them.
 Commit as you complete meaningful chunks; do not save it all for one
 giant commit at the end.
 
-A feature (or any distinct new idea, not a continuation of FOCUS.md's
+A feature (or any distinct new idea, not a continuation of the queue's
 stated focus) gets its own branch off `main`, named for what it is,
 pushed on its own -- don't stack unrelated new work onto whatever branch
 happens to be checked out. That's what "easy to roll back" means in
@@ -97,9 +93,8 @@ one feature's commits from another's.
 For each `NIGHTLY:`-flagged bug you fix, resolve it on the tracker the
 same way `/bug-sweep` would, referencing the commit hash (see
 `../INTAKE.md`) -- do not leave it for a future sweep to re-discover. For
-each feature you build, note in `.scheduler/QUESTIONS.md` (step 5) which
-branch it landed on -- that note IS the review point, not a request to
-build it.
+each feature you build, note on its issue (step 5) which branch it landed
+on -- that note IS the review point, not a request to build it.
 
 ## 4. Stress-test what you built
 
@@ -118,7 +113,7 @@ entries), format `- **YYYY-MM-DD (nightly-batch):** <text>`:
   review point for something built without asking first -- it has to
   actually be findable.
 - **A genuine judgment call needing the user's own decision** -- not
-  "should I build this" (default: yes, per FOCUS.md), but something
+  "should I build this" (default: yes), but something
   actually ambiguous: a real tradeoff, a "which of these two directions,"
   or a case you genuinely couldn't tell whether it crossed the
   irreversible-action line. Most nights have at most one of these; don't
@@ -134,10 +129,10 @@ run did or found, written so a downstream reader (or another tool
 aggregating across projects) never has to guess a summary from the first
 paragraph of prose. Below that, cover: what
 shipped (with commit references), what broke and got fixed, what was
-deliberately deferred and why (per FOCUS.md), any `NIGHTLY:`-flagged bugs
+deliberately deferred and why, any `NIGHTLY:`-flagged bugs
 resolved, a summary of any new feature-backlog ideas seen since the last
-report, and whether anything got appended to `.scheduler/QUESTIONS.md`
-(point at it, don't duplicate its full text here). This is read once,
+report, and any question issue opened (point at it, don't duplicate it
+here). This is read once,
 quickly, the next time this machine boots up -- write for that, not for
 completeness's own sake.
 

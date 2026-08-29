@@ -21,21 +21,14 @@
 
 PROJECT="<project-name>"
 
-# Optional -- this project's real working copy, if it has one. Used to
-# symlink its $SCHEDULER_SUBDIR/QUESTIONS.md into ../questions/<project>.md
-# and its $SCHEDULER_SUBDIR/FOCUS.md into ../focus/<project>.md
-# (sync-crontab.sh --apply creates the QUESTIONS.md file with a template
-# header first if missing).
-# Leave blank for a project with no local working copy in this shape.
+# Optional -- this project's real working copy, if it has one. Leave blank
+# for a project with no local working copy in this shape.
 PROJECT_REPO_PATH="/home/zach/Documents/Project Archive/<project>"
 
-# Subdirectory (within PROJECT_REPO_PATH) where this project's own
-# FOCUS.md/QUESTIONS.md live. Default ".claude" for backwards compat, but
-# use ".scheduler" for every new registration: the harness's
-# sensitive-file gate makes .claude/ unwritable from inside an unattended
-# run, and FOCUS.md/QUESTIONS.md are exactly the files that run needs to
-# write. See schedule/chezz.conf or schedule/realisateur.conf for a real
-# example.
+# Subdirectory (within PROJECT_REPO_PATH) holding this project's own
+# scheduler-owned files. Retired surface: the FOCUS.md/QUESTIONS.md channel
+# it named was sunset by #66/#234 and the queue is the repo's GitHub issues.
+# Kept only so an old conf still parses.
 SCHEDULER_SUBDIR=".scheduler"
 
 # ===========================================================================
@@ -103,7 +96,8 @@ BATCH_CRON="auto"                       # "auto" (or blank) lets sync-crontab.sh
 # --- new-style runtime config (used when BATCH_SCRIPT is blank) ---
 BATCH_PROMPT="/nightly-batch
 
-This is a fully unattended overnight run. Read .scheduler/FOCUS.md FIRST --
+This is a fully unattended overnight run. Read the open issues FIRST --
+\`gh issue list --repo hf7y/<project> --state open\` is the queue, and
 everything tonight is scoped by it. Write your report to
 ~/reports/<project>/\$(date +%Y-%m-%dT%H%M).md, then symlink
 ~/reports/<project>/LATEST.md to point at that exact file instead of

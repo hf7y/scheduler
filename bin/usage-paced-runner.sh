@@ -165,6 +165,7 @@ log() { echo "$(date -Is) $*" >> "$LOG"; }
 #   untracked file on a dispatcher host.
 PULL_STATE="$STATE_DIR/pull-block.state"
 PULL_ESCALATE_AFTER="${PACED_PULL_ESCALATE_AFTER:-3}"
+PULL_FILE_TIMEOUT="${PACED_PULL_FILE_TIMEOUT:-60}"
 
 # Records that this tick's pull did NOT advance, and escalates once the same
 # cause has repeated PULL_ESCALATE_AFTER ticks running. State is "<n> <reason>
@@ -179,6 +180,7 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
   case "$prev_filed" in ''|*[!0-9]*) prev_filed=0 ;; esac
   if [ "$prev_reason" = "$reason" ]; then n=$((prev_n + 1)); filed="$prev_filed"; fi
   log "$line [consecutive blocked ticks: $n]"
+  printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
   if [ "$n" -ge "$PULL_ESCALATE_AFTER" ]; then
     log "PULL FROZEN -- $REPO_ROOT has not advanced for $n consecutive tick(s) (cause: $reason). Deployed code on this host is STALE and a merged fix cannot reach it. NOT auto-resolved: a dirty tree here can hold the only copy of a record (hf7y/scheduler#61, #75)."
     if [ "$filed" = "0" ]; then
@@ -191,16 +193,16 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
       [ -x "$_sched_bin" ] || _sched_bin="$(command -v scheduler 2>/dev/null || true)"
       if [ -z "$_sched_bin" ]; then
         log "FILED FAILED -- scheduler command not found (checked $REPO_ROOT/bin/scheduler and PATH); the pull freeze exists in this log only"
-      elif "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
+      elif timeout "$PULL_FILE_TIMEOUT" "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
         filed=1
         log "FILED the pull freeze to realisateur's inbox"
+        printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
       else
-        log "FILED FAILED -- could not file the pull freeze to realisateur; it exists in this log only"
+        log "FILED FAILED -- could not file the pull freeze to realisateur (command failed or timed out); it exists in this log only"
       fi
       unset _sched_bin
     fi
   fi
-  printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
 }
 
 # The clone is current. Silent in the normal case -- this runs every 5 minutes
@@ -469,8 +471,27 @@ fi
 #   dispatched -- rows this account actually RAN (or decided about: expired,
 #                 frozen). Bounded by MAX_PER_TICK. The quota-facing number.
 #   examined   -- rows this account LOOKED AT. Bounded by $n, the rotation
-#                 length, so the loop terminates after one full lap however
-#                 many rows belong to somebody else.
+#                 length, so the loop terminates after one full lap no matter
+#                 how many rows turn out to belong to somebody else.
+derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch seconds)
+  local name="$1" since="$2" conf repo_url repo pr
+  conf="$REPO_ROOT/schedule/$name.conf"
+  repo_url="$(grep -E '^REPO_URL=' "$conf" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
+  repo="$(sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$repo_url")"
+  if [ -z "$repo" ]; then
+    echo "DERIVED-SILENT: no-verdict, and $name.conf names no REPO_URL to check for a live PR"
+    return
+  fi
+  pr="$(timeout "${PACED_DERIVE_TIMEOUT:-15}" gh pr list -R "$repo" --state open \
+        --json number,updatedAt,statusCheckRollup \
+        --jq '[.[] | select((.updatedAt|fromdateiso8601) >= '"$since"') | select([.statusCheckRollup[]? | (.conclusion // .state // "")] | any(. == "FAILURE"))] | .[0].number // empty' \
+        2>/dev/null)" || pr=""
+  if [ -n "$pr" ]; then
+    echo "DERIVED-CONTINUE: open PR #$pr on $repo has a failing check -- next dispatch should finish it, not start fresh"
+  else
+    echo "DERIVED-SILENT: no open PR on $repo, updated since this run started, with a failing check -- nothing to point at"
+  fi
+}
 dispatched=0
 examined=0
 while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
@@ -735,8 +756,10 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # Asked via `verdict.sh get` (exit 1 == no verdict recorded) rather than by
   # rebuilding the state path here -- one owner of that layout, not two.
   _no_verdict=0
+  _derived=""
   if ! "$SELF_DIR/verdict.sh" get "$name" >/dev/null 2>&1; then
-    log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). Treated as NOT-DONE and re-dispatched; metabolism untouched."
+    _derived="$(derive_no_verdict_reason "$name" "$start" 2>/dev/null)"
+    log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). ${_derived:-no derivation available.} Treated as NOT-DONE and re-dispatched; metabolism untouched."
     _no_verdict=1
   fi
 
@@ -750,7 +773,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # leaving the row to say nothing.
   if declare -F ledger_append >/dev/null 2>&1; then
     if [ "$_no_verdict" -eq 1 ]; then
-      _lreason="no-verdict: ran with no verdict written"
+      _lreason="${_derived:-no-verdict: ran with no verdict written}"
     else
       _lreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
     fi
@@ -758,7 +781,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       || log "LEDGER $name -- could not append to the run ledger; repetition is unobservable for this run"
     unset _lreason
   fi
-  unset _no_verdict
+  unset _no_verdict _derived
 
   # DONE BRAKES (scheduler#54) -- the vrc -eq 0 branch that never existed.
   # `vrc` was computed for as long as this file has existed and only `-eq 3`
