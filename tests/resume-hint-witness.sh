@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# resume-hint-witness.sh -- #297 step 3/#345, feeding a DERIVED-CONTINUE's PR
-# forward into the next dispatch. Covers resume_hint_for_project() (bin/
-# usage-paced-runner.sh) and read_resume_hint() (lib/sweep-loop-common.sh),
-# same two-halves shape as ceiling-breadcrumb-witness.sh.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

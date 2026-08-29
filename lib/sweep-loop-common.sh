@@ -319,10 +319,6 @@ $block
 $PROMPT"
 }
 
-# read_resume_hint() -- #297 step 3/#345. Turns SCHEDULER_RESUME_PR/_REPO
-# (set by usage-paced-runner.sh's resume_hint_for_project(), from the ledger)
-# into a prompt prefix, same slot as read_ceiling_breadcrumb. No file to
-# consume -- the dispatcher recomputes both vars every time.
 read_resume_hint() {
   [ -n "${SCHEDULER_RESUME_PR:-}" ] && [ -n "${SCHEDULER_RESUME_REPO:-}" ] || return 0
   echo "dispatcher found an open PR left by a no-verdict run -- prepending a resume instruction"
