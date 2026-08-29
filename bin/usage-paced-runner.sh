@@ -79,10 +79,8 @@ REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
 # The gate, freeze-check, verdict handling, MAX_PER_TICK and logging are
 # untouched and shared by both modes, which is the point.
 [ -r "$SELF_DIR/../lib/run-ledger.sh" ] && . "$SELF_DIR/../lib/run-ledger.sh"
-# sprint_active/sprint_dir (#292): a per-project TEMPO bypass with an
-# absolute deadline, read from THIS account's own STATE_DIR below -- see the
-# tempo check further down for the one place it is consulted, and lib/
-# sprint-common.sh's header for why it never touches the usage gate.
+# sprint_active (#292): per-project TEMPO bypass with an absolute deadline;
+# consulted at the tempo check below, never the usage gate.
 [ -r "$SELF_DIR/../lib/sprint-common.sh" ] && . "$SELF_DIR/../lib/sprint-common.sh"
 
 # How many dispatch opportunities a project is held for after recording DONE.
@@ -701,15 +699,9 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # same decision, so it skips both or the flag means two things.
   if [ "${PACED_FORCE:-0}" = "1" ]; then
     log "PACED_FORCE=1 -- skipping tempo"
-  # SPRINT (#292): `dose <project> --sprint <dur>` writes an absolute
-  # deadline into THIS account's own STATE_DIR (same account-mode path this
-  # tempo.sh call already reads below), so no new wiring is needed to see one
-  # land. Deliberately narrower than PACED_FORCE: a sprint bypasses TEMPO
-  # ONLY, never the usage gate a few dozen lines above -- see lib/sprint-
-  # common.sh's header for why that split is not negotiable. sprint_active
-  # self-cleans an expired record, so this is also the "hard stop at T" #292
-  # asks for: the tick right after the deadline sees no sprint at all, not a
-  # decaying one.
+  # SPRINT (#292): narrower than PACED_FORCE -- bypasses TEMPO only, never
+  # the usage gate a few dozen lines above. sprint_active self-cleans an
+  # expired record, so the tick after the deadline sees no sprint at all.
   elif declare -F sprint_active >/dev/null 2>&1 && sprint_active "$STATE_DIR" "$name"; then
     log "SPRINT $name -- expires $(sprint_expiry "$STATE_DIR" "$name" 2>/dev/null) -- tempo bypassed (usage gate still applies)"
   # STATE_DIR IS PASSED, NOT INHERITED. It is a plain assignment above, not an

@@ -1,26 +1,11 @@
 #!/usr/bin/env bash
 # sprint-witness.sh -- lib/sprint-common.sh's contract, and usage-paced-
-# runner.sh's tempo bypass (hf7y/scheduler#292).
-#
-# WHAT IS ASSERTED
-#   1. Duration parsing: <N>h and <N>m -> seconds; anything else is refused.
-#   2. sprint_set/sprint_expiry/sprint_active/sprint_clear round-trip.
-#   3. sprint_active is a HARD stop at an absolute deadline, not decay: past
-#      the deadline it reports inactive AND self-cleans the record, so a
-#      status read after expiry does not show a phantom active sprint.
-#   4. Wired into the runner (bin/usage-paced-runner.sh): a project with an
-#      active sprint dispatches even when tempo.sh would HOLD it, logs a
-#      SPRINT line naming the deadline, and writes NO ledger row for the
-#      bypass (same as an ordinary TEMPO pass-through).
-#   5. THE SPLIT THAT MATTERS: a sprint never reaches past the usage gate.
-#      When the gate itself reports HOLD, an active sprint changes nothing --
-#      #292's "bypasses PACING only, never USAGE_CEILING" is a runner-loop
-#      guarantee, not just a comment, and this is where it would break first.
-#   6. A project with NO sprint on record is unaffected -- tempo still holds
-#      it exactly as before this file existed.
-#
-# HERMETIC: no real gh, no real tempo.sh network reads (TEMPO_ENABLED off /
-# TEMPO_REPO fake), no real accounts, no quota spent.
+# runner.sh's tempo bypass (hf7y/scheduler#292). Covers: duration parsing;
+# set/expiry/active/clear round-trip; self-cleaning past the deadline (hard
+# stop, not decay); wired into the runner (a sprint dispatches through a
+# tempo HOLD); and the one rule that matters most, that an active sprint
+# never reaches past a usage-gate HOLD. Hermetic: no real gh/tempo network
+# reads, no real accounts, no quota spent.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -103,9 +88,7 @@ tick() {  # $1 = usage-gate stub (RUN or HOLD)
 }
 
 echo "case 5 -- an active sprint dispatches through a tempo hold"
-# TEMPO_REPO=fake/repo with no gh on PATH -> tempo.sh reports BLIND, which
-# holds exactly like a real HOLD would for this test's purposes: either way,
-# with no sprint on record, nothing should dispatch.
+# No gh on PATH -> tempo.sh reports BLIND, which holds like an ordinary HOLD.
 : > "$RLEDGER"; : > "$DISPATCH_MARK"; rm -f "$SPRINTS"/*.expiry
 before_ledger="$(wc -l < "$RLEDGER")"
 tick run

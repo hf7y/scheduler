@@ -75,12 +75,9 @@ if [ "$MODE" = "--sprint" ] && [ -z "$SPRINT_DURATION" ]; then
   exit 2
 fi
 
-# #291: refused on the CLI's OWN uid, before any network call. --sprint joins
-# --arm/--park here (2026-08-29, #292): it is the same category of judgement
-# call -- a human overriding the regulator on purpose -- and letting a
-# self-dev account grant ITSELF an unpaced window is exactly the self-
-# authorization #291 exists to rule out, more so than arm/park since sprint
-# bypasses tempo directly rather than just flipping a roster state.
+# #291: refused on the CLI's OWN uid, before any network call. --sprint
+# joins --arm/--park here (#292) -- a self-dev account granting ITSELF an
+# unpaced window is the same self-authorization #291 rules out.
 if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ] || [ "$MODE" = "--sprint" ]; then
   CALLER_UID="$(id -u)"
   if [ "$CALLER_UID" -ge 3000 ] && [ "$CALLER_UID" -le 3099 ]; then
@@ -211,25 +208,17 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   exit 0
 fi
 
-# --- 3b. --sprint/--sprint-status (#292): read/write per-project sprint
-# state -- an ABSOLUTE wall-clock deadline until which usage-paced-runner.sh
-# bypasses TEMPO for this project. Never the usage gate/USAGE_CEILING -- see
-# lib/sprint-common.sh's header and usage-paced-runner.sh's tempo check for
-# why that split is deliberate, not an oversight.
+# --- 3b. --sprint/--sprint-status (#292): an ABSOLUTE deadline until which
+# usage-paced-runner.sh bypasses TEMPO for this project -- never the usage
+# gate/USAGE_CEILING. State lives in ROW_ACCT's own STATE_DIR ($HOME/.local/
+# share/scheduler-paced-runner, same as the runner already reads), written
+# via sudo, so the runner needs no new wiring. Hops over ssh first, same as
+# --now.
 #
-# STATE LIVES ON ROW_HOST, in the SAME per-account STATE_DIR usage-paced-
-# runner.sh already reads ($HOME/.local/share/scheduler-paced-runner),
-# written AS that account via sudo -- so the runner needs no new wiring to
-# see a sprint the moment it lands. Hops over ssh first, same as --now,
-# because that account's home is not necessarily this host's.
-#
-# ACCOUNT MODE ONLY, for now. PACED_HOST_MODE=1 (root, one dispatcher per
-# HOST) reads a single shared /var/lib/scheduler-paced-runner STATE_DIR, not
-# any project's $HOME -- this write would land somewhere the host-mode
-# runner never looks. Not wired here because no host currently runs
-# PACED_HOST_MODE=1 (schedule/_runner.conf sets neither it nor anything that
-# implies it, checked 2026-08-29); a host that turns it on later needs this
-# revisited, not silently assumed to already work.
+# ACCOUNT MODE ONLY: PACED_HOST_MODE=1 reads a single shared /var/lib/
+# scheduler-paced-runner instead of any project's $HOME, so this write would
+# land where a host-mode runner never looks. Not wired here since no host
+# runs that mode today (checked schedule/_runner.conf) -- revisit if one does.
 sprint_state_root_for_row() {
   local home
   if [ "$ROW_ACCT" = "$LOCAL_ACCOUNT" ]; then
