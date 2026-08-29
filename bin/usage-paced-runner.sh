@@ -614,25 +614,11 @@ fi
 # Measured on monkey at the 18:00Z tick 2026-08-06: 9 probes host-wide (3
 # accounts x 3 roster rows) to make 3 dispatch decisions. Now 3.
 # >>> derive verdict
-# hf7y/scheduler#297: a run that recorded no verdict at all used to log the
-# same generic "no-verdict: ran with no verdict written" whether it did
-# nothing or did real work and just never wrote the closing report. Zach,
-# 2026-08-28: "give it a new name when something outside derived it so it's
-# clear" -- so this DERIVES a sharper reason from evidence outside the
-# agent's own report (an open PR this run touched, and whether its CI is
-# red) rather than guess-and-relabel as a real verdict. The two spellings
-# below (DERIVED-CONTINUE / DERIVED-SILENT) must never collide with a
-# self-reported DONE/CONTINUE/IMPOSSIBLE, so a reader grepping the ledger
-# for a real verdict can never mistake a guess for a report.
-#
-# Only the cheapest useful rule (per the issue): an OPEN PR, on the
-# project's own repo, updated no earlier than this run's own dispatch, with
-# at least one FAILING check -> DERIVED-CONTINUE, naming the PR. Anything
-# else -- no PR, a green/pending PR, a PR that predates this run, gh itself
-# unreachable -- degrades to DERIVED-SILENT rather than guessing further.
-# This changes NOTHING about control flow: outcome stays NOT-DONE and the
-# run is re-dispatched exactly as before (see the NO-VERDICT log line
-# below) -- it only replaces the reason text a silent run leaves behind.
+# hf7y/scheduler#297: a silent run's ledger reason used to be one generic
+# string regardless of cause. Zach: "give it a new name when something
+# outside derived it so it's clear" -- DERIVED-CONTINUE/DERIVED-SILENT
+# never collide with a self-reported DONE/CONTINUE/IMPOSSIBLE. Outcome
+# stays NOT-DONE; only the reason text changes.
 derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch seconds)
   local name="$1" since="$2" conf repo_url repo pr
   conf="$REPO_ROOT/schedule/$name.conf"
@@ -642,8 +628,7 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
     echo "DERIVED-SILENT: no-verdict, and $name.conf names no REPO_URL to check for a live PR"
     return
   fi
-  # Bounded: a hanging `gh` must not strand the dispatcher (same lesson as
-  # #340's pull-freeze filing hang, just above this block in the file).
+  # Bounded, per #340's pull-freeze-filing hang just above this block.
   pr="$(timeout "${PACED_DERIVE_TIMEOUT:-15}" gh pr list -R "$repo" --state open \
         --json number,updatedAt,statusCheckRollup \
         --jq '[.[] | select((.updatedAt|fromdateiso8601) >= '"$since"') | select([.statusCheckRollup[]? | (.conclusion // .state // "")] | any(. == "FAILURE"))] | .[0].number // empty' \
