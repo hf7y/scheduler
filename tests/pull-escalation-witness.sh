@@ -165,13 +165,7 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
   ok "no phantom filing recorded -- nothing was actually sent"
 else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
-# --- 6. the filing call hangs -- must not hang the tick or lose the count ---
-# (hf7y/scheduler#340: MEASURED on scheduler@monkey -- 91 "PULL FROZEN" lines,
-# 0 "FILED", pull-block.state stuck at "2 dirty-tracked 0" while the log kept
-# showing "consecutive blocked ticks: 3". The state write used to happen only
-# at the very end of pull_blocked(), after the filing subprocess call -- so a
-# tick that hung (or was killed) inside that call never persisted its count,
-# and the next tick recomputed from the same stale n forever.)
+# --- 6. the filing call hangs -- must not hang the tick or lose the count (#340) ---
 echo "== 6. the filing call hangs: the tick bounds itself and the count survives"
 rm -f "$PSTATE"
 cat > "$TMP/bin/scheduler" <<'EOF'
