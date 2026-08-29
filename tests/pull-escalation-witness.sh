@@ -165,6 +165,33 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
   ok "no phantom filing recorded -- nothing was actually sent"
 else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
+echo "== 6. a hanging filing call is bounded and does not strand the count (#340)"
+{ printf '#!/usr/bin/env bash\n'
+  printf 'sleep 5\n'
+  printf 'printf "%%s\\n" "$*" >> %s\n' "$FILED"; } > "$TMP/bin/scheduler"
+chmod +x "$TMP/bin/scheduler"
+rm -f "$PSTATE"
+FILED_BEFORE6="$(wc -l < "$FILED" 2>/dev/null || echo 0)"
+echo "a human edit nothing else has a copy of" >> "$CLONE/code.sh"
+PACED_PULL_FILE_TIMEOUT=1
+export PACED_PULL_FILE_TIMEOUT
+start="$(date +%s)"
+tick; tick; tick
+elapsed=$(( $(date +%s) - start ))
+if [ "$elapsed" -lt 10 ]; then ok "three ticks against a hanging filer finished in ${elapsed}s, not ~15s -- bounded"
+else bad "took ${elapsed}s -- the timeout did not bound the hang"; fi
+if lastlog | grep -q 'consecutive blocked ticks: 3'; then ok "still escalates to 3 despite the filer hanging"
+else bad "count did not reach 3: $(lastlog)"; fi
+if grep -q '^3 dirty-tracked 0$' "$PSTATE"; then
+  ok "state on disk shows n=3, not stuck at an earlier count"
+else bad "state file did not advance: $(cat "$PSTATE" 2>/dev/null || echo MISSING)"; fi
+if grep -q 'FILED FAILED' "$STATE/run.log"; then ok "logs FILED FAILED once the filer times out, rather than dying silently"
+else bad "no FILED FAILED after the timeout: $(lastlog)"; fi
+if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE6" ]; then
+  ok "no phantom filing recorded -- the hung call never completed"
+else bad "a filing was recorded despite the filer timing out"; fi
+unset PACED_PULL_FILE_TIMEOUT
+
 echo
 echo "pull-escalation-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
