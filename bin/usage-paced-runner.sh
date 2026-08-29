@@ -613,12 +613,6 @@ fi
 # "RUNNABILITY BEFORE THE PROBE" below) and a foreign row costs a stat(2).
 # Measured on monkey at the 18:00Z tick 2026-08-06: 9 probes host-wide (3
 # accounts x 3 roster rows) to make 3 dispatch decisions. Now 3.
-# >>> derive verdict
-# hf7y/scheduler#297: a silent run's ledger reason used to be one generic
-# string regardless of cause. Zach: "give it a new name when something
-# outside derived it so it's clear" -- DERIVED-CONTINUE/DERIVED-SILENT
-# never collide with a self-reported DONE/CONTINUE/IMPOSSIBLE. Outcome
-# stays NOT-DONE; only the reason text changes.
 derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch seconds)
   local name="$1" since="$2" conf repo_url repo pr
   conf="$REPO_ROOT/schedule/$name.conf"
@@ -628,7 +622,6 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
     echo "DERIVED-SILENT: no-verdict, and $name.conf names no REPO_URL to check for a live PR"
     return
   fi
-  # Bounded, per #340's pull-freeze-filing hang just above this block.
   pr="$(timeout "${PACED_DERIVE_TIMEOUT:-15}" gh pr list -R "$repo" --state open \
         --json number,updatedAt,statusCheckRollup \
         --jq '[.[] | select((.updatedAt|fromdateiso8601) >= '"$since"') | select([.statusCheckRollup[]? | (.conclusion // .state // "")] | any(. == "FAILURE"))] | .[0].number // empty' \
@@ -639,7 +632,6 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
     echo "DERIVED-SILENT: no open PR on $repo, updated since this run started, with a failing check -- nothing to point at"
   fi
 }
-# <<< derive verdict
 dispatched=0
 examined=0
 while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
