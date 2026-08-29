@@ -9,13 +9,11 @@
 # tracked at hf7y/scheduler#282 -- not this file merely existing with rows
 # in it (`oneroster`, already MET).
 #
-# ONLY ZACH EDITS THIS FILE. schedule/FREEZE's header reserves its
-# human-adds-the-line guard for exactly this reason ("a row added ... by an
-# agent ... still dispatches NOTHING until a human adds a line here"). Once
-# #80's `dose <project>` reads this file to converge a host, editing a row
-# here IS arming or parking a project -- the same act FREEZE will not let an
-# agent do to itself. Until then this file is inert prose an agent may read
-# but must not change, and least of all change-then-converge against.
+# ONLY A HUMAN EDITS THIS FILE'S `state` COLUMN. Editing a row here IS arming
+# or parking a project, once #80's `dose <project>` reads this file to
+# converge a host -- an agent doing that to itself is the one thing this
+# guard exists to prevent. `dose <project> --arm/--park` (#291) writes it on
+# a human's behalf, refusing a uid 3000-3099 self-dev caller outright.
 #
 # `state` is ONE field (live/parked) -- the whole point, per #79: it is what
 # makes "enabled=1 in one file but EXEMPT commented in another" unrepresentable.
