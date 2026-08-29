@@ -1,26 +1,8 @@
 #!/usr/bin/env bash
-# resume-hint-witness.sh -- hf7y/scheduler#297 step 3 / #345: feed a
-# DERIVED-CONTINUE's PR forward into the NEXT dispatch's prompt.
-#
-# THE GAP: #344 made a silent run's ledger reason say
-# "DERIVED-CONTINUE: open PR #N on <repo> has a failing check ..." instead of
-# a generic "no-verdict: ran with no verdict written". That reason landed in
-# the ledger's reason column and the tick log, but nothing downstream read
-# it -- a run that left PR #14 open and red kept getting re-dispatched to
-# pick a FRESH issue instead of being told to go finish #14.
-#
-# THE FIX, in two halves that this witness covers together (same shape as
-# ceiling-breadcrumb-witness.sh covering write_/read_ceiling_breadcrumb):
-#   1. bin/usage-paced-runner.sh's resume_hint_for_project() -- checks
-#      whether a project's MOST RECENT ledger row is a DERIVED-CONTINUE
-#      NOT-DONE, and if so prints "PR REPO" as two bare tokens (the caller
-#      exports these into the dispatched job's environment).
-#   2. lib/sweep-loop-common.sh's read_resume_hint() -- turns those two env
-#      vars into a prompt prefix, the same reading-order slot as
-#      read_ceiling_breadcrumb.
-#
-# Must NOT change dispatch behaviour or the ledger's own vocabulary -- this is
-# context recovery only, same non-goal as the ceiling breadcrumb.
+# resume-hint-witness.sh -- #297 step 3/#345, feeding a DERIVED-CONTINUE's PR
+# forward into the next dispatch. Covers resume_hint_for_project() (bin/
+# usage-paced-runner.sh) and read_resume_hint() (lib/sweep-loop-common.sh),
+# same two-halves shape as ceiling-breadcrumb-witness.sh.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
