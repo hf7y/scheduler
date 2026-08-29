@@ -123,7 +123,7 @@ to re-scope or throttle intake; this command just makes the gap visible.
 
 Commit any `schedule/_paced.conf` changes on a branch
 and open a PR -- `main` is protected, so a direct push is rejected for
-everyone. Follow `claim-drift --convention` verbatim. End with a short
+everyone. gh-sign.sh checks body grammar automatically now. End with a short
 summary: what's now queued and in what order, what issues are still open
 for the user, and explicitly confirm no implementation code was touched
 (or, if
