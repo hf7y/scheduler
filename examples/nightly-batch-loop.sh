@@ -9,14 +9,13 @@
 # ~/Documents/vkv/inv/schedule-drilldown-wakeup.sh's one-off `at` pattern
 # into a real recurring script. Same engine, different knobs: a much
 # higher MAX_TURNS (this tier is meant to run long), and a PROMPT that
-# reads the project's own FOCUS.md first instead of a fixed /bug-sweep
+# reads the project's own open issues first instead of a fixed /bug-sweep
 # invocation.
 #
 # NOT wired up anywhere yet. To actually use: copy this per project,
 # fill in the config block, add a REAL .claude/commands/nightly-batch.md
-# (see ../examples/nightly-batch.md.template) and a REAL .scheduler/FOCUS.md
-# (see ../examples/FOCUS.md.template) to that project's repo, then add a
-# crontab entry (see README.md's "Open decisions" for timing).
+# (see ../examples/nightly-batch.md.template) to that project's repo, then
+# add a crontab entry (see README.md's "Open decisions" for timing).
 
 JOB_NAME="vkv-inventory-nightly-batch"
 PROJECT_KEY="vkv-inventory"  # SAME key as the bug-sweep wrapper's vkv-inventory copy --
