@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# HERMETICITY: HOME_ROOT is a throwaway tree under $T, SUDO is empty, and
-# SELFDEV_HOOK_SRC is pinned off $T too -- a host that has a real build at
-# $PROVISION_HOST_PIN (any provisioned self-dev account does) must not leak
-# a spurious hook-FILE DRIFT into cases A-H, which never create a hooks/
-# fixture and rely on the hook-file check being off. Case J overrides this
-# per-call to test that check on its own. Witness for
-# bin/selfdev-hooks-provision.sh,
+# HERMETICITY: HOME_ROOT is a throwaway tree, SUDO empty, SELFDEV_HOOK_SRC
+# pinned off it too -- no case touches real host state. Witness for bin/selfdev-hooks-provision.sh,
 # same shape as selfdev-permissions-provision.test.sh: A no hooks key ->
 # DRIFT+write, B wrong event -> DRIFT not ok, C correct -> ok+no rewrite, D
 # unparseable -> BLIND, E human account skipped, F --apply preserves env/
@@ -16,7 +11,7 @@ SCRIPT="$REPO_BIN/selfdev-hooks-provision.sh"
 [ -x "$SCRIPT" ] || { echo "FAIL: $SCRIPT not executable"; exit 1; }
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-NO_HOOK_SRC="$T/no-hook-src"  # deliberately absent: forces the BLIND/skip path, never a real build
+NO_HOOK_SRC="$T/no-hook-src"  # absent on purpose: forces the BLIND/skip path
 pass=0; fail=0
 ok()  { echo "  ok   $1"; pass=$((pass+1)); }
 bad() { echo "  FAIL $1"; fail=$((fail+1)); }

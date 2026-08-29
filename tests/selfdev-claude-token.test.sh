@@ -98,10 +98,7 @@ GOOD='sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 printf '%s\n' "$GOOD" > "$TMP/etc/claude-token"
 
 # The write needs root, so unprivileged it stops there -- which is the point:
-# a padded value must reach that step, not be refused as the wrong length.
-# SELFDEV_TOKEN_GROUP is pinned to a name guaranteed absent so this is true
-# on every host, including one where the real "selfdev" group exists (any
-# provisioned self-dev account) and the getent check would otherwise pass.
+# a padded value must reach that step (group pinned absent, holds on any host).
 printf ' %s \n' "$GOOD" > "$TMP/etc/spaced"
 O="$(SELFDEV_TOKEN_FILE="$TMP/etc/claude-token" SELFDEV_TOKEN_GROUP="no-such-group-$$" \
      bash "$TOOL" --install "$TMP/etc/spaced" 2>&1)"
