@@ -255,11 +255,17 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
       [ -x "$_sched_bin" ] || _sched_bin="$(command -v scheduler 2>/dev/null || true)"
       if [ -z "$_sched_bin" ]; then
         log "FILED FAILED -- scheduler command not found (checked $REPO_ROOT/bin/scheduler and PATH); the pull freeze exists in this log only"
-      elif "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
+      elif timeout 30 "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
         filed=1
         log "FILED the pull freeze to realisateur's inbox"
       else
-        log "FILED FAILED -- could not file the pull freeze to realisateur; it exists in this log only"
+        _sched_rc=$?
+        if [ "$_sched_rc" -eq 124 ]; then
+          log "FILED FAILED -- filing the pull freeze timed out after 30s; the pull freeze exists in this log only"
+        else
+          log "FILED FAILED -- could not file the pull freeze to realisateur; it exists in this log only"
+        fi
+        unset _sched_rc
       fi
       unset _sched_bin
     fi

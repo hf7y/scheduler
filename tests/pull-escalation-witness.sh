@@ -165,6 +165,29 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE" ]; then
   ok "no phantom filing recorded -- nothing was actually sent"
 else bad "a filing was recorded despite scheduler being unresolvable"; fi
 
+echo "== 6. the filing command itself hangs -- the tick must not wedge the whole dispatcher (#340)"
+cat > "$TMP/bin/scheduler" <<'EOF'
+#!/usr/bin/env bash
+sleep 999
+EOF
+chmod +x "$TMP/bin/scheduler"
+rm -f "$PSTATE"
+echo "a human edit nothing else has a copy of" >> "$CLONE/code.sh"
+tick; tick  # ticks 1, 2 -- below the threshold of 3, no filing attempted yet
+start="$(date +%s)"
+timeout 60 "$GATE" "$STATE" "$CLONE" >/dev/null 2>&1  # tick 3: crosses the threshold, filing call hangs
+rc=$?
+elapsed=$(( $(date +%s) - start ))
+if [ "$rc" -ne 124 ]; then ok "tick returned on its own in ${elapsed}s, not killed by the test's own outer bound"
+else bad "tick did not return within 60s -- a hung filing call wedges the whole dispatcher tick (#340)"; fi
+if [ -f "$PSTATE" ] && grep -q '^3 dirty-tracked' "$PSTATE"; then
+  ok "state file was written back (count 3) despite the filing call hanging"
+else
+  bad "state file was NOT advanced to 3 -- the hang happened before the write-back (this is exactly #340): $(cat "$PSTATE" 2>/dev/null || echo MISSING)"
+fi
+if lastlog | grep -qE 'FILED FAILED|timed out'; then ok "the hang was logged as a failure, not silently swallowed"
+else bad "no failure logged for the hung filing call: $(lastlog)"; fi
+
 echo
 echo "pull-escalation-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

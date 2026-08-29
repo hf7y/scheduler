@@ -1805,7 +1805,7 @@ cmd_commit_file() {
   # only case that can be fixed automatically, and a loud stop otherwise.
   local branch behind ahead ff_out stall_reason=""
   branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-  git -C "$repo" fetch --quiet 2>/dev/null
+  timeout 20 git -C "$repo" fetch --quiet 2>/dev/null
   behind="$(git -C "$repo" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
   ahead="$(git -C "$repo" rev-list --count "origin/$branch..HEAD" 2>/dev/null || echo 0)"
   if [ "${behind:-0}" -gt 0 ] 2>/dev/null; then
@@ -1842,7 +1842,7 @@ cmd_commit_file() {
     # lib/sweep-loop-common.sh's `push reason:` line: say WHY, from the
     # command's own output, rather than offering a plausible diagnosis
     # nobody verified.
-    push_out="$(git -C "$repo" push 2>&1)"; push_rc=$?
+    push_out="$(timeout 30 git -C "$repo" push 2>&1)"; push_rc=$?
     if [ "$push_rc" -eq 0 ]; then
       echo "committed + pushed in $repo"
     else
