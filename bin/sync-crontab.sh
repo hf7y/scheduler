@@ -1,52 +1,20 @@
 #!/usr/bin/env bash
-# Reads every ../schedule/*.conf entry and rewrites the REAL crontab's
-# scheduler-managed block to match. This is the one and only place that
-# writes cron lines for scheduler-managed jobs -- lib/sweep-loop-common.sh
-# itself no longer edits crontab (see its expiry block).
+# sync-crontab.sh -- read every ../schedule/*.conf entry and rewrite the REAL
+# crontab's scheduler-managed block to match. THE ONE AND ONLY WRITER of cron
+# lines for scheduler-managed jobs; lib/sweep-loop-common.sh no longer edits
+# crontab itself.
 #
-# "Registering" a project = drop a schedule/<project>.conf (see
-# ../examples/schedule-entry.conf.template) and run this script.
-# "Moving hours around" = edit that file's SWEEP_CRON/BATCH_CRON and
-# run this script again. "Deregistering" = delete the file and run again.
+#   register     drop a schedule/<project>.conf and run this
+#   reschedule   edit its SWEEP_CRON/BATCH_CRON and run this
+#   deregister   delete the file and run this
 #
-# Safe by default: prints what it WOULD install and exits. Nothing is
-# written to the real crontab unless you pass --apply.
+# TRAP: safe by default -- it PRINTS what it would install and exits. Nothing
+#   reaches the real crontab without --apply.
+# TRAP: it only ever touches lines between its BEGIN/END markers. A raw entry
+#   you have not migrated is left exactly as-is, so migrating one means
+#   removing the old raw line yourself first or you get two entries for one job.
 #
-# Only ever touches lines between the BEGIN/END markers below -- anything
-# else already in your crontab (including any not-yet-migrated raw entry
-# like chezz's original unrestricted line) is left exactly as-is. If
-# you're migrating an existing raw entry onto a schedule/*.conf file,
-# remove the old raw line yourself first (crontab -e) or you'll end up
-# with two entries for the same job.
-#
-# TWO SCOPING AXES (2026-07-25). Both default to "here, as me", so every
-# existing conf behaves exactly as before:
-#
-#   CRON_ACCOUNT="svc-vaporwave"   install this project's lines into THAT
-#                                  user's crontab instead of the invoking
-#                                  user's. Same managed-block discipline,
-#                                  one block per account, one backup dir
-#                                  per account. Requires passwordless
-#                                  `sudo -u <account> crontab` (zach has
-#                                  `(svc-vaporwave) NOPASSWD: ALL`).
-#   CRON_HOST="mandark"            only install on that short hostname;
-#                                  other hosts skip the conf entirely.
-#
-# CRON_HOST is what makes moving a service account to another box a
-# one-field edit rather than a migration: the conf is the single source of
-# truth for WHERE and AS WHOM a job runs, mirroring how
-# usage-paced-runner.sh already resolves schedule/_paced.<host>.conf. To
-# move svc-vaporwave's jobs to dexter, set CRON_HOST="dexter", run this on
-# dexter with --apply, then re-run on mandark with --apply to retract the
-# now-foreign block (an unlisted host produces an EMPTY managed block,
-# which removes the lines rather than orphaning them).
-#
-# A foreign account's crontab is READ before it is written, exactly like
-# the local one. If that read fails, the block for that account is NOT
-# written and the script exits nonzero -- writing a managed block without
-# first seeing the unmanaged lines would silently discard them, and would
-# hide an already-installed job of the same name (double dispatch).
-
+# The full account is in vault:scheduler/three-headers-20260826.md.
 set -uo pipefail
 
 SCHED_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -232,47 +200,7 @@ batch_slot_time() {
   printf '%d %d' "$((total % 60))" "$((total / 60))"
 }
 
-# --- Paced-runner meta (optional) ---------------------------------------------
-# schedule/_runner.conf turns on usage-paced dispatch: one frequent tick runs
-# bin/usage-paced-runner.sh, which round-robins the ENABLED participants in
-# THIS HOST'S rotation file (schedule/_paced.<host>.conf, else the shared
-# schedule/_paced.conf) whenever usage-gate.sh reports spare weekly quota. With
-# PACED_SUPPRESS_BATCH=1, any project that IS a paced participant gets its fixed
-# nightly BATCH cron line suppressed below (the runner dispatches it instead) --
-# each project's BATCH_* config stays intact, so deleting _runner.conf restores
-# the old fixed-time behaviour on the next sync. SWEEP (bug-sweep) tiers are
-# never suppressed.
-#
-# HOST-SCOPED SINCE 2026-07-29, and this was a live defect, not a tidy-up.
-# The tick meta was read from ONE shared file while the rotation it dispatches
-# has been per-host (_paced.<host>.conf) since 2026-07-24. So on dexter,
-# `--apply` would have installed MANDARK's cadence:
-#
-#   */5 PACED_MAX_PER_TICK=16 USAGE_CEILING=0.99 usage-paced-runner.sh
-#
-# where dexter had been deliberately running */30 with PACED_MAX_PER_TICK=1 --
-# a 6x rate increase on the host that shares one account budget with the other,
-# installed silently by a command whose whole job is to make the crontab match
-# the confs. That is why dexter's crontab was HAND-WRITTEN on 2026-07-24 and
-# why its own header called host-scoping "an open item": the generator could
-# not express what that host needed, so a human bypassed the generator. A
-# config surface a host cannot use is a config surface that host routes around.
-#
-# Resolution is SHARED-THEN-HOST, sourced in that order, so the host file
-# overrides PER FIELD and only needs to state what differs -- the same
-# precedence _usage.conf documents for the pacing knobs. A host file may also
-# blank a field (RUNNER_CRON="") to opt out of a tick the shared file arms;
-# dexter has never run the sweep tick that _sweep.conf would install.
-#
-# OPT-OUT IS DETECTED BY COMPARISON, NOT BY EMPTINESS (fixed 2026-07-29 --
-# the sentence above described a mechanism this script did not implement,
-# and schedule/_sweep.dexter.conf was already relying on it). An empty CRON
-# is ambiguous on its own: it is EITHER "this host opted out" OR "the shared
-# conf is incomplete", and the emit blocks below rightly treat the second as
-# a hard ERROR. So the shared file's value is captured BEFORE the host file
-# is sourced, and only the transition non-empty -> empty counts as an opt-out.
-# That keeps the incomplete-conf error loud (a shared file that never set a
-# CRON still errors, host file or not) while letting a host turn a tick off.
+# HOST-SCOPED SINCE 2026-07-29, and this was a live defect: the tick meta was read from ONE shared file while the rotation it dispatches has been per-host since 2026-07-24, so `--apply` on dexter would have installed MANDARK cadence.
 RUNNER_JOB=""; RUNNER_CMD=""; RUNNER_CRON=""; RUNNER_ENV=""; PACED_SUPPRESS_BATCH=0
 RUNNER_CONF_SRC="none"
 RUNNER_OPTOUT=0

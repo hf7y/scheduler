@@ -1,0 +1,70 @@
+.TH DRESSE 1 "2026-08-20" "realisateur" "bashified verb"
+.SH NAME
+dresse \- stand a self-dev host, or one account on it, up
+.SH SYNOPSIS
+.B dresse
+--host
+[--check|--apply]
+.br
+.B dresse
+--all
+[--check|--apply]
+.br
+.B dresse
+.I account
+[--check|--apply]
+.SH DESCRIPTION
+Runs the provisioning steps that stand a self-dev host and its accounts up, in
+order, idempotently. It is the front door for what were sixteen scripts a human
+ran by hand out of a checkout on another machine.
+.PP
+It is typed by a human with
+.BR sudo ,
+on the host being provisioned. No self-dev account gets sudo, now or later; a
+step that appears to need one is a wrong step.
+.PP
+.B --check
+is the default and writes nothing. Because it writes nothing it runs as any
+user, and says which rows will refuse for want of root.
+.B --apply
+must be root.
+.SH THE PLAN
+The steps are checked against
+.BR bin/lib/propagation-set.sh :
+every script a step runs must be provision-class there, and every
+provision-class script
+.B dresse
+does not reach is printed as uncovered. A front door that quietly covers eleven
+of sixteen reads exactly like one that covers sixteen.
+.PP
+Host-wide, in order: the GitHub App key
+.RB ( selfdev-app-key.sh ),
+the shared OAuth token
+.RB ( selfdev-claude-token.sh ,
+reported only \- it installs no secret unattended), the verb-build release
+channel
+.RB ( wire-release-channel.sh " --host)",
+and the per-account
+.B .claude
+permissions and hooks blocks.
+.PP
+For an account that does not exist,
+.BR setup-selfdev-project.sh
+is itself the ordered sequence and is run whole. For one that does, only its
+release bootstrap and its own clock are re-checked.
+.SH EXIT STATUS
+.TP
+.B 0
+every step ran, or under --check could.
+.TP
+.B 1
+a step refused.
+.TP
+.B 2
+usage error, or --apply without root.
+.TP
+.B 6
+BLIND \- the propagation set could not be read, so the plan is unverifiable.
+.SH SEE ALSO
+.BR ausculte (1),
+.BR discipline (1)

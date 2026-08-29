@@ -605,32 +605,7 @@ conf_field() {
   [ -f "$conf" ] || return 1
   v="$(grep -E "^${field}=" "$conf" | head -1 | cut -d= -f2- | tr -d '"')"
 
-  # ONE FILE, TWO READERS, AND THEY DISAGREED.
-  #
-  # schedule/*.conf is `source`d by bin/sync-crontab.sh and bin/scheduler-run,
-  # where PROJECT_REPO_PATH="$HOME/Documents/Projects/senechal" expands. THIS
-  # reader is grep+cut+tr, so the same line came back as the literal eleven
-  # characters `$HOME/Docum...` -- and every caller below treats the result as
-  # a real path. `scheduler -i senechal` (the ecosystem's front door, and what
-  # notify-senechal files through) refused with
-  #
-  #   scheduler: senechal's PROJECT_REPO_PATH does not exist on this host:
-  #   $HOME/Documents/Projects/senechal
-  #
-  # which is the failure reporting itself accurately and being impossible to
-  # act on. Introduced 2026-08-03 by the bare-host portability pass, which
-  # verified the SOURCED readers and never ran a text reader. Its witness
-  # asserted only "no conf hardcodes /home/" -- a test that passes while the
-  # feature is broken, which is the shape this repo keeps rediscovering.
-  #
-  # Expanded here rather than reverting the confs, because the portability was
-  # the point: a conf that means one path when sourced and a different literal
-  # when grepped is worse than either convention alone.
-  #
-  # ONLY the three forms a path can portably START with, and NO eval: a conf
-  # cannot execute anything through this function. `$HOME` mid-string is left
-  # alone deliberately -- it is not a shape any conf uses, and pretending to
-  # handle it would imply a general expansion this is not.
+  # TRAP: ONE FILE, TWO READERS. schedule/*.conf is `source`d by sync-crontab.sh and scheduler-run, where PROJECT_REPO_PATH="$HOME/..." expands; THIS reader is grep+cut+tr, so the same line came back as the literal characters `$HOME/...` and every caller below treats it as a real path.
   case "$v" in
     '$HOME'|'$HOME'/*)     v="$HOME${v#\$HOME}" ;;
     '${HOME}'|'${HOME}'/*) v="$HOME${v#\$\{HOME\}}" ;;
@@ -740,36 +715,13 @@ is_git_repo() {
 
 
 # --- the GitHub-issues answer channel ----------------------------------
-#
-# Built 2026-07-28 (human-directed: "move the full chezz over to test the
-# github issues pipeline"). Replaces, per project, the file channel whose
-# failure is on record in BLOCKERS.md: `questions/<p>.md` is a symlink
-# into a local mandark working copy, so it goes one commit stale on every
-# push and the round trip never closed. The premise expires anyway under
-# "dexter is the default execution host" -- a project with no mandark
-# checkout has no answer surface at all.
-#
-# THE RULE THAT MATTERS, and the reason this is not just a nicer file: the
-# buffer is rendered fresh from the API on every invocation and DELETED on
-# exit. A view, not a file. Anything that persists question state on disk
-# re-creates the staleness class being escaped -- so there is deliberately
-# no cache of question BODIES here, only of the integer count (see
-# issues_counts, which the glance calls once per project per run).
-#
-# Semantics carried over from the file channel, now as labels:
-#   agents file with `--label question`; a human answer is a COMMENT (never
-#   a body edit, so the ask survives verbatim and history is free), and that
-#   is the whole contract. Zach leaves the issue OPEN and applies no label,
-#   so neither STATE nor LABEL says anything about whether he answered --
-#   an issue is ANSWERED iff the repo owner left a comment on it that is not
-#   agent-stamped (lib/provenance.sh, PROVENANCE_ANSWERED_JQ). This was
-#   written down as a `question`+`answered` label contract until 2026-08-14
-#   and that contract was never real: nothing ever applied the label, so
-#   issues_counts reported every answer Zach ever wrote as UNANSWERED.
-#
-# Per BUILD-DISCIPLINE this must FAIL LOUD if `gh` errors. A questions
-# command that silently renders an empty buffer is indistinguishable from
-# "no questions", which is precisely the failure being retired.
+# Built 2026-07-28 (Zach: "move the full chezz over to test the github issues
+# pipeline"), replacing a `questions/<p>.md` symlink into a local mandark
+# working copy that went one commit stale on every push, so the round trip
+# never closed -- and that has no answer surface at all on a host with no
+# mandark checkout.
+# THE RULE THAT MATTERS: the buffer is rendered fresh from the API on every
+# invocation and DELETED after, so it can never be the stale copy it replaced.
 
 # Which channel a project's questions live in: "issues" or "file".
 # Opt-in per project via ANSWER_CHANNEL in schedule/<proj>.conf. Default
@@ -1288,26 +1240,7 @@ cmd_idea() {
     return
   fi
 
-  # THE FRONT DOOR IS GITHUB (Zach, 2026-08-05).
-  #
-  # This used to resolve PROJECT_REPO_PATH and append a line to a LOCAL
-  # .scheduler/FOCUS.md, then commit and push it. That write is what pinned
-  # every registered project to a checkout on whatever host the note was
-  # typed on -- senechal most of all, because `notify-senechal` is a wrapper
-  # around `scheduler -i senechal` and the estate protocol says every
-  # machine-config change gets filed. So the ONE command every project is
-  # required to call was also the reason every project needed a clone here.
-  #
-  # It is the same defect as realisateur/MONKEY.md 8.1(2) from the other
-  # side: a self-dev account holds a READ-ONLY deploy key on senechal, so
-  # that push could not work and `installe` exited 8 on all 25 verbs while
-  # the change itself had landed. Filing an issue needs no write access to
-  # anyone's default branch and no clone on any host, so one change closes
-  # both.
-  #
-  # Deliberately NOT gated on answer_channel: that setting says where a
-  # project's ANSWERS come from, which is a different axis. An idea is an
-  # inbound note, and it now has exactly one destination for every project.
+  # TRAP: THE FRONT DOOR IS GITHUB (Zach, 2026-08-05). This used to append to a LOCAL .scheduler/FOCUS.md and push it, which pinned every registered project to a checkout on whatever host the note was typed on -- senechal most of all, since notify-senechal wraps `scheduler -i senechal`.
   require_gh || exit 1
   local slug url body today
   slug="$(gh_repo_slug "$proj")" || exit 1

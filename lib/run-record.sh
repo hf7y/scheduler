@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # run-record.sh -- COMPUTE the verdict at closeout instead of asking for it.
 #
 # THE PROBLEM (hf7y/scheduler#54, and the 2026-08-06 blowout):
@@ -218,20 +217,6 @@ run_record_compute_verdict() {
     rr_add_reason "commits were made and NOT pushed -- work that reached no consumer"; failed=1
   fi
 
-  # RC NO LONGER MASKS EFFECTS (2026-08-19). This used to `return` here, so a
-  # nonzero rc decided the verdict before a single effect was read. gardien's
-  # 2026-08-19 run pushed 43 commits, merged 2 PRs and closed 2 issues, then
-  # hit its turn ceiling -- and recorded FAILED, byte-identical to a run that
-  # did nothing. The point of this file is that describing is free and effects
-  # are not; discarding the effects because of an exit code gives that up.
-  #
-  # So fall through and let the WORKED checks below run. A run that shipped
-  # AND then broke is WORKED-CUTOFF: distinguishable from both FAILED (shipped
-  # nothing) and WORKED (finished clean), which is what the ledger needs to
-  # tell them apart later. The reasons already name the rc.
-  # WORKED requires something a consumer can see: pushed commits, a merged PR,
-  # or a closed issue. Note what is NOT on this list -- issues opened, files
-  # touched but uncommitted, and every word the agent wrote about itself.
   if [ "${RR_PUSHED:-null}" = "true" ] && [ "${RR_COMMITS_ADDED:-0}" != "0" ]; then
     rr_add_reason "pushed ${RR_COMMITS_ADDED} commit(s)"; RR_VERDICT="WORKED"
   fi

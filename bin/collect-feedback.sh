@@ -1,157 +1,27 @@
 #!/usr/bin/env bash
-# collect-feedback.sh <file> [--section "## Heading text"] [--consume]
+# collect-feedback.sh <file> [--section "## Heading"] [--consume]
 #                     <file> --list-consumed
 #
-# Scans <file> for inline %%TAG comment lines AND plain `> ` blockquote
-# replies (see ../docs/feedback-tags.md for the format) and prints a
-# structured summary of what it found, each anchored to the nearest
-# preceding markdown heading and the nearest preceding non-blank content
-# line. Exists so a human can review a report (or FOCUS.md/QUESTIONS.md/
-# BLOCKERS.md) in an ordinary text editor, leave tagged comments or plain
-# replies inline, and have the NEXT run pick them up automatically -- no
-# separate app, no re-typing feedback into a chat box.
+# Collect `%TAG` reply lines out of <file>. Exit 0 with output on stdout if
+# any were found; exit 1 with NO output if the file has none, does not exist,
+# or (with --section) has none under that heading -- a caller should read
+# non-zero as "nothing to say", not as an error.
 #
-# `> ` reply support added 2026-07-20 after a real near-miss: a human
-# reply written into a report's LATEST.md (using the same `> ` convention
-# QUESTIONS.md's own contract documents) was invisible to this script
-# before this change -- LATEST.md gets wholly overwritten each run, so
-# that content was one run away from being silently lost, never having
-# been read by anything. Consecutive `> ` lines are merged into ONE
-# "### REPLY" block (not one per physical line) so a wrapped paragraph
-# reads as a single reply. A bare `> (answer inline here)` placeholder
-# (the un-answered template slot) is never treated as a reply, and
-# neither is an empty `>` line that isn't continuing one (2026-07-26:
-# five such bare slots under BLOCKERS.md "## realisateur" were consumed
-# as five empty REPLY blocks -- the slots were silently deleted and the
-# run was handed answerless feedback).
+#   --section TEXT    only tags anchored under a heading matching TEXT
+#   --consume         MARK the matched entries in this account's ledger
+#   --list-consumed   print this account's ledger rows for <file>
 #
-# Exit 0 with output on stdout if any tags were found; exit 1 with no
-# output if the file has none, doesn't exist, or (with --section) has none
-# under that heading -- callers should treat a non-zero exit as "nothing
-# to inject," not an error worth logging.
+# TRAP: --consume MARKS, it does not DELETE (changed 2026-07-28). It used to
+#   rewrite <file> in place, which dirtied the working tree -- and
+#   usage-paced-runner.sh gates its pull-before-dispatch on `git status
+#   --porcelain --untracked-files=no`, so the job blocked its own dispatcher.
+#   Marking in a ledger is what makes it idempotent.
+# TRAP: stripping the `> ` marker as a side effect made an entry invisible to
+#   every future --consume -- nothing left to collect. Do not reintroduce it.
+# TRAP: a tag in a DIFFERENT section (filtered out by --section) must stay
+#   collectable by the pass that owns that section.
 #
-#   --section TEXT   only collect tags anchored under a heading matching
-#                     TEXT (case-insensitive, leading #'s/whitespace and
-#                     trailing whitespace ignored -- so "## vkv-inventory"
-#                     and "vkv-inventory" both match the same heading).
-#                     Lets ONE shared file (e.g. a cross-project
-#                     BLOCKERS.md organized with a "## <project>" heading
-#                     per project) be scanned separately per project, each
-#                     run only picking up its own section.
-#
-# ---------------------------------------------------------------------------
-# WHERE THE CONSUMPTION RECORD LIVES, AND WHY IT MOVED (2026-08-11, #61/#70)
-#
-# --consume USED to rewrite <file> in place: `%%TAG` lines were deleted and
-# a matched `> reply` was demoted to `>> reply` under a dated
-# `>> _[consumed ...]_` header. That worked, and it deadlocked the fleet.
-#
-# The file it rewrites on a dispatcher host is the repo's own TRACKED
-# BLOCKERS.md. bin/usage-paced-runner.sh gates its pull-before-dispatch on
-# `git status --porcelain --untracked-files=no`. So the job dirtied the very
-# file its own deploy gate refuses to pull past: the FIRST consumed tag on a
-# host froze that host at whatever commit it happened to be at, permanently,
-# with one `PULL skip` line in a log nobody reads as the only symptom.
-# Measured cost: PR #59 fixed vim-arcade's brief and merged 2026-08-06T20:02Z.
-# It never ran. Five days later that clone was still pinned behind origin/main
-# for exactly this reason, and crt was wedged the same way (#61 comment,
-# 2026-08-06: two of six monkey clones, and it is every account that has ever
-# consumed a tag, which is every account the feedback channel reaches).
-#
-# The category error was putting a fact about THIS HOST'S RUN HISTORY into the
-# PROJECT'S CONTENT. "A run on this machine has already been handed this
-# entry" is not something the repo knows or should carry; it is per-host
-# runtime state, like the rotation pointer and the verdict files. So it now
-# lives beside them:
-#
-#   ~/.local/share/scheduler-glance/consumed-entries.tsv
-#   (same dir, same SCHEDULER_RECEIPT_DIR override, as consumed-receipts.log)
-#
-# one tab-separated line per consumed entry:
-#   <consumed-at>  <file>  <section>  <anchor>  <kind>  <text>
-# and an entry whose (file, section, anchor, kind, text) is already in the
-# ledger is never collected again. **<file> IS NEVER MODIFIED.** Consequences,
-# all of them the point:
-#   - the pull gate never sees a dirty tree caused by this script
-#   - a fresh clone is never "dirty on arrival"
-#   - the human's words are not merely preserved, they are not touched
-#   - the %%TAG path stops DELETING (the defect this header used to note as
-#     "still deletes and has the identical defect -- filed in FOCUS.md, not
-#     fixed here"). Nothing is removed from anything any more.
-#   - a reader with no write access to <file> can consume correctly instead of
-#     re-prepending the same feedback on every run forever
-#
-# WHAT WAS LOST, AND WHERE IT WENT. The `>>` demotion was also a human-visible
-# "a run read this" marker in the file. On a dispatcher clone that marker was
-# already write-only -- nothing committed or pushed it, so it never reached
-# the human who wrote the reply; it only ever fed the next run on the same
-# host, which is exactly what the ledger does, and better. For the human, the
-# read side is now a flag rather than a file edit:
-#
-#   collect-feedback.sh <file> --list-consumed
-#
-# MIGRATION -- existing in-repo `>>` markers (2026-08-11). Two halves:
-#   1. `>>` lines are STILL skipped outright, exactly as before. A host
-#      carrying an old in-file marker therefore does not re-prepend feedback
-#      it already acted on. Nothing to do, nothing lost.
-#   2. On a --consume pass, every legacy `>>` block that is not already in the
-#      ledger is SEEDED into it, keyed identically to the `> ` reply it was
-#      made from. This is what makes the live remediation of a wedged clone
-#      safe: after one pass under this code, `git restore BLOCKERS.md` on
-#      vim-arcade/crt discards the dirty diff WITHOUT un-consuming the entries
-#      it recorded -- which, before the seeding, it would have (#75, 2026-08-11:
-#      "git restore destroys a real record").
-# The seeding is one-way by design. To deliberately re-ask something already
-# consumed, edit the words (a changed entry is a new entry, and collects) or
-# delete its line from the ledger.
-#
-# `--consume` MARKS replies, it does not delete them (changed 2026-07-28,
-# Zach-directed, after the defect below) -- and since 2026-08-11 it marks them
-# somewhere that is not the file at all. `>>` lines are skipped outright,
-# which is what made --consume idempotent then and still does now, alongside
-# the ledger.
-#
-# Why the 2026-07-28 change: --consume stripped the `> ` marker as a SIDE
-# EFFECT of collecting, before the calling run had decided whether to act.
-# wtul run 28 (2026-07-27, wtul repo 0baabb6) consumed 28 of Zach's replies,
-# judged them "mostly not actionable", and deleted ZERO entries. The answers
-# survived only as unattributed prose wedged inside still-open questions:
-# invisible to every future --consume (nothing left to collect) and
-# indistinguishable from the question's own body text. A question had
-# been answered and by every mechanical measure never had been. Several
-# of those "not actionable" replies were specs -- a stream URL, three
-# Apps Script URLs plus "build it", a decided either/or.
-#
-# The deletion of an entry is the CALLER's job and always was; this
-# script's job is to report what it read. It does not destroy evidence on
-# the caller's behalf, and no longer edits the caller's file at all.
-#
-#   --consume         after collecting, record the matched entries in this
-#                     account's consumption ledger so they are not collected
-#                     again. <file> is NOT modified. An entry under a
-#                     DIFFERENT section (when --section filters it out) is
-#                     neither collected nor recorded. Use for a persistent,
-#                     hand-maintained file like BLOCKERS.md; don't use on
-#                     a report's LATEST.md -- that file already gets
-#                     overwritten wholesale by the run that acts on it.
-#   --list-consumed   print this account's ledger rows for <file> (the read
-#                     side of the marker that used to be visible in the file
-#                     itself). Exit 1 when there are none.
-#
-# Consumption receipt (added 2026-07-27): every --consume call that
-# actually consumes >=1 matched entry appends one line to
-# ~/.local/share/scheduler-glance/consumed-receipts.log (override with
-# SCHEDULER_RECEIPT_DIR) -- timestamp, file, section, count. This exists
-# so "an entry vanished from a QUESTIONS.md/BLOCKERS.md" can later be told
-# apart from "a human hand-deleted an entry nothing ever consumed" --
-# before this, --consume left no trace it had run, so there was no answer
-# key to check a disappearance against. It remains the per-CALL summary;
-# consumed-entries.tsv beside it is the per-ENTRY detail.
-#
-# Deliberately generic: works on any text file, not just reports, so the
-# same %%TAG convention can be reused anywhere a human wants to leave an
-# inline note for the next unattended run.
-
+# The full account is in vault:scheduler/three-headers-20260826.md.
 set -uo pipefail
 
 FILE=""
