@@ -368,6 +368,56 @@ out="$("$TARGET" orphan-proj --arm 2>&1)"; rc=$?
 [ -f "$WORK/gh-calls.log" ] && bad "orphan-proj refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "orphan-proj refusal wrote nothing"
 
+# --- 16-21. --sprint/--sprint-status (#292) ---------------------------------
+export DOSE_SPRINT_STATE_ROOT="$WORK/sprint-state"
+
+export FAKE_UID=3011
+out="$("$TARGET" ecosim --sprint 4h 2>&1)"; rc=$?
+unset FAKE_UID
+[ "$rc" -eq 7 ] && ok "--sprint from a self-dev uid exits 7 (refused), same as --arm/--park" \
+  || bad "--sprint from uid 3011 exited $rc, want 7: $out"
+[ -f "$DOSE_SPRINT_STATE_ROOT/sprints/ecosim.expiry" ] && bad "self-dev refusal still wrote sprint state" \
+  || ok "self-dev refusal wrote nothing"
+
+out="$("$TARGET" ecosim --sprint 4x 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && ok "--sprint with an unparseable duration exits 2 (usage)" \
+  || bad "--sprint 4x exited $rc, want 2: $out"
+
+out="$("$TARGET" ecosim --sprint 999h 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && ok "--sprint past the max-hours cap exits 2 (usage)" \
+  || bad "--sprint 999h exited $rc, want 2: $out"
+grep -qi 'cap' <<<"$out" && ok "the cap refusal names the cap" \
+  || bad "exit 2 but the message doesn't mention a cap: $out"
+
+out="$("$TARGET" ecosim --sprint-status 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "--sprint-status on a never-sprinted project exits 0" \
+  || bad "--sprint-status exited $rc: $out"
+grep -qF 'not sprinting' <<<"$out" && ok "reports 'not sprinting' with no record" \
+  || bad "expected 'not sprinting', got: $out"
+
+# ROW_ACCT != LOCAL_ACCOUNT (testuser) -- exercises the sudo -n -u write path.
+out="$("$TARGET" ecosim --sprint 4h 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "--sprint on a live project (sudo write path) exits 0" \
+  || bad "--sprint exited $rc: $out"
+grep -qF 'SPRINT:' <<<"$out" && ok "--sprint reports the deadline it set" \
+  || bad "--sprint did not report SPRINT:: $out"
+[ -s "$DOSE_SPRINT_STATE_ROOT/sprints/ecosim.expiry" ] && ok "--sprint wrote a state file (sudo path)" \
+  || bad "--sprint wrote nothing to $DOSE_SPRINT_STATE_ROOT/sprints/ecosim.expiry"
+
+out="$("$TARGET" ecosim --sprint-status 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "--sprint-status after --sprint exits 0" || bad "--sprint-status exited $rc: $out"
+grep -qF 'SPRINT active' <<<"$out" && ok "--sprint-status now reports an active sprint" \
+  || bad "expected 'SPRINT active', got: $out"
+
+# ROW_ACCT == LOCAL_ACCOUNT -- exercises the direct (non-sudo) write path.
+export FAKE_UNAME=ecosim
+out="$("$TARGET" ecosim --sprint 30m 2>&1)"; rc=$?
+unset FAKE_UNAME
+[ "$rc" -eq 0 ] && ok "--sprint on the LOCAL account (direct write path) exits 0" \
+  || bad "--sprint as local account exited $rc: $out"
+
+unset DOSE_SPRINT_STATE_ROOT
+
 echo
 echo "dose-project-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

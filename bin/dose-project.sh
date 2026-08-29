@@ -19,10 +19,11 @@ set -uo pipefail
 
 CLI_NAME="dose-project.sh"
 SCHED_REL="Documents/Projects/scheduler"
+SPRINT_MAX_HOURS="${DOSE_SPRINT_MAX_HOURS:-24}"
 
 usage() {
   cat <<EOF
-usage: $CLI_NAME <project> [--check|--apply|--arm|--park|--now]
+usage: $CLI_NAME <project> [--check|--apply|--arm|--park|--now|--sprint <dur>|--sprint-status]
 
 Converge THIS host's crontab to match schedule/ROSTER's row for <project>,
 read fresh from GitHub via 'gh api' every run.
@@ -38,24 +39,49 @@ read fresh from GitHub via 'gh api' every run.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
             neither. Hops to the roster's host over ssh if you are elsewhere.
+  --sprint <dur>   this project ignores TEMPO (never the usage gate or
+            USAGE_CEILING) until an absolute deadline now+<dur>, <dur> being
+            <N>h or <N>m, capped at ${SPRINT_MAX_HOURS:-24}h (DOSE_SPRINT_MAX_HOURS to
+            raise it). Human-only (#291), same refusal as --arm/--park.
+            Hops to the roster's host over ssh if you are elsewhere.
+  --sprint-status  report whether <project> is currently sprinting, and
+            until when.
 
 exit: 0 kept  2 usage  4 gap  5 broken  6 blind  7 refused
 EOF
 }
 
-MODE="--check"; PROJECT=""
-for a in "$@"; do
+MODE="--check"; PROJECT=""; SPRINT_DURATION=""
+_args=("$@"); _i=0
+while [ "$_i" -lt "${#_args[@]}" ]; do
+  a="${_args[$_i]}"
   case "$a" in
-    --check|--apply|--arm|--park|--now) MODE="$a" ;;
+    --check|--apply|--arm|--park|--now|--sprint-status) MODE="$a" ;;
+    --sprint)
+      MODE="$a"
+      _i=$((_i + 1))
+      SPRINT_DURATION="${_args[$_i]:-}"
+      ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "$CLI_NAME: unknown flag $a" >&2; exit 2 ;;
     *) PROJECT="$a" ;;
   esac
+  _i=$((_i + 1))
 done
+unset _args _i a
 [ -n "$PROJECT" ] || { echo "$CLI_NAME: name a project (see --help)" >&2; exit 2; }
+if [ "$MODE" = "--sprint" ] && [ -z "$SPRINT_DURATION" ]; then
+  echo "$CLI_NAME: --sprint needs a duration, e.g. --sprint 4h (see --help)" >&2
+  exit 2
+fi
 
-# #291: refused on the CLI's OWN uid, before any network call.
-if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
+# #291: refused on the CLI's OWN uid, before any network call. --sprint joins
+# --arm/--park here (2026-08-29, #292): it is the same category of judgement
+# call -- a human overriding the regulator on purpose -- and letting a
+# self-dev account grant ITSELF an unpaced window is exactly the self-
+# authorization #291 exists to rule out, more so than arm/park since sprint
+# bypasses tempo directly rather than just flipping a roster state.
+if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ] || [ "$MODE" = "--sprint" ]; then
   CALLER_UID="$(id -u)"
   if [ "$CALLER_UID" -ge 3000 ] && [ "$CALLER_UID" -le 3099 ]; then
     echo "REFUSED: uid $CALLER_UID is a self-dev account (3000-3099) -- $MODE is a human action at a terminal, not something a project may do to itself" >&2
@@ -75,6 +101,8 @@ fi
 DOSE_LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # shellcheck source=../lib/dose-common.sh
 . "$DOSE_LIB_DIR/lib/dose-common.sh"
+# shellcheck source=../lib/sprint-common.sh
+. "$DOSE_LIB_DIR/lib/sprint-common.sh"
 
 # The fetch lives HERE, not in the library: sourcing a library must not make a
 # network call, and must not exit the process that sourced it (#120's defect,
@@ -181,6 +209,97 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   fi
   echo "next: once merged, run 'dose $PROJECT --apply' on $ROW_HOST to converge its crontab"
   exit 0
+fi
+
+# --- 3b. --sprint/--sprint-status (#292): read/write per-project sprint
+# state -- an ABSOLUTE wall-clock deadline until which usage-paced-runner.sh
+# bypasses TEMPO for this project. Never the usage gate/USAGE_CEILING -- see
+# lib/sprint-common.sh's header and usage-paced-runner.sh's tempo check for
+# why that split is deliberate, not an oversight.
+#
+# STATE LIVES ON ROW_HOST, in the SAME per-account STATE_DIR usage-paced-
+# runner.sh already reads ($HOME/.local/share/scheduler-paced-runner),
+# written AS that account via sudo -- so the runner needs no new wiring to
+# see a sprint the moment it lands. Hops over ssh first, same as --now,
+# because that account's home is not necessarily this host's.
+#
+# ACCOUNT MODE ONLY, for now. PACED_HOST_MODE=1 (root, one dispatcher per
+# HOST) reads a single shared /var/lib/scheduler-paced-runner STATE_DIR, not
+# any project's $HOME -- this write would land somewhere the host-mode
+# runner never looks. Not wired here because no host currently runs
+# PACED_HOST_MODE=1 (schedule/_runner.conf sets neither it nor anything that
+# implies it, checked 2026-08-29); a host that turns it on later needs this
+# revisited, not silently assumed to already work.
+sprint_state_root_for_row() {
+  local home
+  if [ "$ROW_ACCT" = "$LOCAL_ACCOUNT" ]; then
+    home="$HOME"
+  else
+    home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
+  fi
+  [ -n "$home" ] || return 1
+  printf '%s' "${DOSE_SPRINT_STATE_ROOT:-$home/.local/share/$SPRINT_JOB_NAME}"
+}
+
+do_sprint() {
+  local dur_sec expires_at root
+  dur_sec="$(sprint_parse_duration "$SPRINT_DURATION")" \
+    || { echo "$CLI_NAME: --sprint duration '$SPRINT_DURATION' is not a form dose understands (want <N>h or <N>m)" >&2; exit 2; }
+  if [ "$dur_sec" -gt $(( SPRINT_MAX_HOURS * 3600 )) ]; then
+    echo "$CLI_NAME: --sprint $SPRINT_DURATION exceeds the ${SPRINT_MAX_HOURS}h cap (raise with DOSE_SPRINT_MAX_HOURS) -- a sprint is a short-term override, never a standing one" >&2
+    exit 2
+  fi
+  root="$(sprint_state_root_for_row)" \
+    || { echo "BROKEN: '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
+  expires_at="$(sprint_expires_at "$dur_sec")"
+
+  if [ "$ROW_ACCT" = "$LOCAL_ACCOUNT" ]; then
+    sprint_set "$root" "$PROJECT" "$expires_at" \
+      || { echo "BROKEN: could not write sprint state under $root" >&2; exit 5; }
+  else
+    sudo -n -u "$ROW_ACCT" mkdir -p "$(sprint_dir "$root")" \
+      || { echo "BROKEN: could not create $(sprint_dir "$root") as $ROW_ACCT" >&2; exit 5; }
+    printf '%s\n' "$expires_at" \
+      | sudo -n -u "$ROW_ACCT" tee "$(sprint_dir "$root")/$PROJECT.expiry" >/dev/null \
+      || { echo "BROKEN: could not write sprint state as $ROW_ACCT" >&2; exit 5; }
+  fi
+  echo "SPRINT: '$PROJECT' ignores tempo until $expires_at -- the usage gate and USAGE_CEILING still apply"
+  echo "status:  dose $PROJECT --sprint-status"
+  exit 0
+}
+
+do_sprint_status() {
+  local root expiry now
+  root="$(sprint_state_root_for_row)" \
+    || { echo "BROKEN: '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
+  if [ "$ROW_ACCT" = "$LOCAL_ACCOUNT" ]; then
+    expiry="$(sprint_expiry "$root" "$PROJECT" 2>/dev/null || true)"
+  else
+    expiry="$(sudo -n -u "$ROW_ACCT" cat "$(sprint_dir "$root")/$PROJECT.expiry" 2>/dev/null || true)"
+  fi
+  if [ -z "$expiry" ]; then
+    echo "not sprinting: '$PROJECT' has no sprint on record"
+    exit 0
+  fi
+  now="$(sprint_now)"
+  if [[ "$now" < "$expiry" ]]; then
+    echo "SPRINT active: '$PROJECT' ignores tempo until $expiry"
+  else
+    echo "SPRINT expired: '$PROJECT' was sprinting until $expiry -- its next dispatch attempt clears the record"
+  fi
+  exit 0
+}
+
+if [ "$MODE" = "--sprint" ] || [ "$MODE" = "--sprint-status" ]; then
+  if [ "$ROW_HOST" != "$HOST" ]; then
+    echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
+    if [ "$MODE" = "--sprint" ]; then
+      exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --sprint '$SPRINT_DURATION'"
+    else
+      exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --sprint-status"
+    fi
+  fi
+  if [ "$MODE" = "--sprint" ]; then do_sprint; else do_sprint_status; fi
 fi
 
 # --- 3. wrong host: say so, stop. Never half-act. ---------------------------
