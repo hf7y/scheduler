@@ -613,6 +613,25 @@ fi
 # "RUNNABILITY BEFORE THE PROBE" below) and a foreign row costs a stat(2).
 # Measured on monkey at the 18:00Z tick 2026-08-06: 9 probes host-wide (3
 # accounts x 3 roster rows) to make 3 dispatch decisions. Now 3.
+derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch seconds)
+  local name="$1" since="$2" conf repo_url repo pr
+  conf="$REPO_ROOT/schedule/$name.conf"
+  repo_url="$(grep -E '^REPO_URL=' "$conf" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
+  repo="$(sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$repo_url")"
+  if [ -z "$repo" ]; then
+    echo "DERIVED-SILENT: no-verdict, and $name.conf names no REPO_URL to check for a live PR"
+    return
+  fi
+  pr="$(timeout "${PACED_DERIVE_TIMEOUT:-15}" gh pr list -R "$repo" --state open \
+        --json number,updatedAt,statusCheckRollup \
+        --jq '[.[] | select((.updatedAt|fromdateiso8601) >= '"$since"') | select([.statusCheckRollup[]? | (.conclusion // .state // "")] | any(. == "FAILURE"))] | .[0].number // empty' \
+        2>/dev/null)" || pr=""
+  if [ -n "$pr" ]; then
+    echo "DERIVED-CONTINUE: open PR #$pr on $repo has a failing check -- next dispatch should finish it, not start fresh"
+  else
+    echo "DERIVED-SILENT: no open PR on $repo, updated since this run started, with a failing check -- nothing to point at"
+  fi
+}
 dispatched=0
 examined=0
 while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
@@ -877,8 +896,10 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # Asked via `verdict.sh get` (exit 1 == no verdict recorded) rather than by
   # rebuilding the state path here -- one owner of that layout, not two.
   _no_verdict=0
+  _derived=""
   if ! "$SELF_DIR/verdict.sh" get "$name" >/dev/null 2>&1; then
-    log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). Treated as NOT-DONE and re-dispatched; metabolism untouched."
+    _derived="$(derive_no_verdict_reason "$name" "$start" 2>/dev/null)"
+    log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). ${_derived:-no derivation available.} Treated as NOT-DONE and re-dispatched; metabolism untouched."
     _no_verdict=1
   fi
 
@@ -892,7 +913,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # leaving the row to say nothing.
   if declare -F ledger_append >/dev/null 2>&1; then
     if [ "$_no_verdict" -eq 1 ]; then
-      _lreason="no-verdict: ran with no verdict written"
+      _lreason="${_derived:-no-verdict: ran with no verdict written}"
     else
       _lreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
     fi
@@ -900,7 +921,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       || log "LEDGER $name -- could not append to the run ledger; repetition is unobservable for this run"
     unset _lreason
   fi
-  unset _no_verdict
+  unset _no_verdict _derived
 
   # ###########################################################################
   # DONE BRAKES (hf7y/scheduler#54). The vrc -eq 0 branch that never existed.
