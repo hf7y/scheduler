@@ -319,6 +319,17 @@ $block
 $PROMPT"
 }
 
+read_resume_hint() {
+  [ -n "${SCHEDULER_RESUME_PR:-}" ] && [ -n "${SCHEDULER_RESUME_REPO:-}" ] || return 0
+  echo "dispatcher found an open PR left by a no-verdict run -- prepending a resume instruction"
+  PROMPT="The previous run of this job ended with no verdict, and the dispatcher found open pull request #$SCHEDULER_RESUME_PR on $SCHEDULER_RESUME_REPO still carrying a failing check. Before picking anything new, go finish or fix that PR first.
+
+---
+
+$PROMPT"
+  unset SCHEDULER_RESUME_PR SCHEDULER_RESUME_REPO
+}
+
 # THE VERDICT CLOSEOUT -- appended to every batch brief, by the engine.
 #
 # bin/usage-paced-runner.sh logs, on a run that wrote nothing:
@@ -853,6 +864,8 @@ $PROMPT"
   # conf's own brief) and unconditional on TIER, unlike append_verdict_closeout
   # -- a bug-sweep tier can hit --max-turns exactly the same way batch does.
   read_ceiling_breadcrumb
+
+  read_resume_hint
 
   # claude's own output is tee'd to a per-run capture file (as well as
   # flowing into $LOG via the enclosing block redirect) so that a FAILED

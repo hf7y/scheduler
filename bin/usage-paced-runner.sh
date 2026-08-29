@@ -632,6 +632,17 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
     echo "DERIVED-SILENT: no open PR on $repo, updated since this run started, with a failing check -- nothing to point at"
   fi
 }
+
+resume_hint_for_project() {
+  local name="${1:?}" last_outcome last_reason
+  declare -F ledger_last >/dev/null 2>&1 || return 0
+  last_outcome="$(ledger_last "$name" 2>/dev/null || true)"
+  [ "$last_outcome" = "NOT-DONE" ] || return 0
+  last_reason="$(ledger_reason "$name" NOT-DONE 1 2>/dev/null || true)"
+  if [[ "$last_reason" =~ ^DERIVED-CONTINUE:\ open\ PR\ \#([0-9]+)\ on\ ([^[:space:]]+)\  ]]; then
+    printf '%s %s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  fi
+}
 dispatched=0
 examined=0
 while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
@@ -849,6 +860,12 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # stamp that reads as current is worse than no stamp.
   "$SELF_DIR/verdict.sh" clear "$name" >/dev/null 2>&1 || true
 
+  _resume_pr="" _resume_repo=""
+  if declare -F resume_hint_for_project >/dev/null 2>&1; then
+    read -r _resume_pr _resume_repo <<<"$(resume_hint_for_project "$name")"
+  fi
+  export SCHEDULER_RESUME_PR="$_resume_pr" SCHEDULER_RESUME_REPO="$_resume_repo"
+
   # HOST MODE: run AS the account that owns the row. The account is read off
   # the command's own path (/home/<acct>/...), which is the authority for who
   # runs it -- that path IS the thing being executed, so deriving the uid from
@@ -867,7 +884,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       dispatched=$((dispatched + 1))
       continue
     fi
-    cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin $cmd"
+    cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin SCHEDULER_RESUME_PR=$_resume_pr SCHEDULER_RESUME_REPO=$_resume_repo $cmd"
   fi
 
   log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF mode=$([ "$PACED_HOST_MODE" = 1 ] && echo host || echo account))"
@@ -1018,6 +1035,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     unset _sched_bin
   fi
 
+  unset _resume_pr _resume_repo
   dispatched=$((dispatched + 1))
 done
 
