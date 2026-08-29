@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
 # Witness for the DERIVED- reason bin/usage-paced-runner.sh writes when a run
-# records no verdict at all -- hf7y/scheduler#297.
-#
-# THE DEFECT THIS EXISTS TO PREVENT: a silent run and a productive run whose
-# only missing piece is the closing report both landed the same generic
-# reason, "no-verdict: ran with no verdict written". Zach, 2026-08-28:
-# "give it a new name when something outside derived it so it's clear" --
-# a guess must never be spelled the same as a self-report, or grepping the
-# ledger for a real verdict can return a derived one. This drives the REAL
-# block lifted out of the dispatcher against a fake `gh`, never the live
-# estate.
+# records no verdict at all -- hf7y/scheduler#297. Drives the REAL block
+# lifted out of the dispatcher against a fake `gh`, never the live estate.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
