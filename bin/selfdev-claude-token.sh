@@ -7,9 +7,7 @@
 #   --install <f> --force-length     skip the length check
 #   --fanout [--apply]   list / rewrite the per-account copies from the one file
 #   --purge  [--apply]   list / shred those copies
-#
 # exit: 0 OK  1 BAD  2 usage  4 GAP  6 BLIND  7 REFUSED
-#
 # TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: ORDER MATTERS and is unenforceable here -- rotate, --install, --fanout, prove a dispatch, revoke. Purging first deletes copies of a live value.
 # TRAP: --fanout IS TEMPORARY. Nothing reads the host-wide file at dispatch yet, so --install alone changes nothing and revoking first takes the fleet down silently. Delete --fanout and --purge the copies the day dispatch reads /etc/selfdev/claude-token.

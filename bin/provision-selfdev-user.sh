@@ -56,7 +56,6 @@ for src in "${SOURCES[@]}"; do
 done
 [ -n "$TOKEN" ] || bad "no credential to copy -- looked in $SRC_HOST, $SRC_SETTINGS (env block) and $SRC_TOKEN_FILE. Run \`selfdev-claude-token.sh --install\` (or \`claude setup-token\`) first; a project account with no token dispatches and produces NOTHING, silently."
 
-# --- account -----------------------------------------------------------------
 if id "$PROJECT" >/dev/null 2>&1; then
   cur_uid="$(id -u "$PROJECT")"
   if [ "$cur_uid" -ge "$UID_MIN" ] && [ "$cur_uid" -le "$UID_MAX" ]; then
@@ -92,7 +91,6 @@ fi
 
 [ "$BAD" -eq 0 ] || die "refusing to apply with $BAD BAD row(s) above"
 
-# --- apply -------------------------------------------------------------------
 if ! id "$PROJECT" >/dev/null 2>&1; then
   NEXT=""
   for u in $(seq "$UID_MIN" "$UID_MAX"); do id -u "$u" >/dev/null 2>&1 || { NEXT="$u"; break; }; done

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # wire-selfdev-git.sh -- give a self-dev account the git credentials it needs
 # to clone and push ONE repo, and prove they work.
-#
 # TRAPS (the rest of this header is in the vault):
 # NOT THE PUSH PATH ANY MORE (2026-08-21, #171). These keys grant access and
 # confer no identity, and their url.insteadOf rewrites silently shadowed the
@@ -55,7 +54,6 @@ else
   else bad "ssh-keyscan github.com failed -- no network, or DNS is lying"; fi
 fi
 
-# --- 2. the keypair ----------------------------------------------------------
 if [ -f "$KEY" ]; then
   ok "keypair exists: $(basename "$KEY")"
 elif [ "$MODE" = --check ]; then

@@ -2,7 +2,6 @@
 # selfdev-claude-token.sh -- WHERE THE SHARED CLAUDE CODE OAUTH TOKEN LIVES.
 # One answer, one host-wide location, sourced by every reader. Same shape and
 # same reason as selfdev-app-key.sh; #409 is the cost, in full.
-#
 # Exports rather than writes: Claude Code reads CLAUDE_CODE_OAUTH_TOKEN from
 # the environment, so the replacement leaves no file for a transcript to quote.
 

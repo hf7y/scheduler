@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # land-selfdev.sh -- stand the self-dev ecosystem up on a host that has nothing.
-#
 # RUN THIS ON THE TARGET HOST, as the project user. Deliberately not a
 # curl-pipe-bash one-liner: getting it onto the machine is a human act, and it
 # is the last one that should be invisible.
 #
 #   ./land-selfdev.sh          --check (default): probes, writes NOTHING
 #   ./land-selfdev.sh --land   clone, install, stop before arming cron
-#
 # TRAPS (the rest of this header is in
 # vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: it NEVER writes a crontab. sync-crontab.sh runs in PREVIEW and the
@@ -34,7 +32,6 @@ act() { printf '  DO      %s\n' "$*"; }
 
 echo "== land-selfdev ($MODE) -- host $(hostname -s), user $(id -un) =="
 
-# --- probe -------------------------------------------------------------------
 for c in git python3 node claude; do
   if command -v "$c" >/dev/null 2>&1; then ok "$c on PATH ($(command -v "$c"))"
   else gap "$c is not on PATH"; fi
@@ -108,7 +105,6 @@ if [ "$MODE" = --check ]; then
   exit 0
 fi
 
-# --- land --------------------------------------------------------------------
 [ "$BAD" -eq 0 ] || { echo; echo "land-selfdev: refusing to land with $BAD BAD row(s) above." >&2; exit 5; }
 echo
 echo "== landing =="
@@ -179,7 +175,6 @@ if [ -x "$PROJECTS/realisateur/bin/install-verbs.sh" ]; then
     && ok "verb surface installed" || gap "install-verbs.sh reported gaps -- read them above"
 fi
 
-# --- stop here ---------------------------------------------------------------
 echo
 echo "== dispatch preview (NOTHING armed) =="
 if [ -x "$PROJECTS/scheduler/bin/sync-crontab.sh" ]; then

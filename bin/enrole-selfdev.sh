@@ -3,7 +3,6 @@
 # and leaves to a human, done mechanically, idempotently and reversibly: flip
 # the project's row in schedule/_paced.<host>.conf from |0| to |1|, and sync
 # that host's crontab as the project's own account.
-#
 # TRAPS (the rest of this header is in
 # vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: --retire flips the row to |0|; it does NOT delete it. Membership is
@@ -182,7 +181,6 @@ elif [ "$SYNC" -eq 1 ]; then
   act "--sync ignored under --check"
 fi
 
-# --- what changed, and how to undo it ----------------------------------------
 echo
 if [ "$MODE" = --check ]; then
   printf 'check only, nothing written: %d ok, %d would-change, %d bad\n' "$PASS" "$GAPS" "$BAD"

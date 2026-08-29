@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # selfdev-credentials.sh -- read every self-dev account's credentials SIDE BY
 # SIDE against one declared baseline, and converge one account to it.
-#
 # RUNNER: no -- needs `ssh $CRED_HOST` + passwordless `sudo -n -u <account>`
 # GUARD-TEST: tests/selfdev-credentials.test.sh
-#
 # TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: pass `-` as the no-filter sentinel, NEVER "". ssh joins every argument
 #   after the remote command into ONE string the far shell re-parses, so a
@@ -19,7 +17,6 @@
 #   private copy beside the host-wide one is a second source a rotation misses.
 # TRAP: there are NO canonical-source knobs, deliberately. A second script
 #   holding its own opinion about where the key lives is realisateur#209.
-#
 # exit (audit):  0 clean   1 drift or a per-account BLIND   6 fleet BLIND
 # exit (apply):  0 converged / nothing to do   5 a step failed
 
@@ -357,8 +354,6 @@ cmd_apply() {
   local failed=0 changed=0
 
   # --- 1. the App credential: HOST-WIDE, placed by the script that owns it --
-  #
-  # This block used to copy a private app.pem + gh-app.conf into the account,
   if [ "$pem" != "ok:600" ] || [ "$conf" = missing ]; then
     act "placing the host-wide App credential and adding $acct to group $CRED_APP_GROUP (selfdev-app-key.sh --apply)"
     if "$CRED_SSH_BIN" -o BatchMode=yes "$CRED_HOST" \

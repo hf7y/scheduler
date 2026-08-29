@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # selfdev-app-key.sh -- place the ONE self-dev GitHub App credential where
 # every account on this host reads it, and retire the per-account copies.
-#
 # RUN ON THE SELF-DEV HOST, AS ROOT:
 #
 #   selfdev-app-key.sh                     --check (default): report, write nothing
@@ -12,7 +11,6 @@
 # WHY: the same App key was on disk under four names across two hosts, and the
 # script that converges an account looked for a fifth. Full account and layout:
 # lib/selfdev-app-key.sh's header, and vault:scheduler/provisioning-block-headers-20260826.md.
-#
 # TRAPS:
 # TRAP: THE ORDER IS ENFORCED -- place host-wide, prove each account can read
 #   it, and only THEN remove the copies. The other order is a fleet-wide
@@ -89,7 +87,6 @@ find_source() {
   return 1
 }
 
-# --- probe -------------------------------------------------------------------
 if [ -f "$PEM" ]; then
   m="$(stat -c '%a %U:%G' "$PEM" 2>/dev/null)"
   [ "$m" = "640 root:$SELFDEV_APP_GROUP" ] \
@@ -134,7 +131,6 @@ fi
 [ "$copies" -eq 0 ] && ok "no per-account copies remain" \
                     || gap "$copies account(s) still hold a private ~/.config/selfdev/app.pem -- retire with --retire-copies once the rows above are clean"
 
-# --- act ---------------------------------------------------------------------
 case "$MODE" in
 --check)
   echo

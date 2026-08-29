@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # cli-guard.sh -- the argument contract, in one place.
-#
 # USAGE: set the four CLI_* variables, source this, call `cli_guard "$@"` BEFORE
 # doing any work. It validates and returns; it never consumes arguments, so each
 # script keeps parsing its own exactly as before.
@@ -10,7 +9,6 @@
 # TRAP: THE SILENT WRITE. `weight-audit.sh` took no flags and REWROTE AND PUSHED
 #   schedule/_paced.conf -- so `weight-audit.sh --dry-run`, a flag a careful
 #   operator would reach for and which does not exist, was a live apply-and-push.
-#
 # EXIT CODES, uniform across every script that sources this:
 
 cli_die() {
@@ -88,9 +86,7 @@ cli_guard() {
 }
 
 # cli_require_matched <wanted-array-name> <matched-array-name>
-#
 # The SECOND silent failure in the project-filter scripts, and the subtler one.
-# hygiene-lint/closeout-lint/milestone-audit take project names as positional
 cli_require_matched() {
   local -n _cli_want="$1" _cli_got="$2"
   [ "${#_cli_want[@]}" -gt 0 ] || return 0

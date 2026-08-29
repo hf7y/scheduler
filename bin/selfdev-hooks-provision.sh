@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # selfdev-hooks-provision.sh -- every self-dev account runs THE-FLOOR gate
 # 3.2's closeout hook: wired in settings.json, and the CURRENT file.
-#
 # RUNNER: bin/tests/selfdev-hooks-provision.test.sh -- and an operator, on the host
 # GUARD-TEST: bin/tests/selfdev-hooks-provision.test.sh
 # GATE: strict
-#
 # THE SPLIT (#272): something else installs the hook FILE; this wires
 # settings.json ("Zach's file"), which #282 crossed that boundary for with
 # `permissions`. The file half is the verb build -- carried in
 # bin/lib/carries.tsv, installed on the release tick -- since #264 got off
 # shims. A sibling of selfdev-permissions-provision.sh, not a merge (#294).
-#
 # Env overrides (test suite only): HOME_ROOT, ACCOUNTS, SUDO, SELFDEV_HOOK_SRC.
 
 set -uo pipefail

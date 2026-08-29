@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # setup-selfdev-project.sh -- stand up ONE new self-dev project account, end to
 # end, in a single root command.
-#
 # TRAPS (the rest of this header is in the vault):
 # WHAT IT RUNS, in order, each already proven on its own:
 #   1. bin/provision-selfdev-user.sh <p> --apply   (root)  account + creds
@@ -135,7 +134,6 @@ run_as "'$STAGE/land-selfdev.sh' --land" 2>&1 | tail -25
 
 # --- 5. the release bootstrap, and the account's own clock -------------------
 # DELEGATED to bin/wire-release-channel.sh since 2026-08-10, not reimplemented.
-# It was inline here, which meant the only way to give an account a clock was
 say "5/8 the GitHub App credential (host-wide)"
 if [ -x "$HERE/selfdev-app-key.sh" ]; then
   appkey_out="$("$HERE/selfdev-app-key.sh" --apply --owner "${SELFDEV_GH_OWNER:-hf7y}" 2>&1)"; appkey_rc=$?

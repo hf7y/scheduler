@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # monkey-scheduler-system.sh -- install scheduler ONCE per host, system-wide.
-#
 # ONE COPY PER HOST, owned by root, readable by everyone, writable by nobody
 # else -- so "what will this host dispatch" is answerable without reading INTO
 # another account's 0700 home, which is what made a read-only monitor need a
@@ -9,14 +8,12 @@
 #     /srv/scheduler             root:root 0755, world-readable (a+rX)
 #     /etc/scheduler/deploy_key  root:root 0600, the READ-ONLY deploy key
 #     /etc/ssh/ssh_known_hosts   github.com, so root can pull unattended
-#
 # TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: OWNERSHIP IS THE POINT, not the path. When `scheduler` becomes a
 #   self-dev user here it must POINT AT /srv/scheduler, never chown it. A
 #   shared tool one participant owns is that participant's tool.
 # TRAP: needs passwordless sudo on the target (senechal
 #   provision/monkey-nopasswd.sh) and a reachable host. Run from mandark.
-#
 #   ./monkey-scheduler-system.sh --check     probe only; changes nothing
 #   ./monkey-scheduler-system.sh --install   idempotent; safe to re-run
 #   ./monkey-scheduler-system.sh --sync      fast-forward /srv/scheduler

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # selfdev-app-key.sh -- WHERE THE SELF-DEV GITHUB APP CREDENTIAL LIVES.
 # One answer, one host-wide location, sourced by every reader.
-#
 # TRAPS (the rest of this header is in the vault):
 #   ~/.config/selfdev/app.pem              on each of 13 accounts (13 copies)
 #   ~/.config/selfdev/monkey/monkey.pem    mandark, written by selfdev-gh-app.sh --adopt

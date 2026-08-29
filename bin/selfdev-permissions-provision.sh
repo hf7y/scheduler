@@ -2,10 +2,8 @@
 # selfdev-permissions-provision.sh -- give every self-dev account the
 # permissions block it was documented as having, so an unattended run can
 # record what it did instead of dying at the gate.
-#
 # GUARD-TEST: tests/selfdev-permissions-provision.test.sh
 # GATE: strict
-#
 # TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: #282 (vim-arcade@monkey's first night) shipped real work with two writes REFUSED. The gate fails closed and an agent cannot self-grant; only a human-authorised pass closes it.
 # TRAP: runs ON the host that owns the accounts -- every read and write of another account's file goes through sudo.

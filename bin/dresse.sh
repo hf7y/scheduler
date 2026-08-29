@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # dresse.sh -- stand a self-dev host, or one account on it, up (#435).
-#
 # KIND: verb
-#
 # TRAP: the step plan is checked against lib/provision-set.sh in BOTH
 #   directions -- a typed list goes stale in silence. That set was realisateur's
 #   PROP_PROVISION_SCRIPTS until 2026-08-26; the other half of that file

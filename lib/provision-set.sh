@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # lib/provision-set.sh -- the ordered set of scripts that stand a self-dev host,
 # or one account on it, up. bin/dresse.sh runs them; this says which they are.
-#
 # It was realisateur's PROP_PROVISION_SCRIPTS until 2026-08-26. The other half
 # of that file -- bootstrap/payload/local, how a file REACHES a host -- stayed
 # there, because that is the verb build's question and this is not.
-#
 # TRAP: the set must match dresse's step plan in BOTH directions. A step naming
 #   an undeclared script, and a script here absent from the plan, are both
 #   findings. dresse --check asserts it; tests/dresse.test.sh asserts that.

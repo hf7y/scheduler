@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # selfdev-credentials-set.sh -- THE SELF-DEV CREDENTIAL BASELINE, in one place.
-#
 # TRAPS (the rest of this header is in vault:scheduler/provisioning-block-headers-20260826.md):
 # TRAP: THE DEFECT IS NEVER "the credential was wrong" -- that is a normal failure every script here reports loudly. It is that NOTHING COMPARED THE TEN. ecosim's fine-grained PAT missing Pull-requests returned 403 on that whole API for two days while `gh issue list`, green tests and pushed branches all kept working.
 # TRAP: FORMAT is newline-separated rows consumed by `while read`, NOT shell code. A bare `"` in a row silently truncates this file, as it once truncated ownership-set.sh (deleted in #514).
@@ -19,8 +18,7 @@ CRED_UID_MAX="${CRED_UID_MAX:-3099}"
 CRED_SHARED_REPOS="realisateur scheduler senechal"
 
 # --- the fleet-wide App, per vault:realisateur/MONKEY.md 11.1 -------------------------------
-# One App across all ten accounts, decided 2026-08-07. An account whose
-# gh-app.conf declares a DIFFERENT id or owner is not obviously wrong (the
+# One App across all ten accounts, decided 2026-08-07.
 CRED_APP_GROUP="${CRED_APP_GROUP:-selfdev}"
 CRED_APP_ID="${CRED_APP_ID:-4521586}"
 CRED_GH_OWNER="${CRED_GH_OWNER:-hf7y}"
@@ -42,8 +40,6 @@ cred_classify_token() {
 }
 
 # cred_own_repo <account> -- the repo this account should hold WRITE on.
-# Today every account's own repo is named identically to the account
-# (vault:realisateur/MONKEY.md 11.1: "every account had a matching hf7y/<name> repo; none was
 cred_own_repo() {
   printf '%s' "$1"
 }
