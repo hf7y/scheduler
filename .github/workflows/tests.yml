@@ -13,14 +13,13 @@
 # it was filed (hf7y/scheduler#58) only after being mistaken for expected
 # output. A suite whose failures nobody is shown is documentation.
 #
-# WHAT IT DOES NOT DO YET: gate. This repository has no branch protection
-# (`gh api repos/hf7y/scheduler/branches/main/protection` -> 404, and it is
-# why `gh pr merge --auto` is a silent no-op here), so this is a red light,
-# not a locked door. Making `suites` a REQUIRED check is hf7y/scheduler#87,
-# and it is deliberately ordered after this: requiring a check on a main that
-# is already red wedges the repository against its own guard. The job is named
-# `suites` -- matching hf7y/realisateur's workflow -- so that #87 has a stable
-# name to require rather than one invented at the time.
+# IT GATES. `suites` is the required status check on `main` and enforce_admins
+# is on -- hf7y/scheduler#87, closed 2026-08-11. `prose / prose` is NOT
+# required, so a PR with `suites` green and `prose` red reports
+# mergeStateStatus UNSTABLE and IS mergeable, while one with `suites` red
+# reports BLOCKED. An agent deciding whether it may merge its own PR reads
+# this block, so it must not say the door is open. Re-read it, do not trust it:
+#   gh api repos/hf7y/scheduler/branches/main/protection --jq '.required_status_checks.contexts'
 
 name: tests
 
@@ -34,7 +33,30 @@ permissions:
   contents: read
 
 jobs:
+  # CARRY FIRST, ON MAIN ONLY (#315). Until now nothing DID the carry the
+  # witness below detects, so a carried file's PR stayed red until a human
+  # pushed bashified by hand -- and it could not be carried before the merge
+  # without putting a version into the build that no branch develops. This
+  # writes to `bashified`, never to `main`.
+  carry:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: git fetch --no-tags origin +refs/heads/bashified:refs/remotes/origin/bashified
+      - name: Give git an identity for the carry commit
+        run: |
+          git config --global user.email "ci@scheduler.invalid"
+          git config --global user.name  "scheduler CI"
+      - run: bash bin/carry.sh --apply
+
   suites:
+    needs: [carry]
+    # `needs` on a job skipped for pull_request would skip this one too.
+    if: always() && (needs.carry.result == 'success' || needs.carry.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

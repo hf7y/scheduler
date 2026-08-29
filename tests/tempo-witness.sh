@@ -64,7 +64,7 @@ set_closed
 row() { printf '%s\tmonkey\tacct\t%s\tbatch\t%s\t%s\tr\n' \
           "$(date -Is -d "-$1 min")" "${2:-p}" "${3:-0}" "${4:-WORKED}" >> "$LEDGER"; }
 
-run_tempo() { TEMPO_CACHE_MIN=0 "$TEMPO" "$@" 2>&1; }
+run_tempo() { TEMPO_CACHE_MIN=0 TEMPO_BASE_MIN=120 TEMPO_PIVOT_ISSUES=12 "$TEMPO" "$@" 2>&1; }
 want_of() { sed -n 's/.*want_min=\([0-9]*\).*/\1/p' <<<"$1"; }
 
 echo "case 1 -- the arithmetic"
@@ -214,6 +214,7 @@ tick() {
     USAGE_GATE="$H/gate.sh" RUN_LEDGER_FILE="$RLEDGER" \
     SCHEDULER_FREEZE_FILE="$T/no-such-freeze" \
     TEMPO_REPO="fake/repo" TEMPO_CACHE_MIN=0 \
+    TEMPO_BASE_MIN=120 TEMPO_PIVOT_ISSUES=12 \
     "$RUNNER" >/dev/null 2>&1
 }
 

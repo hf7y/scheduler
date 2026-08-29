@@ -1,31 +1,44 @@
 # run-record.sh -- COMPUTE the verdict at closeout instead of asking for it.
 #
-# THE PROBLEM (scheduler#54, and the 2026-08-06 blowout): a run that fixed
-# something and a run that merely filed three issues leave IDENTICAL records.
-# The only outcome signal above `rc` is bin/verdict.sh, every field of which
-# is typed by the agent about itself -- and it is CONSUMED at dispatch, so
-# even that self-report is gone before anyone can compare it to what the run
-# did. Describing is free, indistinguishable from working, and strictly
-# cheaper, so agents describe: on 2026-08-06 that produced 42 issues across
-# five repos while the thing that needed doing was one `git merge --ff-only`.
+# THE PROBLEM (hf7y/scheduler#54, and the 2026-08-06 blowout):
+#
+# A run that fixed something and a run that merely filed three issues leave
+# IDENTICAL records. The only outcome signal above `rc` is bin/verdict.sh, and
+# every field in it is typed by the agent about itself -- VERDICT, REASON, the
+# closing summary prose. Worse, the file is CONSUMED at dispatch, so even that
+# self-report is gone by the time anyone could compare it against what the run
+# actually did. Describing is free, indistinguishable from working, and
+# strictly cheaper. So agents describe. On 2026-08-06 that produced 42 issues
+# across five repos while the thing that actually needed doing was one
+# `git merge --ff-only`.
+#
+# This file does not ask the agent anything. Every field below is read back out
+# of git and the GitHub API AFTER `claude -p` has already exited, from state the
+# agent had to actually change in order to move. Prose may ACCOMPANY the record
+# -- claimed_verdict/claimed_reason carry it, namespaced -- but it can never
+# POPULATE it. There is no code path from agent output into a sha, a count, or
+# verdict_computed.
+#
+# WHERE IT IS WRITTEN, and why not in the repo:
+#
+#   $STATE_ROOT/scheduler-runs/<participant>.jsonl     (append-only, one line
+#                                                       per run, never rewritten)
+#
+# Sibling of bin/verdict.sh's $STATE_ROOT/scheduler-verdict/, keyed the same way
+# (rotation participant name) for the same reason. NOT a git-tracked file, and
+# run_record_append REFUSES to write one inside the run's own work tree -- that
+# refusal is not hypothetical hygiene. On 2026-08-07 vim-arcade's deploys sat
+# frozen for 18 hours because lib/sweep-loop-common.sh:601 consumes BLOCKERS.md
+# out of its OWN checkout: the engine dirtied the tree it was about to pull
+# into, and bin/usage-paced-runner.sh's pull gate correctly refused every tick
+# after. An engine that writes into the checkout it manages will eventually
+# deadlock against its own guards. So it writes outside, always.
+#
+# All state is in RR_* globals rather than stdout, so tests/run-record-witness.sh
+# can source this file, drive each probe directly, and read the results -- the
+# same shape as lib/salvage.sh and append_verdict_closeout() in the engine, and
+# for the same reason: a function buried in the run body cannot be witnessed.
 set -uo pipefail
-
-# THE DEBT RULE -- TWO-WEEK TRIAL, started 2026-08-07, ended 2026-08-21.
-#
-#   A run may not open more issues than it closed. If opened > closed at
-#   closeout, verdict_computed is FAILED and the run says so, loudly.
-#
-# Filing an issue is the cheapest action available to an agent that wants to
-# look productive, which is why this is a rule and not advice.
-#
-# TO REVERT, ONE LINE: DEBT_RULE_TRIAL_END="" turns it off entirely. The trial
-# EXPIRES ON ITS OWN and does not become policy by default -- and its end date
-# has passed, which is scheduler#314.
-#
-# These exact phrases are asserted by tests/run-record-witness.sh section 12:
-# the trial and its revert must be legible IN THE CODE, not only in a commit
-# message. Rewording them is a red suite, deliberately.
-DEBT_RULE_TRIAL_END="${DEBT_RULE_TRIAL_END:-2026-08-21}"
 
 RUN_RECORD_SCHEMA="scheduler.run-record/1"
 
@@ -128,17 +141,18 @@ run_record_repo_slug() {
 # Args: <owner/repo> <since ISO8601>
 # Sets: RR_ISSUES_OPENED RR_ISSUES_CLOSED RR_PRS_OPENED RR_PRS_MERGED RR_GH
 #
-# SCOPE, stated plainly because the debt rule is built on it:
+# SCOPE, stated plainly because run_record_compute_verdict's NET-closed check
+# is built on it:
 #   opened  -- author:@me, i.e. attributable to the account this run ran as.
 #   closed  -- everything closed in the window, whoever closed it. GitHub
 #              search has no closed-by: qualifier, so this cannot be narrowed.
-# That asymmetry makes the rule LENIENT (a human closing something in the same
-# window credits the run) and never harsh, which is the right direction for a
-# rule that can fail a run.
+# That asymmetry makes the count LENIENT (a human closing something in the
+# same window credits the run) and never harsh.
 #
 # gh missing, unauthenticated, or erroring is RR_GH != ok and NULL counts --
-# never zero. Unmeasured must not be able to trip a rule; that is the same
-# asymmetry as bin/verdict.sh's "absence of a verdict is never GAVE-UP".
+# never zero. Unmeasured must read as unmeasured, not as a real zero; that is
+# the same asymmetry as bin/verdict.sh's "absence of a verdict is never
+# GAVE-UP".
 run_record_probe_gh() {
   local slug="$1" since="$2"
   RR_ISSUES_OPENED=""; RR_ISSUES_CLOSED=""; RR_PRS_OPENED=""; RR_PRS_MERGED=""
@@ -149,7 +163,7 @@ run_record_probe_gh() {
     return 1
   fi
   if ! command -v "$RR_GH_BIN" >/dev/null 2>&1; then
-    rr_log "WARNING: '$RR_GH_BIN' not on PATH -- issue/PR counts recorded as null, debt rule cannot be evaluated"
+    rr_log "WARNING: '$RR_GH_BIN' not on PATH -- issue/PR counts recorded as null"
     return 1
   fi
 
@@ -186,32 +200,6 @@ rr_gh_count() {
   esac
 }
 
-# --- THE DEBT RULE ---------------------------------------------------------
-# Sets: RR_DEBT_RULE (active|expired|off|unmeasured) RR_DEBT_DELTA
-# Returns 0 if the rule is satisfied (or not applicable), 1 if TRIPPED.
-run_record_debt_rule() {
-  local today="${1:-$(date +%F)}"
-  RR_DEBT_DELTA=""
-
-  if [ -z "$DEBT_RULE_TRIAL_END" ]; then
-    RR_DEBT_RULE="off"; return 0
-  fi
-  if [ -z "${RR_ISSUES_OPENED:-}" ] || [ -z "${RR_ISSUES_CLOSED:-}" ]; then
-    RR_DEBT_RULE="unmeasured"; return 0
-  fi
-
-  RR_DEBT_DELTA=$(( RR_ISSUES_OPENED - RR_ISSUES_CLOSED ))
-
-  # String compare is correct and total for ISO dates, and needs no date(1).
-  if [[ "$today" > "$DEBT_RULE_TRIAL_END" ]]; then
-    RR_DEBT_RULE="expired"; return 0
-  fi
-
-  RR_DEBT_RULE="active"
-  [ "$RR_DEBT_DELTA" -gt 0 ] && return 1
-  return 0
-}
-
 # --- THE VERDICT, COMPUTED -------------------------------------------------
 # Sets: RR_VERDICT (WORKED|WORKED-CUTOFF|IDLE|FAILED) RR_REASONS (newline-separated)
 #
@@ -227,10 +215,6 @@ run_record_compute_verdict() {
   fi
   if [ "${RR_PUSHED:-null}" = "false" ]; then
     rr_add_reason "commits were made and NOT pushed -- work that reached no consumer"; failed=1
-  fi
-  if ! run_record_debt_rule "${RR_TODAY:-$(date +%F)}"; then
-    rr_add_reason "DEBT RULE (trial, ends $DEBT_RULE_TRIAL_END): opened ${RR_ISSUES_OPENED} issue(s), closed ${RR_ISSUES_CLOSED} -- a run may not leave more work behind than it took away"
-    failed=1
   fi
 
   if [ "${RR_PUSHED:-null}" = "true" ] && [ "${RR_COMMITS_ADDED:-0}" != "0" ]; then
@@ -327,9 +311,6 @@ run_record_line() {
   printf '"prs_merged":%s,'      "$(rr_jnum "${RR_PRS_MERGED:-}")"
   printf '"gh":%s,'              "$(rr_jstr "${RR_GH:-unavailable}")"
   printf '"gh_scope":%s,'        "$(rr_jstr 'opened=author:@me; closed=window, any actor')"
-  printf '"debt_rule":%s,'       "$(rr_jstr "${RR_DEBT_RULE:-unmeasured}")"
-  printf '"debt_trial_end":%s,'  "$(rr_jstr "$DEBT_RULE_TRIAL_END")"
-  printf '"debt_delta":%s,'      "$(rr_jnum "${RR_DEBT_DELTA:-}")"
   printf '"verdict_computed":%s,' "$(rr_jstr "${RR_VERDICT:-}")"
   printf '"verdict_reasons":['
   local first=1 r
@@ -392,9 +373,6 @@ run_record_closeout() {
   echo "COMPUTED VERDICT: ${RR_VERDICT} -- $(printf '%s' "${RR_REASONS:-}" | tr '\n' ';' )"
   if [ "$RR_VERDICT" = "FAILED" ]; then
     echo "!!! COMPUTED VERDICT FAILED for $PROJECT_KEY. This is derived from git and the GitHub API after the run, not from anything the run said about itself."
-    if [ "${RR_DEBT_RULE:-}" = "active" ] && [ "${RR_DEBT_DELTA:-0}" -gt 0 ] 2>/dev/null; then
-      echo "!!! Debt rule TRIPPED: opened ${RR_ISSUES_OPENED}, closed ${RR_ISSUES_CLOSED} (delta +${RR_DEBT_DELTA}). Trial ends ${DEBT_RULE_TRIAL_END}; revert by setting DEBT_RULE_TRIAL_END=\"\" in lib/run-record.sh."
-    fi
     return 1
   fi
   return 0

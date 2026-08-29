@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Witness for lib/run-record.sh -- the COMPUTED verdict and the debt rule.
+# Witness for lib/run-record.sh -- the COMPUTED verdict.
 #
 # What this exists to prevent, in order of how badly it would hurt:
 #
@@ -8,18 +8,27 @@
 #     record still shows git's shas and gh's counts. A version of this library
 #     that trusted the agent for any one field would pass every other case here
 #     and be worthless: the whole point is that describing must stop paying.
-#  2. A DEBT RULE THAT CANNOT FAIL. Cases 5-9 drive it in both directions and
-#     through both of its off-switches. A rule never observed refusing anything
-#     is indistinguishable from one that cannot -- and this one is on a trial,
-#     so the expiry and the one-line revert are asserted too, not just the
-#     enforcement.
-#  3. UNMEASURED READING AS ZERO. Case 8: gh missing must never trip the rule.
-#     Zero opened and "we never looked" are different facts, and conflating
-#     them fails runs on evidence nobody collected.
-#  4. THE LEDGER LANDING IN THE REPO. Case 10. lib/sweep-loop-common.sh:601
+#  2. UNMEASURED READING AS ZERO. Case 5b: gh missing must never read as a real
+#     zero. Zero opened and "we never looked" are different facts.
+#  3. THE LEDGER LANDING IN THE REPO. Case 7. lib/sweep-loop-common.sh:601
 #     already consumes BLOCKERS.md in its own tree and froze vim-arcade's
 #     deploys for 18 hours on 2026-08-07. A second engine writer inside the
 #     checkout is the same bug again.
+#
+# THE DEBT RULE that used to live here (a run may not open more issues than it
+# closed) ran as a two-week trial, 2026-08-07..2026-08-21, and is RETIRED, not
+# just expired -- hf7y/scheduler#314. Two weeks of this account's own ledger
+# never once showed it tripping (issues_opened was 0 in every trial-window
+# run), and it had no measurable effect on the estate's issue-creation rate at
+# either boundary. Its scoping was also weaker than documented: opened counts
+# were as fresh as `since` allowed, correct for a real run window, but "author:
+# @me" resolves through one shared GitHub identity across all fifteen self-dev
+# accounts (`gh auth status` here shows account hf7y, no per-account token on
+# the write path) -- see hf7y/scheduler#310. The behavioral intent survives as
+# schedule/_standing-rules.md rule 0 (mechanism first) and rule 1 (close what
+# you resolved), which do not depend on that measurement. The NET-closed
+# WORKED credit below (closing more than you opened) is a different,
+# unretired feature and keeps its cases.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,7 +38,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 # shellcheck source=../lib/run-record.sh
 . "$LIB"
-for f in run_record_probe_git run_record_probe_gh run_record_debt_rule \
+for f in run_record_probe_git run_record_probe_gh \
          run_record_compute_verdict run_record_append run_record_line \
          run_record_closeout; do
   type "$f" >/dev/null 2>&1 || { echo "lib did not define $f"; exit 1; }
@@ -157,27 +166,16 @@ run_record_compute_verdict 0
 [ "$RR_VERDICT" = "IDLE" ] && ok "3 issues opened + 3 closed, nothing pushed -> IDLE" || bad "verdict=$RR_VERDICT"
 grep -q "nothing observable changed" <<<"$RR_REASONS" && ok "and says why" || bad "no reason given"
 
-echo "== 5. THE DEBT RULE FIRES: opened > closed is FAILED"
-RR_ISSUES_OPENED=3; RR_ISSUES_CLOSED=0; RR_GH=ok
-RR_TODAY="2026-08-07"
-run_record_compute_verdict 0
-[ "$RR_VERDICT" = "FAILED" ] && ok "3 opened / 0 closed -> FAILED" || bad "verdict=$RR_VERDICT"
-[ "$RR_DEBT_RULE" = "active" ] && ok "debt_rule=active" || bad "debt_rule=$RR_DEBT_RULE"
-[ "$RR_DEBT_DELTA" = "3" ] && ok "delta=+3" || bad "delta=$RR_DEBT_DELTA"
-grep -q "DEBT RULE" <<<"$RR_REASONS" && ok "the reason names the rule and its end date" || bad "reason silent"
-grep -q "$DEBT_RULE_TRIAL_END" <<<"$RR_REASONS" && ok "and prints the trial end date" || bad "end date not surfaced"
-
-echo "== 6. the rule is satisfied by breaking even, and by closing more"
-RR_ISSUES_OPENED=2; RR_ISSUES_CLOSED=2; run_record_compute_verdict 0
+echo "== 5. the NET-closed credit: breaking even is not a failure, closing more is WORKED"
+RR_ISSUES_OPENED=2; RR_ISSUES_CLOSED=2; RR_GH=ok; run_record_compute_verdict 0
 [ "$RR_VERDICT" != "FAILED" ] && ok "2 opened / 2 closed is not a failure" || bad "even trade failed"
 RR_ISSUES_OPENED=0; RR_ISSUES_CLOSED=2; run_record_compute_verdict 0
 [ "$RR_VERDICT" = "WORKED" ] && ok "closing 2 and opening 0 is WORKED" || bad "verdict=$RR_VERDICT"
 
-echo "== 6b. rc DOES NOT MASK EFFECTS (2026-08-19, gardien)"
+echo "== 5b. rc DOES NOT MASK EFFECTS (2026-08-19, gardien)"
 # gardien 2026-08-19: 43 commits pushed, 2 PRs merged, 2 issues closed, then
 # hit its turn ceiling. It recorded FAILED, byte-identical to a run that did
 # nothing at all. Effects must survive a nonzero rc.
-RR_TODAY="2026-08-07"
 RR_PUSHED=true; RR_COMMITS_ADDED=43; RR_PRS_MERGED=2
 RR_ISSUES_OPENED=0; RR_ISSUES_CLOSED=2; RR_GH=ok
 run_record_compute_verdict 1
@@ -185,7 +183,7 @@ run_record_compute_verdict 1
 grep -q "exited rc=1" <<<"$RR_REASONS" && ok "and the rc is still named in the reasons" || bad "rc hidden: $RR_REASONS"
 grep -q "merged 2 PR" <<<"$RR_REASONS" && ok "and the effects are still counted" || bad "effects lost: $RR_REASONS"
 
-echo "== 6c. a nonzero rc with NO effects is still FAILED"
+echo "== 5c. a nonzero rc with NO effects is still FAILED"
 RR_PUSHED=false; RR_COMMITS_ADDED=0; RR_PRS_MERGED=0
 RR_ISSUES_OPENED=0; RR_ISSUES_CLOSED=0
 run_record_compute_verdict 1
@@ -193,28 +191,7 @@ run_record_compute_verdict 1
 # reset what this block set, so the cases below see the state they expect
 unset RR_PUSHED; RR_COMMITS_ADDED=0; RR_PRS_MERGED=0
 
-echo "== 7. THE TRIAL EXPIRES ON ITS OWN (2026-08-21) -- it does not become policy by default"
-RR_ISSUES_OPENED=9; RR_ISSUES_CLOSED=0
-RR_TODAY="2026-08-22"; run_record_compute_verdict 0
-[ "$RR_DEBT_RULE" = "expired" ] && ok "past the end date -> expired" || bad "debt_rule=$RR_DEBT_RULE"
-[ "$RR_VERDICT" != "FAILED" ] && ok "and stops failing runs" || bad "expired rule still failing runs"
-RR_TODAY="2026-08-21"; run_record_compute_verdict 0
-[ "$RR_DEBT_RULE" = "active" ] && ok "ON the end date it is still active (inclusive)" || bad "debt_rule=$RR_DEBT_RULE"
-
-echo "== 8. THE ONE-LINE REVERT, and unmeasured never trips the rule"
-SAVED="$DEBT_RULE_TRIAL_END"
-DEBT_RULE_TRIAL_END=""            # <- the documented revert, exercised
-RR_ISSUES_OPENED=9; RR_ISSUES_CLOSED=0; RR_TODAY="2026-08-07"
-run_record_compute_verdict 0
-[ "$RR_DEBT_RULE" = "off" ] && ok "DEBT_RULE_TRIAL_END=\"\" turns it off -- the revert works" || bad "debt_rule=$RR_DEBT_RULE"
-[ "$RR_VERDICT" != "FAILED" ] && ok "and no run fails on it" || bad "still failing after revert"
-DEBT_RULE_TRIAL_END="$SAVED"
-RR_ISSUES_OPENED=""; RR_ISSUES_CLOSED=""; RR_GH=unavailable
-run_record_compute_verdict 0
-[ "$RR_DEBT_RULE" = "unmeasured" ] && ok "gh unavailable -> unmeasured" || bad "debt_rule=$RR_DEBT_RULE"
-[ "$RR_VERDICT" != "FAILED" ] && ok "UNMEASURED IS NOT ZERO: no run fails on evidence nobody collected" || bad "failed a run it never measured"
-
-echo "== 9. gh probe: a failing gh is an ERROR, distinguishable from a real zero"
+echo "== 6. gh probe: a failing gh is an ERROR, distinguishable from a real zero"
 STUB_ISSUES_OPENED=4 STUB_ISSUES_CLOSED=1 STUB_PRS_OPENED=1 STUB_PRS_MERGED=2 \
   run_record_probe_gh o/r 2026-08-07T00:00:00-05:00 >/dev/null
 [ "$RR_GH" = "ok" ] && [ "$RR_ISSUES_OPENED" = "4" ] && [ "$RR_PRS_MERGED" = "2" ] \
@@ -225,7 +202,7 @@ STUB_FAIL=1 run_record_probe_gh o/r 2026-08-07T00:00:00-05:00 >/dev/null
 RR_GH_BIN="$TMP/bin/nonexistent-gh" run_record_probe_gh o/r 2026-08-07T00:00:00-05:00 >/dev/null
 [ "$RR_GH" = "unavailable" ] && ok "a missing gh reports unavailable" || bad "gh=$RR_GH"
 
-echo "== 10. THE REFUSAL: the ledger must never be written inside a work tree"
+echo "== 7. THE REFUSAL: the ledger must never be written inside a work tree"
 fresh
 if run_record_append "$TMP/work/ledger.jsonl" '{"x":1}' >/dev/null 2>&1; then
   bad "wrote the ledger INTO the checkout -- the vim-arcade freeze, again"
@@ -236,17 +213,12 @@ fi
 run_record_append "$TMP/state/scheduler-runs/p.jsonl" '{"x":1}' >/dev/null 2>&1 \
   && ok "accepts a path outside any work tree" || bad "refused a legitimate state path"
 
-echo "== 11. append-only: a second run adds a line and rewrites nothing"
+echo "== 8. append-only: a second run adds a line and rewrites nothing"
 run_record_append "$TMP/state/scheduler-runs/p.jsonl" '{"x":2}' >/dev/null 2>&1
 [ "$(wc -l < "$TMP/state/scheduler-runs/p.jsonl")" = "2" ] && ok "two runs, two lines" || bad "line count wrong"
 [ "$(head -1 "$TMP/state/scheduler-runs/p.jsonl")" = '{"x":1}' ] && ok "the first record is untouched" || bad "an earlier record was rewritten"
 
-echo "== 12. the trial and its revert are legible IN THE CODE, not only in a commit message"
-grep -q '2026-08-21' "$LIB" && ok "the end date is in lib/run-record.sh" || bad "no end date in the source"
-grep -qi 'TO REVERT, ONE LINE' "$LIB" && ok "the one-line revert is spelled out where the rule lives" || bad "revert not documented in the source"
-grep -q 'TWO-WEEK TRIAL' "$LIB" && ok "it is marked as a trial" || bad "not marked as a trial"
-
-echo "== 13. the engine actually calls it, and folds a computed FAILED into rc"
+echo "== 9. the engine actually calls it, and folds a computed FAILED into rc"
 ENG="$ROOT/lib/sweep-loop-common.sh"
 grep -q 'source "$LIB_DIR_EARLY/run-record.sh"' "$ENG" && ok "engine sources the lib" || bad "lib is never sourced"
 grep -q 'run_record_closeout' "$ENG" && ok "engine calls run_record_closeout" || bad "closeout is never called"
@@ -262,7 +234,7 @@ grep -q 'RUN_RC=1' <<<"$(sed -n "${CALL_LINE},$((CALL_LINE+2))p" "$ENG")" \
   && ok "a computed FAILED sets RUN_RC -- it changes the run's exit status" \
   || bad "computed FAILED does not reach RUN_RC, so it is just another self-report"
 
-echo "== 14. a conf whose own prompt already names verdict.sh still gets a run record"
+echo "== 10. a conf whose own prompt already names verdict.sh still gets a run record"
 # hf7y/scheduler#259: crt and chezz both showed runs=0 in the fleet sensor
 # (~/.local/share/scheduler-runs/<key>.jsonl did not exist) on a night both
 # ran and finished. The issue's own diagnosis names the cause: their
@@ -277,7 +249,7 @@ echo "== 14. a conf whose own prompt already names verdict.sh still gets a run r
 # run_record_closeout from writing the ledger line? It must not -- the two
 # are unrelated mechanisms (append_verdict_closeout edits $PROMPT before
 # `claude -p` runs; run_record_closeout runs AFTER, unconditionally, per
-# lib/sweep-loop-common.sh:982 / case 13 above) -- but the issue was filed
+# lib/sweep-loop-common.sh:982 / case 9 above) -- but the issue was filed
 # on the theory that they are coupled, and nothing before this asserted
 # they are not.
 awk '/^append_verdict_closeout\(\) \{$/,/^\}$/' "$ROOT/lib/sweep-loop-common.sh" > "$TMP/avc.sh"
@@ -307,7 +279,7 @@ JOB_NAME=crt-nightly-batch; BRANCH=main
 START_TS=$(( $(date +%s) - 5 )); RUN_RC=0; STATUS=done
 RUN_LEDGER_FILE="$TMP/state/scheduler-runs/crt.jsonl"
 STUB_ISSUES_OPENED=0 STUB_ISSUES_CLOSED=0 STUB_PRS_OPENED=0 STUB_PRS_MERGED=0 \
-  run_record_closeout > "$TMP/closeout14.out" 2>&1
+  run_record_closeout > "$TMP/closeout10.out" 2>&1
 
 [ -f "$RUN_LEDGER_FILE" ] \
   && ok "the ledger file exists despite the closeout-text skip" \

@@ -173,14 +173,15 @@ abletim         | abletim@monkey         | 20m | live
 # Reads work, writes do not. Do not "tidy" any of the three.
 apms            | apms@monkey            | 20m | live
 
-# PAUSED 2026-08-06, Zach-directed: "For now, pause chezz for 1 week."
-# Playwright cannot launch a browser in that account (missing
-# libatk-1.0.so.0), so no gameplay commit can land there. UN-PAUSE ON OR
-# AFTER 2026-08-13 by changing `parked` to `live` below -- today that alone
-# is not enough, since this file is not yet authoritative: _paced.monkey.conf's
-# row must also go back to enabled=1 and FREEZE's `EXEMPT: chezz@monkey` must
-# also be uncommented. Both, or it stays dark, same as always.
-chezz           | chezz@monkey           | 6h | parked
+# UN-PAUSED 2026-08-28, Zach-directed ("1 and 3 so we can stop 3 in case it
+# hits a limit and 1 still works"). The 2026-08-06 pause was a missing
+# libatk-1.0.so.0 in this account; installed host-wide 2026-08-19 and
+# `npm run check` is green there (hf7y/chezz#41). 6h -> 20m per the CEILING
+# block: the parked-era ceiling is what left baudin at 0 dispatches in 24h.
+# chezz ALSO runs in GitHub Actions on free public-repo minutes
+# (hf7y/chezz#57). Nothing locks between the two; that is the point. Actions
+# is the runner that survives this row being turned off again.
+chezz           | chezz@monkey           | 20m | live
 
 # UN-PAUSED 2026-08-25, Zach-directed: "stand up abletim and crt and use the
 # ecosystem's native way to trigger them to develop unattended." The pause
@@ -207,23 +208,24 @@ crt             | crt@monkey             | 20m | live
 # condition -- "un-pause condition is Zach deciding what baudin is for" -- and
 # he decided it: baudin's Home Assistant instance is the store and the MCP
 # surface for the voice -> shopping-list loop (hf7y/baudin#42,
-# hf7y/groc-mangr#59). The CRON_HOST/CRON_ACCOUNT gap named here is closed in
-# schedule/baudin.conf in this same change.
-baudin          | baudin@monkey          | 6h | live
-secretaire      | secretaire@monkey      | 6h | parked
+# hf7y/groc-mangr#59). RATE 6h -> 20m 2026-08-27: un-parking left the
+# parked-era ceiling, 6x coarser than tempo's floor -- 0 dispatches in 24h.
+baudin          | baudin@monkey          | 20m | live
+# RE-ANIMATED 2026-08-28, Zach-directed: hf7y/secretaire#1 asked "re-animate,
+# park, or unregister" and he answered re-animate. This row was opened before
+# that answer and is correct under it. #1 is now the build ticket, and the
+# conf's brief no longer tells the run to record DONE and stop -- that
+# instruction was right for an empty queue and would otherwise have made every
+# armed run a no-op. 20m is the ceiling, not the pace.
+secretaire      | secretaire@monkey      | 20m | live
 
-# ADDED 2026-08-20, Zach-directed (hf7y/scheduler#228: "add it to the
-# roster. get read[y] to onboard others."). Not derivable from
-# _paced.monkey.conf or any schedule/dcp-gate-site.conf -- neither exists --
-# so bin/roster-diff.sh will name this row as a DIFF (in ROSTER, not in the
-# old files) and that is expected, not a bug: #228 found dcp-gate-site was in
-# a FOURTH state the old files have no vocabulary for at all (absent, not
-# merely parked), holding 15 of the estate's 37 open needs-human/question
-# issues uncounted by anything that walks the roster. `parked` here is
-# option 1 of #228's three -- "cheapest, and makes the absence a decision" --
-# not a decision to dispatch agents at client work. No unix account, no
-# _paced.monkey.conf row, no schedule/dcp-gate-site.conf: those are the
-# actual onboarding cost (realisateur#102's uid 3000-3099 convention) and are
-# NOT done here. account@host below is aspirational, matching baudin/crt's
-# staging convention above, not a claim the account exists.
-dcp-gate-site   | dcp-gate-site@monkey   | 6h | parked
+# ONBOARDED 2026-08-28, Zach-directed ("onboard dcp-gate-site"), closing the
+# FOURTH state hf7y/scheduler#228 found it in: absent rather than parked. The
+# 2026-08-20 row was aspirational -- #228's option 1, explicitly not a decision
+# to dispatch agents at client work. This is that decision, and #228's three
+# costs are paid in this order deliberately: uid 3016 account and both clones,
+# then schedule/dcp-gate-site.conf, then this row. do_live exits 5 BROKEN on a
+# live row whose account is missing, so merging this first would arm a break.
+# The conf carries what this file cannot: the repo's own never-do list, and
+# that its default branch is `master`.
+dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
