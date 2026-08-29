@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Witness for the DERIVED- reason bin/usage-paced-runner.sh writes when a run
-# records no verdict at all -- hf7y/scheduler#297. Drives the REAL block
-# lifted out of the dispatcher against a fake `gh`, never the live estate.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,20 +10,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 echo "derive-verdict-witness"
 
-# --- lift the real block -----------------------------------------------------
 BLOCK="$TMP/derive-verdict.sh"
-awk '/^# >>> derive verdict/,/^# <<< derive verdict/' "$RUNNER" > "$BLOCK"
+awk '/^derive_no_verdict_reason\(\) \{/,/^\}/' "$RUNNER" > "$BLOCK"
 grep -q 'derive_no_verdict_reason' "$BLOCK" \
-  || { echo "FAIL: no derive_no_verdict_reason() found between the markers -- lift failed"; exit 1; }
+  || { echo "FAIL: no derive_no_verdict_reason() extracted -- lift failed"; exit 1; }
 grep -q 'DERIVED-CONTINUE' "$BLOCK" \
   || { echo "FAIL: the extracted block never spells DERIVED-CONTINUE"; exit 1; }
 grep -q 'DERIVED-SILENT' "$BLOCK" \
   || { echo "FAIL: the extracted block never spells DERIVED-SILENT"; exit 1; }
 
-# A fake `gh` on PATH -- every case below is driven by what it prints, never
-# the live estate. Real `gh --jq` runs the expression through jq itself, so
-# this does too, rather than asserting on raw JSON the block under test never
-# sees.
 mkdir -p "$TMP/bin"
 cat > "$TMP/bin/gh" <<'EOF'
 #!/usr/bin/env bash
@@ -50,7 +42,6 @@ JSON
 JSON
     ;;
   old-red-pr)
-    # a failing PR, but updated BEFORE this run started -- not this run's doing
     cat <<'JSON'
 [{"number": 44, "updatedAt": "2000-01-01T00:00:00Z", "statusCheckRollup": [{"conclusion": "FAILURE"}]}]
 JSON
