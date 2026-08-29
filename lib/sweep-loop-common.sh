@@ -319,29 +319,12 @@ $block
 $PROMPT"
 }
 
-# read_resume_hint() -- hf7y/scheduler#297 step 3 / #345. bin/usage-paced-
-# runner.sh's resume_hint_for_project() checks whether THIS project's most
-# recent ledger row was a DERIVED-CONTINUE (a prior run that wrote no verdict
-# and left an open PR with a failing check, per derive_no_verdict_reason) and,
-# if so, exports SCHEDULER_RESUME_PR/SCHEDULER_RESUME_REPO into this job's
-# environment before dispatching it. This is the read side: turn those two
-# bare tokens into an instruction, same reading-order slot as
-# read_ceiling_breadcrumb above (context recovery, prepended right after it) --
-# but sourced from the ledger via the dispatcher's env rather than a file this
-# job wrote itself, because the fact being fed forward (gh's view of a PR
-# opened under a DIFFERENT account) is not something this job could have
-# recorded about itself.
-#
-# NOTHING TO CONSUME: unlike the breadcrumb file, there is no local state to
-# delete. The dispatcher recomputes this from the ledger's current tail on
-# every dispatch, so the hint stops appearing on its own as soon as a newer
-# ledger row for this project is anything other than that same
-# DERIVED-CONTINUE (a real verdict, a fixed PR, or a different NOT-DONE
-# reason). Unsetting the two env vars here only stops THIS process from
-# re-reading them if some future caller sourced this file twice in one shell.
-#
-# Globals in: SCHEDULER_RESUME_PR, SCHEDULER_RESUME_REPO. Global out: PROMPT.
-# Does not change dispatch outcome, same non-goal as read_ceiling_breadcrumb.
+# read_resume_hint() -- #297 step 3/#345. Turns SCHEDULER_RESUME_PR/_REPO
+# (set by bin/usage-paced-runner.sh's resume_hint_for_project(), from the
+# ledger, when this project's last dispatch left an open PR unresolved) into
+# a prompt prefix, same slot as read_ceiling_breadcrumb. No file to consume:
+# the dispatcher recomputes both vars from the ledger's current tail every
+# time, so the hint stops on its own once a newer row says something else.
 read_resume_hint() {
   [ -n "${SCHEDULER_RESUME_PR:-}" ] && [ -n "${SCHEDULER_RESUME_REPO:-}" ] || return 0
   echo "dispatcher found an open PR left by a no-verdict run -- prepending a resume instruction"
@@ -888,13 +871,9 @@ $PROMPT"
   # -- a bug-sweep tier can hit --max-turns exactly the same way batch does.
   read_ceiling_breadcrumb
 
-  # Resume hint from the DISPATCHER, if the last dispatch for this project
-  # ended with no verdict and an open PR the dispatcher could see -- see
-  # read_resume_hint() above. Same slot, right after the ceiling breadcrumb:
-  # both are "you're continuing something", and the two frequently co-occur
-  # (a --max-turns cutoff before verdict.sh runs is exactly how a run ends up
-  # both cut off AND with no verdict), so read in the order they were written
-  # above rather than interleaved.
+  # Right after the ceiling breadcrumb: the two frequently co-occur (a
+  # --max-turns cutoff before verdict.sh runs is exactly how a run ends up
+  # both cut off and with no verdict).
   read_resume_hint
 
   # claude's own output is tee'd to a per-run capture file (as well as
