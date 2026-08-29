@@ -13,17 +13,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 echo "resume-hint-witness"
 
-# --- half 1: resume_hint_for_project() in bin/usage-paced-runner.sh --------
-
 BLOCK="$TMP/resume-hint.sh"
 awk '/^resume_hint_for_project\(\) \{$/,/^\}$/' "$RUNNER" > "$BLOCK"
 grep -q 'resume_hint_for_project' "$BLOCK" \
   || { echo "FAIL: could not extract resume_hint_for_project() from $RUNNER"; exit 1; }
 
 export RUN_LEDGER_FILE="$TMP/ledger.tsv"
-# shellcheck disable=SC1090
 . "$ROOT/lib/run-ledger.sh"
-# shellcheck disable=SC1090
 . "$BLOCK"
 
 echo "== 1. no history at all -- no hint"
@@ -62,13 +58,10 @@ out_b="$(resume_hint_for_project other-one)"
   && ok "each project's hint is keyed to its own rows" \
   || bad "cross-contamination: hasrepo='$out_a' other-one='$out_b'"
 
-# --- half 2: read_resume_hint() in lib/sweep-loop-common.sh ----------------
-
 BLOCK2="$TMP/read-resume-hint.sh"
 awk '/^read_resume_hint\(\) \{$/,/^\}$/' "$SWEEP_LIB" > "$BLOCK2"
 grep -q 'read_resume_hint' "$BLOCK2" \
   || { echo "FAIL: could not extract read_resume_hint() from $SWEEP_LIB"; exit 1; }
-# shellcheck disable=SC1090
 . "$BLOCK2"
 
 echo "== 7. neither env var set -- PROMPT untouched"
