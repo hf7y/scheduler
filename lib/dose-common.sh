@@ -153,34 +153,25 @@ fetch_repo_file() {
 # a path, and because the path itself then lives in exactly one place.
 fetch_roster() { fetch_repo_file schedule/ROSTER; }
 
-# --- write path: hf7y/scheduler#291. `dose <project> --arm/--park` needs to
-# COMMIT, not just read -- and the same "no local clone" reasoning from
-# fetch_repo_file's header applies here doubled: a write through a clone that
-# could be stale would branch from stale truth, silently. Every call below is
-# a plain REST/GraphQL request through the SAME gh_as credential the reads
-# already use; nothing here touches a working tree.
+# --- write path (#291): branch/commit/PR/auto-merge, all via gh api/graphql,
+# no local clone -- same portability contract fetch_repo_file already has.
 
-# branch_head_sha <ref> -- the commit sha a branch currently points at.
-branch_head_sha() {
+branch_head_sha() {  # <ref> -> the sha it currently points at
   local ref="${1:?branch_head_sha needs a ref}"
   gh_as api "repos/$REPO_SLUG/git/ref/heads/$ref" --jq '.object.sha' 2>/dev/null
 }
 
-# create_repo_branch <new-branch> <base-ref> -- branch off base's CURRENT tip,
-# fetched fresh (never reused from an earlier call in the same run: the base
-# can move between a dry-run and the write that follows it).
-create_repo_branch() {
+create_repo_branch() {  # <new-branch> <base-ref>, off base's CURRENT tip
   local branch="${1:?create_repo_branch needs a branch name}" base="${2:?needs a base ref}" sha
   sha="$(branch_head_sha "$base")" || return 6
   [ -n "$sha" ] || return 6
   gh_as api "repos/$REPO_SLUG/git/refs" -f ref="refs/heads/$branch" -f sha="$sha" >/dev/null
 }
 
-# write_repo_file <path> <new-content> <branch> <commit-message> -- one commit
-# on an EXISTING branch. Needs the file's current sha on that branch (the
-# contents API refuses a write without it, the same optimistic-lock it uses
-# for humans in the web editor) so this re-reads it fresh rather than reusing
-# whatever fetch_repo_file returned earlier in the run.
+# write_repo_file <path> <new-content> <branch> <commit-message> -- one
+# commit. Re-fetches the file's sha on THIS branch first: the contents API
+# refuses a write without it (an optimistic lock), and a stale sha from an
+# earlier read in this run is exactly what that lock exists to catch.
 write_repo_file() {
   local rel="${1:?write_repo_file needs a path}" content="$2" branch="${3:?needs a branch}" msg="${4:?needs a commit message}"
   local sha
@@ -191,18 +182,16 @@ write_repo_file() {
     -f sha="$sha" -f branch="$branch" >/dev/null
 }
 
-# open_repo_pr <branch> <base> <title> <body> -- prints "<number> <url>".
-open_repo_pr() {
+open_repo_pr() {  # <branch> <base> <title> <body> -> "<number> <url>"
   local branch="${1:?}" base="${2:?}" title="${3:?}" body="${4:-}"
   gh_as api "repos/$REPO_SLUG/pulls" \
     -f title="$title" -f head="$branch" -f base="$base" -f body="$body" \
     --jq '"\(.number) \(.html_url)"'
 }
 
-# enable_pr_auto_merge <pr-number> -- best-effort GraphQL toggle (auto-merge
-# has no REST verb). Failure here is NOT fatal to the caller: the PR still
-# exists and a human can merge it by hand, which is strictly no worse than
-# today's fully-manual roster edit -- see bin/dose-project.sh's do_arm.
+# enable_pr_auto_merge <pr-number> -- GraphQL only, no REST verb exists for
+# it. Best-effort: failure isn't fatal to the caller, since the PR still
+# exists for a human to merge by hand -- no worse than today's manual edit.
 enable_pr_auto_merge() {
   local num="${1:?enable_pr_auto_merge needs a PR number}" node_id
   node_id="$(gh_as api "repos/$REPO_SLUG/pulls/$num" --jq '.node_id' 2>/dev/null)"

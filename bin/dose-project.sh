@@ -17,11 +17,9 @@
 # roster and then converge would have self-armed. --check/--apply/--now never
 # write schedule/ROSTER, only converge to whatever it already says.
 #
-# --arm/--park (hf7y/scheduler#291) DO write it, and are the one exception to
-# "dose converges TO the roster, it never writes it" above -- but they carry
-# their own guard, checked before any network call: a uid 3000-3099 self-dev
-# account is refused outright, so an agent still cannot arm itself, only a
-# person running this by hand can.
+# --arm/--park (#291) DO write it -- the one exception -- but refuse a uid
+# 3000-3099 self-dev caller outright, before any network call, so an agent
+# still cannot arm itself.
 #
 # RUNNER: tests/dose-project-witness.sh
 set -uo pipefail
@@ -63,11 +61,8 @@ for a in "$@"; do
 done
 [ -n "$PROJECT" ] || { echo "$CLI_NAME: name a project (see --help)" >&2; exit 2; }
 
-# --- #291: arming/parking is a decision reserved for a person at a terminal,
-# for the reason schedule/ROSTER's own header gives -- an agent that could
-# edit the roster and then converge would have self-armed, which is exactly
-# what the roster's human-only guard exists to prevent. Checked before any
-# network call, on the CLI's own uid, not on who the roster row names.
+# #291: arming/parking is a human action -- refused on the CLI's OWN uid,
+# before any network call, not on who the roster row names.
 if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   CALLER_UID="$(id -u)"
   if [ "$CALLER_UID" -ge 3000 ] && [ "$CALLER_UID" -le 3099 ]; then
@@ -114,12 +109,9 @@ fi
 ROW_ACCT_HOST="${ROW[1]}"; ROW_RATE="${ROW[2]}"; ROW_STATE="${ROW[3]}"
 ROW_ACCT="${ROW_ACCT_HOST%@*}"; ROW_HOST="${ROW_ACCT_HOST##*@}"
 
-# --- 3a. --arm / --park (#291): write the roster, never converge here. This
-# runs BEFORE the wrong-host check below on purpose -- writing schedule/ROSTER
-# is a GitHub API call, not a local crontab write, so unlike --apply/--now it
-# has no "wrong host" to be wrong about; it may run from any machine gh can
-# reach. The account guard above already refused a self-dev caller, so
-# reaching here means a person is at the terminal.
+# --- 3a. --arm / --park (#291): write the roster, never converge here. Runs
+# BEFORE the wrong-host check below -- a GitHub write has no "wrong host" to
+# be wrong about, unlike --apply/--now's local crontab write.
 roster_with_state() {  # <content> <project> <new-state>
   awk -v proj="$2" -v newstate="$3" '
     $0 ~ /^[[:space:]]*(#|$)/ { print; next }
@@ -147,9 +139,8 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
     exit 0
   fi
 
-  # Zach, 2026-08-28: refuse arming a project whose unix account does not
-  # exist yet -- do_live below would exit 5 BROKEN the moment this converges,
-  # so this catches it before spending a PR on a row that cannot work.
+  # do_live below exits 5 BROKEN the moment this converges if the account is
+  # missing -- catch it before spending a PR on a row that cannot work.
   if [ "$NEW_STATE" = "live" ]; then
     ACCT_OK=1
     if [ "$ROW_HOST" = "$HOST" ]; then

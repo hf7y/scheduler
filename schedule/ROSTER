@@ -12,11 +12,8 @@
 # ONLY A HUMAN EDITS THIS FILE'S `state` COLUMN. Editing a row here IS arming
 # or parking a project, once #80's `dose <project>` reads this file to
 # converge a host -- an agent doing that to itself is the one thing this
-# guard exists to prevent. `dose <project> --arm/--park` (#291) is the one
-# sanctioned writer: it refuses a uid 3000-3099 self-dev account outright, so
-# only a person running it by hand can move this column. Hand-editing still
-# works too (via a PR, same as any other file) -- #291 just means nobody has
-# to.
+# guard exists to prevent. `dose <project> --arm/--park` (#291) writes it on
+# a human's behalf, refusing a uid 3000-3099 self-dev caller outright.
 #
 # `state` is ONE field (live/parked) -- the whole point, per #79: it is what
 # makes "enabled=1 in one file but EXEMPT commented in another" unrepresentable.
