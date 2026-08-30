@@ -13,13 +13,10 @@
 # it was filed (hf7y/scheduler#58) only after being mistaken for expected
 # output. A suite whose failures nobody is shown is documentation.
 #
-# IT GATES. `suites` is the required status check on `main` and enforce_admins
-# is on -- hf7y/scheduler#87, closed 2026-08-11. `prose / prose` is NOT
-# required, so a PR with `suites` green and `prose` red reports
-# mergeStateStatus UNSTABLE and IS mergeable, while one with `suites` red
-# reports BLOCKED. An agent deciding whether it may merge its own PR reads
-# this block, so it must not say the door is open. Re-read it, do not trust it:
-#   gh api repos/hf7y/scheduler/branches/main/protection --jq '.required_status_checks.contexts'
+# IT GATES, and an agent deciding whether it may merge its own PR reads which
+# checks do (hf7y/scheduler#87, closed 2026-08-11). That is one settings change
+# from being wrong, so it is measured rather than written down here:
+# tests/branch-protection-witness.sh.
 
 name: tests
 
@@ -85,5 +82,11 @@ jobs:
       # which is a runner's condition): the result was identical to a normal
       # run. If that stops being true, the fix is an install step here, not a
       # witness taught to skip.
+      #
+      # ONE EXCEPTION, and it is the point of it: branch-protection-witness.sh
+      # reads this repo's branch protection from the API, because a hermetic
+      # fixture cannot answer what gates `main`. It stubs nothing and asserts
+      # nothing where it cannot read -- a CI GITHUB_TOKEN is not an admin, so
+      # here it says BLIND and passes zero checks rather than green.
       - name: Run every witness in tests/
         run: bash tests/run-all.sh
