@@ -58,17 +58,13 @@ export SCHEDULER_FREEZE_FILE="$T/schedule/FREEZE"
 # into this run.
 export SCHEDULER_FREEZE_CACHE="$T/freeze-cache"
 # ...and the ROSTER needs the same fixture treatment, for a stronger reason.
-# participant_enabled() asks schedule/ROSTER and NOTHING ELSE (#364): since
-# 2026-08-30 the conf's enabled column is not passed to it and cannot arm a
-# row. roster_state_for reads $REPO_ROOT/schedule/ROSTER unless
-# SCHEDULER_ROSTER_FILE points elsewhere, and the rows below are real project
-# names, so without this the LIVE roster decides whether this test dispatches
-# -- and every row in it is parked today, which would fail this witness for a
-# reason that has nothing to do with probe ordering.
-#
-# This file used to be EMPTY, which worked only because an unnamed row fell
-# back to the fixture's own enabled column. That fallback is the arming
-# surface #364 removed, so the fixture now states its rows outright.
+# participant_enabled asks schedule/ROSTER and nothing else (#364), and
+# roster_state_for reads $REPO_ROOT/schedule/ROSTER unless
+# SCHEDULER_ROSTER_FILE points elsewhere. The rows below are real project
+# names, so the LIVE roster -- parked throughout today -- would otherwise
+# decide whether this test dispatches, failing it for a reason that has
+# nothing to do with probe ordering. An EMPTY file worked only while an
+# unnamed row fell back to the conf column, so it now states its rows.
 { echo 'ecosim         | ecosim@monkey         | 20m | live'
   echo 'bibliothecaire | bibliothecaire@monkey | 20m | live'
   echo 'vim-arcade     | vim-arcade@monkey     | 20m | live'

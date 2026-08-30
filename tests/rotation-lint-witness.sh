@@ -163,14 +163,10 @@ echo "== 8. the enabled predicate still agrees with the live dispatcher"
 # changes how it reads `enabled`, this fails loud rather than letting the
 # check quietly disagree with what dispatches.
 #
-# THE MIRROR IS BROKEN ON PURPOSE (#364). Until 2026-08-30 the dispatcher had
-# a ROSTER-less fallback -- the identical `[ "${enabled// /}" = "1" ]` test --
-# and this section asserted the two stayed byte-identical. participant_enabled
-# no longer takes the conf column at all, so there is nothing left to mirror:
-# the `enabled` field this lint reads decides no dispatch anywhere. The lint
-# still earns its keep as a DUPLICATE/disagreement check over the rotation
-# files until #364 deletes them, but it must not be re-coupled to a dispatch
-# decision that has moved to schedule/ROSTER.
+# THE MIRROR IS BROKEN ON PURPOSE (#364). participant_enabled no longer takes
+# the conf column, so the identical `[ "${enabled// /}" = "1" ]` test this
+# section used to pin has nothing left to mirror. Assert the opposite: the
+# lint may keep parsing that field, and the dispatcher may not.
 RUNNER="$ROOT/bin/usage-paced-runner.sh"
 if sed -n '/^participant_enabled() {/,/^}/p' "$RUNNER" | grep -qF '${enabled// /}'; then
   bad "the dispatcher reads the conf's enabled column again -- the second arming surface is back (#364)"
@@ -188,10 +184,8 @@ if grep -qF 'case "$name" in '"''"'|\#*) continue ;; esac' "$RUNNER" \
 else
   bad "the blank/comment rule differs between the dispatcher and the lint"
 fi
-# AND both must read a final line with no trailing newline. schedule/
-# _paced.monkey.conf ends without one, so a bare `read` drops dcp-gate-site
-# from the rotation silently -- the lint guarded against this from the start
-# and the dispatcher did not until #364.
+# AND both must read an unterminated final line: _paced.monkey.conf ends with
+# no newline, and a bare `read` dropped dcp-gate-site from the rotation.
 if grep -qF '|| [ -n "$name" ]' "$RUNNER" && grep -qF '|| [ -n "$name" ]' "$LINT"; then
   ok "both read an unterminated final line, so neither drops the last row"
 else

@@ -356,30 +356,17 @@ roster_state_for() {
 
 # participant_enabled <name> <host> -- is this row live?
 # schedule/ROSTER decides, and it is the ONLY thing that decides (#282, #364).
-# IT DOES NOT TAKE THE CONF'S enabled COLUMN, and that is the point: a value
-# this function is never handed cannot become a second opinion about arming.
-# #79 called that disagreement unrepresentable; until now it was merely
-# outranked -- ROSTER won when it named a row, the conf column answered when
-# it did not, and which surface armed a project depended on which file had
-# heard of it.
-#
-# WHAT THE OUTRANKING COST (2026-08-25): schedule/_paced.monkey.conf carried
-# `crt|1|...` and `secretaire|1|...` -- both ARMED -- while ROSTER recorded
-# both `parked`, on Zach's own directives quoted in ROSTER's comments. Both
-# kept dispatching against a standing pause nobody revisited.
-#
-# A ROSTER MISS IS NOW A REFUSAL, AND IT SAYS SO. The fallback it replaces
-# existed so an un-onboarded project kept its pre-#282 behaviour; measured on
-# main 2026-08-30, no project anywhere is in that position -- ROSTER names
-# every one of _paced.monkey.conf's 18 rows, and every row in _paced.conf and
-# _paced.dexter.conf is enabled=0, so the fallback answered "not live" for all
-# of them anyway. `dose <project> --arm/--park` writes both files, so the only
-# way to reach this line is a hand-edit of a conf alone -- which is the act
-# this refusal exists to stop, not an onboarding path.
-#
-# NOT the rotation source. schedule/_paced.<host>.conf still supplies WHICH
-# rows exist and what command each runs; only the live/parked answer moved.
-# Deleting the file is #364, and it is gated on host mode, not on this.
+# It is not handed the conf's enabled column, so it cannot consult one: a value
+# never passed in is not a second opinion. #79 called that disagreement
+# unrepresentable and it was merely outranked -- which is how `crt|1|` and
+# `secretaire|1|` kept dispatching against a standing `parked` (2026-08-25).
+# A ROSTER miss is a logged refusal, not a fall-back to the conf. Measured on
+# main 2026-08-30 the fallback armed nothing: ROSTER names all 18 of
+# _paced.monkey.conf's rows, and every row on the other two hosts is enabled=0.
+# `dose <project> --arm/--park` writes both files, so the only way to reach it
+# was a hand-edit of a conf alone -- the act this refusal exists to stop.
+# NOT the rotation source: _paced.<host>.conf still supplies which rows exist
+# and what each runs. Deleting it is #364, gated on host mode, not on this.
 participant_enabled() {
   local name="$1" host="$2" rstate
   if rstate="$(roster_state_for "$name" "$host")"; then
@@ -420,9 +407,9 @@ elif [ "$PACED_HOST_MODE" = 1 ]; then
   # PACED_CONF holds roster_rows' CONF-shaped translation (name|enabled|weight|
   # cmd), while roster_state_for parses the roster's OWN shape (project |
   # account@host | rate | state). Pointing it at PACED_CONF would make every
-  # row unmatchable, roster_state_for would return 1 for everything, and host
-  # mode would fall back to the conf column silently -- the failure this fix
-  # exists to remove, wearing the fix's clothes.
+  # row unmatchable, so roster_state_for would return 1 for everything and the
+  # whole host would go dark (before #364, worse: it fell back to the conf
+  # column) -- the failure this fix exists to remove, wearing the fix's clothes.
   #
   # Exported rather than assigned because it IS the environment default
   # roster_state_for reads. Host mode is the only writer: account mode leaves
@@ -457,12 +444,8 @@ if [ ! -f "$PACED_CONF" ]; then
   log "FATAL no participants conf at $PACED_CONF [$PACED_CONF_SRC] host=$PACED_HOST"
   exit 1
 fi
-# `|| [ -n "$name" ]` so a final line with no trailing newline is still read.
-# MEASURED, not defensive: schedule/_paced.monkey.conf ends without one, so a
-# bare `read` sees 17 of its 18 rows and the last project is missing from the
-# rotation with no error anywhere. bin/rotation-lint.sh has carried this guard
-# since it was written ("a lint that silently skips the last line of a file is
-# worse than no lint"); the dispatcher it mirrors did not.
+# `|| [ -n "$name" ]` because schedule/_paced.monkey.conf ends with no trailing
+# newline: a bare `read` saw 17 of its 18 rows and dropped the last silently.
 while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
   case "$name" in ''|\#*) continue ;; esac
   name="${name// /}"

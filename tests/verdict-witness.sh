@@ -51,9 +51,7 @@ esac
 AGENT
   chmod +x "$TMP/agent.sh"
   echo "alpha|1|1|$TMP/agent.sh" > "$TMP/rot.conf"
-  # schedule/ROSTER is the only thing that arms a row (#364): the conf's
-  # enabled column is not passed to participant_enabled at all. PACED_HOST is
-  # pinned so the fixture row matches wherever this suite runs.
+  # ROSTER is the only arming surface (#364); PACED_HOST is pinned so the row matches.
   echo 'alpha | alpha@testhost | 20m | live' > "$TMP/ROSTER"
 
   # Seed a verdict as if left by an EARLIER run (case 4).

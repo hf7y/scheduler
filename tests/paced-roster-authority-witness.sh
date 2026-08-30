@@ -72,9 +72,8 @@ participant_enabled delta testhost \
   && ok "ROSTER live dispatches" \
   || bad "delta is live in ROSTER and did not dispatch"
 
-# NO ROW AT ALL IS A REFUSAL, not a fall-back to a second surface (#364).
-# The conf's enabled column used to answer here; the whole point of taking it
-# out of the signature is that there is no longer a value to answer WITH.
+# NO ROW AT ALL IS A REFUSAL, not a fall-back to a second surface (#364):
+# taking the conf column out of the signature leaves nothing to answer WITH.
 LOG="$TMP/run.log"; log() { echo "$*" >> "$LOG"; }
 participant_enabled epsilon testhost \
   && bad "epsilon has no ROSTER row -- an unnamed project must not dispatch" \
