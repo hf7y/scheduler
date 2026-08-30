@@ -365,7 +365,28 @@ elif [ "$PACED_HOST_MODE" = 1 ]; then
   . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
     echo "usage-paced-runner: host mode needs lib/dose-common.sh beside this script and it is not there. Refusing." >&2; exit 2; }
   _roster="$(fetch_roster)" || { echo "usage-paced-runner: host mode could not read schedule/ROSTER. Refusing to dispatch rather than fall back to a checkout." >&2; exit 2; }
-  PACED_CONF="$(mktemp)"; trap 'rm -f "$PACED_CONF"' EXIT
+  PACED_CONF="$(mktemp)"; SCHEDULER_ROSTER_FILE="$(mktemp)"
+  trap 'rm -f "$PACED_CONF" "$SCHEDULER_ROSTER_FILE"' EXIT
+  # BOTH READS COME FROM THE FETCHED BYTES (hf7y/scheduler#412). The rotation
+  # was already fetched; the per-project live/parked question was not, because
+  # roster_state_for (:280) defaults to $REPO_ROOT/schedule/ROSTER -- the
+  # checkout this mode exists to do without. A stale local `live` then beat a
+  # fetched `parked`, so a pushed `dose --park` did not stop a host-mode
+  # dispatch.
+  #
+  # A SECOND TEMPFILE, not PACED_CONF, and the distinction is load-bearing:
+  # PACED_CONF holds roster_rows' CONF-shaped translation (name|enabled|weight|
+  # cmd), while roster_state_for parses the roster's OWN shape (project |
+  # account@host | rate | state). Pointing it at PACED_CONF would make every
+  # row unmatchable, roster_state_for would return 1 for everything, and host
+  # mode would fall back to the conf column silently -- the failure this fix
+  # exists to remove, wearing the fix's clothes.
+  #
+  # Exported rather than assigned because it IS the environment default
+  # roster_state_for reads. Host mode is the only writer: account mode leaves
+  # it unset and keeps reading REPO_ROOT, unchanged.
+  printf '%s\n' "$_roster" > "$SCHEDULER_ROSTER_FILE"
+  export SCHEDULER_ROSTER_FILE
   printf '%s\n' "$_roster" | roster_rows > "$PACED_CONF"
   [ -s "$PACED_CONF" ] || { echo "usage-paced-runner: schedule/ROSTER names no project on $PACED_HOST. Refusing -- an empty rotation is indistinguishable from a parse failure." >&2; exit 2; }
   PACED_CONF_SRC="schedule/ROSTER via gh ($(grep -c . "$PACED_CONF") row(s), no checkout)"
