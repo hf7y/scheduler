@@ -124,7 +124,7 @@
 # live only where all three agree. Re-verify, don't trust this comment:
 #   bash bin/roster-diff.sh
 
-ecosim          | ecosim@monkey          | 20m | live
+ecosim          | ecosim@monkey          | 20m | parked
 bibliothecaire  | bibliothecaire@monkey  | 20m | live
 vim-arcade      | vim-arcade@monkey      | 20m | live
 realisateur     | realisateur@monkey     | 20m | live
