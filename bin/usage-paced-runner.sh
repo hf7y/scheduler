@@ -103,6 +103,120 @@ acct_of_prog() {
   printf '%s' "$a"
 }
 
+# --- the roster parser, hoisted above the side-effecting section -------------
+# Pure, and defined this early because the pull gate's escalation expands
+# "$PACED_HOST": unset under `set -u`, the third consecutive blocked tick aborted
+# instead of filing (order pinned by tests/host-mode-preflight-witness.sh).
+roster_rows() {
+  local line p ah rate state acct
+  while IFS= read -r line; do
+    case "$line" in ''|\#*) continue ;; esac
+    IFS='|' read -r p ah rate state <<<"$line"
+    p="$(printf '%s' "$p" | tr -d '[:space:]')"
+    ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+    [ -n "$p" ] || continue
+    [ "${ah##*@}" = "$PACED_HOST" ] || continue
+    acct="${ah%@*}"
+    # enabled is the roster's ONE state field -- the whole point of #79 is that
+    # live/parked cannot disagree with a second file. weight is emitted as 1
+    # because it is inert (#55) and this is a translation, not a revival.
+    case "$state" in
+      live)   printf '%s|1|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+      parked) printf '%s|0|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+    esac
+  done
+}
+
+# roster_state_for <project> <host> -- print live/parked for that project@host
+# row in schedule/ROSTER; return 1 if ROSTER is absent/unreadable or names no
+# row for it. A FUNCTION, not inlined, for the same reason roster_rows is:
+# tests/paced-roster-authority-witness.sh calls it directly.
+roster_state_for() {
+  local proj="$1" host="$2" f line p ah rate state
+  f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
+  [ -r "$f" ] || return 1
+  while IFS= read -r line; do
+    case "$line" in ''|\#*) continue ;; esac
+    IFS='|' read -r p ah rate state <<<"$line"
+    p="$(printf '%s' "$p" | tr -d '[:space:]')"
+    ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+    [ "$p" = "$proj" ] || continue
+    [ "${ah##*@}" = "$host" ] || continue
+    printf '%s' "$state"
+    return 0
+  done < "$f"
+  return 1
+}
+
+# participant_enabled <name> <host> -- is this row live?
+# schedule/ROSTER decides, and it is the ONLY thing that decides (#282, #364).
+# It is not handed the conf's enabled column, so it cannot consult one -- a
+# value never passed in is not a second opinion. That column merely OUTRANKED
+# ROSTER, which is how `crt|1|` and `secretaire|1|` kept dispatching against a
+# standing `parked` (2026-08-25). A ROSTER miss is a logged refusal now.
+# _paced.<host>.conf is still the rotation SOURCE; deleting it is #364.
+participant_enabled() {
+  local name="$1" host="$2" rstate
+  if rstate="$(roster_state_for "$name" "$host")"; then
+    [ "$rstate" = "live" ]
+    return
+  fi
+  log "SKIP $name -- schedule/ROSTER names no $name@$host row, and ROSTER is the only arming surface"
+  return 1
+}
+
+PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
+
+# --- --check: the host-mode arming preflight (hf7y/scheduler#364) ------------
+# IT CLEARS SUDO_USER ON PURPOSE. gh_as borrows $SUDO_USER's credential when root
+# has none, so `sudo PACED_HOST_MODE=1 ...` reads as the human and passes, while
+# the armed row reads as root -- no /root/.config/gh, no GH_TOKEN (monkey,
+# 2026-08-30) -- gets BLIND, and exits 2 every tick. Whether root gets one: #364.
+if [ "${1:-}" = --check ]; then
+  echo "usage-paced-runner --check -- host-mode arming preflight for $PACED_HOST"
+  if [ "$PACED_HOST_MODE" != 1 ]; then
+    echo "  REFUSE   PACED_HOST_MODE is not 1; this preflight describes host mode only." >&2
+    exit 2
+  fi
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "  REFUSE   not root -- host mode needs root, so an armed tick would exit 2." >&2
+    exit 2
+  fi
+  echo "  root     OK"
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+    echo "  identity ignoring SUDO_USER=$SUDO_USER -- the armed cron row will not have it"
+  fi
+  unset SUDO_USER
+  . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
+    echo "  REFUSE   lib/dose-common.sh is not beside this script." >&2; exit 2; }
+  if ! _r="$(fetch_roster 2>&1)"; then
+    echo "  roster   BLIND as root -- an armed tick would refuse and dispatch nothing:" >&2
+    printf '           %s\n' "$_r" >&2
+    exit 2
+  fi
+  _rows="$(printf '%s\n' "$_r" | roster_rows)"
+  _n="$(printf '%s\n' "$_rows" | grep -c . || true)"
+  if [ "$_n" -eq 0 ]; then
+    echo "  roster   OK, but it names no project on $PACED_HOST -- an armed tick would refuse." >&2
+    exit 2
+  fi
+  _live="$(printf '%s\n' "$_rows" | awk -F'|' '$2 == 1' | grep -c . || true)"
+  echo "  roster   OK -- $_n row(s) for $PACED_HOST, read as root over gh"
+  echo "  rotation $_live live, $(( _n - _live )) parked"
+  if [ "$_live" -eq 0 ]; then
+    echo "  tick 1   dispatches NOTHING -- logs 'no enabled participants ... nothing to dispatch'"
+  else
+    echo "  tick 1   may dispatch up to PACED_MAX_PER_TICK=${PACED_MAX_PER_TICK:-8} of $_live live row(s)"
+  fi
+  if [ -d "$REPO_ROOT/.git" ] && ! git -C "$REPO_ROOT" rev-parse HEAD >/dev/null 2>&1; then
+    echo "  checkout WARN -- git cannot read $REPO_ROOT as $(id -un) (usually 'dubious ownership')."
+    echo "           No parked row reaches the schedule/-clean gate, but the first LIVE one"
+    echo "           would, and it would log REFUSE instead of dispatching."
+  fi
+  exit 0
+fi
 if [ "$PACED_HOST_MODE" = 1 ]; then
   # Refuse rather than silently degrade: host mode without root cannot sudo to
   # the accounts, so every dispatch would fail one at a time and the tick would
@@ -311,73 +425,6 @@ fi
 # construction -- different paths, not different edits to one path. A host
 # with no host-scoped file reads _paced.conf exactly as before.
 # Design: vault:scheduler/DESIGN-NOTES.md "multi-machine parallelism".
-roster_rows() {
-  local line p ah rate state acct
-  while IFS= read -r line; do
-    case "$line" in ''|\#*) continue ;; esac
-    IFS='|' read -r p ah rate state <<<"$line"
-    p="$(printf '%s' "$p" | tr -d '[:space:]')"
-    ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
-    state="$(printf '%s' "$state" | tr -d '[:space:]')"
-    [ -n "$p" ] || continue
-    [ "${ah##*@}" = "$PACED_HOST" ] || continue
-    acct="${ah%@*}"
-    # enabled is the roster's ONE state field -- the whole point of #79 is that
-    # live/parked cannot disagree with a second file. weight is emitted as 1
-    # because it is inert (#55) and this is a translation, not a revival.
-    case "$state" in
-      live)   printf '%s|1|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
-      parked) printf '%s|0|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
-    esac
-  done
-}
-
-# roster_state_for <project> <host> -- print live/parked for that project@host
-# row in schedule/ROSTER; return 1 if ROSTER is absent/unreadable or names no
-# row for it. A FUNCTION, not inlined, for the same reason roster_rows is:
-# tests/paced-roster-authority-witness.sh calls it directly.
-roster_state_for() {
-  local proj="$1" host="$2" f line p ah rate state
-  f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
-  [ -r "$f" ] || return 1
-  while IFS= read -r line; do
-    case "$line" in ''|\#*) continue ;; esac
-    IFS='|' read -r p ah rate state <<<"$line"
-    p="$(printf '%s' "$p" | tr -d '[:space:]')"
-    ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
-    state="$(printf '%s' "$state" | tr -d '[:space:]')"
-    [ "$p" = "$proj" ] || continue
-    [ "${ah##*@}" = "$host" ] || continue
-    printf '%s' "$state"
-    return 0
-  done < "$f"
-  return 1
-}
-
-# participant_enabled <name> <host> -- is this row live?
-# schedule/ROSTER decides, and it is the ONLY thing that decides (#282, #364).
-# It is not handed the conf's enabled column, so it cannot consult one: a value
-# never passed in is not a second opinion. #79 called that disagreement
-# unrepresentable and it was merely outranked -- which is how `crt|1|` and
-# `secretaire|1|` kept dispatching against a standing `parked` (2026-08-25).
-# A ROSTER miss is a logged refusal, not a fall-back to the conf. Measured on
-# main 2026-08-30 the fallback armed nothing: ROSTER names all 18 of
-# _paced.monkey.conf's rows, and every row on the other two hosts is enabled=0.
-# `dose <project> --arm/--park` writes both files, so the only way to reach it
-# was a hand-edit of a conf alone -- the act this refusal exists to stop.
-# NOT the rotation source: _paced.<host>.conf still supplies which rows exist
-# and what each runs. Deleting it is #364, gated on host mode, not on this.
-participant_enabled() {
-  local name="$1" host="$2" rstate
-  if rstate="$(roster_state_for "$name" "$host")"; then
-    [ "$rstate" = "live" ]
-    return
-  fi
-  log "SKIP $name -- schedule/ROSTER names no $name@$host row, and ROSTER is the only arming surface"
-  return 1
-}
-
-PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 if [ -n "${PACED_CONF:-}" ]; then
   PACED_CONF_SRC="explicit PACED_CONF"
 elif [ "$PACED_HOST_MODE" = 1 ]; then
@@ -393,7 +440,7 @@ elif [ "$PACED_HOST_MODE" = 1 ]; then
   # on the one path where nobody is watching.
   . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
     echo "usage-paced-runner: host mode needs lib/dose-common.sh beside this script and it is not there. Refusing." >&2; exit 2; }
-  _roster="$(fetch_roster)" || { echo "usage-paced-runner: host mode could not read schedule/ROSTER. Refusing to dispatch rather than fall back to a checkout." >&2; exit 2; }
+  _roster="$(fetch_roster)" || { echo "usage-paced-runner: host mode could not read schedule/ROSTER as $(id -un) (SUDO_USER=${SUDO_USER:-unset}). Refusing to dispatch rather than fall back to a checkout. An armed cron row runs as root with SUDO_USER unset; run this script with --check as root to measure that identity before arming." >&2; exit 2; }
   PACED_CONF="$(mktemp)"; SCHEDULER_ROSTER_FILE="$(mktemp)"
   trap 'rm -f "$PACED_CONF" "$SCHEDULER_ROSTER_FILE"' EXIT
   # BOTH READS COME FROM THE FETCHED BYTES (hf7y/scheduler#412). The rotation
@@ -825,7 +872,8 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin SCHEDULER_RESUME_PR=$_resume_pr SCHEDULER_RESUME_REPO=$_resume_repo $cmd"
   fi
 
-  log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF mode=$([ "$PACED_HOST_MODE" = 1 ] && echo host || echo account))"
+  # conf= is an mktemp path in host mode; [$PACED_CONF_SRC] is the only part that names a surface.
+  log "DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF [$PACED_CONF_SRC] mode=$([ "$PACED_HOST_MODE" = 1 ] && echo host || echo account))"
   start=$(date +%s)
   # shellcheck disable=SC2086
   if $cmd; then rc=0; else rc=$?; fi
