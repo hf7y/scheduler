@@ -167,6 +167,45 @@ PULL_STATE="$STATE_DIR/pull-block.state"
 PULL_ESCALATE_AFTER="${PACED_PULL_ESCALATE_AFTER:-3}"
 PULL_FILE_TIMEOUT="${PACED_PULL_FILE_TIMEOUT:-60}"
 
+# file_to_realisateur <what> <text> -- escalate OUTSIDE this checkout. Both
+# escalations use it; it sits inside the pull-gate markers because
+# tests/pull-escalation-witness.sh lifts that block whole.
+#
+# TRAP: AN ESCALATION MUST NOT LIVE INSIDE WHAT IT REPORTS ON. This resolved
+# "$REPO_ROOT/bin/scheduler" FIRST, so a frozen checkout -- the one condition
+# it exists to report -- was also the condition that disabled it (2026-08-30:
+# scheduler@monkey on `bashified`, no bin/scheduler, logged "FILED FAILED --
+# scheduler command not found" and went dark). PATH first now, the checkout
+# still after it, covering #276's bare cron PATH. `gh` LAST and it is the half
+# that carries this: `scheduler` is not in the verb build (only `dose` is), so
+# no PATH lookup finds a host-wide one, while `gh` is a verb on every account.
+# Not a new channel -- `scheduler -i` is itself a gh issue create on that repo
+# (bin/scheduler:1304), minus the checkout it reads REPO_URL from. No --label:
+# `idea` does not exist on hf7y/realisateur and a missing named label makes gh
+# record NOTHING (bin/scheduler:854).
+file_to_realisateur() {
+  local what="$1" text="$2" bin title bf
+  bin="$(command -v scheduler 2>/dev/null || true)"
+  [ -n "$bin" ] || { [ -x "$REPO_ROOT/bin/scheduler" ] && bin="$REPO_ROOT/bin/scheduler"; }
+  if [ -n "$bin" ] && timeout "$PULL_FILE_TIMEOUT" "$bin" -i realisateur "$text" >/dev/null 2>&1; then
+    log "FILED $what to realisateur's inbox"
+    return 0
+  fi
+  # Title indexes (GitHub rejects one over 256), body records. --body-file,
+  # not --body: this text carries backticks and $(.
+  title="$(printf '%s\n' "$text" | head -1 | cut -c1-200)"
+  bf="$(mktemp)"; printf '%s\n' "$text" > "$bf"
+  if timeout "$PULL_FILE_TIMEOUT" gh issue create --repo hf7y/realisateur \
+       --title "$title" --body-file "$bf" >/dev/null 2>&1; then
+    rm -f "$bf"
+    log "FILED $what to realisateur as a GitHub issue (no usable \`scheduler\`${bin:+ -- $bin failed}; filed with \`gh\` from outside the checkout)"
+    return 0
+  fi
+  rm -f "$bf"
+  log "FILED FAILED -- could not file $what to realisateur${bin:+ via $bin} and \`gh issue create\` also failed; it exists in this log only"
+  return 1
+}
+
 # Records that this tick's pull did NOT advance, and escalates once the same
 # cause has repeated PULL_ESCALATE_AFTER ticks running. State is "<n> <reason>
 # <filed>"; a change of reason restarts the count, so an unrelated blip cannot
@@ -184,23 +223,10 @@ pull_blocked() {  # $1 = short reason key   $2 = the line to log
   if [ "$n" -ge "$PULL_ESCALATE_AFTER" ]; then
     log "PULL FROZEN -- $REPO_ROOT has not advanced for $n consecutive tick(s) (cause: $reason). Deployed code on this host is STALE and a merged fix cannot reach it. NOT auto-resolved: a dirty tree here can hold the only copy of a record (hf7y/scheduler#61, #75)."
     if [ "$filed" = "0" ]; then
-      # Prefer this checkout's own bin/scheduler over bare `scheduler` on
-      # PATH: this call runs from a cron/dispatcher environment, and PATH
-      # there has no guarantee of carrying whatever a login shell has (#276
-      # -- `command -v scheduler` was silently false here, and the missing
-      # `else` meant the escalation dropped with no log line at all).
-      _sched_bin="$REPO_ROOT/bin/scheduler"
-      [ -x "$_sched_bin" ] || _sched_bin="$(command -v scheduler 2>/dev/null || true)"
-      if [ -z "$_sched_bin" ]; then
-        log "FILED FAILED -- scheduler command not found (checked $REPO_ROOT/bin/scheduler and PATH); the pull freeze exists in this log only"
-      elif timeout "$PULL_FILE_TIMEOUT" "$_sched_bin" -i realisateur "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG" >/dev/null 2>&1; then
+      if file_to_realisateur "the pull freeze" "PULL FROZEN on $PACED_HOST as $(id -un): $REPO_ROOT has not pulled for $n consecutive dispatcher ticks (cause: $reason). Deployed scheduler code there is stale -- merged fixes cannot reach that account until a human clears it. Evidence: $LOG"; then
         filed=1
-        log "FILED the pull freeze to realisateur's inbox"
         printf '%s %s %s\n' "$n" "$reason" "$filed" > "$PULL_STATE"
-      else
-        log "FILED FAILED -- could not file the pull freeze to realisateur (command failed or timed out); it exists in this log only"
       fi
-      unset _sched_bin
     fi
   fi
 }
@@ -843,20 +869,9 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       log "METABOLISM $name -- COULD NOT stamp expires_at (job_state=${job_state:-<unset>}); it will keep dispatching"
     fi
     # File it where a human and realisateur both read. A brake nobody is told
-    # about is an outage that looks like calm.
-    # Same PATH-independence fix as the pull-freeze escalation above (#276):
-    # prefer this checkout's own bin/scheduler over a bare PATH lookup, and
-    # say so when neither resolves instead of dropping the escalation silently.
-    _sched_bin="$REPO_ROOT/bin/scheduler"
-    [ -x "$_sched_bin" ] || _sched_bin="$(command -v scheduler 2>/dev/null || true)"
-    if [ -z "$_sched_bin" ]; then
-      log "FILED FAILED -- scheduler command not found (checked $REPO_ROOT/bin/scheduler and PATH); $name's give-up exists in this log only"
-    elif "$_sched_bin" -i realisateur "GAVE-UP: $name declared IMPOSSIBLE on $PACED_HOST -- ${vreason:-no reason recorded}. Metabolism reduced (expires_at stamped). Renew: rm ${job_state:-<unset>}/expires_at" >/dev/null 2>&1; then
-      log "FILED $name's give-up to realisateur's inbox"
-    else
-      log "FILED FAILED -- could not file $name's give-up to realisateur; it exists in this log only"
-    fi
-    unset _sched_bin
+    # about is an outage that looks like calm. It had the pull freeze's defect
+    # byte for byte, so it shares the fix rather than a second copy of it.
+    file_to_realisateur "$name's give-up" "GAVE-UP: $name declared IMPOSSIBLE on $PACED_HOST -- ${vreason:-no reason recorded}. Metabolism reduced (expires_at stamped). Renew: rm ${job_state:-<unset>}/expires_at"
   fi
 
   unset _resume_pr _resume_repo
