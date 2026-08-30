@@ -27,7 +27,10 @@
 # USAGE_PROBE_MODEL. Plus:
 #   PACED_CONF        (explicit participants file; otherwise host-resolved)
 #   PACED_HOST        (short hostname; overrides which host-scoped conf is picked)
-#   USAGE_GATE        (~/.local/bin/usage-gate.sh)
+#   USAGE_GATE        (~/.local/bin/usage-gate.sh; beside this script in host
+#                      mode, which runs as root so ~ is /root's)
+#   NODE_BIN_DIR      (this account's newest ~/.nvm/versions/node/*/bin) the
+#                      dir holding `claude`, when discovery guesses wrong
 #   PACED_FORCE       (0)  1 = skip the gate AND tempo, run the next participant now (testing)
 #   PACED_MAX_PER_TICK (8) hard cap on dispatches in one tick, so a single cron
 #                      firing can't monopolize the flock indefinitely if the
@@ -120,14 +123,37 @@ PTR="$STATE_DIR/rotation.idx"
 GATE_ERROR_STREAK_FILE="$STATE_DIR/gate-error-streak.state"
 GATE_ERROR_STREAK_THRESHOLD="${GATE_ERROR_STREAK_THRESHOLD:-5}"
 
-USAGE_GATE="${USAGE_GATE:-$HOME/.local/bin/usage-gate.sh}"
-[ -x "$USAGE_GATE" ] || USAGE_GATE="$SELF_DIR/usage-gate.sh"
-NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+# Host mode runs as root (it refuses otherwise, above), so `$HOME/.local/bin`
+# there is /root's and names nothing -- it reached the real gate only by
+# FAILING the -x test, which is resolution by accident. Say it instead.
+# Account mode keeps its two-step order byte for byte: 18 accounts use it.
+if [ "$PACED_HOST_MODE" = 1 ]; then
+  USAGE_GATE="${USAGE_GATE:-$SELF_DIR/usage-gate.sh}"
+else
+  USAGE_GATE="${USAGE_GATE:-$HOME/.local/bin/usage-gate.sh}"
+  [ -x "$USAGE_GATE" ] || USAGE_GATE="$SELF_DIR/usage-gate.sh"
+fi
 
-# mandark reaches `claude` through nvm; dexter has a native binary in
-# ~/.local/bin and no nvm at all. Prepend the node dir only when it exists,
-# and always APPEND ~/.local/bin (cron's default PATH omits it) -- appending
-# can add a resolution but can never shadow one that already worked.
+# node_bin_dir -- THIS account's `claude` dir, discovered. A FUNCTION for the
+# same reason acct_of_prog is one: tests/paced-node-bin-witness.sh calls it.
+#
+# It replaces a literal /home/zach/.nvm/.../v25.2.1/bin -- one person's home,
+# one node version -- tried FIRST by every account on every host. Monkey, the
+# only host that dispatches, does not use it: every cron-shaped PATH this repo
+# builds to reach `claude` there (bin/provision-selfdev-user.sh:174,
+# bin/setup-selfdev-project.sh:97, this file's own sudo line) names
+# /usr/local/bin and ~/.local/bin and no node dir. The literal stays LAST, as
+# mandark's fallback, so that host resolves exactly as it did.
+node_bin_dir() {
+  local newest
+  newest="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  printf '%s' "${newest:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+}
+NODE_BIN_DIR="${NODE_BIN_DIR:-$(node_bin_dir)}"
+
+# Prepend the node dir only when it exists, and always APPEND ~/.local/bin
+# (cron's default PATH omits it) -- appending can add a resolution but can
+# never shadow one that already worked.
 [ -d "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
 export PATH="$PATH:$HOME/.local/bin"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -143,6 +169,15 @@ fi
 [ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
 log() { echo "$(date -Is) $*" >> "$LOG"; }
+
+# THE MISS IS LOUD NOW. `[ -d ]` above says nothing when false, so a host that
+# could not reach `claude` logged what one that could logged: nothing. To the
+# log, not stderr -- cron mails stderr to nobody. NOT a refusal: the gate
+# probes with curl and python3 (never `claude`), host mode replaces PATH for
+# the dispatch anyway, and the engine re-prepends its own NODE_BIN_DIR, so
+# exiting would darken hosts that work today over a PATH this process
+# does not own.
+command -v claude >/dev/null 2>&1 || log "NODE-BIN MISS -- no \`claude\` on PATH after resolution (NODE_BIN_DIR=$NODE_BIN_DIR, $([ -d "$NODE_BIN_DIR" ] && echo present || echo ABSENT)). Not refusing: pacing does not need it. But a dispatch that reaches \`claude -p\` from this environment produces nothing."
 
 # >>> pull gate
 # --- pull before dispatch (2026-07-24) ---------------------------------------
