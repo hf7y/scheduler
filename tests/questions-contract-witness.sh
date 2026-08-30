@@ -1,30 +1,27 @@
 #!/usr/bin/env bash
-# Witness for the QUESTIONS.md ANSWER CONTRACT (rules A-D, 2026-07-29).
+# Witness for the ANSWER CONTRACT (rules A-D, 2026-07-29).
 #
-# What the contract is: a `> ` reply is the most authoritative input this
-# system takes, and until 2026-07-29 it was the only one with NO admission
-# control -- ideas are parked by default, machine-state claims are
-# re-probed rather than quoted, and an answer was simply obeyed. The
-# failure that names the gap is a question asked from a STALE PREMISE, so
-# a correct reply directs action at a world that no longer exists. Rules
-# A-D authorize the actor to notice that, without demoting the answer.
+# What the contract is: a reply is the most authoritative input this system
+# takes, and until 2026-07-29 the only one with NO admission control -- an
+# answer was simply obeyed. The failure that names the gap is a question
+# asked from a STALE PREMISE, so a correct reply directs action at a world
+# that no longer exists. Rules A-D authorize the actor to notice that,
+# without demoting the answer.
 #
-# Why a witness and not just prose: the rules are prose, and prose decays.
-# Two copies of them exist in this repo and they must not drift -- the body
-# `scheduler ask` writes into the GitHub issue it opens (the copy the person
-# answering actually reads), and `examples/nightly-batch.md.template`'s
-# answer-processing step (where the rules bind at run time). A rule dropped
-# from either is a silent hole, so absence here is a FAILURE, never a pass.
+# Why a witness and not prose: the rules are prose, and prose decays. They
+# have ONE home now -- the issue body `scheduler ask` writes, read by both
+# the person answering and the actor acting on the answer. Absence there is
+# a silent hole, so it is a FAILURE here, never a pass.
 #
-# The contract used to have a third home, `examples/QUESTIONS.md.template`,
-# copied into every new project by `scheduler ask`. #66 (2026-08-07) retired
-# that channel and hf7y/realisateur#293 deleted the file; section 3 below now
-# asserts the REFUSAL that replaced the copy, because a re-grown QUESTIONS.md
-# in a repo that had none is the exact failure the sunset exists to stop.
-#
-# A fourth assertion block used to cover bin/questions-lint.sh's own entry-
-# parsing regression; that tool was retired with the rest of the QUESTIONS.md
-# machinery (hf7y/scheduler#234) and its coverage retired with it.
+# Two other homes are gone. `examples/QUESTIONS.md.template` was copied into
+# every new project until #66 (2026-08-07) retired the channel and
+# hf7y/realisateur#293 deleted it -- section 2 asserts the REFUSAL that
+# replaced it, because a re-grown QUESTIONS.md in a repo that had none is the
+# failure the sunset exists to stop. `examples/nightly-batch.md.template` held
+# a second copy for scaffolded projects; hf7y/realisateur#744 holds that
+# procedure once instead, so the six assertions pinning it went with it -- one
+# copy cannot drift from itself. A fourth block covered bin/questions-lint.sh,
+# retired with the rest of the QUESTIONS.md machinery (#234).
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -48,16 +45,7 @@ has "$CANON" 'irreversible'                                "B -- names the irrev
 has "$CANON" 'standing direction'                          "C -- extract the standing direction"
 has "$CANON" 'no clean-check reports|NO OUTPUT'            "D -- no clean-check reports"
 
-echo "== 2. run-time binding: examples/nightly-batch.md.template"
-NB="$ROOT/examples/nightly-batch.md.template"
-has "$NB" 'direction, not instruction'                     "A -- present in the answer-processing step"
-has "$NB" 're-probe the premise'                           "B -- present in the answer-processing step"
-has "$NB" 'REVERSIBLE'                                     "B -- reversible half named"
-has "$NB" 'IRREVERSIBLE'                                   "B -- irreversible half named"
-has "$NB" 'standing direction'                             "C -- present in the answer-processing step"
-has "$NB" 'clean-check'                                    "D -- present in the answer-processing step"
-
-echo '== 3. `scheduler ask` REFUSES the retired file channel'
+echo '== 2. `scheduler ask` REFUSES the retired file channel'
 # Real invocation, not a grep of the source: what matters is that a project
 # still configured for the markdown channel gets nothing written. Before
 # hf7y/realisateur#293 this call CREATED $GEN, re-growing a retired file in a

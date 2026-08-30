@@ -22,8 +22,8 @@
 # terminal tab without asking for it first).
 #
 # Expects: ~/reports/<project>/LATEST.md per project (see
-# nightly-batch-loop.sh / nightly-batch.md.template for how those get
-# written). Silently no-ops if nothing exists yet -- this is meant to be
+# nightly-batch-loop.sh for how those get written). Silently no-ops if
+# nothing exists yet -- this is meant to be
 # safe to run before any project has ever produced a report.
 #
 # Also prints anything sitting in QUESTIONS.md across every registered
