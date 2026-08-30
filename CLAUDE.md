@@ -1,12 +1,17 @@
 # CLAUDE.md
 
-## Push permission (2026-07-22, human-directed)
+## Landing work (2026-08-30, reaped: this granted what the remote refuses, #417)
 
-Claude may push committed changes directly to `origin/main` without
-asking each time, for ordinary work in this repo. Flag every such push in
-the next report/summary (what was pushed, why, and how to revert it —
-`git revert <sha>`). This does not license skipping review of what goes
-into a commit in the first place, only the push step itself.
+Open a pull request and let the checks land it; never commit to local `main`.
+Direct pushes are refused here for everyone, this repo's own automation
+included. The 2026-07-22 grant this replaces licensed exactly what the server
+already rejected, so agents found out by failing. What gates a merge is not
+restated here, because it moves — ask:
+
+```
+gh api repos/hf7y/scheduler/branches/main/protection \
+  --jq '{admins: .enforce_admins.enabled, checks: .required_status_checks.contexts}'
+```
 
 
 
