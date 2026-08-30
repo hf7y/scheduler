@@ -170,8 +170,8 @@ against: which facts the machinery records and which views print them.
 ## COMMANDS
 
 Run `scheduler --help` — the authoritative, terse list lives there (one source,
-not retyped here). The non-obvious ones: `explain` narrates how the system
-works; `status <project>` (or a bare project name) is the offline per-project
+not retyped here). The non-obvious ones: `status <project>` (or a bare project
+name) is the offline per-project
 deep-dive — for a conf setting `CRON_ACCOUNT` it reads "last scheduled run"
 from THAT account's home via `sudo -n -u <acct>`, saying `BLIND` with the
 account and path if that read fails rather than falling back to `$HOME` and
