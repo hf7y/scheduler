@@ -126,17 +126,14 @@ grep -q 'write_repo_file "\$PACED_REL"' "$ROOT/bin/dose-project.sh" \
   && ok "dose --arm/--park still writes both files, matching the split above" \
   || bad "dose no longer writes the paced conf -- either the split collapsed (good, update this witness) or arming is now half-applied"
 
-# --- 5. DEFECT, PINNED: host mode re-reads the checkout it exists to avoid --
-# Host mode fetches ROSTER over gh and refuses to "fall back to a checkout"
-# (bin/usage-paced-runner.sh:334-341) -- then participant_enabled calls
-# roster_state_for, which reads $REPO_ROOT/schedule/ROSTER (:280), REPO_ROOT
-# being the script's own tree (:55), fetch or no fetch. A local `live` beats a
-# fetched `parked`: the stale-clone dependency the mode exists to remove.
-#
-# One-line fix, for whoever owns the runner: host mode should set
-# SCHEDULER_ROSTER_FILE at the fetch (:280 honours it; nothing sets it today)
-# so both reads come from the same bytes. IF YOU FIXED IT, invert these cases.
-echo "== 5. host mode vs a local checkout's ROSTER (defect, pinned as observed)"
+# --- 5. WHICH ROSTER: SCHEDULER_ROSTER_FILE, else the checkout ---------------
+# This case pinned a DEFECT until #412: host mode fetched ROSTER over gh, then
+# roster_state_for read $REPO_ROOT/schedule/ROSTER regardless, so a stale local
+# `live` beat a fetched `parked`. #412 exports SCHEDULER_ROSTER_FILE from the
+# fetch; tests/host-mode-roster-source-witness.sh drives that end to end.
+# What is left to pin HERE is the resolution rule underneath it: with the
+# variable unset the checkout answers, so ACCOUNT MODE (18) is unchanged.
+echo "== 5. which ROSTER roster_state_for reads when SCHEDULER_ROSTER_FILE is unset"
 eval "$(sed -n '/^roster_rows() {/,/^}/p'        "$RUNNER")"
 eval "$(sed -n '/^roster_state_for() {/,/^}/p'   "$RUNNER")"
 eval "$(sed -n '/^participant_enabled() {/,/^}/p' "$RUNNER")"
@@ -152,14 +149,22 @@ enabled="$(printf '%s' "$row" | cut -d'|' -f2)"
   && ok "the gh fetch materialises a parked row as enabled=0" \
   || bad "roster_rows gave enabled='$enabled' for a parked row, expected 0"
 
+LOG="$TMP/run.log"; log() { echo "$*" >> "$LOG"; }
 REPO_ROOT="$TMP/stale"
-participant_enabled p "$enabled" h \
-  && ok "OBSERVED: a stale local ROSTER saying live overrides the fetched parked row (the defect)" \
-  || bad "the local ROSTER no longer wins -- if you fixed this, invert this case and case 5b"
+unset SCHEDULER_ROSTER_FILE
+participant_enabled p h \
+  && ok "with the variable unset it answers from \$REPO_ROOT/schedule/ROSTER (account mode, unchanged)" \
+  || bad "account mode stopped reading the checkout's ROSTER -- 18 accounts dispatch through this"
+SCHEDULER_ROSTER_FILE="$TMP/fetched-ROSTER"
+printf 'p | p@h | 20m | parked\n' > "$SCHEDULER_ROSTER_FILE"
+participant_enabled p h \
+  && bad "SCHEDULER_ROSTER_FILE is set and parked, and the checkout's live won anyway (#412 regressed)" \
+  || ok "SCHEDULER_ROSTER_FILE outranks the checkout, which is what host mode relies on (#412)"
+unset SCHEDULER_ROSTER_FILE
 REPO_ROOT="$TMP/stale/no-checkout-here"
-participant_enabled p "$enabled" h \
-  && bad "with no local ROSTER the fetched parked row must decide, and it did not" \
-  || ok "with no checkout at all, the fetched parked row decides correctly"
+participant_enabled p h \
+  && bad "with no ROSTER readable at all it must refuse, and it dispatched" \
+  || ok "no ROSTER readable at all -> refuse; there is no conf column to fall back to (#364)"
 
 printf '\narming-precedence-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

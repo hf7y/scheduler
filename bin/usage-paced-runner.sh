@@ -354,33 +354,27 @@ roster_state_for() {
   return 1
 }
 
-# participant_enabled <name> <conf-enabled-field> <host> -- is this row live?
-# schedule/ROSTER decides (#282) whenever it names a row for name@host; the
-# conf's own enabled column is consulted ONLY when ROSTER has no such row, so
-# a project not yet onboarded onto ROSTER fails toward its previous behaviour
-# (the conf column) instead of going dark silently.
-#
-# WHY THIS MATTERS, found while wiring it (2026-08-25): schedule/_paced.
-# monkey.conf carries `crt|1|...` and `secretaire|1|...` today -- both
-# ARMED -- while schedule/ROSTER records both `parked`, on Zach's own
-# directives quoted in ROSTER's comments ("CRT also needs to pause pending
-# Zach work"; secretaire "de-animated ... record DONE and stop"). Nothing
-# before this function read the second file, so both kept dispatching
-# against a standing pause nobody revisited. This is the disagreement #79
-# and #282 exist to make unrepresentable.
-#
-# The fallback line below (`[ "${enabled// /}" = "1" ]`) is byte-identical to
-# the raw conf-column test bin/rotation-lint.sh mirrors -- tests/rotation-
-# lint-witness.sh section 8 asserts that, so a future change to this test
-# fails loud there instead of letting the lint quietly disagree with what
-# the fallback path dispatches.
+# participant_enabled <name> <host> -- is this row live?
+# schedule/ROSTER decides, and it is the ONLY thing that decides (#282, #364).
+# It is not handed the conf's enabled column, so it cannot consult one: a value
+# never passed in is not a second opinion. #79 called that disagreement
+# unrepresentable and it was merely outranked -- which is how `crt|1|` and
+# `secretaire|1|` kept dispatching against a standing `parked` (2026-08-25).
+# A ROSTER miss is a logged refusal, not a fall-back to the conf. Measured on
+# main 2026-08-30 the fallback armed nothing: ROSTER names all 18 of
+# _paced.monkey.conf's rows, and every row on the other two hosts is enabled=0.
+# `dose <project> --arm/--park` writes both files, so the only way to reach it
+# was a hand-edit of a conf alone -- the act this refusal exists to stop.
+# NOT the rotation source: _paced.<host>.conf still supplies which rows exist
+# and what each runs. Deleting it is #364, gated on host mode, not on this.
 participant_enabled() {
-  local name="$1" enabled="$2" host="$3" rstate
+  local name="$1" host="$2" rstate
   if rstate="$(roster_state_for "$name" "$host")"; then
     [ "$rstate" = "live" ]
     return
   fi
-  [ "${enabled// /}" = "1" ]
+  log "SKIP $name -- schedule/ROSTER names no $name@$host row, and ROSTER is the only arming surface"
+  return 1
 }
 
 PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
@@ -413,9 +407,9 @@ elif [ "$PACED_HOST_MODE" = 1 ]; then
   # PACED_CONF holds roster_rows' CONF-shaped translation (name|enabled|weight|
   # cmd), while roster_state_for parses the roster's OWN shape (project |
   # account@host | rate | state). Pointing it at PACED_CONF would make every
-  # row unmatchable, roster_state_for would return 1 for everything, and host
-  # mode would fall back to the conf column silently -- the failure this fix
-  # exists to remove, wearing the fix's clothes.
+  # row unmatchable, so roster_state_for would return 1 for everything and the
+  # whole host would go dark (before #364, worse: it fell back to the conf
+  # column) -- the failure this fix exists to remove, wearing the fix's clothes.
   #
   # Exported rather than assigned because it IS the environment default
   # roster_state_for reads. Host mode is the only writer: account mode leaves
@@ -450,10 +444,12 @@ if [ ! -f "$PACED_CONF" ]; then
   log "FATAL no participants conf at $PACED_CONF [$PACED_CONF_SRC] host=$PACED_HOST"
   exit 1
 fi
-while IFS='|' read -r name enabled rest; do
+# `|| [ -n "$name" ]` because schedule/_paced.monkey.conf ends with no trailing
+# newline: a bare `read` saw 17 of its 18 rows and dropped the last silently.
+while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
   case "$name" in ''|\#*) continue ;; esac
   name="${name// /}"
-  participant_enabled "$name" "$enabled" "$PACED_HOST" || continue
+  participant_enabled "$name" "$PACED_HOST" || continue
   rest="${rest#"${rest%%[![:space:]]*}"}"
   weight=1
   case "$rest" in
