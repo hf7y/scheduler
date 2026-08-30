@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
 # branch-protection-witness.sh -- which checks actually gate `main`, read from
-# the API rather than asserted in a comment.
+# the API rather than asserted in a comment. An agent decides whether it may
+# merge its own PR from this. `prose` NOT being required is the half that
+# matters: `suites` green + `prose` red is UNSTABLE and IS mergeable, `suites`
+# red is BLOCKED.
 #
-# RUNNER: tests/run-all.sh
-# WHY: an agent decides whether it may merge its own PR from this fact, and it
-# is one settings change from being wrong with nothing to say so. `prose` NOT
-# being required is the half that matters -- a PR with `suites` green and
-# `prose` red is UNSTABLE and IS mergeable; one with `suites` red is BLOCKED.
-#
-# THE ONE WITNESS HERE THAT REACHES THE NETWORK. It stubs nothing, and where it
-# cannot read protection it says BLIND and asserts nothing.
+# RUNNER: tests/run-all.sh. THE ONE WITNESS HERE THAT REACHES THE NETWORK: it
+# stubs nothing, and asserts nothing where it cannot read protection.
 set -uo pipefail
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/harness.sh"
 
 REPO="${BRANCH_PROTECTION_REPO:-hf7y/scheduler}"
 BRANCH="${BRANCH_PROTECTION_BRANCH:-main}"
 
-# THE CONTRACT (hf7y/scheduler#87, closed 2026-08-11). `suites` gates; `prose`
-# runs on every PR and deliberately does not.
+# THE CONTRACT (hf7y/scheduler#87). `suites` gates; `prose` deliberately does not.
 REQUIRED=("suites")
 ADVISORY=("prose / prose")
 
