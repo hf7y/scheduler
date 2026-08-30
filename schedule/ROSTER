@@ -200,7 +200,7 @@ chezz           | chezz@monkey           | 20m | parked
 # 2026-08-25, not assumed:
 #   verdict=RUN project=crt open=12 blocked=0 actionable=12 closed7d=30
 #   drive=12 want_min=120
-crt             | crt@monkey             | 20m | live
+crt             | crt@monkey             | 20m | parked
 
 # UN-PAUSED 2026-08-26, Zach-directed. The pause stated its own release
 # condition -- "un-pause condition is Zach deciding what baudin is for" -- and
