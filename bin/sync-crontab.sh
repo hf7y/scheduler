@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # sync-crontab.sh -- read every ../schedule/*.conf entry and rewrite the REAL
-# crontab's scheduler-managed block to match. THE ONE AND ONLY WRITER of cron
-# lines for scheduler-managed jobs; lib/sweep-loop-common.sh no longer edits
+# crontab's scheduler-managed block to match. THE ONE AND ONLY WRITER of the
+# lines BETWEEN its own markers; lib/sweep-loop-common.sh no longer edits
 # crontab itself.
+#
+# IT IS NOT THE ONLY WRITER OF CRON, corrected 2026-08-29. `dose <p> --apply`
+# writes the RUNNER line into an account's crontab OUTSIDE these markers,
+# carrying this file's own tag (bin/dose-project.sh:271, :291) -- deliberate
+# since #81 put the tick rate in schedule/ROSTER. They meet at the
+# carry-forward ~:675 and in the tag-collision guard.
 #
 #   register     drop a schedule/<project>.conf and run this
 #   reschedule   edit its SWEEP_CRON/BATCH_CRON and run this

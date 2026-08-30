@@ -129,11 +129,15 @@ runner_resolve() {  # $1=repo root  $2=PACED_HOST  $3=explicit PACED_CONF
 }
 
 # Compare only the branches BOTH implementations have. The runner carries one
-# extra branch the library deliberately does not -- a legacy absolute path into
-# mandark's old checkout, for a copied-not-symlinked install whose repo cannot
-# be located. bin/scheduler cannot reach that state: it refuses on an
-# unlocatable checkout before it ever resolves a rotation (see its SCHED_ROOT
-# block). Stated here so the gap is a decision on the record, not an oversight.
+# extra branch the library deliberately does not: PACED_HOST_MODE=1, which
+# takes the rotation from schedule/ROSTER over `gh` with no checkout at all
+# (bin/usage-paced-runner.sh:328-345). bin/scheduler has no host mode, so
+# there is nothing on the library side to compare it against.
+#
+# CORRECTED 2026-08-29. This used to call that branch "a legacy absolute path
+# into mandark's old checkout" -- deleted 2026-08-16 by de1f01c (#230), with
+# host mode in its place, so the comment named the wrong rung. The rungs in
+# order are asserted in tests/arming-precedence-witness.sh.
 for case_spec in "both alpha" "both beta" "shared-only alpha"; do
   set -- $case_spec
   repo="$TMP/$1"; host="$2"
