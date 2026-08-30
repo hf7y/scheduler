@@ -126,7 +126,7 @@
 
 ecosim          | ecosim@monkey          | 20m | live
 bibliothecaire  | bibliothecaire@monkey  | 20m | parked
-vim-arcade      | vim-arcade@monkey      | 20m | live
+vim-arcade      | vim-arcade@monkey      | 20m | parked
 realisateur     | realisateur@monkey     | 20m | parked
 scheduler       | scheduler@monkey       | 20m | live
 groc-mangr      | groc-mangr@monkey      | 20m | parked
