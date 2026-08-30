@@ -208,7 +208,7 @@ crt             | crt@monkey             | 20m | live
 # surface for the voice -> shopping-list loop (hf7y/baudin#42,
 # hf7y/groc-mangr#59). RATE 6h -> 20m 2026-08-27: un-parking left the
 # parked-era ceiling, 6x coarser than tempo's floor -- 0 dispatches in 24h.
-baudin          | baudin@monkey          | 20m | live
+baudin          | baudin@monkey          | 20m | parked
 # RE-ANIMATED 2026-08-28, Zach-directed: hf7y/secretaire#1 asked "re-animate,
 # park, or unregister" and he answered re-animate. This row was opened before
 # that answer and is correct under it. #1 is now the build ticket, and the
