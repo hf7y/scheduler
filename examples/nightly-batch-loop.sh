@@ -14,8 +14,8 @@
 #
 # NOT wired up anywhere yet. To actually use: copy this per project,
 # fill in the config block, add a REAL .claude/commands/nightly-batch.md
-# (see ../examples/nightly-batch.md.template) to that project's repo, then
-# add a crontab entry (see README.md's "Open decisions" for timing).
+# to that project's repo, then add a crontab entry (see README.md's
+# "Open decisions" for timing).
 
 JOB_NAME="vkv-inventory-nightly-batch"
 PROJECT_KEY="vkv-inventory"  # SAME key as the bug-sweep wrapper's vkv-inventory copy --
