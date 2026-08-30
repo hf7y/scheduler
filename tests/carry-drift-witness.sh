@@ -21,13 +21,6 @@
 # DERIVED, NOT LISTED. The carried set is computed as "tracked on both
 # branches" rather than hardcoded, so carrying a fourth script is covered the
 # moment it lands instead of when someone remembers to add it here.
-#
-# hf7y/scheduler#222 added two things on top of the byte-identical check
-# above: a carried file's OWN sibling references must resolve on the branch
-# that ships it too (see the dependency check inside the loop below), and on
-# a pull request the "main" side is the PR's proposed HEAD, not origin/main
-# (see REF_MAIN below) -- comparing against origin/main is exactly why #219's
-# broken carry passed its own PR and only went red on main after merging.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/witness-common.sh"
@@ -40,20 +33,15 @@ echo "carry-drift-witness"
 # caught by CI on this witness's own first run, which is the correct place for
 # a check about deploy drift to be caught.
 #
-# ON A PULL REQUEST, though, origin/main does not yet carry the change under
-# test -- actions/checkout for `pull_request` leaves HEAD at the PR's own
-# content (GitHub's merge of the PR into its base), which is exactly "what
-# main would look like if this merged". Diffing THAT against origin/bashified
-# moves the failure to where it can be fixed before landing, instead of
-# guaranteeing a red main the instant a carried file's PR merges (#222).
-if [ -n "${CARRY_REF_MAIN:-}" ]; then
-  REF_MAIN="$CARRY_REF_MAIN"
-elif [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
-  REF_MAIN="HEAD"
-else
-  REF_MAIN="origin/main"
-fi
+# TWO REFS, TWO QUESTIONS. "Is main carried onto bashified?" is a property of
+# the repo, so REF_MAIN is origin/main in EVERY context. #222 asked it of a PR's
+# HEAD, which the push-only carry job (tests.yml:42) makes guaranteed-false
+# until merge -- the one required check stayed red and #367 and #374 sat BLOCKED
+# on their own fix. "Does this content reach for a sibling bashified does not
+# ship?" IS about the proposed change, so that half keeps HEAD, as REF_SRC.
+REF_MAIN="${CARRY_REF_MAIN:-origin/main}"
 REF_BASH="${CARRY_REF_BASHIFIED:-origin/bashified}"
+if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then REF_SRC=HEAD; else REF_SRC="$REF_MAIN"; fi
 
 # CI CHECKOUTS ARE SHALLOW. actions/checkout fetches the one ref under test, so
 # origin/bashified is usually absent and this witness would go BLIND on every
@@ -120,13 +108,13 @@ while IFS= read -r f; do
   # branch does not ship (#219 added `$SELF_DIR/tempo.sh` to a carried file
   # without carrying tempo.sh in the same PR; only caught by hand in #220).
   # Cheap approximation, not a real dependency graph: grep the AUTHORED text
-  # (REF_MAIN, i.e. what this PR proposes) for the two shapes every script
+  # (REF_SRC, i.e. what this PR proposes) for the two shapes every script
   # here actually uses to reach a sibling -- `$SELF_DIR/../lib/<name>` (or any
   # similarly-derived `$VAR/lib/<name>`) and `$SELF_DIR/<name>` -- and require
   # the resolved path to exist on REF_BASH. Not a claim that every such
   # reference is reached unconditionally at runtime; a hit here is a lead to
   # check, same as this whole witness is a lead and not a full deploy replay.
-  content="$(git show "$REF_MAIN:$f" 2>/dev/null)"
+  content="$(git show "$REF_SRC:$f" 2>/dev/null)"
   deps="$( { grep -oE '\$[A-Za-z_][A-Za-z0-9_]*/(\.\./)?lib/[A-Za-z0-9_.-]+\.sh' <<<"$content" \
                | sed -E 's#.*/(lib/[A-Za-z0-9_.-]+\.sh)#\1#'
              grep -oE '\$SELF_DIR/[A-Za-z0-9_.-]+\.sh' <<<"$content" \
