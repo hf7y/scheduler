@@ -23,13 +23,12 @@ mean, where each number comes from, the conventions (`*`, `> ` replies,
 
 ## DESCRIPTION
 
-`scheduler` is a thin, offline-first wrapper over the scheduler repo's
-own tracking files (`focus/`, `questions/`, `~/reports/<project>/`) and
-the paced runner's logs. It is not a parser
-or database: subcommands mostly open the real file in `$EDITOR` or print
-a screen assembled by `grep`/`awk`. Nothing here spends an AI call
-unless you explicitly ask (`status --claude` / `--interactive`) — see
-`docs/offline-first-checks.md` for the pattern.
+`scheduler` is a thin, offline-first wrapper over the scheduler repo's own
+tracking files (`focus/`, `questions/`, `~/reports/<project>/`) and the paced
+runner's logs. It is not a parser or database: subcommands mostly open the real
+file in `$EDITOR` or print a screen assembled by `grep`/`awk`. Nothing here
+spends an AI call unless you explicitly ask (`status --claude` /
+`--interactive`) — see `docs/offline-first-checks.md` for the pattern.
 
 ## THE GLANCE (no arguments)
 
@@ -170,17 +169,15 @@ against: which facts the machinery records and which views print them.
 
 ## COMMANDS
 
-Run `scheduler --help` — the authoritative, terse list lives there (one
-source, not retyped here). The non-obvious ones in brief: `explain`
-narrates how the whole system works; `status <project>` (or a bare
-project name) is the offline per-project deep-dive — for a project whose
-conf sets `CRON_ACCOUNT`, its "last scheduled run" state is read from
-THAT account's home via `sudo -n -u <acct>`, and if that read fails the
-line says `BLIND` naming the account and path rather than falling back to
-`$HOME` (which would report a job that ran fine as never-run); `sweep` is the
-read-mostly repo-state backstop; `-i <project> "idea"` files one GitHub
-issue on that project's own repo, writing nothing locally (omit "idea" to
-open `$EDITOR` instead); `next` prints the real
+Run `scheduler --help` — the authoritative, terse list lives there (one source,
+not retyped here). The non-obvious ones: `explain` narrates how the system
+works; `status <project>` (or a bare project name) is the offline per-project
+deep-dive — for a conf setting `CRON_ACCOUNT` it reads "last scheduled run"
+from THAT account's home via `sudo -n -u <acct>`, saying `BLIND` with the
+account and path if that read fails rather than falling back to `$HOME` and
+calling a job that ran fine never-run; `sweep` is the read-mostly repo-state
+backstop; `-i <project> "idea"` files one GitHub issue on that project's repo,
+writing nothing locally (omit "idea" for `$EDITOR`); `next` prints the real
 upcoming rotation order; `pacing` shows the live usage-gate verdict and
 bin-drift check.
 
