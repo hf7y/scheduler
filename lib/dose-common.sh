@@ -84,20 +84,17 @@ crontab_write() {
 }
 
 # --- 1. bootstrap: read schedule/ROSTER from GitHub, not a local clone -----
-# WHOSE CREDENTIAL READS THE ROSTER. `dose host` runs as root, and root has no
-# `gh` auth on monkey -- gh is authenticated for the human. Measured
-# 2026-08-11: the first root run returned BLIND with "please run gh auth
-# login", which is the honest answer and a useless one.
+# WHOSE CREDENTIAL READS THE ROSTER. root has no `gh` auth on monkey (measured
+# 2026-08-11 and again 2026-08-30); gh is authenticated for the human. Root
+# holding a permanent token to read one public-ish file would be a standing
+# secret for a transient need, so a human-invoked converger borrows $SUDO_USER's
+# instead: no new secret, nothing on disk, cannot outlive the command.
 #
-# The fix is NOT to give root a token. A host converger is invoked BY a human
-# with sudo, so the human's own read-only credential is right there in
-# $SUDO_USER, and borrowing it for one `gh api` read installs no new secret
-# anywhere, leaves nothing on disk, and cannot outlive the command. Root
-# holding a GitHub token so it can read one public-ish file would be a
-# permanent credential to solve a transient need.
-#
-# The dispatch TICK never needs this: it runs usage-paced-runner.sh, which
-# reads its participants from the clone. Only the converger reads the roster.
+# BUT THE DISPATCH TICK READS THE ROSTER NOW (hf7y/scheduler#412), which retires
+# the "only the converger reads it" premise this block used to carry. A cron
+# tick has no human and so no $SUDO_USER to borrow: HOST MODE reads as root, and
+# gets BLIND. It fails closed, but it never works. Run `usage-paced-runner.sh
+# --check` as root before arming; whether root gets a token is #364.
 gh_as() {
   if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
     sudo -n -u "$SUDO_USER" "$GH_BIN" "$@"
