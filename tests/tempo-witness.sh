@@ -206,11 +206,16 @@ EOF
 chmod +x "$H/gate.sh"
 export DISPATCH_MARK="$T/dispatched"
 conf="$T/paced.conf"; echo "solo|1|$H/own-run solo batch" > "$conf"
+# schedule/ROSTER is the only thing that arms a row (#364): the conf's enabled
+# column is not passed to participant_enabled at all, so a fixture that does
+# not name its row in a roster dispatches nothing.
+roster="$T/ROSTER"; echo 'solo | solo@monkey | 20m | live' > "$roster"
 RLOG="$H/.local/share/scheduler-paced-runner/run.log"
 RLEDGER="$H/.local/share/scheduler-paced-runner/ledger.tsv"
 
 tick() {
   HOME="$H" PACED_CONF="$conf" PACED_HOST=monkey PACED_MAX_PER_TICK=1 \
+    SCHEDULER_ROSTER_FILE="$roster" \
     USAGE_GATE="$H/gate.sh" RUN_LEDGER_FILE="$RLEDGER" \
     SCHEDULER_FREEZE_FILE="$T/no-such-freeze" \
     TEMPO_REPO="fake/repo" TEMPO_CACHE_MIN=0 \

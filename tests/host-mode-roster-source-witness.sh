@@ -109,16 +109,17 @@ got="$(roster_state_for alpha testhost || true)"
 [ "$got" = parked ] && ok "roster_state_for reports the fetched 'parked', not the checkout's 'live'" \
   || bad "roster_state_for still answers from the checkout: got '$got', want parked"
 
-if participant_enabled alpha 1 testhost; then
+LOG="$TMP/run.log"; log() { echo "$*" >> "$LOG"; }
+if participant_enabled alpha testhost; then
   bad "alpha would still be DISPATCHED -- a pushed park does not stop host mode"
 else
   ok "participant_enabled refuses alpha: the pushed park stops the dispatch"
 fi
 
-# The conf column is the fallback, and a fetched park must outrank it too --
-# in host mode PACED_CONF is generated with enabled=1 for live rows, so this
-# is the shape a real tick presents.
-if participant_enabled beta 1 testhost; then
+# The mirror, so the fix is not a blanket refusal: a row the fetch calls live
+# still dispatches. There is no conf column left to outrank (#364) -- the
+# fetched bytes are the only thing participant_enabled can read.
+if participant_enabled beta testhost; then
   ok "beta, live in both copies, still dispatches (the fix is not a blanket refusal)"
 else
   bad "beta stopped dispatching -- host mode now refuses rows that ARE live"

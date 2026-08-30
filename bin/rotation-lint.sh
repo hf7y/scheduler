@@ -20,21 +20,36 @@
 #
 # WHAT DOUBLE DISPATCH COSTS, so this reads as a defect and not as tidiness:
 # each host runs bin/usage-paced-runner.sh out of the same git-tracked repo
-# but reads its OWN rotation file. A project enabled in two of them is
-# dispatched by two machines, into one git history, with no shared lock
-# (decided 2026-07-24: full local peer, no cross-host rotation). The same
+# but reads its OWN rotation file. A project dispatched by two machines lands
+# in one git history with no shared lock (decided 2026-07-24: full local peer,
+# no cross-host rotation). Until #364 the `enabled` column was what put it
+# there, which is why this file reads that column. Now schedule/ROSTER's state
+# is, so what finding 1 catches is the two files disagreeing BEFORE anyone
+# copies that disagreement into ROSTER. The same
 # hazard on the FIXED-CRON side is already confirmed live rather than
 # theoretical -- see the aedile/vkv-inventory notes in `_paced.conf` -- and
 # bin/sync-crontab.sh asserts it there. This is the rotation-vs-rotation
 # direction, which nothing checked.
 #
+# THE `enabled` COLUMN NO LONGER ARMS ANYTHING (2026-08-30, #364). This lint
+# was written when that column was the dispatch decision. It is not any more:
+# bin/usage-paced-runner.sh's participant_enabled takes <name> <host> and asks
+# schedule/ROSTER, full stop -- it is not handed a conf column and cannot
+# consult one. So read finding 1 below as a disagreement about INTENT between
+# two files, not as a live double dispatch; the dispatching kind is two `live`
+# ROSTER rows for one project, which is ROSTER's own shape and not visible
+# here. Finding 2 survives intact, because pooling is still per LINE.
+#
+# The files themselves go in #364, gated on host mode having dispatched from
+# ROSTER; this lint goes with them.
+#
 # Checks (both are zero-false-positive -- there is no legitimate reason for
 # either, which is what makes them safe to run every sweep):
 #   1. a project enabled=1 in MORE THAN ONE rotation file
-#      -- cross-host double dispatch;
+#      -- two files stating opposite intent about one project;
 #   2. a project listed MORE THAN ONCE in the SAME rotation file
-#      -- if several are enabled, that is same-host double dispatch (the
-#      runner has no dedup: it pools every enabled line it reads); if only
+#      -- if several are live in ROSTER, that is same-host double dispatch (the
+#      runner has no dedup: it pools every line ROSTER calls live); if only
 #      one is, the other is a shadowed line that will bite the next edit,
 #      because "flip the wtul line" is then ambiguous.
 #
@@ -122,8 +137,9 @@ for f in "${FILES[@]}"; do
     # form -- the comment test runs BEFORE whitespace is stripped, so a line
     # indented with a space is a live participant while `# name|1|...` is not.
     # tests/rotation-lint-witness.sh asserts this predicate still matches the
-    # dispatcher's, so a change there fails loud instead of silently making
-    # this check disagree with what actually dispatches.
+    # dispatcher's, so the two cannot disagree about which lines are rows.
+    # It no longer asserts a shared `enabled` test: that mirror was cut with
+    # the arming surface it mirrored (#364).
     case "$name" in ''|\#*) continue ;; esac
     name="${name// /}"
     [ -n "$name" ] || continue
@@ -134,10 +150,10 @@ for f in "${FILES[@]}"; do
     if [ "${SEEN_IN_FILE[$key]}" -gt 1 ] && [ -z "${DUP_REPORTED[$key]:-}" ]; then
       DUP_REPORTED["$key"]=1
       echo "$(basename "$f"):$lineno: DUPLICATE '$name' is listed more than once in this file"
-      echo "    Every enabled copy is pooled separately by bin/usage-paced-runner.sh (it does"
-      echo "    not dedup), so two enabled copies double-dispatch on this host alone. One"
-      echo "    enabled and one not is a shadowed line: the next 'flip the $name line' is"
-      echo "    ambiguous. Delete the stale copy."
+      echo "    Every copy is pooled separately by bin/usage-paced-runner.sh (it does not"
+      echo "    dedup), so if schedule/ROSTER calls '$name' live both copies dispatch on this"
+      echo "    host alone. The next 'flip the $name line' is ambiguous either way."
+      echo "    Delete the stale copy."
       findings=$((findings + 1))
     fi
 
@@ -153,10 +169,12 @@ while IFS= read -r name; do
   # shellcheck disable=SC2206
   where=(${ENABLED_AT[$name]})
   [ "${#where[@]}" -gt 1 ] || continue
-  echo "DOUBLE DISPATCH: '$name' is enabled=1 in ${#where[@]} rotations -- ${where[*]}"
-  echo "    Two hosts will dispatch it into one git history, with no shared lock."
-  echo "    Park it (enabled 0) everywhere but the host that should own it, in ONE change --"
-  echo "    that is the 'PAIRED, NOT LANDED ALONE' rule the conf blocks state in prose."
+  echo "SPLIT INTENT: '$name' is enabled=1 in ${#where[@]} rotations -- ${where[*]}"
+  echo "    That column stopped arming anything (#364): schedule/ROSTER's state decides."
+  echo "    So this dispatches nothing today -- it is two files claiming one project, and"
+  echo "    the next reader will believe whichever they open. Set enabled 0 everywhere but"
+  echo "    the host that owns it, in ONE change ('PAIRED, NOT LANDED ALONE'), and check"
+  echo "    schedule/ROSTER has no second live row for '$name' -- that is the dispatching kind."
   findings=$((findings + 1))
 done < <(printf '%s\n' "${!ENABLED_AT[@]}" | sort)
 

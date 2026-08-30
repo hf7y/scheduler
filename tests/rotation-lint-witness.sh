@@ -67,7 +67,7 @@ gamma|1|/bin/true
 EOF
 run_case c1
 [ "$RC" -eq 1 ] && ok "rc=1" || bad "expected rc=1, got $RC"
-printf '%s\n' "$OUT" | grep -q "DOUBLE DISPATCH: 'alpha'" \
+printf '%s\n' "$OUT" | grep -q "SPLIT INTENT: 'alpha'" \
   && ok "names alpha" || bad "did not name alpha -- output: $OUT"
 printf '%s\n' "$OUT" | grep -q 'shared/default:1' \
   && ok "names the shared file and its line" || bad "did not locate the shared-file line"
@@ -104,7 +104,7 @@ printf '%s\n' "$OUT" | grep -q "_paced.conf:3: DUPLICATE 'alpha'" \
   && ok "names the file, the SECOND line, and the project" || bad "wrong duplicate location -- output: $OUT"
 [ "$(printf '%s\n' "$OUT" | grep -c DUPLICATE)" -eq 1 ] \
   && ok "reports the duplicate once, not once per copy" || bad "duplicate reported more than once"
-printf '%s\n' "$OUT" | grep -q 'DOUBLE DISPATCH' \
+printf '%s\n' "$OUT" | grep -q 'SPLIT INTENT' \
   && bad "also claimed cross-host double dispatch for a single-file duplicate" \
   || ok "does not confuse a same-file duplicate with a cross-host one"
 
@@ -163,28 +163,39 @@ echo "== 8. the enabled predicate still agrees with the live dispatcher"
 # changes how it reads `enabled`, this fails loud rather than letting the
 # check quietly disagree with what dispatches.
 #
-# Since hf7y/scheduler#282, the runner's enabled decision is no longer this
-# bare conf-column test alone -- schedule/ROSTER is consulted first
-# (participant_enabled) and this is now only the FALLBACK for a project
-# ROSTER names no row for. rotation-lint.sh has no ROSTER awareness at all
-# (by design -- see its own header), so it can only ever mirror this
-# fallback/raw-conf test, not the ROSTER-aware decision. Assert it still does.
+# THE MIRROR IS BROKEN ON PURPOSE (#364). Until 2026-08-30 the dispatcher had
+# a ROSTER-less fallback -- the identical `[ "${enabled// /}" = "1" ]` test --
+# and this section asserted the two stayed byte-identical. participant_enabled
+# no longer takes the conf column at all, so there is nothing left to mirror:
+# the `enabled` field this lint reads decides no dispatch anywhere. The lint
+# still earns its keep as a DUPLICATE/disagreement check over the rotation
+# files until #364 deletes them, but it must not be re-coupled to a dispatch
+# decision that has moved to schedule/ROSTER.
 RUNNER="$ROOT/bin/usage-paced-runner.sh"
-if grep -qF '[ "${enabled// /}" = "1" ]' "$RUNNER"; then
-  ok "bin/usage-paced-runner.sh still tests \${enabled// /} = 1 (participant_enabled's ROSTER-less fallback)"
+if sed -n '/^participant_enabled() {/,/^}/p' "$RUNNER" | grep -qF '${enabled// /}'; then
+  bad "the dispatcher reads the conf's enabled column again -- the second arming surface is back (#364)"
 else
-  bad "the dispatcher's enabled test changed -- re-derive bin/rotation-lint.sh against it"
+  ok "bin/usage-paced-runner.sh's dispatch decision reads no conf enabled column"
 fi
 if grep -qF '[ "${enabled// /}" = "1" ]' "$LINT"; then
-  ok "bin/rotation-lint.sh uses the identical test"
+  ok "bin/rotation-lint.sh still parses the field, as a disagreement check over an inert column"
 else
-  bad "bin/rotation-lint.sh no longer uses the dispatcher's enabled test"
+  bad "bin/rotation-lint.sh no longer reads the enabled field it reports on"
 fi
 if grep -qF 'case "$name" in '"''"'|\#*) continue ;; esac' "$RUNNER" \
    && grep -qF 'case "$name" in '"''"'|\#*) continue ;; esac' "$LINT"; then
   ok "both skip blank/comment lines by the same rule, before trimming"
 else
   bad "the blank/comment rule differs between the dispatcher and the lint"
+fi
+# AND both must read a final line with no trailing newline. schedule/
+# _paced.monkey.conf ends without one, so a bare `read` drops dcp-gate-site
+# from the rotation silently -- the lint guarded against this from the start
+# and the dispatcher did not until #364.
+if grep -qF '|| [ -n "$name" ]' "$RUNNER" && grep -qF '|| [ -n "$name" ]' "$LINT"; then
+  ok "both read an unterminated final line, so neither drops the last row"
+else
+  bad "one of the dispatcher/lint no longer guards the unterminated last line"
 fi
 
 echo "== 9. wired into \`scheduler sweep\`, not merely built"

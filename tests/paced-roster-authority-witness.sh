@@ -58,32 +58,44 @@ roster_state_for alpha testhost >/dev/null 2>&1 \
 REPO_ROOT="$TMP"
 
 # --- participant_enabled: the actual dispatch decision ----------------------
-# THE REGRESSION CASE: conf says enabled=1, ROSTER says parked -- ROSTER wins.
-participant_enabled crt 1 testhost \
-  && bad "crt is parked in ROSTER -- conf's enabled=1 must NOT win" \
-  || ok "ROSTER parked overrides a conf enabled=1 (the crt/secretaire bug)"
+# THE REGRESSION CASE: ROSTER says parked, so the row does not dispatch --
+# whatever schedule/_paced.<host>.conf says about it.
+participant_enabled crt testhost \
+  && bad "crt is parked in ROSTER -- it must not dispatch" \
+  || ok "ROSTER parked stops the dispatch (the crt/secretaire bug)"
 
-# The mirror: conf says enabled=0, ROSTER says live -- ROSTER still wins.
+# The mirror: ROSTER says live, so it dispatches.
 cat >> "$TMP/schedule/ROSTER" <<'EOF'
 delta   | delta@testhost   | 20m | live
 EOF
-participant_enabled delta 0 testhost \
-  && ok "ROSTER live overrides a conf enabled=0" \
-  || bad "delta is live in ROSTER -- conf's enabled=0 must not win"
+participant_enabled delta testhost \
+  && ok "ROSTER live dispatches" \
+  || bad "delta is live in ROSTER and did not dispatch"
 
-# No row for this project@host at all -- falls back to the conf column,
-# so an un-onboarded project keeps its pre-#282 behaviour instead of going
-# dark silently.
-participant_enabled epsilon 1 testhost \
-  && ok "no ROSTER row -> falls back to the conf's enabled=1" \
-  || bad "epsilon has no ROSTER row -- should have fallen back to conf enabled=1"
-participant_enabled epsilon 0 testhost \
-  && bad "epsilon has no ROSTER row -- should have fallen back to conf enabled=0" \
-  || ok "no ROSTER row -> falls back to the conf's enabled=0"
+# NO ROW AT ALL IS A REFUSAL, not a fall-back to a second surface (#364).
+# The conf's enabled column used to answer here; the whole point of taking it
+# out of the signature is that there is no longer a value to answer WITH.
+LOG="$TMP/run.log"; log() { echo "$*" >> "$LOG"; }
+participant_enabled epsilon testhost \
+  && bad "epsilon has no ROSTER row -- an unnamed project must not dispatch" \
+  || ok "no ROSTER row -> refuses; ROSTER is the only arming surface"
+grep -q 'SKIP epsilon .*ROSTER names no epsilon@testhost row' "$LOG" \
+  && ok "and it says so in the log rather than going dark silently" \
+  || bad "the refusal wrote no SKIP line: $(cat "$LOG" 2>/dev/null)"
+
+# The signature IS the guarantee: a value never passed in cannot be consulted.
+if sed -n '/^participant_enabled() {/,/^}/p' "$R" | grep -q '\$enabled\|{enabled'; then
+  bad "participant_enabled reads an 'enabled' value again -- the second arming surface is back"
+else
+  ok "participant_enabled's body names no 'enabled' value at all"
+fi
+sed -n '/^participant_enabled() {/,/^}/p' "$R" | grep -qF 'local name="$1" host="$2"' \
+  && ok "and its signature is <name> <host>, with no slot for a conf column" \
+  || bad "participant_enabled's signature changed -- re-derive this witness against it"
 
 # --- the runner's own loop calls participant_enabled, not the bare column ---
-grep -q 'participant_enabled "\$name" "\$enabled" "\$PACED_HOST" || continue' "$R" \
-  && ok "the participant-loading loop consults participant_enabled, not a bare enabled check" \
+grep -q 'participant_enabled "\$name" "\$PACED_HOST" || continue' "$R" \
+  && ok "the participant-loading loop consults participant_enabled, and hands it no conf column" \
   || bad "the loop no longer calls participant_enabled -- this witness is testing dead code"
 grep -qE '^\s*\[ "\$\{enabled// /\}" = "1" \] \|\| continue' "$R" \
   && bad "the loop still has a bare enabled==1 check ahead of the ROSTER lookup" \
