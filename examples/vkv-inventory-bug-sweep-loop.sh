@@ -4,12 +4,10 @@
 # same config into schedule/<project>.conf, which bin/scheduler-run reads
 # (see ../README.md).
 #
-# The line above used to end "Kept only as a reference for the still-live
-# wrappers that haven't migrated yet." There are none, verified 2026-08-10:
-# `ls ~/.local/bin/*-loop.sh` finds no file, and vkv-inventory -- the project
-# this example is named for -- is no longer registered in schedule/ at all.
-# So this file references nothing live. It is a candidate for deletion; that
-# is a separate change from the prose reaping that noticed it.
+# vkv-inventory is no longer registered in schedule/. Whether wrappers of this
+# pattern are still live elsewhere is OPEN, not settled: the 2026-08-10
+# "there are none" claim checked `ls ~/.local/bin/*-loop.sh`, and
+# hf7y/scheduler#368 records two firing from a DIFFERENT account's home.
 #
 # Example: what the REAL script at
 # ~/.local/bin/vkv-inventory-bug-sweep-loop.sh (currently ~97 lines,
