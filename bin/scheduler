@@ -207,12 +207,11 @@ usage: scheduler [command] [project]
   weight <project> [n]  show (no n) or set (with n) a project's pace weight
                          in THIS HOST's rotation file
                          (schedule/_paced.<host>.conf if it exists, else
-                         schedule/_paced.conf). Setting it also
-                         drops a `.idea` note in realisateur's inbox so its
-                         next pass knows a human overrode its last-set
-                         value (see docs/priority-weight.md -- the number
-                         itself is realisateur's judgment call, this
-                         command only edits + flags, never silently).
+                         schedule/_paced.conf). Setting it commits that
+                         file, naming the old and new value, so the
+                         override has a trace (see docs/priority-weight.md
+                         -- the number itself is realisateur's judgment
+                         call, this command only edits, never silently).
   paced, -p              open THIS HOST's rotation file directly
                          (enable/disable participants, reorder round-robin
                          tie-breaks). A host with its own
@@ -239,18 +238,14 @@ usage: scheduler [command] [project]
                          summary views show it rather than the date.
   idea <project> ["text"], -i
                          drop a new idea/feature-request for a project.
-                         realisateur gets a new .idea file (its own real
-                         inbox convention); every other project gets a
-                         timestamped line inserted into its FOCUS.md
-                         backlog/feature-request section (or a new "Ideas"
-                         section, created if the project has no FOCUS.md
-                         yet). Omit "text" to open $EDITOR instead: a
-                         normal project's FOCUS.md opens with a blank
-                         templated bullet already inserted at that same
-                         spot (existing ideas stay visible for context);
-                         leaving the placeholder line untouched and
-                         quitting cancels instead of committing an empty
-                         entry.
+                         Every project, realisateur included, gets ONE
+                         GitHub issue on its own repo (labels: idea,
+                         from:<calling-project>) -- nothing is written to
+                         the local filesystem, so this works from any host
+                         holding no clone of the target. Omit "text" to
+                         open $EDITOR instead; quitting without typing
+                         anything cancels rather than filing an empty
+                         issue.
   idea --receipt <project> "text", -i --receipt
                          file a RECEIPT, not an idea: a record that
                          something already happened, with no decision in
@@ -1131,58 +1126,21 @@ cmd_ask() {
 }
 
 # cmd_idea_editor -- the no-text-argument path (`scheduler -i <project>`
-# with nothing after the project name). Built 2026-07-25, batched from
-# FOCUS.md's 2026-07-20 backlog entry: open $EDITOR instead of failing
-# with a usage message. For a normal project, pre-populates a blank
-# templated bullet AT the real backlog insertion point on a scratch copy
-# of the real FOCUS.md, so existing/older ideas are naturally visible
-# right there while typing (no separate "show parked ideas" feature
-# needed) -- then either saves that edited copy over the real file (real
-# content was typed) or discards it (the placeholder line was left
-# untouched, i.e. cancelled) rather than leaving a stray empty entry.
-# realisateur gets a fresh scratch file with a comment placeholder
-# instead, matching its own bare `.idea`-file convention.
+# with nothing after the project name). Built 2026-07-25: open $EDITOR
+# instead of failing with a usage message. Collects the text and hands it
+# to cmd_idea, which owns the filing for every project.
 cmd_idea_editor() {
   local proj="$1"
 
-  if [ "$proj" = "realisateur" ]; then
-    local repo_path
-    repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
-    if [ -z "$repo_path" ]; then
-      echo "scheduler: realisateur has no PROJECT_REPO_PATH set" >&2
-      exit 1
-    fi
-    local tmp
-    tmp="$(mktemp)"
-    printf '# Idea for realisateur -- type below, then save+quit to submit.\n# Leave this empty (comment lines only) and quit to cancel.\n' > "$tmp"
-    "${EDITOR:-vi}" "$tmp"
-    local content
-    content="$(grep -v '^#' "$tmp" | sed '/^[[:space:]]*$/d')"
-    rm -f "$tmp"
-    if [ -z "$content" ]; then
-      echo "scheduler: idea cancelled (nothing typed)"
-      return 0
-    fi
-    local slug ts file
-    ts="$(date +%Y%m%d-%H%M%S)"
-    slug="$(printf '%s' "$content" | head -1 | tr -c 'a-zA-Z0-9' '-' | tr -s '-' | cut -c1-30 | sed 's/^-*//; s/-*$//')"
-    [ -n "$slug" ] || slug="idea"
-    file="$repo_path/${slug}-${ts}.idea"
-    printf '%s\n' "$content" > "$file"
-    echo "dropped: $file"
-    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle)"
-    cmd_commit_file "$file" "Idea added via \`scheduler -i\` (editor): $(basename "$file")"
-    return 0
-  fi
-
-  # NON-REALISATEUR: capture the text, then hand it to cmd_idea, which
-  # files a GitHub issue. This branch used to build a whole FOCUS.md in a
-  # temp file and mv it over the real one -- so the editor path pinned the
-  # clone exactly as the text path did. Fixing only the text path would
-  # have left `scheduler -i <proj>` with no argument still writing to disk:
-  # a front door that is GitHub only when you pass your note on the command
-  # line is not a front door, and the half that still wrote locally is the
-  # half `notify-senechal` does not use, so nothing would have noticed.
+  # Capture the text, then hand it to cmd_idea, which files a GitHub issue.
+  # This branch used to build a whole FOCUS.md in a temp file and mv it over
+  # the real one -- so the editor path pinned the clone exactly as the text
+  # path did. Fixing only the text path would have left `scheduler -i <proj>`
+  # with no argument still writing to disk: a front door that is GitHub only
+  # when you pass your note on the command line is not a front door, and the
+  # half that still wrote locally is the half `notify-senechal` does not use,
+  # so nothing would have noticed. realisateur kept a `.idea`-file exception
+  # here until 2026-08-29; it is gone for the same reason (see cmd_idea).
   local tmp content
   tmp="$(mktemp)"
   printf '%s\n' \
@@ -1221,25 +1179,17 @@ cmd_idea() {
     return
   fi
 
-  if [ "$proj" = "realisateur" ]; then
-    local repo_path
-    repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
-    if [ -z "$repo_path" ]; then
-      echo "scheduler: realisateur has no PROJECT_REPO_PATH set" >&2
-      exit 1
-    fi
-    local slug ts file
-    ts="$(date +%Y%m%d-%H%M%S)"
-    slug="$(printf '%s' "$text" | tr -c 'a-zA-Z0-9' '-' | tr -s '-' | cut -c1-30 | sed 's/^-*//; s/-*$//')"
-    [ -n "$slug" ] || slug="idea"
-    file="$repo_path/${slug}-${ts}.idea"
-    printf '%s\n' "$text" > "$file"
-    echo "dropped: $file"
-    echo "(realisateur's own inbox convention -- picked up + archived by its next nightly-batch cycle)"
-    cmd_commit_file "$file" "Idea added via \`scheduler -i\`: $(basename "$file")"
-    return
-  fi
-
+  # realisateur used to be excepted here: its note was written as a bare
+  # `<slug>-<ts>.idea` file into `conf_field realisateur PROJECT_REPO_PATH`,
+  # resolved against the CALLER's $HOME. Retired 2026-08-29. It was the last
+  # write path in this file that required the caller to hold a clone of
+  # someone else's project, and it addressed a channel the estate stopped
+  # reading on 2026-08-06 ("Vault gets narrative. Issues get work" --
+  # realisateur/PROSE-REAPING.md 3). Worse, its two unattended callers are
+  # escalations -- usage-paced-runner.sh's PULL FROZEN and GAVE-UP -- so a
+  # pull freeze filed its own alarm into the stale clone that the freeze had
+  # already made unreadable. Those callers pass text and read the exit
+  # status; both still work, and now land somewhere a human can count.
   # TRAP: THE FRONT DOOR IS GITHUB (Zach, 2026-08-05). This used to append to a LOCAL .scheduler/FOCUS.md and push it, which pinned every registered project to a checkout on whatever host the note was typed on -- senechal most of all, since notify-senechal wraps `scheduler -i senechal`.
   require_gh || exit 1
   local slug url body today
@@ -1593,8 +1543,9 @@ cmd_commit_file() {
   # `git diff --quiet` only sees changes to ALREADY-TRACKED files -- it is
   # silent (exit 0, "no differences") for a brand-new untracked file, which
   # made this bail out and skip committing entirely for exactly the case
-  # (a freshly dropped .idea file) it most needed to handle. `git status
-  # --porcelain` catches both untracked and modified.
+  # (a newly created file, e.g. the sweep backstop below adopting one) it
+  # most needed to handle. `git status --porcelain` catches both untracked
+  # and modified.
   if [ -z "$(git -C "$repo" status --porcelain -- "$path" 2>/dev/null)" ]; then
     return 0
   fi
@@ -1869,25 +1820,18 @@ cmd_weight() {
     $1==proj { print newline; next } { print }
   ' "$PACED_CONF" > "$PACED_CONF.tmp" && mv "$PACED_CONF.tmp" "$PACED_CONF"
   echo "set $proj weight: $cur_weight -> $newval"
-  cmd_commit_file "$PACED_CONF" "scheduler weight: $proj $cur_weight -> $newval (human override via \`scheduler weight\`)"
+  cmd_commit_file "$PACED_CONF" "scheduler weight: $proj $cur_weight -> $newval in $PACED_CONF_SRC (human override via \`scheduler weight\`)"
 
-  # Flag the override for realisateur -- same .idea inbox convention as
-  # `scheduler idea realisateur "..."` (see docs/priority-weight.md: the
-  # weight VALUE is realisateur's judgment call, this command only edits +
-  # flags, never silently overrides its next pass without a trace).
-  local repo_path
-  repo_path="$(conf_field realisateur PROJECT_REPO_PATH)"
-  if [ -n "$repo_path" ]; then
-    local ts idea_file
-    ts="$(date +%Y%m%d-%H%M%S)"
-    idea_file="$repo_path/weight-override-${proj}-${ts}.idea"
-    # Name the FILE, not just "_paced.conf": with per-host rotations a weight
-    # override applies to one host only, and "which host" is the first thing
-    # realisateur's next pass needs in order to read the number correctly.
-    printf 'Human set %s pace weight %s -> %s directly in %s (%s) via `scheduler weight` on %s. FYI, not a request to revert it -- just flagging the override so your next pass has the full picture instead of assuming its own last-set value still holds.\n' \
-      "$proj" "$cur_weight" "$newval" "$PACED_CONF" "$PACED_CONF_SRC" "$(date '+%Y-%m-%d %H:%M')" > "$idea_file"
-    echo "flagged for realisateur: $idea_file"
-  fi
+  # The commit above IS the trace. This used to ALSO drop a
+  # `weight-override-<proj>-<ts>.idea` file into realisateur's checkout, to
+  # tell its next pass a human had overridden the value (docs/priority-weight.md
+  # -- the weight VALUE is realisateur's judgment call, this command only edits
+  # + flags, never silently). Retired 2026-08-29 with the rest of the `.idea`
+  # channel: the flag carried nothing the commit does not already carry -- it
+  # named the project, both values, and which host's rotation file (that is
+  # $PACED_CONF_SRC, recorded in the commit) -- and it bought that redundancy
+  # by requiring a clone of realisateur under the caller's own $HOME.
+  echo "recorded in $PACED_CONF_SRC's history -- no separate flag file"
 }
 
 # Prints "<unanswered> <answered>" for one QUESTIONS.md. One

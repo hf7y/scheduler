@@ -68,6 +68,15 @@ while IFS='|' read -r name _acct _rate state; do
   else
     bad "$name is live in ROSTER but $name.conf leaves CRON_HOST/CRON_ACCOUNT unset -- roster-diff derives parked for it and can never exit 0"
   fi
+  # ARMED AND BROKEN. bin/scheduler-run:59 exits 2 on a batch tier whose
+  # BATCH_JOB_NAME is empty, so a live row over a blank field dispatches every
+  # tick and records nothing: nine-speakers ran that way for 571 ticks and the
+  # status page read it as "armed, never ran" (schedule/nine-speakers.conf).
+  if grep -qE '^BATCH_JOB_NAME="[^"]+"' "$conf"; then
+    ok "$name.conf sets a non-empty BATCH_JOB_NAME"
+  else
+    bad "$name is live in ROSTER but $name.conf has no non-empty BATCH_JOB_NAME -- scheduler-run exits 2 every tick"
+  fi
 done < <(grep -vE '^[[:space:]]*(#|$)' "$ROOT/schedule/ROSTER")
 
 out="$(bash "$DIFF" 2>&1)"; rc=$?

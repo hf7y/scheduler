@@ -1,13 +1,11 @@
 # schedule/ROSTER -- the single source scheduler#79 is building toward.
 # project | account@host | rate | state
 #
-# NOT YET AUTHORITATIVE. schedule/_paced.monkey.conf, schedule/FREEZE, and
-# each schedule/<project>.conf are still what dispatch actually reads today;
-# this file is a parallel derivation of the same set, kept honest by
-# `bash bin/roster-diff.sh`. It becomes authoritative only when the
-# retirement PR (hf7y/scheduler#79) removes those three as liveness sources,
-# tracked at hf7y/scheduler#282 -- not this file merely existing with rows
-# in it (`oneroster`, already MET).
+# AUTHORITATIVE FOR LIVENESS. usage-paced-runner.sh reads the `state` column
+# here and it OVERRIDES _paced.<host>.conf's enabled column whenever this file
+# names the row; the conf is consulted only for a project with no row here.
+# WITNESS: tests/paced-roster-authority-witness.sh. `bash bin/roster-diff.sh`
+# still checks that the legacy files derive the same set.
 #
 # ONLY A HUMAN EDITS THIS FILE'S `state` COLUMN. Editing a row here IS arming
 # or parking a project, once #80's `dose <project>` reads this file to
@@ -119,9 +117,8 @@
 # 2 points of headroom with 16h to the roll. Expect the first day to be "wins
 # most of the remaining grants, then everyone holds", not 4x more work.
 #
-# Derived 2026-08-11 from _paced.monkey.conf (enabled==1), FREEZE (uncommented
-# EXEMPT: <p>@monkey), and each schedule/<p>.conf's CRON_HOST/CRON_ACCOUNT --
-# live only where all three agree. Re-verify, don't trust this comment:
+# Seeded 2026-08-11 from _paced.monkey.conf and each schedule/<p>.conf's
+# CRON_HOST/CRON_ACCOUNT. Re-verify, don't trust this comment:
 #   bash bin/roster-diff.sh
 
 ecosim          | ecosim@monkey          | 20m | parked

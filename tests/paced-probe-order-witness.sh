@@ -57,6 +57,18 @@ export SCHEDULER_FREEZE_FILE="$T/schedule/FREEZE"
 # The cache is keyed per-uid and would otherwise carry the live file's verdict
 # into this run.
 export SCHEDULER_FREEZE_CACHE="$T/freeze-cache"
+# ...and the ROSTER needs the same fixture treatment, for the same reason.
+# participant_enabled() (bin/usage-paced-runner.sh:296-322) lets schedule/ROSTER
+# OVERRIDE the conf's enabled column whenever ROSTER names name@host, and
+# roster_state() reads $REPO_ROOT/schedule/ROSTER unless SCHEDULER_ROSTER_FILE
+# points elsewhere. The rows below are real project names, so without this the
+# live ROSTER decides whether this test's fixture rows are enabled: parking
+# ecosim or vim-arcade in the real file turned `|1|` rows here into disabled
+# ones and this witness failed for a reason that had nothing to do with probe
+# ordering. An EMPTY roster names no row, so the documented fallback applies
+# and the fixture's own enabled column governs -- which is what this test means.
+: > "$T/schedule/ROSTER"
+export SCHEDULER_ROSTER_FILE="$T/schedule/ROSTER"
 FAILED=0
 fail() { echo "FAIL: $*"; FAILED=1; }
 
