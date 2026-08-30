@@ -178,9 +178,9 @@ conf sets `CRON_ACCOUNT`, its "last scheduled run" state is read from
 THAT account's home via `sudo -n -u <acct>`, and if that read fails the
 line says `BLIND` naming the account and path rather than falling back to
 `$HOME` (which would report a job that ran fine as never-run); `sweep` is the
-read-mostly repo-state backstop; `-i <project> "idea"` drops a
-timestamped idea into that project's backlog (omit "idea" to open
-`$EDITOR` on a pre-populated placeholder instead); `next` prints the real
+read-mostly repo-state backstop; `-i <project> "idea"` files one GitHub
+issue on that project's own repo, writing nothing locally (omit "idea" to
+open `$EDITOR` instead); `next` prints the real
 upcoming rotation order; `pacing` shows the live usage-gate verdict and
 bin-drift check.
 
