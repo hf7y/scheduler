@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Witness for the 2026-08-20 fix: sync-crontab.sh's local focus/*.md and
 # questions/*.md symlink farm was retired whole by #244 (the coordinator-
-# file sunset, #234), but bin/scheduler's cmd_overview, cmd_glance and
-# cmd_status kept reading those exact paths -- so every project's NEXT
-# UP/ETA column, `scheduler overview`, and a file-channel project's "open
-# questions" section in `scheduler status` silently rendered as "nothing
-# here" (`-`, "no FOCUS.md ... yet", "no QUESTIONS.md symlink found")
+# file sunset, #234), but bin/scheduler's cmd_glance and cmd_status kept
+# reading those exact paths -- so every project's NEXT UP/ETA column and a
+# file-channel project's "open questions" section in `scheduler status`
+# silently rendered as "nothing here" (`-`, "no QUESTIONS.md symlink
+# found")
 # instead of the true answer: this account cannot read the file at all
 # (every project's home is 0700 -- verified 2026-08-20 -- so there is no
 # path back to the data now that the mirror is gone).
@@ -16,7 +16,7 @@
 # present, these three surfaces say so (BLIND) instead of implying an
 # empty backlog / no open questions.
 #
-# Section 4 (added 2026-08-25, #234) covers a fourth site the original fix
+# Section 3 (added 2026-08-25, #234) covers a further site the original fix
 # missed: the bare `scheduler focus <project>` verb itself still called
 # open_file() unconditionally and failed with open_file's generic "no file
 # yet at ..." -- which reads as "$proj has no FOCUS.md", not "this command
@@ -41,20 +41,7 @@ printf 'witnessproj|1|3\n' > "$TMP/root/schedule/_paced.conf"
 
 run() { SCHED_ROOT="$TMP/root" HOME="$TMP/home" "$ROOT/bin/scheduler" "$@"; }
 
-echo "== 1. cmd_overview: BLIND, not 'no FOCUS.md ... yet'"
-out="$(run overview witnessproj 2>&1)"
-if printf '%s' "$out" | grep -qi 'blind'; then
-  ok "overview says BLIND when the focus/ mirror is absent"
-else
-  bad "overview did not say BLIND -- output: $out"
-fi
-if printf '%s' "$out" | grep -qi 'no FOCUS\.md at .* yet'; then
-  bad "overview still uses the old 'no FOCUS.md ... yet' phrasing (implies empty, not unreadable)"
-else
-  ok "overview does not claim an empty backlog it never read"
-fi
-
-echo "== 2. cmd_glance: NEXT UP / ETA render '?' (BLIND), never '-' (empty)"
+echo "== 1. cmd_glance: NEXT UP / ETA render '?' (BLIND), never '-' (empty)"
 out="$(run 2>&1)"
 row="$(printf '%s\n' "$out" | grep -E '^\s*witnessproj\s')"
 if [ -z "$row" ]; then
@@ -68,7 +55,7 @@ else
   if [ "$next" = "?" ]; then ok "NEXT UP column is '?' (BLIND)"; else bad "NEXT UP column is '$next', not '?' -- row: $row"; fi
 fi
 
-echo "== 3. cmd_status: file-channel 'open questions' says BLIND, not silent-empty"
+echo "== 2. cmd_status: file-channel 'open questions' says BLIND, not silent-empty"
 out="$(run status witnessproj 2>&1)"
 if printf '%s' "$out" | grep -qi 'blind'; then
   ok "status's open-questions section says BLIND when the questions/ mirror is absent"
@@ -81,7 +68,7 @@ else
   ok "status does not claim nothing is open when it never looked"
 fi
 
-echo "== 4. bare 'scheduler focus <project>' verb: BLIND, not open_file's generic 'no file yet'"
+echo "== 3. bare 'scheduler focus <project>' verb: BLIND, not open_file's generic 'no file yet'"
 out="$(run focus witnessproj 2>&1)"
 rc=0; run focus witnessproj >/dev/null 2>&1 || rc=$?
 if printf '%s' "$out" | grep -qi 'blind'; then

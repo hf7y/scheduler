@@ -22,7 +22,7 @@ _scheduler_completion() {
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  subcommands="blockers -b focus -f questions -q report -r idea -i sweep -s explain -e man -m status -c"
+  subcommands="focus -f questions -q report -r idea -i sweep -s man -m status -c"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
     COMPREPLY=($(compgen -W "$subcommands" -- "$cur"))
