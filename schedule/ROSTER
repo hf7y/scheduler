@@ -2,15 +2,10 @@
 # project | account@host | rate | state
 #
 # THE ONLY SURFACE THAT ARMS A PROJECT (2026-08-30, #364). It used to merely
-# OUTRANK _paced.<host>.conf's enabled column -- that column answered for any
-# project this file did not name, so which surface decided depended on which
-# file had heard of the project. usage-paced-runner.sh's participant_enabled
-# now takes <name> <host> and is never handed a conf column at all, so a row
-# this file does not name does not dispatch, and says so in run.log.
-#
-# _paced.<host>.conf is still the ROTATION SOURCE in account mode -- which
-# rows exist and what command each runs. Deleting it is #364, gated on host
-# mode having really dispatched from here.
+# OUTRANK _paced.<host>.conf's enabled column, which answered for any project
+# this file did not name. participant_enabled takes <name> <host> and is handed
+# no conf column, so a row this file does not name does not dispatch and says
+# so in run.log. That conf is still the rotation SOURCE; deleting it is #364.
 # WITNESS: tests/paced-roster-authority-witness.sh. `bash bin/roster-diff.sh`
 # still checks that the legacy files derive the same set.
 #

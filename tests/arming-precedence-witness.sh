@@ -127,16 +127,11 @@ grep -q 'write_repo_file "\$PACED_REL"' "$ROOT/bin/dose-project.sh" \
   || bad "dose no longer writes the paced conf -- either the split collapsed (good, update this witness) or arming is now half-applied"
 
 # --- 5. WHICH ROSTER: SCHEDULER_ROSTER_FILE, else the checkout ---------------
-# This case pinned a DEFECT until #412: host mode fetched ROSTER over gh and
-# refused to "fall back to a checkout", then participant_enabled asked
-# roster_state_for, which read $REPO_ROOT/schedule/ROSTER regardless, so a
-# stale local `live` beat a fetched `parked`. #412 fixed it by exporting
-# SCHEDULER_ROSTER_FILE from the fetch, and tests/host-mode-roster-source-
-# witness.sh drives the whole mode end to end against that.
-#
-# What is left to pin HERE is the resolution rule the fix rests on, tested on
-# the function alone with the variable unset: roster_state_for reads
-# $REPO_ROOT/schedule/ROSTER, so ACCOUNT MODE -- 18 accounts -- is unchanged.
+# This case pinned a DEFECT until #412: a stale local `live` beat a fetched
+# `parked`, because roster_state_for read $REPO_ROOT/schedule/ROSTER whatever
+# host mode fetched. #412 exports SCHEDULER_ROSTER_FILE from the fetch, and
+# tests/host-mode-roster-source-witness.sh drives the whole mode against that.
+# Left to pin HERE is the resolution rule it rests on, on the function alone.
 echo "== 5. which ROSTER roster_state_for reads when SCHEDULER_ROSTER_FILE is unset"
 eval "$(sed -n '/^roster_rows() {/,/^}/p'        "$RUNNER")"
 eval "$(sed -n '/^roster_state_for() {/,/^}/p'   "$RUNNER")"

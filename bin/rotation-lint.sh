@@ -22,26 +22,19 @@
 # each host runs bin/usage-paced-runner.sh out of the same git-tracked repo
 # but reads its OWN rotation file. A project dispatched by two machines lands
 # in one git history with no shared lock (decided 2026-07-24: full local peer,
-# no cross-host rotation). Until #364 the `enabled` column was what put it
-# there, which is why this file reads that column. Now schedule/ROSTER's state
-# is, so what finding 1 catches is the two files disagreeing BEFORE anyone
-# copies that disagreement into ROSTER. The same
+# no cross-host rotation). The `enabled` column used to put it there; since
+# #364 ROSTER's state does, so finding 1 catches the disagreement BEFORE
+# anyone copies it into ROSTER. The same
 # hazard on the FIXED-CRON side is already confirmed live rather than
 # theoretical -- see the aedile/vkv-inventory notes in `_paced.conf` -- and
 # bin/sync-crontab.sh asserts it there. This is the rotation-vs-rotation
 # direction, which nothing checked.
 #
-# THE `enabled` COLUMN NO LONGER ARMS ANYTHING (2026-08-30, #364). This lint
-# was written when that column was the dispatch decision. It is not any more:
-# bin/usage-paced-runner.sh's participant_enabled takes <name> <host> and asks
-# schedule/ROSTER, full stop -- it is not handed a conf column and cannot
-# consult one. So read finding 1 below as a disagreement about INTENT between
-# two files, not as a live double dispatch; the dispatching kind is two `live`
-# ROSTER rows for one project, which is ROSTER's own shape and not visible
-# here. Finding 2 survives intact, because pooling is still per LINE.
-#
-# The files themselves go in #364, gated on host mode having dispatched from
-# ROSTER; this lint goes with them.
+# THE `enabled` COLUMN NO LONGER ARMS ANYTHING (2026-08-30, #364):
+# participant_enabled takes <name> <host> and asks schedule/ROSTER, full stop.
+# Finding 1 below is two files disagreeing about INTENT, not a live double
+# dispatch -- the dispatching kind is two `live` ROSTER rows, invisible here.
+# Finding 2 survives: pooling is still per LINE. Both files go in #364.
 #
 # Checks (both are zero-false-positive -- there is no legitimate reason for
 # either, which is what makes them safe to run every sweep):
@@ -137,9 +130,9 @@ for f in "${FILES[@]}"; do
     # form -- the comment test runs BEFORE whitespace is stripped, so a line
     # indented with a space is a live participant while `# name|1|...` is not.
     # tests/rotation-lint-witness.sh asserts this predicate still matches the
-    # dispatcher's, so the two cannot disagree about which lines are rows.
-    # It no longer asserts a shared `enabled` test: that mirror was cut with
-    # the arming surface it mirrored (#364).
+    # dispatcher's, so the two cannot disagree about which lines are rows. The
+    # shared `enabled` test it also asserted was cut with the arming surface
+    # that test mirrored (#364).
     case "$name" in ''|\#*) continue ;; esac
     name="${name// /}"
     [ -n "$name" ] || continue

@@ -117,8 +117,7 @@ else
 fi
 
 # The mirror, so the fix is not a blanket refusal: a row the fetch calls live
-# still dispatches. There is no conf column left to outrank (#364) -- the
-# fetched bytes are the only thing participant_enabled can read.
+# still dispatches. The fetched bytes are all participant_enabled reads (#364).
 if participant_enabled beta testhost; then
   ok "beta, live in both copies, still dispatches (the fix is not a blanket refusal)"
 else

@@ -355,31 +355,16 @@ roster_state_for() {
 }
 
 # participant_enabled <name> <host> -- is this row live?
-# schedule/ROSTER decides, and it is the ONLY thing that decides (#282, #364).
-# IT DOES NOT TAKE THE CONF'S enabled COLUMN, and that is the point: a value
-# this function is never handed cannot become a second opinion about arming.
-# #79 called that disagreement unrepresentable; until now it was merely
-# outranked -- ROSTER won when it named a row, the conf column answered when
-# it did not, and which surface armed a project depended on which file had
-# heard of it.
-#
-# WHAT THE OUTRANKING COST (2026-08-25): schedule/_paced.monkey.conf carried
-# `crt|1|...` and `secretaire|1|...` -- both ARMED -- while ROSTER recorded
-# both `parked`, on Zach's own directives quoted in ROSTER's comments. Both
-# kept dispatching against a standing pause nobody revisited.
-#
-# A ROSTER MISS IS NOW A REFUSAL, AND IT SAYS SO. The fallback it replaces
-# existed so an un-onboarded project kept its pre-#282 behaviour; measured on
-# main 2026-08-30, no project anywhere is in that position -- ROSTER names
-# every one of _paced.monkey.conf's 18 rows, and every row in _paced.conf and
-# _paced.dexter.conf is enabled=0, so the fallback answered "not live" for all
-# of them anyway. `dose <project> --arm/--park` writes both files, so the only
-# way to reach this line is a hand-edit of a conf alone -- which is the act
-# this refusal exists to stop, not an onboarding path.
-#
-# NOT the rotation source. schedule/_paced.<host>.conf still supplies WHICH
-# rows exist and what command each runs; only the live/parked answer moved.
-# Deleting the file is #364, and it is gated on host mode, not on this.
+# schedule/ROSTER decides and NOTHING else does (#282, #364). It is not handed
+# the conf's enabled column, which is the point: a value never passed in
+# cannot become a second opinion about arming. Until 2026-08-30 that column
+# answered for any project ROSTER did not name, so which surface armed a
+# project depended on which file had heard of it -- and _paced.monkey.conf's
+# `crt|1|` and `secretaire|1|` dispatched for weeks against a `parked` ROSTER.
+# The removed fallback armed nothing: ROSTER names all 18 monkey rows and
+# every other conf row is enabled=0 (23 compared, 0 divergences).
+# NOT the rotation source -- the conf still supplies which rows exist and what
+# each runs. Deleting it is #364, gated on host mode, not on this.
 participant_enabled() {
   local name="$1" host="$2" rstate
   if rstate="$(roster_state_for "$name" "$host")"; then
@@ -458,11 +443,9 @@ if [ ! -f "$PACED_CONF" ]; then
   exit 1
 fi
 # `|| [ -n "$name" ]` so a final line with no trailing newline is still read.
-# MEASURED, not defensive: schedule/_paced.monkey.conf ends without one, so a
-# bare `read` sees 17 of its 18 rows and the last project is missing from the
-# rotation with no error anywhere. bin/rotation-lint.sh has carried this guard
-# since it was written ("a lint that silently skips the last line of a file is
-# worse than no lint"); the dispatcher it mirrors did not.
+# MEASURED: schedule/_paced.monkey.conf ends without one, so a bare `read` saw
+# 17 of its 18 rows and dcp-gate-site was missing from the rotation with no
+# error anywhere. bin/rotation-lint.sh has carried this guard from the start.
 while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
   case "$name" in ''|\#*) continue ;; esac
   name="${name// /}"
