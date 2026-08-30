@@ -104,12 +104,9 @@ acct_of_prog() {
 }
 
 # --- the roster parser, hoisted above the side-effecting section -------------
-# Pure, and must be defined this early. The pull gate's escalation expands
-# "$PACED_HOST"; under `set -u` an unset one aborted the third consecutive
-# blocked tick instead of filing. tests/pull-escalation-witness.sh cannot see
-# that -- it injects PACED_HOST into the block it lifts -- so
-# tests/host-mode-preflight-witness.sh asserts the order against this file.
-# --check below then answers with the SAME parser the tick dispatches on.
+# Pure, and defined this early because the pull gate's escalation expands
+# "$PACED_HOST": unset under `set -u`, the third consecutive blocked tick aborted
+# instead of filing (order pinned by tests/host-mode-preflight-witness.sh).
 roster_rows() {
   local line p ah rate state acct
   while IFS= read -r line; do
@@ -155,17 +152,11 @@ roster_state_for() {
 
 # participant_enabled <name> <host> -- is this row live?
 # schedule/ROSTER decides, and it is the ONLY thing that decides (#282, #364).
-# It is not handed the conf's enabled column, so it cannot consult one: a value
-# never passed in is not a second opinion. #79 called that disagreement
-# unrepresentable and it was merely outranked -- which is how `crt|1|` and
-# `secretaire|1|` kept dispatching against a standing `parked` (2026-08-25).
-# A ROSTER miss is a logged refusal, not a fall-back to the conf. Measured on
-# main 2026-08-30 the fallback armed nothing: ROSTER names all 18 of
-# _paced.monkey.conf's rows, and every row on the other two hosts is enabled=0.
-# `dose <project> --arm/--park` writes both files, so the only way to reach it
-# was a hand-edit of a conf alone -- the act this refusal exists to stop.
-# NOT the rotation source: _paced.<host>.conf still supplies which rows exist
-# and what each runs. Deleting it is #364, gated on host mode, not on this.
+# It is not handed the conf's enabled column, so it cannot consult one -- a
+# value never passed in is not a second opinion. That column merely OUTRANKED
+# ROSTER, which is how `crt|1|` and `secretaire|1|` kept dispatching against a
+# standing `parked` (2026-08-25). A ROSTER miss is a logged refusal now.
+# _paced.<host>.conf is still the rotation SOURCE; deleting it is #364.
 participant_enabled() {
   local name="$1" host="$2" rstate
   if rstate="$(roster_state_for "$name" "$host")"; then
@@ -179,12 +170,10 @@ participant_enabled() {
 PACED_HOST="${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}"
 
 # --- --check: the host-mode arming preflight (hf7y/scheduler#364) ------------
-# IT CLEARS SUDO_USER ON PURPOSE. Host mode reads schedule/ROSTER over gh, and
-# lib/dose-common.sh's gh_as borrows $SUDO_USER's credential when root has none,
-# so `sudo PACED_HOST_MODE=1 ...` reads as the human and passes while the armed
-# cron row reads as root and gets BLIND. Measured on monkey 2026-08-30: root has
-# no /root/.config/gh and no GH_TOKEN, so the row would exit 2 every 20 minutes.
-# Checking under a borrowed credential reproduces that lie instead of finding it.
+# IT CLEARS SUDO_USER ON PURPOSE. gh_as borrows $SUDO_USER's credential when root
+# has none, so `sudo PACED_HOST_MODE=1 ...` reads as the human and passes, while
+# the armed row reads as root -- no /root/.config/gh, no GH_TOKEN (monkey,
+# 2026-08-30) -- gets BLIND, and exits 2 every tick. Whether root gets one: #364.
 if [ "${1:-}" = --check ]; then
   echo "usage-paced-runner --check -- host-mode arming preflight for $PACED_HOST"
   if [ "$PACED_HOST_MODE" != 1 ]; then
@@ -451,7 +440,6 @@ elif [ "$PACED_HOST_MODE" = 1 ]; then
   # on the one path where nobody is watching.
   . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
     echo "usage-paced-runner: host mode needs lib/dose-common.sh beside this script and it is not there. Refusing." >&2; exit 2; }
-  # Name the identity: root and a borrowed $SUDO_USER are different answers (gh_as).
   _roster="$(fetch_roster)" || { echo "usage-paced-runner: host mode could not read schedule/ROSTER as $(id -un) (SUDO_USER=${SUDO_USER:-unset}). Refusing to dispatch rather than fall back to a checkout. An armed cron row runs as root with SUDO_USER unset; run this script with --check as root to measure that identity before arming." >&2; exit 2; }
   PACED_CONF="$(mktemp)"; SCHEDULER_ROSTER_FILE="$(mktemp)"
   trap 'rm -f "$PACED_CONF" "$SCHEDULER_ROSTER_FILE"' EXIT

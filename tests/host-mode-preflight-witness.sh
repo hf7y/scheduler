@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
-# host-mode-preflight-witness.sh -- `usage-paced-runner.sh --check` must measure
-# the identity the ARMED CRON ROW uses, and the roster parser it needs must be
-# defined before anything that can abort the tick.
-#
-# gh_as (lib/dose-common.sh) borrows $SUDO_USER's credential when root has none,
-# so a human's sudo test reads as the human and passes while the cron row reads
-# as root and gets BLIND -- root on monkey has no gh credential (2026-08-30).
-# Section C asserts the clearing behaviourally: the stub records what it saw.
-# Section A asserts $PACED_HOST is assigned before the pull gate that expands
-# it, which tests/pull-escalation-witness.sh cannot do -- it injects the
-# variable into the block it lifts.
+# host-mode-preflight-witness.sh -- `--check` must measure the identity the ARMED
+# CRON ROW uses, and its parser must be defined before anything that can abort
+# the tick. Rationale is in the code this pins.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 R="$HERE/../bin/usage-paced-runner.sh"
@@ -21,8 +13,6 @@ mkdir -p "$TMP/bin" "$TMP/lib" "$TMP/repo"
 
 echo
 echo "A. ordering: the escalation string cannot outrun its variable"
-# A mention inside roster_rows() is harmless -- it is not called until later.
-# The pull gate is not: every statement of it runs at top level on each tick.
 assign_ln="$(grep -n '^PACED_HOST="${PACED_HOST:-' "$R" | head -1 | cut -d: -f1)"
 gate_ln="$(grep -n '^# >>> pull gate$' "$R" | head -1 | cut -d: -f1)"
 esc_ln="$(grep -n 'file_to_realisateur "the pull freeze"' "$R" | head -1 | cut -d: -f1)"
@@ -43,8 +33,6 @@ if [ -n "$assign_ln" ] && [ -n "$gate_ln" ]; then
     || bad "A4 PACED_HOST is not assigned until $assign_ln, after the pull gate opens at $gate_ln -- under set -u the third consecutive blocked tick aborts on an unbound variable instead of filing"
 fi
 
-# --- harness: block lifted by anchors; roster_rows from the script itself, so
-# --- --check is witnessed against the SAME parser the tick dispatches on ------
 BLOCK="$(sed -n '/= --check \]; then$/,/^fi$/p' "$R")"
 [ -n "$BLOCK" ] || { bad "the --check block could not be located in $R"; echo; exit 1; }
 grep -q 'fetch_roster' <<<"$BLOCK" || { bad "the block found is not the --check block"; echo; exit 1; }
