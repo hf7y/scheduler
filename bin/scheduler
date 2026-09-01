@@ -678,21 +678,26 @@ issues_counts() {
     return 1
   fi
   if ! raw="$(gh issue list --repo "$slug" --label question --state all \
-                --limit 200 --json number,state,labels,comments 2>&1)"; then
+                --limit 200 --json number,state,labels,comments,updatedAt 2>&1)"; then
     printf 'scheduler: %s: `gh issue list` failed against %s -- the question count is BLIND, not zero:\n%s\n' \
       "$proj" "$slug" "$raw" >&2
     return 1
   fi
+  # Third field is the newest updatedAt (epoch) among UNANSWERED open issues,
+  # 0 when there are none -- questions_unopened()'s replacement for the
+  # `questions/$proj.md` mtime that #244 deleted (issue #461: the old stat
+  # always failed, so `*` could never fire for an issues-channel project).
   if ! out="$(printf '%s' "$raw" | jq -r --arg owner "$owner" \
         "$PROVENANCE_ANSWERED_JQ"'
-         [.[] | select(.state == "OPEN")]
-         | "\([.[] | select(is_answered($owner) | not)] | length) \([.[] | select(is_answered($owner))] | length)"' 2>&1)"; then
+         [.[] | select(.state == "OPEN")] as $open
+         | ($open | [.[] | select(is_answered($owner) | not)]) as $unanswered
+         | "\($unanswered | length) \([$open[] | select(is_answered($owner))] | length) \($unanswered | map(.updatedAt) | if length > 0 then (max | fromdateiso8601) else 0 end)"' 2>&1)"; then
     printf 'scheduler: %s: jq failed over %s issue JSON -- the question count is BLIND, not zero:\n%s\n' \
       "$proj" "$slug" "$out" >&2
     return 1
   fi
   case "$out" in
-    [0-9]*' '[0-9]*) ;;
+    [0-9]*' '[0-9]*' '[0-9]*) ;;
     *) echo "scheduler: $proj: could not derive a question count for $slug -- BLIND, not zero." >&2
        return 1 ;;
   esac
@@ -1643,7 +1648,7 @@ cmd_weight() {
 # every project showed 2-4 phantom "open questions" from this).
 questions_counts() {
   local qfile="$1"
-  [ -f "$qfile" ] || { echo "0 0"; return 0; }
+  [ -f "$qfile" ] || { echo "0 0 0"; return 0; }
   local out
   out="$(awk '
     BEGIN{unanswered=0; answered=0; is_resolved=0; has_reply=0; started=0; infence=0}
@@ -1682,23 +1687,26 @@ questions_counts() {
     END { if (started) { if (!is_resolved) { if (has_reply) answered++; else unanswered++ } }
           print unanswered, answered }
   ' "$qfile" 2>/dev/null)"
-  echo "${out:-0 0}"
+  echo "${out:-0 0} $(stat -c %Y "$qfile" 2>/dev/null || echo 0)"
 }
 
-# True when this project's QUESTIONS.md changed since you last opened it
-# via `scheduler questions`/`status` -- the `*` in both question views,
-# added 2026-07-22 so an open count doesn't read the same whether it's
-# brand new or something you've already seen and just haven't gotten to.
-# Approximate (file mtime vs a per-project "last opened" timestamp), not
-# a real read-receipt. Only meaningful when something is still
-# unanswered, so a zero count is never starred.
+# True when this project's questions changed since you last opened them via
+# `scheduler questions`/`status` -- the `*` in both question views, added
+# 2026-07-22 so an open count doesn't read the same whether it's brand new
+# or something you've already seen and just haven't gotten to. $3 is the
+# "changed at" epoch from project_questions_counts's third field -- the
+# newest unanswered issue's updatedAt for an issues-channel project, or the
+# QUESTIONS.md mtime for the (now unreachable, #244) file channel. Fixed
+# 2026-08-31 (#461): this used to `stat` $SCHED_ROOT/questions/$proj.md
+# directly, a path #244 deleted, so the star could never fire for any
+# project. Approximate, not a real read-receipt. Only meaningful when
+# something is still unanswered, so a zero count is never starred.
 questions_unopened() {
-  local proj="$1" q_unanswered="${2:-0}"
+  local proj="$1" q_unanswered="${2:-0}" q_changed="${3:-0}"
   [ "$q_unanswered" -gt 0 ] 2>/dev/null || return 1
-  local qmtime qseen
-  qmtime="$(stat -c %Y "$SCHED_ROOT/questions/$proj.md" 2>/dev/null || echo 0)"
+  local qseen
   qseen="$(get_seen "$proj")"
-  [ "$qmtime" -gt "$qseen" ] 2>/dev/null
+  [ "$q_changed" -gt "$qseen" ] 2>/dev/null
 }
 
 cmd_questions_list() {
@@ -1713,7 +1721,7 @@ cmd_questions_list() {
   local rows="" quiet="" blind="" n_unanswered=0 n_unopened=0 n_projects=0 n_blind=0
   while IFS= read -r proj; do
     local qfile="$SCHED_ROOT/questions/$proj.md"
-    local qu qa counts
+    local qu qa qchanged counts
     # A project we could not COUNT is not a project with nothing open. It
     # gets its own row and its own tally line -- BLIND reported as OK is
     # the failure this whole channel exists to avoid.
@@ -1721,7 +1729,7 @@ cmd_questions_list() {
       blind="$blind $proj"; n_blind=$(( n_blind + 1 ))
       continue
     fi
-    read -r qu qa <<<"$counts"
+    read -r qu qa qchanged <<<"$counts"
     local total=$(( qu + qa ))
     if [ "$total" -eq 0 ]; then
       quiet="$quiet $proj"
@@ -1733,7 +1741,7 @@ cmd_questions_list() {
     # printing that on 17 of 18 rows is column noise, and the `*` already
     # carries the one distinction that matters at a glance.
     local star=" " note="" score=$qu
-    if questions_unopened "$proj" "$qu"; then
+    if questions_unopened "$proj" "$qu" "$qchanged"; then
       star="*"; n_unopened=$(( n_unopened + 1 ))
       score=$(( score + 1000 ))
     elif [ "$qu" -eq 0 ]; then
@@ -1811,9 +1819,9 @@ cmd_glance() {
     if [ -f "$qfile" ] || [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
       # Could-not-look renders `?`, never `-`. `-` means "nothing open".
       if ! q_counts="$(project_questions_counts "$proj")"; then
-        q_blind=1; q_counts="0 0"
+        q_blind=1; q_counts="0 0 0"
       fi
-      read -r q_unanswered q_answered <<<"$q_counts"
+      read -r q_unanswered q_answered q_changed <<<"$q_counts"
       local q_total=$(( q_unanswered + q_answered ))
       local q_star=""
       if [ "$q_total" -gt 0 ] 2>/dev/null; then
@@ -1824,7 +1832,7 @@ cmd_glance() {
       # read the same whether it's brand new or something you've already
       # seen and just haven't gotten to. Approximate (file mtime vs a
       # per-project "last opened" timestamp), not a real read-receipt.
-      questions_unopened "$proj" "$q_unanswered" && q_star="*"
+      questions_unopened "$proj" "$q_unanswered" "$q_changed" && q_star="*"
     fi
     # Fixed-shape render: a reserved 1-char `*` slot + right-aligned
     # numerator, so every row's `/` lands in the same column whether or
