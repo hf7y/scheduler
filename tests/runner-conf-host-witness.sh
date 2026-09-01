@@ -213,7 +213,33 @@ echo "case 8 -- the opt-out is a NOTE, not an ERROR (the defect case 3 missed)"
 #
 # So: assert the MANNER, not just the outcome. An assertion that only checks
 # a line is missing cannot tell a clean opt-out from a refusal.
-err="$(SYNC_HOST=dexter timeout 60 "$SYNC" 2>&1 >/dev/null)"; rc=$?
+#
+# Hermetic sudo (same fix as #94, this repo's own precedent): this runs the
+# REAL bin/sync-crontab.sh against this repo's REAL schedule/ -- every real
+# account on it, not just dexter. read_crontab_for()'s foreign-account path
+# is `sudo -n -u "$acct" crontab -l`, and whether that answers or demands a
+# password is a property of the HOST this witness happens to run on, not of
+# the sweep-opt-out code this case exists to check. Found live 2026-09-01:
+# a newly-armed real account with no passwordless-sudo entry made this
+# assertion fail for a reason unrelated to dexter or sweep at all. Stubbing
+# `sudo` to drop -n/-u ACCT and exec the rest makes every account's read
+# resolve the same deterministic way regardless of who is running this test.
+STUB8="$TMP/stub8"; mkdir -p "$STUB8"
+cat > "$STUB8/sudo" <<'STUB'
+#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n) shift ;;
+    -u) shift; shift ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+exec "$@"
+STUB
+chmod +x "$STUB8/sudo"
+err="$(PATH="$STUB8:$PATH" SYNC_HOST=dexter timeout 60 "$SYNC" 2>&1 >/dev/null)"; rc=$?
 [ "$rc" -eq 0 ] && ok "script preview for dexter exits 0" || bad "script preview for dexter exits $rc -- an opt-out is not an error"
 case "$err" in
   *"ERROR [sweep]"*) bad "opt-out still reported as ERROR [sweep]" ;;
