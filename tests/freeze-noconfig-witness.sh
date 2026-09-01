@@ -49,6 +49,15 @@ else
   bad "unexpected rc=$rc from the remote fallback: $out"
 fi
 
+if gh auth status >/dev/null 2>&1; then
+  out="$(SCHEDULER_FREEZE_FILE="$W/nothing2/schedule/FREEZE" SCHEDULER_FREEZE_CACHE="$W/cache-gap" \
+         bash "$F" ecosim 2>&1)"; rc=$?
+  [ "$rc" -eq 0 ] && ok "GAP on main (known to carry no FREEZE) is RELEASED (rc=0), not FROZEN" \
+    || bad "GAP on main returned rc=$rc, expected 0 -- a 404 is being read as a freeze again: $out"
+else
+  echo "  SKIP: gh unauthenticated here, cannot exercise the known-GAP case"
+fi
+
 # --- 3. FROZEN still frozen ------------------------------------------------
 mkdir -p "$W/frozen/schedule"
 printf 'migration wave 1 rollback\n' > "$W/frozen/schedule/FREEZE"
