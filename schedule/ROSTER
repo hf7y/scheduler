@@ -172,7 +172,7 @@ abletim         | abletim@monkey         | 20m | live
 # schedule/apms.conf exports APMS_READ_ONLY=1; canvas.py's _guard refuses every
 # non-GET while it is set; and the account's clone has no canvas.token at all.
 # Reads work, writes do not. Do not "tidy" any of the three.
-apms            | apms@monkey            | 20m | parked
+apms            | apms@monkey            | 20m | live
 
 # UN-PAUSED 2026-08-28, Zach-directed ("1 and 3 so we can stop 3 in case it
 # hits a limit and 1 still works"). The 2026-08-06 pause was a missing
