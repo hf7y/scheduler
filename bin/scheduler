@@ -855,11 +855,7 @@ project_questions_counts() {
   if [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
     issues_counts "$proj"
   elif [ ! -d "$SCHED_ROOT/questions" ]; then
-    # The local questions/*.md mirror was retired whole by #244. Without
-    # this check, questions_counts() below opens a path that can no
-    # longer exist, sees no file, and returns a clean "0 0" -- the exact
-    # "BLIND reported as OK" failure this function exists to prevent,
-    # just for the mirror channel instead of the issues one (#396).
+    # Retired by #244: a missing file here is unread, not empty (#396).
     return 1
   else
     questions_counts "$SCHED_ROOT/questions/$proj.md"
@@ -2981,11 +2977,7 @@ case "${1:-}" in
       exit $?
     fi
     if [ ! -d "$SCHED_ROOT/questions" ]; then
-      # Same BLIND framing as the focus verb above: the local
-      # questions/*.md mirror was retired with sync-crontab.sh's symlink
-      # farm (#244), so falling through to open_file's generic "no file
-      # yet at ..." reads as "$2 has no QUESTIONS.md" rather than "this
-      # command can no longer see one" (#396).
+      # Same BLIND framing as the focus verb above, not open_file's generic (#396).
       echo "scheduler questions: cannot read -- the local questions/*.md mirror" >&2
       echo "  was retired with sync-crontab.sh's symlink farm (#244); this is" >&2
       echo "  BLIND, not '$2 has no QUESTIONS.md'. See $2's own repo directly." >&2

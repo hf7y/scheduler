@@ -21,15 +21,6 @@
 # open_file() unconditionally and failed with open_file's generic "no file
 # yet at ..." -- which reads as "$proj has no FOCUS.md", not "this command
 # can no longer see one". Same BLIND framing now applied there too.
-#
-# Sections 4-5 (added 2026-09-01, #396) cover the questions side of the
-# same retirement, missed by the original pass because #234 only fixed
-# cmd_status/cmd_glance's file-channel branch, not project_questions_counts
-# (shared by cmd_glance AND `scheduler -q`) or the bare `questions <proj>`
-# verb. project_questions_counts() returned a clean "0 0" for a file whose
-# whole directory no longer exists, so `scheduler -q` listed every
-# file-channel project as "nothing open" instead of BLIND; and the bare
-# verb fell into open_file's generic "no file yet at ...".
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
