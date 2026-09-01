@@ -100,5 +100,24 @@ grep -qE '^\s*\[ "\$\{enabled// /\}" = "1" \] \|\| continue' "$R" \
   && bad "the loop still has a bare enabled==1 check ahead of the ROSTER lookup" \
   || ok "no bare enabled==1 gate left ahead of the ROSTER lookup"
 
+# --- the LAST row, on a file with no trailing newline (hf7y/scheduler#430) ---
+# THE BUG THIS CATCHES: a bare `while read` drops a final line with no newline
+# after it, so the dispatcher called the last row "no such row" every 20 min.
+# printf, not a heredoc: a heredoc supplies the newline whose absence IS the bug.
+printf '%s\n%s' '# comment' 'omega   | omega@testhost   | 20m | live' \
+  > "$TMP/schedule/ROSTER"
+out="$(roster_state_for omega testhost)"; rc=$?
+[ "$rc" -eq 0 ] && [ "$out" = "live" ] \
+  && ok "roster_state_for reads the last row of a file with no trailing newline" \
+  || bad "the newline-less last row is invisible again (#430): rc=$rc out=$out"
+
+# roster_rows reads stdin; the guard belongs on the loop either way.
+eval "$(sed -n '/^roster_rows() {/,/^}/p' "$R")"
+PACED_HOST=testhost
+rows="$(roster_rows < "$TMP/schedule/ROSTER")"
+printf '%s' "$rows" | grep -q '^omega|1|1|' \
+  && ok "roster_rows emits the newline-less last row too" \
+  || bad "roster_rows still drops the last row (#430): got '$rows'"
+
 printf '\npaced-roster-authority-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
