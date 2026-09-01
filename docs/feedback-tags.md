@@ -83,9 +83,10 @@ retry until it's actually acted on).
 ## Editing reports in vim
 
 `~/.vimrc` defines buffer-local mappings (active on files under
-`~/reports/**/*.md`, this repo's `focus/` and `questions/` symlink dirs,
-and `BLOCKERS.md`) that insert a tag on a new line below the cursor and
-drop straight into insert mode:
+`~/reports/**/*.md`) that insert a tag on a new line below the cursor and
+drop straight into insert mode. (This repo's own `focus/*.md`/`questions/*.md`
+symlink farm and `BLOCKERS.md`, once also in scope here, were retired by
+#244 and #66 -- neither exists in this tree any more.)
 
 | Mapping | Inserts |
 |---|---|
@@ -172,15 +173,14 @@ done" — a discipline problem solved by automation instead of a habit to
 build.
 
 **Commits into whichever repo actually owns the file, not necessarily
-this one.** `focus/*.md` and `questions/*.md` are symlinks into other
-projects' own repos (chezz's `FOCUS.md`, etc.) — editing one and saving
-resolves the symlink, finds the REAL owning repo via `git rev-parse
---show-toplevel`, and commits there. `BLOCKERS.md` and this project's own
-`.scheduler/FOCUS.md`/`QUESTIONS.md` commit into the scheduler repo
-itself. Files with no owning repo at all (`~/reports/**/*.md` —
-deliberately uncommitted, lives outside git by design) are silently
-skipped — confirmed directly against the real `~/reports` directory, not
-assumed.
+this one** — resolving a symlink to its real owning repo via `git
+rev-parse --show-toplevel` if the saved path is one. Files with no owning
+repo at all (`~/reports/**/*.md` — deliberately uncommitted, lives outside
+git by design) are silently skipped. (The `focus/*.md`/`questions/*.md`
+symlink farm this was written against, and `BLOCKERS.md`/
+`.scheduler/FOCUS.md`/`QUESTIONS.md`, are the same #244/#66 retirements
+noted above — this routing logic is dormant for this repo until something
+else supplies a symlinked path.)
 
 **Fully backgrounded so vim never blocks**, using `setsid` plus full
 stdin/stdout/stderr detachment — some projects' pre-commit hooks are
@@ -192,12 +192,11 @@ work already sitting in that repo. The commit message is always prefixed
 hand-crafted one.
 
 Verified end-to-end in a sandboxed pair of throwaway repos linked by a
-symlink (mirroring the real `focus/*.md` setup) before touching the real
-`~/.vimrc`: committing through the symlink lands only in the external
-repo, the local one stays untouched; committing `BLOCKERS.md` directly
-lands locally; both return control to vim near-instantly. A naive first
-attempt (background the command with a bare `&`, no `setsid`/detachment)
-was confirmed to hang vim indefinitely — the tested form here is what
+symlink before touching the real `~/.vimrc`: committing through the
+symlink lands only in the external repo, the local one stays untouched;
+both return control to vim near-instantly. A naive first attempt
+(background the command with a bare `&`, no `setsid`/detachment) was
+confirmed to hang vim indefinitely — the tested form here is what
 avoids that.
 
 ## The retired cross-project channel: BLOCKERS.md
