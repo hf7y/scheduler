@@ -74,8 +74,9 @@ for adv in 'explain, -e' 'overview <project>' -- '--receipt' 'questions [project
     ok "\`--help\` does not advertise: $adv"
   fi
 done
+completion_verbs="$(source "$ROOT/bin/scheduler-completion.bash"; SCHEDULER_COMPLETION_BIN="$ROOT/bin/scheduler" _scheduler_subcommands)"
 for name in explain blockers; do
-  if grep -qE "subcommands=.*\b$name\b" "$ROOT/bin/scheduler-completion.bash"; then
+  if grep -qxF "$name" <<<"$completion_verbs"; then
     bad "tab-completion still offers \`$name\`"
   else
     ok "tab-completion does not offer \`$name\`"
