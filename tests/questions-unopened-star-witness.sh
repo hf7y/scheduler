@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Witness for #461: questions_unopened()'s `*` stat-ed the questions/ mirror
-# #244 deleted, so it always read qmtime=0 and could never fire. Now takes
-# the changed-at epoch as $3 (issues_counts()'s new 3rd field) instead.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,14 +11,11 @@ command -v jq >/dev/null 2>&1 || { echo "  FAIL: jq missing -- this witness cann
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-# Extracted, not sourced whole (would run bin/scheduler's dispatch case).
 for fn in conf_field gh_repo_slug issues_counts questions_unopened get_seen mark_seen; do
   sed -n "/^${fn}() {/,/^}/p" "$SCHED" >> "$TMP/fns.sh"
 done
 [ -s "$TMP/fns.sh" ] || { echo "could not extract functions from $SCHED"; exit 1; }
-# shellcheck disable=SC1090
 . "$TMP/fns.sh"
-# shellcheck disable=SC1091
 . "$ROOT/lib/provenance.sh"
 
 HOME="$TMP/home"; mkdir -p "$HOME"
@@ -32,7 +26,6 @@ SCHED_ROOT="$TMP/root"; mkdir -p "$SCHED_ROOT/schedule"
 printf 'PROJECT="witnessproj"\nREPO_URL="git@github.com:hf7y/witnessproj.git"\n' \
   > "$SCHED_ROOT/schedule/witnessproj.conf"
 
-# Fake `gh` on PATH -- hermetic (same approach as tests/gh-comment-witness.sh).
 mkdir -p "$TMP/bin"
 cat > "$TMP/bin/gh" <<'FAKE'
 #!/usr/bin/env bash
