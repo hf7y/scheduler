@@ -32,18 +32,10 @@
 #   NODE_BIN_DIR      (this account's newest ~/.nvm/versions/node/*/bin) the
 #                      dir holding `claude`, when discovery guesses wrong
 #   PACED_FORCE       (0)  1 = skip the gate AND tempo, run the next participant now (testing)
-#   PACED_MAX_PER_TICK (8) hard cap on dispatches in one tick, so a single cron
-#                      firing can't monopolize the flock indefinitely if the
-#                      gate keeps reporting RUN (e.g. a probe stuck reporting
-#                      stale slack). The next tick simply continues rotation.
-#   GATE_ERROR_STREAK_THRESHOLD (5) consecutive gate rc=2 (ERROR -- probe
-#                      failed/unparseable) ticks before a GATE-ERROR-STREAK
-#                      line is logged, and every multiple thereafter. rc=2
-#                      still behaves exactly like rc=1 (HOLD, fail-safe) --
-#                      this only makes a broken probe loud, it does not change
-#                      what the runner does. See #191: a 319-tick unbroken
-#                      ERROR streak (~57h) on dexter went unnoticed because
-#                      every tick logged as an ordinary, silent HOLD.
+#   PACED_MAX_PER_TICK (8) hard cap on dispatches in one tick, so one cron
+#                      firing cannot monopolize the flock. Rotation continues.
+#   GATE_ERROR_STREAK_THRESHOLD (5) consecutive gate rc=2 ticks before a
+#                      GATE-ERROR-STREAK line is logged. Why: the gate site.
 set -uo pipefail
 
 JOB_NAME="scheduler-paced-runner"
@@ -109,7 +101,9 @@ acct_of_prog() {
 # instead of filing (order pinned by tests/host-mode-preflight-witness.sh).
 roster_rows() {
   local line p ah rate state acct
-  while IFS= read -r line; do
+  # `|| [ -n "$line" ]` for the conf loader's reason below: a file with no
+  # trailing newline is read one row short. ROSTER is one (hf7y/scheduler#430).
+  while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|\#*) continue ;; esac
     IFS='|' read -r p ah rate state <<<"$line"
     p="$(printf '%s' "$p" | tr -d '[:space:]')"
@@ -136,7 +130,7 @@ roster_state_for() {
   local proj="$1" host="$2" f line p ah rate state
   f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
   [ -r "$f" ] || return 1
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|\#*) continue ;; esac
     IFS='|' read -r p ah rate state <<<"$line"
     p="$(printf '%s' "$p" | tr -d '[:space:]')"
