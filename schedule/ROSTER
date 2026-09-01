@@ -127,7 +127,7 @@
 # CRON_HOST/CRON_ACCOUNT. That seeding is history: this file is the authority
 # now, not a derivation of those, and nothing corroborates it against them.
 
-ecosim          | ecosim@monkey          | 20m | parked
+ecosim          | ecosim@monkey          | 20m | live
 bibliothecaire  | bibliothecaire@monkey  | 20m | live
 vim-arcade      | vim-arcade@monkey      | 20m | parked
 realisateur     | realisateur@monkey     | 20m | parked
