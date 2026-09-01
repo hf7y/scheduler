@@ -683,10 +683,8 @@ issues_counts() {
       "$proj" "$slug" "$raw" >&2
     return 1
   fi
-  # Third field is the newest updatedAt (epoch) among UNANSWERED open issues,
-  # 0 when there are none -- questions_unopened()'s replacement for the
-  # `questions/$proj.md` mtime that #244 deleted (issue #461: the old stat
-  # always failed, so `*` could never fire for an issues-channel project).
+  # 3rd field: newest updatedAt (epoch) among unanswered open issues, 0 if
+  # none -- feeds questions_unopened() (#461).
   if ! out="$(printf '%s' "$raw" | jq -r --arg owner "$owner" \
         "$PROVENANCE_ANSWERED_JQ"'
          [.[] | select(.state == "OPEN")] as $open
@@ -1691,16 +1689,11 @@ questions_counts() {
 }
 
 # True when this project's questions changed since you last opened them via
-# `scheduler questions`/`status` -- the `*` in both question views, added
-# 2026-07-22 so an open count doesn't read the same whether it's brand new
-# or something you've already seen and just haven't gotten to. $3 is the
-# "changed at" epoch from project_questions_counts's third field -- the
-# newest unanswered issue's updatedAt for an issues-channel project, or the
-# QUESTIONS.md mtime for the (now unreachable, #244) file channel. Fixed
-# 2026-08-31 (#461): this used to `stat` $SCHED_ROOT/questions/$proj.md
-# directly, a path #244 deleted, so the star could never fire for any
-# project. Approximate, not a real read-receipt. Only meaningful when
-# something is still unanswered, so a zero count is never starred.
+# `scheduler questions`/`status` -- the `*` in both question views. $3 is
+# the "changed at" epoch (project_questions_counts's 3rd field), not a
+# stat of $SCHED_ROOT/questions/$proj.md -- #244 deleted that path, which
+# is why the star could never fire before this (#461). Approximate, not a
+# real read-receipt; only meaningful when something is still unanswered.
 questions_unopened() {
   local proj="$1" q_unanswered="${2:-0}" q_changed="${3:-0}"
   [ "$q_unanswered" -gt 0 ] 2>/dev/null || return 1

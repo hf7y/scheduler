@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-# Witness for #461: questions_unopened()'s `*` marker could never fire for
-# any project.
-#
-# THE BUG. questions_unopened() decided the glance/`-q` `*` ("changed since
-# you last opened it") by `stat`-ing $SCHED_ROOT/questions/$proj.md's mtime.
-# #244 deleted that whole directory (the local file-mirror sunset), so the
-# stat always failed, qmtime was always 0, and `[ 0 -gt "$qseen" ]` could
-# never be true for any real "last seen" timestamp -- structurally dead for
-# every project, including issues-channel ones (the only kind
-# questions_unopened is ever called for now).
-#
-# THE FIX. issues_counts() now emits a THIRD field: the newest updatedAt
-# (epoch) among the project's UNANSWERED open question issues, 0 if none.
-# questions_unopened() takes that as $3 instead of stat-ing the retired path.
+# Witness for #461: questions_unopened()'s `*` stat-ed the questions/ mirror
+# #244 deleted, so it always read qmtime=0 and could never fire. Now takes
+# the changed-at epoch as $3 (issues_counts()'s new 3rd field) instead.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,9 +14,7 @@ command -v jq >/dev/null 2>&1 || { echo "  FAIL: jq missing -- this witness cann
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-# Extract the real functions under test from the script, so this cannot drift
-# from the source (same technique as tests/conf-field-witness.sh). Sourcing
-# bin/scheduler wholesale would execute its dispatch case at the bottom.
+# Extracted, not sourced whole (would run bin/scheduler's dispatch case).
 for fn in conf_field gh_repo_slug issues_counts questions_unopened get_seen mark_seen; do
   sed -n "/^${fn}() {/,/^}/p" "$SCHED" >> "$TMP/fns.sh"
 done
@@ -35,7 +22,7 @@ done
 # shellcheck disable=SC1090
 . "$TMP/fns.sh"
 # shellcheck disable=SC1091
-. "$ROOT/lib/provenance.sh"   # PROVENANCE_ANSWERED_JQ, read by issues_counts
+. "$ROOT/lib/provenance.sh"
 
 HOME="$TMP/home"; mkdir -p "$HOME"
 SEEN_FILE="$HOME/.local/share/scheduler-glance/seen.tsv"
@@ -45,8 +32,7 @@ SCHED_ROOT="$TMP/root"; mkdir -p "$SCHED_ROOT/schedule"
 printf 'PROJECT="witnessproj"\nREPO_URL="git@github.com:hf7y/witnessproj.git"\n' \
   > "$SCHED_ROOT/schedule/witnessproj.conf"
 
-# Fake `gh` on PATH -- hermetic, never the live estate (same approach as
-# tests/gh-comment-witness.sh).
+# Fake `gh` on PATH -- hermetic (same approach as tests/gh-comment-witness.sh).
 mkdir -p "$TMP/bin"
 cat > "$TMP/bin/gh" <<'FAKE'
 #!/usr/bin/env bash
