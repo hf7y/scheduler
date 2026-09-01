@@ -796,8 +796,9 @@ for acct in "${ACCT_ORDER[@]}"; do
 
   # Unmanaged lines that reference a job name we are about to manage mean
   # the same job is installed twice under different ownership -- the exact
-  # failure the aedile/vkv-inventory migration produced. Loud, not fatal:
-  # the human has to pick which one survives.
+  # failure the aedile/vkv-inventory migration produced. REFUSED (#454), not
+  # merely warned: the human has to pick which one survives, first.
+  dup_refuse=0
   while IFS= read -r mline; do
     [ -n "$mline" ] || continue
     # The command this managed line runs, i.e. the line minus its leading
@@ -820,10 +821,17 @@ for acct in "${ACCT_ORDER[@]}"; do
         echo "adopting [$acct]: '$mcmd' was hand-installed; the managed block takes it over (raw line dropped)"
         KEPT="$(grep -vxF -- "$kline" <<<"$KEPT")"
       else
-        echo "WARNING [$acct]: an UNMANAGED line already runs '$mcmd' -- installing the managed block as well would run it TWICE. Re-run with --adopt to take the existing line over, or remove it by hand." >&2
+        echo "ERROR [$acct]: an UNMANAGED line already runs '$mcmd' -- installing the managed block as well would run it TWICE. Re-run with --adopt to take the existing line over, or remove it by hand." >&2
+        WRITE_ERRORS=$((WRITE_ERRORS + 1))
+        dup_refuse=1
       fi
     done <<<"$KEPT"
   done <<<"${ACCT_LINES[$acct]}"
+
+  if [ "$dup_refuse" -eq 1 ]; then
+    echo "ERROR [$acct]: refusing to write -- resolve the duplicate above first." >&2
+    continue
+  fi
 
   NEW_FILE="/tmp/sync-crontab.$$.$acct.new"
   {

@@ -24,8 +24,8 @@
 # What must hold:
 #   1. An unmanaged line whose command matches the managed RUNNER line,
 #      differing ONLY by its own trailing "# scheduler:...:RUNNER (...)" tag
-#      -> WARNING, not a silent double-install.
-#   2. An unmanaged line with a genuinely different command -> no warning
+#      -> ERROR, refused (#454; used to WARN and still install the duplicate).
+#   2. An unmanaged line with a genuinely different command -> no error
 #      (keeps the guard from crying wolf on unrelated lines).
 #
 # Runs the REAL script against a throwaway fixture repo, preview-only:
@@ -109,23 +109,30 @@ run_sync() { ( cd "$REPO" && PATH="$STUBBIN:$PATH" "$REPO/bin/sync-crontab.sh" 2
 
 echo "== an unmanaged line differing ONLY by its own RUNNER tag comment"
 crontab_stub "21 */2 * * * PACED_MAX_PER_TICK=1 $REPO/wrappers/w-runner.sh # scheduler:fixture-paced-runner:RUNNER (usage-paced dispatch)"
-OUT="$(run_sync)"
-if printf '%s\n' "$OUT" | grep -q 'WARNING \['"$(id -un)"'\]:.*RUNNER (usage-paced dispatch)\|WARNING \['"$(id -un)"'\]:.*'"$REPO/wrappers/w-runner.sh"; then
+OUT="$(run_sync)"; RC=$?
+if printf '%s\n' "$OUT" | grep -q 'ERROR \['"$(id -un)"'\]:.*RUNNER (usage-paced dispatch)\|ERROR \['"$(id -un)"'\]:.*'"$REPO/wrappers/w-runner.sh"; then
   ok "tag-only difference is still flagged as a collision"
 else
   bad "a dose-converged RUNNER line (same command, different cadence, its own tag) was NOT flagged -- sync-crontab.sh --apply would silently install a second runner line"
   echo "$OUT"
 fi
+if [ "$RC" -ne 0 ]; then
+  ok "the collision refuses (non-zero exit), not merely warns"
+else
+  bad "a collision was flagged but sync-crontab.sh still exited 0 -- enrole-selfdev.sh's 'rc -ne 0' check would not catch it"
+fi
 
 echo "== an unmanaged line whose command genuinely differs"
 crontab_stub "0 3 * * * $REPO/wrappers/w-runner.sh --unrelated-flag"
-OUT="$(run_sync)"
-if printf '%s\n' "$OUT" | grep -q 'WARNING'; then
-  bad "an unrelated unmanaged line raised a collision warning -- guard is over-firing"
+OUT="$(run_sync)"; RC=$?
+if printf '%s\n' "$OUT" | grep -q 'ERROR \['"$(id -un)"'\]:.*RUNNER (usage-paced dispatch)\|ERROR \['"$(id -un)"'\]:.*'"$REPO/wrappers/w-runner.sh"; then
+  bad "an unrelated unmanaged line raised a collision error -- guard is over-firing"
   echo "$OUT"
 else
-  ok "an unrelated unmanaged line raises no warning"
+  ok "an unrelated unmanaged line raises no collision error"
 fi
+[ "$RC" -eq 0 ] && ok "an unrelated unmanaged line does not change the exit code" \
+  || bad "an unrelated unmanaged line made sync-crontab.sh exit nonzero (rc=$RC)"
 
 echo
 echo "sync-crontab-runner-tag-collision-witness: $PASS passed, $FAIL failed"
