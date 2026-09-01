@@ -854,6 +854,12 @@ project_questions_counts() {
   local proj="$1"
   if [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
     issues_counts "$proj"
+  elif [ ! -d "$SCHED_ROOT/questions" ]; then
+    # Same BLIND framing cmd_status already uses for this exact mirror
+    # (#234): the questions/*.md symlink farm was retired by #244, so a
+    # missing directory means "cannot read", never "nothing open".
+    echo "scheduler: $proj: cannot read -- the local questions/*.md mirror was retired by #244; not the same as nothing open" >&2
+    return 1
   else
     questions_counts "$SCHED_ROOT/questions/$proj.md"
   fi
@@ -1800,22 +1806,23 @@ cmd_glance() {
   # ordering still queued in FOCUS.md's backlog.
   local rows=""
   while IFS= read -r proj; do
-    local qfile="$SCHED_ROOT/questions/$proj.md"
     local qlabel="-"
-    # An issues-channel project has no local file to gate on -- gating the
-    # count on one is exactly how it would silently render "-" forever.
+    # project_questions_counts is the single BLIND-aware gate now (#396) --
+    # gating on [ -f "$qfile" ] here too used to make a file-channel project
+    # with no local file (every one of them, since #244 retired the mirror
+    # that would ever create it) skip straight to "-" without even asking.
     local q_blind=0 q_counts
-    if [ -f "$qfile" ] || [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
-      # Could-not-look renders `?`, never `-`. `-` means "nothing open".
-      if ! q_counts="$(project_questions_counts "$proj")"; then
-        q_blind=1; q_counts="0 0"
-      fi
-      read -r q_unanswered q_answered <<<"$q_counts"
-      local q_total=$(( q_unanswered + q_answered ))
-      local q_star=""
-      if [ "$q_total" -gt 0 ] 2>/dev/null; then
-        qlabel="$q_unanswered/$q_total"
-      fi
+    # Could-not-look renders `?`, never `-`. `-` means "nothing open".
+    if ! q_counts="$(project_questions_counts "$proj" 2>/dev/null)"; then
+      q_blind=1; q_counts="0 0"
+    fi
+    read -r q_unanswered q_answered <<<"$q_counts"
+    local q_total=$(( q_unanswered + q_answered ))
+    local q_star=""
+    if [ "$q_total" -gt 0 ] 2>/dev/null; then
+      qlabel="$q_unanswered/$q_total"
+    fi
+    if [ "$q_blind" -ne 1 ]; then
       # `*` = this file changed since you last opened it via `scheduler
       # questions`/`status` -- added 2026-07-22 so an open count doesn't
       # read the same whether it's brand new or something you've already
@@ -2972,6 +2979,16 @@ case "${1:-}" in
     if [ "$(answer_channel "$2")" = "issues" ]; then
       cmd_questions_issues "$2"
       exit $?
+    fi
+    if [ ! -d "$SCHED_ROOT/questions" ]; then
+      # Same BLIND framing as the focus|-f arm above (#396): the
+      # questions/*.md mirror was retired with #244, so this reads as
+      # "cannot read", never open_file's generic "no file yet" (which
+      # implies "$2 has no open questions").
+      echo "scheduler questions: cannot read -- the local questions/*.md mirror was" >&2
+      echo "  retired with sync-crontab.sh's symlink farm (#244); this is BLIND," >&2
+      echo "  not '$2 has no open questions'. See $2's own repo directly." >&2
+      exit 1
     fi
     open_file "$SCHED_ROOT/questions/$2.md"
     ;;
