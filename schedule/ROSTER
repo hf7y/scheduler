@@ -149,7 +149,7 @@ senechal        | senechal@monkey        | 20m | live
 #
 # 20m is TEMPO_MIN_MIN, per the CEILING block above -- the ceiling, not the
 # pace. bin/tempo.sh sets the real interval from abletim's own backlog.
-abletim         | abletim@monkey         | 20m | parked
+abletim         | abletim@monkey         | 20m | live
 
 # ADDED 2026-08-25, Zach-directed: "yes stand up but ensure it has a no publish
 # to canvas guard." The guard is the precondition, not a follow-up: apms writes
