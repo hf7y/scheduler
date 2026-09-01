@@ -227,4 +227,4 @@ secretaire      | secretaire@monkey      | 20m | live
 # live row whose account is missing, so merging this first would arm a break.
 # The conf carries what this file cannot: the repo's own never-do list, and
 # that its default branch is `master`.
-dcp-gate-site   | dcp-gate-site@monkey   | 20m | parked
+dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
