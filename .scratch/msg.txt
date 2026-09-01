@@ -1,0 +1,36 @@
+roster-diff: verify a column nothing reads, and the file already said why not
+
+Zach, 2026-09-01: "this dies. the whole script is dead. and anything touching
+it should die too."
+
+roster-diff.sh's own header states what "old" still meant: "_paced.<host>.conf's
+enabled column plus CRON_HOST/CRON_ACCOUNT". The enabled column has no readers.
+bin/usage-paced-runner.sh:496 binds $enabled and never references it again --
+`grep -n '\$enabled'` returns nothing -- because participant_enabled() at :160
+consults roster_state_for and says so: "a value never passed in is not a second
+opinion."
+
+So three mechanisms maintained a dead field: dose --arm WROTE it, this script
+VERIFIED it, and its witness TESTED the verifier.
+
+And the precedent for cutting it is in this file already. It dropped FREEZE from
+the comparison on exactly this reasoning -- "comparing against it here would
+compare ROSTER against a file nothing consults anymore" -- and nobody applied it
+a second time when the enabled column reached the same state.
+
+SALVAGED, because half of case 5 was never roster-diff's: every live ROSTER row's
+conf must set a non-empty BATCH_JOB_NAME, or bin/scheduler-run:59 exits 2 every
+tick. nine-speakers ran that way for 571 ticks and the status page read it as
+"armed, never ran". That assertion moves to tests/live-row-conf-witness.sh and
+still passes. tests/run-all.sh auto-discovers it; no roster is updated.
+
+DROPPED with the script: case 5's CRON_HOST/CRON_ACCOUNT half. Its failure text
+was "roster-diff derives parked for it and can never exit 0", which was its whole
+reason for existing, and bin/sync-crontab.sh defaults CRON_ACCOUNT to the local
+account when unset.
+
+The four ROSTER citations, abletim.conf's paragraph and two WITNESS lines went
+with it -- a citation of a deleted script is the stale-path finding this estate
+already grades.
+
+Analysis on #429.
