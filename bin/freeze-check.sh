@@ -104,8 +104,13 @@ _FREEZE_REMOTE_CACHE=""
 _freeze_fetch_remote() {
   local ttl="${SCHEDULER_FREEZE_CACHE_TTL:-45}"
   local cache="${SCHEDULER_FREEZE_CACHE:-${XDG_CACHE_HOME:-${TMPDIR:-/tmp}}/scheduler-freeze.$(id -u)}"
+  local gap_marker="$cache.gap"
   _FREEZE_REMOTE_CACHE="$cache"
   # Fresh enough? Reuse. `find -newermt` avoids stat(1) portability games.
+  if [ -f "$gap_marker" ]; then
+    local gap_age; gap_age=$(( $(date +%s) - $(date -r "$gap_marker" +%s 2>/dev/null || echo 0) ))
+    [ "$gap_age" -ge 0 ] && [ "$gap_age" -lt "$ttl" ] && return 2
+  fi
   if [ -f "$cache" ]; then
     local age; age=$(( $(date +%s) - $(date -r "$cache" +%s 2>/dev/null || echo 0) ))
     [ "$age" -ge 0 ] && [ "$age" -lt "$ttl" ] && return 0
@@ -124,9 +129,14 @@ _freeze_fetch_remote() {
     # the same statement an absent file makes inside a real schedule/. Only an
     # unreachable/unauthenticated GitHub (BLIND) is a refusal. Conflating them
     # would make every network hiccup a full estate stop.
-    [ "$?" = 4 ] && { : > "$cache"; return 0; }
+    if [ "$?" = 4 ]; then
+      rm -f "$cache"
+      : > "$gap_marker"
+      return 2
+    fi
     return 1
   }
+  rm -f "$gap_marker"
   printf '%s\n' "$body" > "$cache" || return 1
   return 0
 }
@@ -171,8 +181,11 @@ freeze_check() {
     # an uncached fetch would be one API call per project per tick. Measured
     # run durations are 110-1000s, so a short TTL costs a freeze essentially
     # nothing in reaction time while removing the per-participant call.
-    if _freeze_fetch_remote; then
+    _freeze_fetch_remote; local fetch_rc=$?
+    if [ "$fetch_rc" = 0 ]; then
       f="$_FREEZE_REMOTE_CACHE"
+    elif [ "$fetch_rc" = 2 ]; then
+      return 0
     else
       printf 'FROZEN (no config) -- %s\n' "$f" >&2
       printf '  no schedule/ directory here, and schedule/FREEZE could not be read from GitHub either.\n' >&2
