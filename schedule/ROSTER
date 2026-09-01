@@ -11,8 +11,7 @@
 # _paced.<host>.conf is still the ROTATION SOURCE in account mode -- which
 # rows exist and what command each runs. Deleting it is #364, gated on host
 # mode having really dispatched from here.
-# WITNESS: tests/paced-roster-authority-witness.sh. `bash bin/roster-diff.sh`
-# still checks that the legacy files derive the same set.
+# WITNESS: tests/paced-roster-authority-witness.sh.
 #
 # ONLY A HUMAN EDITS THIS FILE'S `state` COLUMN. Editing a row here IS arming
 # or parking a project, once #80's `dose <project>` reads this file to
@@ -125,8 +124,8 @@
 # most of the remaining grants, then everyone holds", not 4x more work.
 #
 # Seeded 2026-08-11 from _paced.monkey.conf and each schedule/<p>.conf's
-# CRON_HOST/CRON_ACCOUNT. Re-verify, don't trust this comment:
-#   bash bin/roster-diff.sh
+# CRON_HOST/CRON_ACCOUNT. That seeding is history: this file is the authority
+# now, not a derivation of those, and nothing corroborates it against them.
 
 ecosim          | ecosim@monkey          | 20m | parked
 bibliothecaire  | bibliothecaire@monkey  | 20m | live
@@ -146,7 +145,7 @@ senechal        | senechal@monkey        | 20m | parked
 # row lands, in that order and deliberately: dose-project.sh's do_live exits 5
 # BROKEN ("names account 'abletim' but no such account exists") on a live row
 # whose account is missing, so merging this first would arm a break, not a
-# project. Re-verify with `bash bin/roster-diff.sh`, do not trust this comment.
+# project. `dose <project> --check` is what re-verifies it.
 #
 # 20m is TEMPO_MIN_MIN, per the CEILING block above -- the ceiling, not the
 # pace. bin/tempo.sh sets the real interval from abletim's own backlog.
@@ -193,10 +192,8 @@ chezz           | chezz@monkey           | 20m | parked
 #
 # The note this block used to carry -- that schedule/crt.conf sets no
 # CRON_HOST/CRON_ACCOUNT -- was true when it was written and is not now: that
-# file sets CRON_HOST="monkey" and CRON_ACCOUNT="crt", so the third leg
-# bin/roster-diff.sh wants is filled in and this row is corroborated rather
-# than staged. The FREEZE half of the same note is moot: schedule/FREEZE was
-# deleted 2026-08-20 (hf7y/scheduler#246/#187).
+# file sets CRON_HOST="monkey" and CRON_ACCOUNT="crt". The FREEZE half of the
+# same note is moot: schedule/FREEZE was deleted 2026-08-20 (#246/#187).
 #
 # 20m, not the 6h this row carried while parked, for the reason the CEILING
 # block above gives: the ceiling quantises tempo's setpoint, and at 6h
