@@ -213,7 +213,23 @@ echo "case 8 -- the opt-out is a NOTE, not an ERROR (the defect case 3 missed)"
 #
 # So: assert the MANNER, not just the outcome. An assertion that only checks
 # a line is missing cannot tell a clean opt-out from a refusal.
-err="$(SYNC_HOST=dexter timeout 60 "$SYNC" 2>&1 >/dev/null)"; rc=$?
+# Hermetic sudo (#94's precedent) -- ambient passwordless-sudo state broke this.
+STUB8="$TMP/stub8"; mkdir -p "$STUB8"
+cat > "$STUB8/sudo" <<'STUB'
+#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n) shift ;;
+    -u) shift; shift ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+exec "$@"
+STUB
+chmod +x "$STUB8/sudo"
+err="$(PATH="$STUB8:$PATH" SYNC_HOST=dexter timeout 60 "$SYNC" 2>&1 >/dev/null)"; rc=$?
 [ "$rc" -eq 0 ] && ok "script preview for dexter exits 0" || bad "script preview for dexter exits $rc -- an opt-out is not an error"
 case "$err" in
   *"ERROR [sweep]"*) bad "opt-out still reported as ERROR [sweep]" ;;

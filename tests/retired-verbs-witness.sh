@@ -58,8 +58,9 @@ fi
 
 echo "== 3. \`questions <p> <n>\` no longer jumps -- the mirror it jumped into is gone"
 out="$(run_sched questions witnessproj 3 2>&1)"; rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "no file yet at"; then
-  ok "the trailing number is inert; the absent questions/ mirror is what fails"
+# #396: fallthrough now says BLIND, not open_file's generic "no file yet at ...".
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi "blind"; then
+  ok "the trailing number is inert; the absent questions/ mirror is what fails, BLIND not silent"
 else
   bad "unexpected rc=$rc: $(printf '%s' "$out" | head -1)"
 fi

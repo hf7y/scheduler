@@ -21,6 +21,7 @@
 # open_file() unconditionally and failed with open_file's generic "no file
 # yet at ..." -- which reads as "$proj has no FOCUS.md", not "this command
 # can no longer see one". Same BLIND framing now applied there too.
+# Sections 4-5: same retirement on the questions side (#396).
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -82,6 +83,34 @@ else
   ok "focus verb does not fall through to open_file's generic missing-file message"
 fi
 [ "$rc" -ne 0 ] && ok "focus verb exits non-zero on BLIND" || bad "focus verb exited 0 on BLIND"
+
+echo "== 4. 'scheduler -q' (questions overview): file-channel project reported BLIND, not 'nothing open'"
+out="$(run -q 2>&1)"
+if printf '%s' "$out" | grep -qi 'blind'; then
+  ok "-q overview says BLIND for the file-channel project it never read"
+else
+  bad "-q overview did not say BLIND -- output: $out"
+fi
+if printf '%s' "$out" | grep -qE '^\s*nothing open:.*witnessproj'; then
+  bad "-q overview still lists the unreadable project under 'nothing open' -- output: $out"
+else
+  ok "-q overview does not claim witnessproj has nothing open"
+fi
+
+echo "== 5. bare 'scheduler questions <project>' verb: BLIND, not open_file's generic 'no file yet'"
+out="$(run questions witnessproj 2>&1)"
+rc=0; run questions witnessproj >/dev/null 2>&1 || rc=$?
+if printf '%s' "$out" | grep -qi 'blind'; then
+  ok "questions verb says BLIND when the questions/ mirror is absent"
+else
+  bad "questions verb did not say BLIND -- output: $out"
+fi
+if printf '%s' "$out" | grep -q 'no file yet at'; then
+  bad "questions verb still uses open_file's generic 'no file yet at ...' (implies empty, not unreadable)"
+else
+  ok "questions verb does not fall through to open_file's generic missing-file message"
+fi
+[ "$rc" -ne 0 ] && ok "questions verb exits non-zero on BLIND" || bad "questions verb exited 0 on BLIND"
 
 echo
 echo "== $PASS passed, $FAIL failed =="

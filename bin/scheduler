@@ -854,6 +854,9 @@ project_questions_counts() {
   local proj="$1"
   if [ "$(answer_channel "$proj" 2>/dev/null)" = "issues" ]; then
     issues_counts "$proj"
+  elif [ ! -d "$SCHED_ROOT/questions" ]; then
+    # Retired by #244: a missing file here is unread, not empty (#396).
+    return 1
   else
     questions_counts "$SCHED_ROOT/questions/$proj.md"
   fi
@@ -2972,6 +2975,13 @@ case "${1:-}" in
     if [ "$(answer_channel "$2")" = "issues" ]; then
       cmd_questions_issues "$2"
       exit $?
+    fi
+    if [ ! -d "$SCHED_ROOT/questions" ]; then
+      # Same BLIND framing as the focus verb above, not open_file's generic (#396).
+      echo "scheduler questions: cannot read -- the local questions/*.md mirror" >&2
+      echo "  was retired with sync-crontab.sh's symlink farm (#244); this is" >&2
+      echo "  BLIND, not '$2 has no QUESTIONS.md'. See $2's own repo directly." >&2
+      exit 1
     fi
     open_file "$SCHED_ROOT/questions/$2.md"
     ;;
