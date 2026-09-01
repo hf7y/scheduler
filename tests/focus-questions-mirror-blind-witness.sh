@@ -21,8 +21,7 @@
 # open_file() unconditionally and failed with open_file's generic "no file
 # yet at ..." -- which reads as "$proj has no FOCUS.md", not "this command
 # can no longer see one". Same BLIND framing now applied there too.
-# Sections 4-5: same retirement on the questions side (#396).
-set -uo pipefail
+set -uo pipefail  # sections 4-5: same retirement on the questions side (#396)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
