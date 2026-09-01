@@ -31,9 +31,10 @@
 #                      PRECHECK_CMD: the precheck cuts HOW OFTEN claude runs,
 #                      MODEL cuts what each run costs.
 #   ALLOWED_TOOLS      ("Bash,Read,Write,Edit,Glob,Grep")
-#   NODE_BIN_DIR       (/home/zach/.nvm/versions/node/v25.2.1/bin) wherever
-#                      `claude` resolves from. TRAP: cron's PATH is minimal and
-#                      will not find it otherwise.
+#   NODE_BIN_DIR       (this account's newest ~/.nvm/versions/node/*/bin,
+#                      falling back to /home/zach/.nvm/versions/node/v25.2.1/bin)
+#                      wherever `claude` resolves from. TRAP: cron's PATH is
+#                      minimal and will not find it otherwise.
 #   BRANCH             ("main") branch this job resets to and pushes against
 #   SECRETS_SRC_DIR    (unset) a local dir of non-git secrets, gitignored by
 #                      design. Copied into the clone EVERY run, not just on
@@ -58,7 +59,20 @@ set -uo pipefail
 : "${MAX_TURNS:=40}"
 : "${MODEL:=}"
 : "${ALLOWED_TOOLS:=Bash,Read,Write,Edit,Glob,Grep}"
-: "${NODE_BIN_DIR:=/home/zach/.nvm/versions/node/v25.2.1/bin}"
+
+# node_bin_dir -- THIS account's `claude` dir, discovered. A FUNCTION so
+# tests/sweep-node-bin-witness.sh can call it, same reason
+# bin/usage-paced-runner.sh's copy of this is one (hf7y/scheduler#366).
+# It replaces a literal /home/zach/.nvm/.../v25.2.1/bin -- one person's home,
+# one node version -- tried FIRST by every project this engine runs for. The
+# literal stays LAST, as mandark's fallback, so that host resolves exactly as
+# it did before this existed.
+node_bin_dir() {
+  local newest
+  newest="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  printf '%s' "${newest:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+}
+: "${NODE_BIN_DIR:=$(node_bin_dir)}"
 # Empty = resolve from origin's own default HEAD after the clone (below),
 # NOT the literal string "main". Hardcoding "main" silently half-broke
 # every home-assistant run for weeks: baudin's only branch is master, so
@@ -141,7 +155,10 @@ REGISTRY_DIR="$HOME/.local/share/scheduler-registry"
 REGISTRY_LOCK="$REGISTRY_DIR/${PROJECT_KEY}.lock"
 REGISTRY_MARKER="$REGISTRY_DIR/${PROJECT_KEY}.active"
 
-export PATH="${NODE_BIN_DIR}:$PATH"
+# Prepend only when it exists -- an absent dir on PATH resolves nothing and
+# breaks nothing, but adding it unconditionally hid this exact fact, which is
+# why node_bin_miss_check() below exists (hf7y/scheduler#366).
+[ -d "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
@@ -170,6 +187,19 @@ notify() {
     echo "$(date -Is) WARNING: notify-send timed out after 5s (dbus socket present but unanswered, or a hung notification daemon) -- notification DROPPED: $*" >> "$LOG"
   fi
   return 0
+}
+
+# node_bin_miss_check -- unlike bin/usage-paced-runner.sh's own NODE-BIN MISS
+# (a log line only: pacing does not need `claude`), THIS engine's whole job is
+# calling `claude -p` a few lines below. `[ -d ]` above says nothing when
+# false, so a host that could not reach `claude` used to log exactly what one
+# that could reach it logged: nothing. Loud on both channels this file already
+# uses for a must-fix condition (see the auth-failure CRITICAL case below).
+node_bin_miss_check() {
+  command -v claude >/dev/null 2>&1 && return 0
+  local state; state="$([ -d "$NODE_BIN_DIR" ] && echo present || echo ABSENT)"
+  echo "$(date -Is) CRITICAL: no \`claude\` on PATH after NODE_BIN_DIR resolution (NODE_BIN_DIR=$NODE_BIN_DIR, $state) -- this run cannot reach claude -p and everything below will FAIL loud, not silent. Fix: point NODE_BIN_DIR at a directory with claude in it, or put claude on PATH for $(id -un)." >> "$LOG"
+  notify -u critical "$JOB_NAME: no claude on PATH" "NODE_BIN_DIR=$NODE_BIN_DIR ($state) -- see $LOG"
 }
 
 # claude_failure_detail() -- say WHY claude -p failed, when the cause is
@@ -462,6 +492,9 @@ if ! flock -n 201; then
   echo "$(date -Is) project '$PROJECT_KEY' already has an active job ($OTHER) -- skipping this run to avoid a concurrent-push conflict" >> "$LOG"
   exit 0
 fi
+
+node_bin_miss_check
+
 # ---- job vs. HUMAN --------------------------------------------------------
 # The two flocks above are job-vs-job. This is the other half: is a person
 # editing this project right now? $REGISTRY_DIR/<PROJECT_KEY>.interactive is
