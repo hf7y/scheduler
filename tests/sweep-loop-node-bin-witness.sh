@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# sweep-loop-node-bin-witness.sh -- how lib/sweep-loop-common.sh finds
-# `claude`, and what it says when it cannot.
-#
-# THE DEFECT THIS PINS (hf7y/scheduler#366): a literal
-# /home/zach/.nvm/.../v25.2.1/bin behind an UNCONDITIONAL `export PATH=...`
-# -- no `[ -d ]` test at all, unlike bin/usage-paced-runner.sh's copy of the
-# same default. On a host without that exact directory the prepend did
-# nothing AND SAID NOTHING, and this is the engine that actually invokes
-# `claude -p` (unlike the runner, which only paces) -- so a run that could
-# not reach `claude` would fail with no clue why.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ENGINE="$HERE/../lib/sweep-loop-common.sh"
@@ -16,7 +6,6 @@ source "$HERE/lib/witness-common.sh"
 
 echo "sweep-loop-node-bin-witness"
 
-# --- 1. node_bin_dir: discovery, not assumption ----------------------------
 eval "$(sed -n '/^node_bin_dir() {/,/^}/p' "$ENGINE")"
 if ! declare -F node_bin_dir >/dev/null; then
   bad "node_bin_dir could not be extracted from the engine -- the rest of this section tested nothing"
@@ -42,17 +31,14 @@ else
     || bad "version ordering returned '$got'"
 fi
 
-# --- 2. the knob still wins, and default resolution goes through the function
 grep -q ': "\${NODE_BIN_DIR:=\$(node_bin_dir)}"' "$ENGINE" \
   && ok "an explicit NODE_BIN_DIR still overrides discovery, default routes through node_bin_dir()" \
   || bad "NODE_BIN_DIR default no longer routes through node_bin_dir()"
 
-# --- 3. the PATH prepend is conditional, not unconditional -----------------
 grep -q '\[ -d "\$NODE_BIN_DIR" \] && export PATH="\${NODE_BIN_DIR}:\$PATH"' "$ENGINE" \
   && ok "PATH is only prepended when NODE_BIN_DIR actually exists" \
-  || bad "PATH prepend is still unconditional (or the exact shape changed) -- an absent dir would add a dead PATH entry"
+  || bad "PATH prepend is still unconditional -- an absent dir would add a dead PATH entry"
 
-# --- 4. A MISS IS LOUD -------------------------------------------------------
 if grep -q 'if ! command -v claude >/dev/null 2>&1; then' "$ENGINE"; then
   ok "the engine checks for \`claude\` on PATH after resolution"
 else
@@ -67,8 +53,6 @@ grep -q 'notify -u critical "\$JOB_NAME: claude NOT FOUND"' "$ENGINE" \
   && ok "a miss pages via notify -u critical, same vocabulary as the auth-failure case" \
   || bad "a node-bin miss no longer pages via notify -u critical"
 
-# The loud check must read AFTER notify() is defined (it calls notify()) and
-# AFTER the PATH prepend (it must observe the real resolution, not guess).
 notify_line="$(grep -n '^notify() {' "$ENGINE" | head -1 | cut -d: -f1)"
 path_line="$(grep -n '\[ -d "\$NODE_BIN_DIR" \] && export PATH=' "$ENGINE" | head -1 | cut -d: -f1)"
 check_line="$(grep -n 'if ! command -v claude >/dev/null 2>&1; then' "$ENGINE" | head -1 | cut -d: -f1)"

@@ -53,10 +53,6 @@ MAX_CYCLES="${MAX_CYCLES:-5}"
 GAP_MINUTES="${GAP_MINUTES:-55}"
 DEADLINE_HHMM="${DEADLINE_HHMM:-0830}"   # don't START a new cycle after this local time
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
-# node_bin_dir() -- THIS account's `claude` dir, discovered, not assumed.
-# Same fix and same shape as bin/usage-paced-runner.sh's node_bin_dir() and
-# lib/sweep-loop-common.sh's copy (hf7y/scheduler#366). The literal stays
-# LAST, as the fallback, so a host with no nvm resolves exactly as before.
 node_bin_dir() {
   local newest
   newest="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
@@ -70,9 +66,6 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
 mkdir -p "$STATE_DIR" "$REPORTS_DIR"
 
-# THE MISS IS LOUD. This driver is about to invoke `claude -p` for real
-# cycles overnight, so an unresolved NODE_BIN_DIR is reported here rather
-# than discovered at 8am as a night of cycles that each produced nothing.
 command -v claude >/dev/null 2>&1 || echo "$(date -Is) CRITICAL: no \`claude\` on PATH after resolution (NODE_BIN_DIR=$NODE_BIN_DIR, $([ -d "$NODE_BIN_DIR" ] && echo present || echo ABSENT)) -- every cycle tonight will fail outright." >> "$LOG"
 
 exec 200>"$LOCK"
