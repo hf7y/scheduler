@@ -1,34 +1,21 @@
-# Priority/pace weight: the scheduler/realisateur boundary
+# Priority/pace weight: currently inert everywhere it's read
 
-`schedule/_paced.conf` supports an optional `weight` field
-(`name|enabled|weight|command`, weight omitted defaults to 1) that
-`bin/usage-paced-runner.sh` enforces by literally repeating a
-weight-N participant N times in its round-robin rotation pool — a
-weight-3 participant gets 3 turns for every 1 turn a weight-1
-participant gets. Ties still resolve by plain rotation order.
+`schedule/_paced*.conf` supports an optional `weight` field
+(`name|enabled|weight|command`, omitted defaults to 1). Where
+`bin/usage-paced-runner.sh` still parses it (account mode, reading a conf
+file directly) it would repeat a weight-N participant N times in the
+rotation pool — but as of 2026-09-01 every enabled row in every
+`schedule/_paced*.conf` in this tree is weight 1, so no dispatch anywhere
+is actually being differentiated by it. In host mode, dispatching off
+`schedule/ROSTER` (the liveness authority, #364), it can't even be
+expressed: `roster_rows` emits weight 1 for every row regardless of what a
+conf says (see `schedule/_paced.conf`'s own header). #55 explored dropping
+the field outright and closed on a different question being moot instead.
 
-**This is a mechanical enforcement point only.** Scheduler's job stops at
-"run the number in this field this many times more often" — it has no
-opinion on what the number should be. That judgment belongs to
-realisateur, which has the thing scheduler deliberately doesn't: a
-cross-project view of which ideas are converging on something real (more
-turns, more benefit from steady iteration) versus which are still
-speculative/likely to morph before anything built on them would survive
-("vision debt" — pace slower, avoid sinking dev cycles into something
-that gets discarded once the idea itself changes shape).
-
-Realisateur is expected to edit this field directly as part of its own
-periodic pass, the same way it already edits `schedule/<project>.conf`
-files when registering a new project. No new mechanism is needed beyond
-this file already being a plain, human/agent-editable conf scheduler
-re-reads on every dispatch tick — the same "edit the conf, sync/apply"
-loop as any other schedule change (this field doesn't need a
-`sync-crontab.sh` step; `usage-paced-runner.sh` reads `_paced.conf`
-directly on every tick, no crontab regeneration involved).
-
-This is one piece of a larger scheduler/realisateur division of labor
-being worked out 2026-07-22: scheduler stays a pure mechanism (timing,
-pacing, resource gating); realisateur owns interpreting vision (feature
-requests, cross-project synchronicities, idea stability) and expresses
-that interpretation through mechanical knobs like this one rather than
-scheduler ever needing to understand *why*.
+The intended split, unexercised so far: scheduler would only be a
+mechanical enforcement point ("run this number more often"), and
+realisateur — which has the cross-project view scheduler deliberately
+lacks — would be the one to actually set non-default values, weighing
+which ideas are converging on something real against which are still
+likely to morph before anything built on them survives. Nothing has set a
+non-default value on a live row yet.

@@ -85,7 +85,7 @@ git repo at all — unverifiable is treated as dirty, not as clean.
 | `examples/` | The conf template + the canonical `.claude/` command/FOCUS templates a project copies in, plus `CLAUDE.md.template` (the "suggest `/ideate` instead of implementing" guardrail — see `docs/priority-weight.md` for the realisateur/scheduler split this belongs to). |
 | `docs/scheduler-cli.md` | The maintained man page for `bin/scheduler` (`scheduler man` opens it in `$PAGER`): glance column meanings, the `*` convention, where each number comes from, and the files behind them. The terse per-command list stays only in `scheduler --help` so the two can't drift. |
 | `docs/offline-first-checks.md` | The reusable pattern behind `bin/scheduler status`: build a check entirely out of deterministic scripts first, layer AI on top only as an opt-in (one-shot summary or interactive session) — a template for any project that wants the same kind of status check. |
-| `docs/priority-weight.md` | The optional `weight` field in `schedule/_paced.conf`: scheduler enforces it mechanically, realisateur is the one expected to set it based on cross-project vision judgment. |
+| `docs/priority-weight.md` | The optional `weight` field in `schedule/_paced*.conf` — currently inert on every live row, and structurally forced to 1 under `schedule/ROSTER` host-mode dispatch. |
 
 ## The conf file: `schedule/<project>.conf`
 
