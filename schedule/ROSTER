@@ -129,7 +129,7 @@
 #   bash bin/roster-diff.sh
 
 ecosim          | ecosim@monkey          | 20m | parked
-bibliothecaire  | bibliothecaire@monkey  | 20m | parked
+bibliothecaire  | bibliothecaire@monkey  | 20m | live
 vim-arcade      | vim-arcade@monkey      | 20m | parked
 realisateur     | realisateur@monkey     | 20m | parked
 scheduler       | scheduler@monkey       | 20m | parked
