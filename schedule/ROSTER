@@ -182,7 +182,7 @@ apms            | apms@monkey            | 20m | live
 # chezz ALSO runs in GitHub Actions on free public-repo minutes
 # (hf7y/chezz#57). Nothing locks between the two; that is the point. Actions
 # is the runner that survives this row being turned off again.
-chezz           | chezz@monkey           | 20m | parked
+chezz           | chezz@monkey           | 20m | live
 
 # UN-PAUSED 2026-08-25, Zach-directed: "stand up abletim and crt and use the
 # ecosystem's native way to trigger them to develop unattended." The pause
