@@ -23,11 +23,11 @@ mean, where each number comes from, the conventions (`*`, `> ` replies,
 
 ## DESCRIPTION
 
-`scheduler` is a thin, offline-first wrapper over the scheduler repo's own
-tracking files (`focus/`, `questions/`, `~/reports/<project>/`) and the paced
-runner's logs. It is not a parser or database: subcommands mostly open the real
-file in `$EDITOR` or print a screen assembled by `grep`/`awk`. Nothing here
-spends an AI call unless you explicitly ask (`status --claude` /
+`scheduler` is a thin, offline-first wrapper over `~/reports/<project>/`, the
+paced runner's logs, and (for a project with `ANSWER_CHANNEL=issues`) that
+project's GitHub issues. It is not a parser or database: subcommands mostly
+open the real file in `$EDITOR` or print a screen assembled by `grep`/`awk`.
+Nothing here spends an AI call unless you explicitly ask (`status --claude` /
 `--interactive`) — see `docs/offline-first-checks.md` for the pattern.
 
 ## THE GLANCE (no arguments)
@@ -42,49 +42,43 @@ they have something to say (see FOOTER LINES).
 
 - **PROJECT** — the registered name (`schedule/<project>.conf`).
 
-- **QUESTIONS** — `unanswered/total` open questions in that project's
-  `questions/<project>.md`. *Total* includes questions you've already
-  replied to inline (a real `> ` reply) but whose project run hasn't
-  consumed yet; *unanswered* is the count still waiting on you. Bullets
-  marked RESOLVED/ACKNOWLEDGED are excluded entirely. `-` = none open.
-  See `docs/feedback-tags.md` for how replies round-trip.
+- **QUESTIONS** — `unanswered/total` open questions, for a project with
+  `ANSWER_CHANNEL=issues` in its conf: read live from that project's GitHub
+  issues (`gh`). `-` = none open. Every other project defaults to the local
+  `questions/<project>.md` mirror `sync-crontab.sh` used to symlink here —
+  retired whole by #244, no replacement read path — so those render `?`
+  (BLIND: not read, not "nothing open"). See `docs/feedback-tags.md` for how
+  replies round-trip on the issues channel.
 
 - **LAST RUN** — age of `~/reports/<project>/LATEST.md` (the same file
   `scheduler report <project>` opens): a proxy for "last completed run"
   (its mtime only moves when a run actually writes a report), not a
   scheduler-tracked dispatch timestamp.
 
-- **ETA** — FOCUS.md backlog size × that project's own average recent
-  gap between paced dispatches (measured from
-  `usage-paced-runner.sh`'s log). A rough projection off real history,
-  NOT a promise: it assumes one backlog item clears per cycle, the
-  backlog size stays fixed, and recent pace holds. `no history` =
-  fewer than 2 recorded dispatches yet for that project.
-
-- **NEXT UP** — `1/N: <top item's title>`, where N is the bulleted
-  backlog size in that project's FOCUS.md. This is just what the next
-  run reads first — it may reprioritize instead of clearing the top
-  item, and paced projects run whenever `usage-gate.sh` has spare
-  quota, not on a fixed clock, so this is not an ETA either.
+- **ETA** and **NEXT UP** — meant to read a project's FOCUS.md backlog (size
+  × average recent dispatch gap for ETA; top bulleted item for NEXT UP), the
+  same way QUESTIONS above used to read `questions/<project>.md` directly.
+  Both symlinks came from the same retired mirror (#244), and nothing has
+  replaced the FOCUS.md read path, so both columns always render `?` (BLIND)
+  today, for every project.
 
 ### Conventions
 
-- **`*` prefix** (QUESTIONS) — that file changed since you last opened
-  it via this tool (`scheduler questions <project>`, `scheduler status
-  <project>`, …). Approximate — file mtime against a "last opened"
-  timestamp in `~/.local/share/scheduler-glance/seen.tsv` — not a real
-  read-receipt. No `*` means an open count you've already seen and just
-  haven't gotten to.
-- Counts come from format-convention heuristics (dated `- **` bullets,
-  `> ` replies, RESOLVED/PARKED markers), not a real parser — an entry
-  that ignores the usual conventions can miscount.
+- **`*` prefix** (QUESTIONS) — meant to mean "changed since you last
+  opened it via this tool", by comparing `questions/<project>.md`'s mtime
+  against a "last opened" timestamp in
+  `~/.local/share/scheduler-glance/seen.tsv`. That file is the same #244
+  casualty as the QUESTIONS column above, so on the surviving issues
+  channel this never fires today — no `*` is not a signal either way.
+- On the issues channel, "answered" comes from a provenance stamp (the
+  last comment on the issue), not a markdown-format heuristic — see
+  `lib/provenance.sh`.
 
 ### Footer lines (each appears only when nonempty)
 
 - **est. time to burn down every project's backlog** — the largest
-  single-project ETA above (they burn concurrently under the rotation,
-  so the max, not the sum, bounds the total). Projects showing
-  `no history` aren't in the estimate, and the line says so.
+  single-project ETA above. Never prints today: it needs at least one
+  real ETA, and ETA is unconditionally `?` (see above).
 - **stranded local commits** — some project's dedicated clone
   (`~/.local/share/<job>/repo`) has commits ahead of origin: its run
   committed but the push silently failed or never ran (e.g. a
@@ -156,9 +150,10 @@ against: which facts the machinery records and which views print them.
   (which owns `_paced.dexter.conf`) they described — and `weight <p> <n>`
   *wrote into* — `mandark`'s rotation. Set `PACED_CONF` to override, or
   `PACED_HOST` to ask what another host would resolve.
-- `focus/<project>.md`, `questions/<project>.md` — symlinks into each
-  project's own scheduler-owned files (usually `.scheduler/` or
-  `.claude/` in that project's repo).
+- A project's GitHub issues (`ANSWER_CHANNEL=issues` only) — read live via
+  `gh`, no local file. Every other project has no read path at all: the
+  `focus/<project>.md`/`questions/<project>.md` symlinks this used to be are
+  the mirror #244 retired.
 - `~/reports/<project>/LATEST.md` — each project's newest report.
 - `~/.local/share/scheduler-paced-runner/run.log` — the paced runner's
   dispatch log (feeds ETA and `scheduler next`).
