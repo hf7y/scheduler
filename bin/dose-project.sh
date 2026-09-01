@@ -38,21 +38,39 @@ read fresh from GitHub via 'gh api' every run.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
             neither. Hops to the roster's host over ssh if you are elsewhere.
+  --sprint <dur>
+            let this project's own ticks ignore the gate's PACE hold and
+            tempo until an absolute wall-clock time, <dur> from now
+            (30m, 4h, 2d). The CEILING is never bypassed. Ends by itself;
+            --sprint 0 ends it early. Hops like --now.
+  --sprint-status
+            what is sprinting on this host, and when each one ends.
+            Takes no project.
 
 exit: 0 kept  2 usage  4 gap  5 broken  6 blind  7 refused
 EOF
 }
 
-MODE="--check"; PROJECT=""
-for a in "$@"; do
-  case "$a" in
-    --check|--apply|--arm|--park|--now) MODE="$a" ;;
+MODE="--check"; PROJECT=""; SPRINT_DUR=""
+# while/shift, not `for a in "$@"`: --sprint is the first flag carrying a value.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check|--apply|--arm|--park|--now|--sprint-status) MODE="$1" ;;
+    --sprint)
+      MODE="--sprint"; shift
+      SPRINT_DUR="${1:-}"
+      [ -n "$SPRINT_DUR" ] || { echo "$CLI_NAME: --sprint needs a duration (30m, 4h, 2d)" >&2; exit 2; } ;;
     -h|--help) usage; exit 0 ;;
-    -*) echo "$CLI_NAME: unknown flag $a" >&2; exit 2 ;;
-    *) PROJECT="$a" ;;
+    -*) echo "$CLI_NAME: unknown flag $1" >&2; exit 2 ;;
+    *) PROJECT="$1" ;;
   esac
+  shift
 done
-[ -n "$PROJECT" ] || { echo "$CLI_NAME: name a project (see --help)" >&2; exit 2; }
+if [ "$MODE" = "--sprint-status" ]; then
+  [ -z "$PROJECT" ] || { echo "$CLI_NAME: --sprint-status takes no project" >&2; exit 2; }
+else
+  [ -n "$PROJECT" ] || { echo "$CLI_NAME: name a project (see --help)" >&2; exit 2; }
+fi
 
 # #291: refused on the CLI's OWN uid, before any network call.
 if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
@@ -80,6 +98,31 @@ DOSE_LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # network call, and must not exit the process that sourced it (#120's defect,
 # fixed 2026-08-11).
 ROSTER_CONTENT="$(fetch_roster)" || exit $?
+
+# --- sprint-status (#292): no project, so it precedes the row lookup.
+SPRINT_REL=".local/share/scheduler-paced-runner/sprint"
+if [ "$MODE" = "--sprint-status" ]; then
+  now_e="$(date +%s)"; found=0
+  while IFS='|' read -r f1 f2 _; do
+    case "$f1" in ''|\#*) continue ;; esac
+    p_name="$(xargs <<<"$f1")"; ah="$(xargs <<<"$f2")"
+    [ -n "$p_name" ] || continue
+    [ "${ah##*@}" = "$HOST" ] || continue
+    acct="${ah%@*}"
+    home="$(getent passwd "$acct" 2>/dev/null | cut -d: -f6)"
+    [ -n "$home" ] || continue
+    until_s="$(sudo -n cat "$home/$SPRINT_REL" 2>/dev/null)" || continue
+    [ -n "$until_s" ] || continue
+    until_e="$(date -d "$until_s" +%s 2>/dev/null)" || continue
+    if [ "$now_e" -lt "$until_e" ]; then
+      printf 'SPRINTING %-16s until %s (%d min left)\n' \
+        "$p_name" "$until_s" "$(( (until_e - now_e + 59) / 60 ))"
+      found=1
+    fi
+  done <<<"$ROSTER_CONTENT"
+  [ "$found" = 1 ] || echo "nothing is sprinting on $HOST"
+  exit 0
+fi
 
 # --- 2. project not in roster -> exit 4, not 0 ------------------------------
 find_row() {
@@ -191,6 +234,11 @@ if [ "$ROW_HOST" != "$HOST" ]; then
   if [ "$MODE" = --now ]; then
     echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
     exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --now"
+  fi
+  # It writes state the roster's host reads on its ticks -- travels like --now.
+  if [ "$MODE" = --sprint ]; then
+    echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
+    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --sprint '$SPRINT_DUR'"
   fi
   echo "REFUSED: roster says '$PROJECT' runs on '$ROW_HOST', this host is '$HOST' -- stopping, nothing touched" >&2
   exit 7
@@ -365,7 +413,40 @@ do_now() {
   exit 5
 }
 
+# do_sprint -- an ABSOLUTE expiry, never a duration and never decay (#292:
+# "decay makes the end fuzzy, which is how temporary becomes permanent").
+do_sprint() {
+  local home secs n unit until_s
+  home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
+  [ -n "$home" ] || { echo "BROKEN: '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
+
+  case "$SPRINT_DUR" in
+    0|0m|0h|0d)
+      sudo -n -u "$ROW_ACCT" rm -f "$home/$SPRINT_REL" 2>/dev/null
+      echo "ended: '$PROJECT' is no longer sprinting; its ticks pace normally again"
+      return 0 ;;
+    *[0-9]m) n="${SPRINT_DUR%m}"; unit=60 ;;
+    *[0-9]h) n="${SPRINT_DUR%h}"; unit=3600 ;;
+    *[0-9]d) n="${SPRINT_DUR%d}"; unit=86400 ;;
+    *) echo "$CLI_NAME: '$SPRINT_DUR' is not a duration -- use 30m, 4h or 2d (0 ends a sprint)" >&2; exit 2 ;;
+  esac
+  case "$n" in ''|*[!0-9]*) echo "$CLI_NAME: '$SPRINT_DUR' is not a duration -- use 30m, 4h or 2d" >&2; exit 2 ;; esac
+  secs=$(( n * unit ))
+  [ "$secs" -gt 0 ] || { echo "$CLI_NAME: a sprint must be longer than zero" >&2; exit 2; }
+  until_s="$(date -d "@$(( $(date +%s) + secs ))" -Is)"
+
+  sudo -n -u "$ROW_ACCT" mkdir -p "$(dirname "$home/$SPRINT_REL")" 2>/dev/null
+  printf '%s\n' "$until_s" | sudo -n -u "$ROW_ACCT" tee "$home/$SPRINT_REL" >/dev/null || {
+    echo "BROKEN: could not write the sprint marker for $ROW_ACCT" >&2; exit 5; }
+  # RE-READ, never trust the write -- same rule --apply follows for a crontab.
+  local got; got="$(sudo -n cat "$home/$SPRINT_REL" 2>/dev/null)"
+  [ "$got" = "$until_s" ] || { echo "BROKEN: wrote the sprint marker but re-reading gives '$got'" >&2; exit 5; }
+  echo "sprinting: '$PROJECT' ignores the gate's pace hold and tempo until $until_s"
+  echo "note: the CEILING still holds, and this ends by itself -- 'dose $PROJECT --sprint 0' ends it now"
+}
+
 if [ "$MODE" = --now ]; then do_now; exit $?; fi
+if [ "$MODE" = --sprint ]; then do_sprint; exit $?; fi
 
 case "$ROW_STATE" in
   parked) do_parked ;;

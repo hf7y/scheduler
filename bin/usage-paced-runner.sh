@@ -231,6 +231,42 @@ PTR="$STATE_DIR/rotation.idx"
 GATE_ERROR_STREAK_FILE="$STATE_DIR/gate-error-streak.state"
 GATE_ERROR_STREAK_THRESHOLD="${GATE_ERROR_STREAK_THRESHOLD:-5}"
 
+# --- sprint (hf7y/scheduler#292): a bounded, recorded bypass of the PACE hold.
+# Per-account IS per-project ("EVERY RUNNER RUNS ONLY ITSELF", rotation filter
+# below). Not under schedule/: git-clean-gated, so it would REFUSE its own tick.
+SPRINT_FILE="$STATE_DIR/sprint"
+SPRINT_UNTIL=""
+
+# sprint_active -- the WALL CLOCK decides, never the file's mere presence.
+sprint_active() {
+  SPRINT_UNTIL=""
+  local until_s until_e now_e
+  [ -r "$SPRINT_FILE" ] || return 1
+  until_s="$(cat "$SPRINT_FILE" 2>/dev/null)"
+  [ -n "$until_s" ] || return 1
+  until_e="$(date -d "$until_s" +%s 2>/dev/null)" || return 1
+  [ -n "$until_e" ] || return 1
+  now_e="$(date +%s)"
+  [ "$now_e" -lt "$until_e" ] || return 1
+  SPRINT_UNTIL="$until_s"
+  return 0
+}
+
+# gate_hold_is_pace_only -- EVERY window must read `on-pace`. THE CEILING IS NOT
+# SPRINTABLE (#292), nor a `rejected` window: safety, not preference.
+gate_hold_is_pace_only() {
+  local reasons r
+  reasons="$(printf '%s\n' "$1" | grep -E '^hold_reasons=' | head -1)"
+  reasons="${reasons#hold_reasons=}"
+  [ -n "$reasons" ] || return 1
+  local IFS=';'
+  for r in $reasons; do
+    [ -n "$r" ] || continue
+    case "${r#*:}" in on-pace) ;; *) return 1 ;; esac
+  done
+  return 0
+}
+
 # Host mode runs as root (it refuses otherwise, above), so `$HOME/.local/bin`
 # there is /root's and names nothing -- it reached the real gate only by
 # FAILING the -x test, which is resolution by accident. Say it instead.
@@ -406,19 +442,10 @@ fi
 
 # >>> paced conf resolution
 # --- which participants file? (host-scoped, 2026-07-24) ---------------------
-# Two hosts run this dispatcher out of ONE tracked repo. A single shared
-# _paced.conf cannot express that -- the hosts pin different projects, and
-# that file has an AUTOMATED writer (weight-audit.sh rewrites and commits
-# weights), so aiming both at one file means two machines rewriting one set of
-# lines. So each host MAY own its own:
-#
+# Two hosts, one tracked repo, different pinned projects, so each host MAY own
 #   schedule/_paced.<short-hostname>.conf   this host, if present
 #   schedule/_paced.conf                    shared/default otherwise
-#
-# A host only ever writes its OWN file, so two hosts cannot fight by
-# construction -- different paths, not different edits to one path. A host
-# with no host-scoped file reads _paced.conf exactly as before.
-# Design: vault:scheduler/DESIGN-NOTES.md "multi-machine parallelism".
+# A host writes only its OWN file, so two cannot fight by construction.
 if [ -n "${PACED_CONF:-}" ]; then
   PACED_CONF_SRC="explicit PACED_CONF"
 elif [ "$PACED_HOST_MODE" = 1 ]; then
@@ -669,10 +696,16 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       rm -f "$GATE_ERROR_STREAK_FILE"
     fi
     if [ "$rc" -ne 0 ]; then
-      log "HOLD (gate rc=$rc) $summary"
-      break
+      # rc=1 required: rc=2 is a FAILED PROBE, which says nothing about pace.
+      if [ "$rc" -eq 1 ] && sprint_active && gate_hold_is_pace_only "$verdict"; then
+        log "SPRINT (expires $SPRINT_UNTIL) -- pace bypassed; $summary"
+      else
+        log "HOLD (gate rc=$rc) $summary"
+        break
+      fi
+    else
+      log "RUN  $summary"
     fi
-    log "RUN  $summary"
   fi
 
   # Committed HERE, once, before any branch below can `continue`. Every exit
@@ -683,21 +716,12 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   echo "$idx" > "$PTR"
   examined=$((examined + 1))
 
-  # Dead-man-switch awareness (2026-07-26, FOCUS.md EXPIRY_DAYS finding 2):
-  # an expired participant used to consume a full dispatch slot and record
-  # as a normal DISPATCH/DONE pair -- this runner had no expires_at
-  # awareness at all, so expired jobs no-op'd visibly only in their own
-  # sweep.log. The job's state dir is derived from the wrapper filename by
-  # the same <job>-loop.sh convention the wrappers themselves use
-  # (chezz-nightly-batch-loop.sh -> ~/.local/share/chezz-nightly-batch);
-  # a command that doesn't match the convention (scheduler-dev-cycle.sh)
-  # has no expires_at at the derived path and dispatches exactly as
-  # before -- fail-open, never fail-blocked. Belt-and-braces with
-  # lib/sweep-loop-common.sh's own pre-clone check (which exits 3): this
-  # skip saves the dispatch slot, that one saves the clone if a job
-  # expires between here and its own check, or arrives via cron instead.
-  # Counts toward MAX_PER_TICK like the not-runnable SKIP above, so an
-  # all-expired rotation still terminates the tick loop.
+  # Dead-man-switch awareness (2026-07-26): an expired participant used to
+  # consume a dispatch slot and record as a normal DISPATCH/DONE pair. The
+  # state dir is derived from the wrapper name by the <job>-loop.sh convention;
+  # a command not matching it has no expires_at there and dispatches as before
+  # -- FAIL-OPEN. Belt-and-braces with sweep-loop-common.sh's pre-clone check:
+  # this saves the slot, that one saves the clone. Counts toward MAX_PER_TICK.
   job_state="$HOME/.local/share/$(basename "$prog" | sed 's/-loop\.sh$//')"
   if [ -f "$job_state/expires_at" ]; then
     expires_at="$(cat "$job_state/expires_at" 2>/dev/null)"
@@ -815,6 +839,9 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # same decision, so it skips both or the flag means two things.
   if [ "${PACED_FORCE:-0}" = "1" ]; then
     log "PACED_FORCE=1 -- skipping tempo"
+  # Pace is one decision with two brakes; releasing only the gate buys nothing.
+  elif sprint_active; then
+    log "SPRINT (expires $SPRINT_UNTIL) -- tempo bypassed"
   # STATE_DIR IS PASSED, NOT INHERITED. It is a plain assignment above, not an
   # export, and it MOVES between $HOME/.local/share and /var/lib depending on
   # host mode -- so a tempo.sh left to resolve its own default would read the
