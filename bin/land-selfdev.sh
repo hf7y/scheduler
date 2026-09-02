@@ -141,18 +141,11 @@ clone_or_update() {
   guard_foreign_clone "$name" "$dir"
 }
 
-# hf7y/scheduler#321: wtul committed straight into its OWN scheduler clone --
-# a checkout this account never develops, only pulls --ff-only. The commit
-# could never fast-forward past again, and nothing noticed for 3 ticks until
-# PULL FROZEN. Any clone that is not this account's own dev target (same test
-# wire_repo already uses for --rw) is a pure deployment: refuse commits in it
-# so the mistake fails loud at commit time, not three ticks later.
 guard_foreign_clone() {
   local name="$1" dir="$2" hook="$2/.git/hooks/pre-commit"
   [ "$name" = "$(id -un)" ] && { rm -f "$hook"; return 0; }
   cat > "$hook" <<'HOOK'
 #!/bin/sh
-# Installed by land-selfdev.sh (hf7y/scheduler#321).
 echo "REFUSED: this is a deployment clone, pulled --ff-only, not a dev checkout -- a local commit here can never fast-forward past again and silently wedges every future pull. Develop this project from its own self-dev account instead." >&2
 exit 1
 HOOK
