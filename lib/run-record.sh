@@ -1,6 +1,6 @@
 # run-record.sh -- COMPUTE the verdict at closeout instead of asking for it.
 #
-# THE PROBLEM (hf7y/scheduler#54, and the 2026-08-06 blowout):
+# THE PROBLEM (hf7y/scheduler#54):
 #
 # A run that fixed something and a run that merely filed three issues leave
 # IDENTICAL records. The only outcome signal above `rc` is bin/verdict.sh, and
@@ -8,9 +8,7 @@
 # closing summary prose. Worse, the file is CONSUMED at dispatch, so even that
 # self-report is gone by the time anyone could compare it against what the run
 # actually did. Describing is free, indistinguishable from working, and
-# strictly cheaper. So agents describe. On 2026-08-06 that produced 42 issues
-# across five repos while the thing that actually needed doing was one
-# `git merge --ff-only`.
+# strictly cheaper. So agents describe.
 #
 # This file does not ask the agent anything. Every field below is read back out
 # of git and the GitHub API AFTER `claude -p` has already exited, from state the
@@ -26,13 +24,10 @@
 #
 # Sibling of bin/verdict.sh's $STATE_ROOT/scheduler-verdict/, keyed the same way
 # (rotation participant name) for the same reason. NOT a git-tracked file, and
-# run_record_append REFUSES to write one inside the run's own work tree -- that
-# refusal is not hypothetical hygiene. On 2026-08-07 vim-arcade's deploys sat
-# frozen for 18 hours because lib/sweep-loop-common.sh:601 consumes BLOCKERS.md
-# out of its OWN checkout: the engine dirtied the tree it was about to pull
-# into, and bin/usage-paced-runner.sh's pull gate correctly refused every tick
-# after. An engine that writes into the checkout it manages will eventually
-# deadlock against its own guards. So it writes outside, always.
+# run_record_append REFUSES to write one inside the run's own work tree: an
+# engine that writes into the checkout it manages will eventually deadlock
+# against its own pull/dirty-tree guards (lib/sweep-loop-common.sh's pull gate
+# among them). So it writes outside, always.
 #
 # All state is in RR_* globals rather than stdout, so tests/run-record-witness.sh
 # can source this file, drive each probe directly, and read the results -- the
@@ -223,11 +218,9 @@ run_record_compute_verdict() {
   if [ -n "${RR_PRS_MERGED:-}" ] && [ "${RR_PRS_MERGED}" -gt 0 ] 2>/dev/null; then
     rr_add_reason "merged ${RR_PRS_MERGED} PR(s)"; RR_VERDICT="WORKED"
   fi
-  # NET closed, not closed. Caught by tests/run-record-witness.sh case 4 while
-  # this was being written: counting gross closures lets a run open three
-  # issues, close those same three, and score WORKED -- the exact
-  # describing-is-free loop this file exists to break, reconstituted inside the
-  # thing meant to detect it. The backlog has to be SMALLER than it was.
+  # NET closed, not closed: counting gross closures would let a run open three
+  # issues, close those same three, and score WORKED -- the backlog has to be
+  # SMALLER than it was, not merely churned.
   if [ -n "${RR_ISSUES_CLOSED:-}" ] && [ -n "${RR_ISSUES_OPENED:-}" ] \
      && [ "$(( RR_ISSUES_CLOSED - RR_ISSUES_OPENED ))" -gt 0 ] 2>/dev/null; then
     rr_add_reason "closed $(( RR_ISSUES_CLOSED - RR_ISSUES_OPENED )) more issue(s) than it opened (${RR_ISSUES_CLOSED} closed, ${RR_ISSUES_OPENED} opened)"
@@ -257,9 +250,8 @@ run_record_append() {
   local path="$1" line="$2" dir
   [ -n "$path" ] || { rr_log "FATAL: no ledger path"; return 1; }
 
-  # THE REFUSAL. The engine writing into the checkout it manages is what froze
-  # vim-arcade's deploys for 18 hours on 2026-08-07 (BLOCKERS.md consumed in
-  # its own tree, tripping the pull gate at bin/usage-paced-runner.sh). Refuse
+  # THE REFUSAL: an engine writing into the checkout it manages can deadlock
+  # against its own pull/dirty-tree guards (see the file header). Refuse
   # rather than trust that the caller passed a sane path.
   if git -C "$(dirname "$path")" rev-parse --show-toplevel >/dev/null 2>&1; then
     rr_log "FATAL: refusing to write the run ledger inside a git work tree ($path). The engine must never dirty the checkout it manages."
