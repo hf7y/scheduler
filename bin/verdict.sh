@@ -46,10 +46,21 @@
 #
 # USAGE
 #   verdict.sh set <job> <CONTINUE|DONE|IMPOSSIBLE> "<one-line reason>"
+#   verdict.sh set <job> BLOCKED "<one-line reason>" [issue]
 #   verdict.sh get <job>                 # print the record, exit 0 if present
 #   verdict.sh classify <job> <rc>       # print NOT-DONE|DONE|GAVE-UP; see below
 #   verdict.sh clear <job>               # consume (call at dispatch)
 #   verdict.sh --selftest
+#
+# BLOCKED's optional [issue] (a bare number, resolved against the cwd's repo
+# by `gh`, or an explicit `owner/repo#N`) labels that issue `needs-human`.
+# hf7y/scheduler#149: BLOCKED was chosen 0 times in 494 recorded runs and
+# nothing ever applied the label tempo.sh already reads (TEMPO_BLOCKED_LABELS)
+# -- an alarm wired to nothing is the recurring failure shape here, so this is
+# the day-one consumer, not a second unused control symbol. Best-effort: a
+# `gh` failure (no network, no issue, no repo in cwd) is reported but does not
+# fail the verdict write -- the local backoff (LEDGER_BLOCKED_HOLD) must not
+# depend on GitHub being reachable.
 #
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
@@ -63,17 +74,38 @@
 set -uo pipefail
 
 STATE_ROOT="${STATE_ROOT:-$HOME/.local/share}"
+VERDICT_GH_BIN="${VERDICT_GH_BIN:-gh}"
 
 die() { echo "verdict: $*" >&2; exit 2; }
 vfile() { echo "$STATE_ROOT/scheduler-verdict/$1"; }
 
+# Best-effort: label the named issue needs-human so tempo.sh's existing
+# TEMPO_BLOCKED_LABELS consumer, and any human scanning the tracker, see the
+# block without reading this run's log. Never fails the caller.
+label_needs_human() {
+  local issue="$1" args=(issue edit)
+  case "$issue" in
+    */*'#'*) args+=("${issue##*#}" --repo "${issue%#*}") ;;
+    *)       args+=("$issue") ;;
+  esac
+  args+=(--add-label needs-human)
+  if "$VERDICT_GH_BIN" "${args[@]}" >/dev/null 2>&1; then
+    echo "verdict: labeled $issue needs-human"
+  else
+    echo "verdict: could not label $issue needs-human (gh failed -- label it by hand)" >&2
+  fi
+}
+
 cmd_set() {
-  local job="$1" v="$2" reason="${3:-}"
+  local job="$1" v="$2" reason="${3:-}" issue="${4:-}"
   [ -n "$job" ] || die "set needs a job name"
   case "$v" in
     CONTINUE|DONE|BLOCKED|IMPOSSIBLE) ;;
     *) die "verdict must be CONTINUE, DONE, BLOCKED or IMPOSSIBLE -- got '$v'" ;;
   esac
+  if [ -n "$issue" ] && [ "$v" != "BLOCKED" ]; then
+    die "an issue argument is only for BLOCKED (it labels the issue needs-human) -- got verdict '$v'"
+  fi
   # An IMPOSSIBLE with no reason is not a finding, it is a shrug. It brakes
   # the whole ecosystem, so it must say what it probed.
   if [ "$v" = "IMPOSSIBLE" ] && [ -z "$reason" ]; then
@@ -98,6 +130,8 @@ cmd_set() {
     echo "HOST=$(hostname)"
   } > "$(vfile "$job")" || die "cannot write $(vfile "$job")"
   echo "verdict: $job = $v"
+  [ "$v" = "BLOCKED" ] && [ -n "$issue" ] && label_needs_human "$issue"
+  return 0
 }
 
 cmd_get() {
@@ -176,17 +210,52 @@ cmd_selftest() {
     echo "FAIL: reasonless IMPOSSIBLE was accepted"; fails=1
   fi
 
+  # BLOCKED's optional 4th argument labels the named issue needs-human --
+  # hf7y/scheduler#149's "day-one consumer". A stub gh stands in so this
+  # never touches a real tracker.
+  local stubdir="$t/stub"; mkdir -p "$stubdir"
+  cat > "$stubdir/gh" <<'STUB'
+#!/usr/bin/env bash
+echo "gh $*" >> "$GH_CALLS_LOG"
+[ "${GH_SHOULD_FAIL:-0}" = 1 ] && exit 1
+exit 0
+STUB
+  chmod +x "$stubdir/gh"
+  VERDICT_GH_BIN="$stubdir/gh"
+  export GH_CALLS_LOG="$t/gh-calls.log"; : > "$GH_CALLS_LOG"
+
+  out="$(cmd_set j BLOCKED "waiting on a human" 458 2>&1)"
+  grep -q 'gh issue edit 458 --add-label needs-human' "$GH_CALLS_LOG" \
+    || { echo "FAIL: bare issue number did not call gh issue edit 458 --add-label needs-human"; fails=1; }
+  grep -q 'labeled 458 needs-human' <<<"$out" || { echo "FAIL: BLOCKED-with-issue did not report the label"; fails=1; }
+
+  : > "$GH_CALLS_LOG"
+  cmd_set j BLOCKED "waiting" "hf7y/other#12" >/dev/null 2>&1
+  grep -q 'gh issue edit 12 --repo hf7y/other --add-label needs-human' "$GH_CALLS_LOG" \
+    || { echo "FAIL: owner/repo#N form did not resolve to --repo hf7y/other issue 12"; fails=1; }
+
+  : > "$GH_CALLS_LOG"
+  out="$(GH_SHOULD_FAIL=1 cmd_set j BLOCKED "waiting" 999 2>&1)"; rc=$?
+  [ $rc -eq 0 ] || { echo "FAIL: a gh failure must not fail the verdict write itself (rc=$rc)"; fails=1; }
+  grep -q 'could not label 999 needs-human' <<<"$out" || { echo "FAIL: gh failure was not reported"; fails=1; }
+  unset VERDICT_GH_BIN GH_CALLS_LOG
+
+  # An issue argument makes no sense outside BLOCKED (it is not a reason).
+  if ( cmd_set j DONE "bar met" "458" >/dev/null 2>&1 ); then
+    echo "FAIL: an issue argument was accepted on a non-BLOCKED verdict"; fails=1
+  fi
+
   # A malformed file degrades toward retry, not toward braking.
   mkdir -p "$t/scheduler-verdict"; printf 'VERDICT=BANANA\n' > "$t/scheduler-verdict/j"
   out="$(cmd_classify j 1 2>/dev/null)"; rc=$?
   [ "$out" = "NOT-DONE" ] && [ $rc -eq 1 ] || { echo "FAIL: malformed verdict must degrade to NOT-DONE (got $out/$rc)"; fails=1; }
 
-  [ "$fails" -eq 0 ] && echo "selftest OK (8 cases; every classify branch observed firing, incl. both refusals)"
+  [ "$fails" -eq 0 ] && echo "selftest OK (13 cases; every classify branch and the BLOCKED needs-human labeling observed firing, incl. all refusals)"
   return "$fails"
 }
 
 case "${1:---help}" in
-  set)       shift; cmd_set "${1:-}" "${2:-}" "${3:-}" ;;
+  set)       shift; cmd_set "${1:-}" "${2:-}" "${3:-}" "${4:-}" ;;
   get)       shift; cmd_get "${1:-}" ;;
   clear)     shift; cmd_clear "${1:-}" ;;
   classify)  shift; cmd_classify "${1:-}" "${2:-0}" ;;
