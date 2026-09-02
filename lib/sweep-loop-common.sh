@@ -352,20 +352,7 @@ apply_decision_defaults() {
   n=0
   while IFS=$'\t' read -r num created labels; do
     [ -n "$num" ] || continue
-    # ALREADY DEFAULTED, SKIP. needs-human is derived:decision (labels.tsv):
-    # `etiquette --apply`, run as reconcile_own_labels immediately before this
-    # in the dispatch path, reasserts it every tick straight from the body's
-    # still-unanswered DECISION line -- so a decision that already proceeded
-    # on its default reappears in THIS SAME `--label needs-human` query on the
-    # very next tick even though nothing changed. `defaulted` is the record
-    # that the act already happened once (labels.tsv: "a record of an act,
-    # not a closure"); without checking it here that record is invisible to
-    # this function and the comment below re-posts every tick for as long as
-    # the question stays open -- measured as 6 duplicate comments in under
-    # 12h on hf7y/baudin#29. Reversing needs a human (or agent) to remove
-    # `defaulted`, which says the default should be reconsidered -- not
-    # etiquette's routine, unrelated re-derivation of needs-human.
-    case ",$labels," in *",defaulted,"*) continue ;; esac
+    case ",$labels," in *",defaulted,"*) continue ;; esac  # already acted on -- etiquette reasserts needs-human every tick otherwise (#29)
     body="$(gh issue view "$num" -R "$slug" --json body --jq .body 2>/dev/null)" || continue
     # exit 0 ONLY. 1 = blocks forever by design; 6 = could not read.
     read -r days action <<<"$(printf '%s' "$body" | gh --default-after - 2>/dev/null | tr '\t' ' ')" || continue

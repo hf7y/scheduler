@@ -80,14 +80,6 @@ case "$(cat "$TMP/writes")" in
   *) ok "the issue stays OPEN, which is what makes the default reversible" ;;
 esac
 
-# --- 1b. already defaulted -- it does NOT re-fire ---------------------------
-# needs-human is DERIVED: etiquette --apply (run immediately before this
-# function in the dispatch path) reasserts it every tick straight from the
-# body's still-open DECISION line, so an issue that already proceeded on its
-# default reappears in this SAME --label needs-human query on the very next
-# tick even though nothing changed. Without checking for `defaulted` this
-# fires again, and again, forever -- measured as 6 duplicate comments in
-# under 12h on hf7y/baudin#29 before this test existed.
 mk_gh 20 '14\tclose it as declined' 0 'needs-human,defaulted'
 run
 eq "an issue already labelled defaulted is skipped, not re-defaulted" "$(cat "$TMP/writes")" ""
