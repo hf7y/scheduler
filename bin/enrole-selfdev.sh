@@ -119,10 +119,11 @@ done
 # The brief location is a FACT ABOUT THE PROJECT REPO, not fixable by editing the scheduler conf. Reported, never auto-moved: a git mv in someone else's repository is a PR, not a side effect of provisioning.
 PRP="$(conf_get PROJECT_REPO_PATH)"; PRP="${PRP/\$HOME/$HOME}"
 if [ -d "$PRP" ]; then
-  if [ -f "$PRP/.scheduler/FOCUS.md" ]; then ok "brief at .scheduler/FOCUS.md (writable unattended)"
+  if [ -f "$PRP/CLAUDE.md" ]; then ok "brief at CLAUDE.md (repo root, writable unattended -- the live convention; schedule/_run-procedure.md reads this)"
+  elif [ -f "$PRP/.scheduler/FOCUS.md" ]; then ok "brief at .scheduler/FOCUS.md (writable unattended)"
   elif [ -f "$PRP/.claude/FOCUS.md" ]; then
     bad "brief is at .claude/FOCUS.md -- an unattended run can read it and CANNOT write it (sensitive-file gate). Move it: git mv .claude/FOCUS.md .scheduler/FOCUS.md (same for QUESTIONS.md), in that repo, as its own PR."
-  else gap "no FOCUS.md in either location under $PRP -- the run will have only its BATCH_PROMPT and the issue queue"; fi
+  else gap "no CLAUDE.md or FOCUS.md in any location under $PRP -- the run will have only its BATCH_PROMPT and the issue queue"; fi
 else
   gap "PROJECT_REPO_PATH=$PRP is not present here -- cannot check where the brief lives (normal when enrolling from a different account than the one that will run it)"
 fi

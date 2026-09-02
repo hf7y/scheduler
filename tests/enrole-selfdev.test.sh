@@ -114,6 +114,11 @@ mv "$T/home/Documents/Projects/widget/.claude/FOCUS.md" "$T/home/Documents/Proje
 OUT="$(HOME="$T/home" run "$C3" --check 2>&1)"; RC=$?
 has "G3 accepts a brief under .scheduler/" "$OUT" "brief at .scheduler/FOCUS.md"
 rc  "G4 and exits 0 again" 0 "$RC"
+rm "$T/home/Documents/Projects/widget/.scheduler/FOCUS.md"
+: > "$T/home/Documents/Projects/widget/CLAUDE.md"
+OUT="$(HOME="$T/home" run "$C3" --check 2>&1)"; RC=$?
+has "G5 accepts a brief at repo-root CLAUDE.md, the live convention" "$OUT" "brief at CLAUDE.md"
+rc  "G6 and exits 0" 0 "$RC"
 
 echo "-- H. the argument contract (cli-guard)"
 "$SCRIPT" widget --not-a-real-flag >/dev/null 2>&1; rc "H1 unknown flag exits 2" 2 "$?"
