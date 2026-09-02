@@ -218,4 +218,14 @@ case "$OUT" in
 esac
 
 echo
+echo "-- 10. the usage line stays in one place (#210) -------------------------"
+BAD_FLAG_OUT="$(bash "$BIN/setup-selfdev-project.sh" "$PROJECT" --bogus 2>&1)"
+NO_PROJECT_OUT="$(bash "$BIN/setup-selfdev-project.sh" 2>&1)"
+if [ -n "$BAD_FLAG_OUT" ] && [ "$BAD_FLAG_OUT" = "$NO_PROJECT_OUT" ]; then
+  ok "10 an unknown flag and a missing project print the identical usage line"
+else
+  bad "10 the two usage sites drifted" "flag: [$BAD_FLAG_OUT] project: [$NO_PROJECT_OUT]"
+fi
+
+echo
 summary
