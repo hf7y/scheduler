@@ -175,6 +175,15 @@ if [ -x "$PROJECTS/realisateur/bin/install-verbs.sh" ]; then
     && ok "verb surface installed" || gap "install-verbs.sh reported gaps -- read them above"
 fi
 
+if [ -x "$PROJECTS/realisateur/bin/guard-readonly-clone.sh" ]; then
+  act "guard-readonly-clone.sh --apply (refuse a local commit into realisateur/scheduler/senechal)"
+  "$PROJECTS/realisateur/bin/guard-readonly-clone.sh" --apply \
+    && ok "read-only clones guarded against a local commit" \
+    || gap "guard-readonly-clone.sh reported gaps -- read them above"
+else
+  gap "no $PROJECTS/realisateur/bin/guard-readonly-clone.sh -- read-only clones are NOT guarded against a local commit"
+fi
+
 echo
 echo "== dispatch preview (NOTHING armed) =="
 if [ -x "$PROJECTS/scheduler/bin/sync-crontab.sh" ]; then
