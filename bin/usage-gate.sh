@@ -21,14 +21,11 @@
 #   1 = HOLD  (on/over pace, at ceiling, or a window is 'rejected')
 #   2 = ERROR (probe failed / unparseable)  -> callers MUST treat as HOLD
 #
-# Rush-before-reset (human policy, 2026-07-20): within USAGE_RUSH_BEFORE_RESET_MIN
-# minutes of the 7-DAY window's own reset, the even-burn "on-pace" hold is
-# dropped entirely (on BOTH windows) -- unused weekly quota doesn't roll
-# over, so preserving slack in the final stretch is waste, not caution.
-# CEILING and a 'rejected' status still block, same as always -- this only
-# removes the pacing-preference hold, not the real safety limits. Expect
-# (and accept) the 5h window hitting its ceiling early under this policy;
-# it recovers on its own regardless, unlike the weekly budget.
+# Rush-before-reset: near the 7-day window's own reset, the "on-pace" hold
+# drops entirely (on BOTH windows) since unused weekly quota doesn't roll
+# over -- see the decision core below for the exact mechanics. CEILING and
+# a 'rejected' status still block regardless; only the pacing-preference
+# hold is affected.
 #
 # Knobs (each settable in a conf file OR the environment -- see "Where the
 # knobs come from" below):
@@ -161,12 +158,12 @@ MODEL="$RES_VAL"
 command -v curl >/dev/null 2>&1 || emit_error no_curl
 command -v python3 >/dev/null 2>&1 || emit_error no_python
 
-# TRAP: THREE PLACES A TOKEN CAN LIVE, and until 2026-08-03 this read only the one that does NOT work on an unattended host:
+# Three places a token can live, checked in this precedence order:
 #   1. $CLAUDE_CODE_OAUTH_TOKEN        exported in the environment
-#   2. ~/.claude/settings.json .env    written from `claude setup-token`
+#   2. ~/.claude/settings.json .env    written by `claude setup-token`
 #   3. ~/.claude/.credentials.json     the interactive OAuth login
-# (3) was the only one supported, and it is the login that EXPIRES and that a
-# headless host cannot perform.
+# (2) is what makes a headless host work at all: (3) is the login that
+# expires and that a headless host cannot perform.
 TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
 TOKEN_SRC="env"
 if [ -z "$TOKEN" ]; then
@@ -185,13 +182,12 @@ fi
 HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
 
 # --- try the FREE probe first, fall back to the paid one -------------------
-# TRAP: GET /api/oauth/usage is free but answers only for an INTERACTIVE OAuth
-# credential. A `claude setup-token` credential -- every monkey self-dev
+# GET /api/oauth/usage is free but answers only for an INTERACTIVE OAuth
+# credential: a `claude setup-token` credential -- every monkey self-dev
 # account -- gets 403 (`OAuth token does not meet scope requirement
-# user:profile`). scheduler#110 made it the ONLY path, it 403d on every
-# setup-token account at once, and ERROR is HOLD by design, so that stopped
-# ALL self-dev dispatch until #132 reverted to paid-always. This is #133s
-# fallback, not a repeat of #110.
+# user:profile`). Anything short of a clean 200 with a parseable body falls
+# straight through to the paid probe below, in exactly one paid call per
+# invocation.
 FREE_BODY="$(mktemp)"; trap 'rm -f "$HDR" "$FREE_BODY"' EXIT
 FREE_CODE=$(curl -sS -o "$FREE_BODY" -w '%{http_code}' --max-time 15 \
   https://api.anthropic.com/api/oauth/usage \
