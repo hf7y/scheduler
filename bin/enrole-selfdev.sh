@@ -82,13 +82,12 @@ is not this script's call."
 # Field, wanted value, why it is not optional. All derived from project and host; nothing here is a judgement.
 conf_get() { grep -m1 -oP "(?<=^$1=\")[^\"]*" "$CONF" 2>/dev/null || true; }
 
-declare -a FIELD=(CRON_HOST      CRON_ACCOUNT BATCH_JOB_NAME             BATCH_CRON)
-declare -a WANT=("$HOST"         "$PROJECT"   "$PROJECT-nightly-batch"   "auto")
+declare -a FIELD=(CRON_HOST      CRON_ACCOUNT BATCH_JOB_NAME)
+declare -a WANT=("$HOST"         "$PROJECT"   "$PROJECT-nightly-batch")
 declare -a WHY=(
   "without it mandark also emits this project's cron lines"
   "state ownership: whose ~/.local/share holds the run log (scheduler#33 -- four jobs read 7-12d idle while running daily)"
   "scheduler-run <p> batch exits 2 without it -- a blank one is not 'unarmed', it is 'armed and broken'"
-  "the batch tier is suppressed for a paced participant anyway, but a blank cron with a job name set is a half-configured tier"
 )
 
 CONF_MINE="($(IFS='|'; echo "${FIELD[*]}"))=\""

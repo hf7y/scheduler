@@ -87,11 +87,14 @@ SWEEP_MAX_TURNS=40
 # ===========================================================================
 
 BATCH_JOB_NAME="<project>-nightly-batch"
-BATCH_CRON="auto"                       # "auto" (or blank) lets sync-crontab.sh
-                                         # assign a staggered slot (see
-                                         # schedule/_batch.conf). Set an explicit
-                                         # "MIN HOUR * * *" only if this project's
-                                         # cadence genuinely isn't nightly.
+BATCH_CRON="auto"                       # vestigial: "auto" used to let
+                                         # bin/sync-crontab.sh assign a
+                                         # staggered slot. That script is gone
+                                         # (#488) and nothing installs a batch
+                                         # tier into cron any more -- dispatch
+                                         # is via bin/scheduler-run under the
+                                         # paced runner, which ignores this
+                                         # field entirely.
 
 # --- new-style runtime config (used when BATCH_SCRIPT is blank) ---
 BATCH_PROMPT="/nightly-batch
