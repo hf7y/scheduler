@@ -502,7 +502,7 @@ for conf in "${CONF_FILES[@]}"; do
   unset BATCH_JOB_NAME BATCH_SCRIPT BATCH_CRON PROJECT_REPO_PATH
   # Runtime fields (read by scheduler-run) that also gate command resolution
   # here -- reset so one conf's value can't leak into the next.
-  unset REPO_URL SWEEP_PROMPT BATCH_PROMPT SCHEDULER_SUBDIR
+  unset REPO_URL SWEEP_PROMPT BATCH_PROMPT
   # Scoping axes -- reset so one conf's account/host can't leak into the next.
   unset CRON_ACCOUNT CRON_HOST
   # shellcheck disable=SC1090
