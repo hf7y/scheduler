@@ -49,6 +49,14 @@ grep -q 'verdict\.sh set vim-arcade' <<<"$PROMPT" \
 for v in CONTINUE DONE IMPOSSIBLE; do
   grep -q "$v" <<<"$PROMPT" && ok "explains $v" || bad "never mentions $v"
 done
+# A bare mention already passes the loop above (#149's trailing aside did
+# too) -- this checks BLOCKED reads as a real bullet, not just a footnote.
+grep -qE '^  BLOCKED  ' <<<"$PROMPT" \
+  && ok "BLOCKED is an enumerated bullet, not just a trailing mention" \
+  || bad "BLOCKED has no bullet next to CONTINUE/DONE/IMPOSSIBLE -- the #149 wording gap"
+grep -q 'needs-human' <<<"$PROMPT" \
+  && ok "tells the agent BLOCKED can label the issue needs-human" \
+  || bad "closeout never mentions the needs-human consumer BLOCKED feeds"
 grep -q 'appended to the brief' <<<"$OUT" \
   && ok "says so in the run log (a silent prompt rewrite is unreviewable)" \
   || bad "rewrote the prompt without logging it"

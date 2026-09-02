@@ -444,6 +444,15 @@ only signal that can ever stop this job being dispatched again.
   IMPOSSIBLE a real dead end, with the probe that proves it -- not merely out
              of turns. This one brakes the whole ecosystem, so it requires a
              reason and the command refuses it without one.
+  BLOCKED    a SUCCESS verdict, not a lesser one -- something OUTSIDE this run
+             (a credential, a human decision, a permission you lack) has to
+             move before you can proceed, and you named the exact wall. Do
+             not write a blocked-flavored CONTINUE instead: that hides the
+             block from the one thing that reads it back. Add the issue
+             number as a 4th argument and BLOCKED labels it needs-human so
+             the next run (or Zach) can find it without re-reading this one:
+
+               $VERDICT_BIN set $PROJECT_KEY BLOCKED \"<reason>\" <issue#>
 
 If you ran out of room mid-task, write NOTHING: silence already classifies as
 NOT-DONE, which is the correct reading of a truncated run.
