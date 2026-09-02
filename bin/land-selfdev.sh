@@ -8,9 +8,9 @@
 #   ./land-selfdev.sh --land   clone, install, stop before arming cron
 # TRAPS (the rest of this header is in
 # vault:scheduler/provisioning-block-headers-20260826.md):
-# TRAP: it NEVER writes a crontab. sync-crontab.sh runs in PREVIEW and the
-#   --apply is PRINTED for a human. Arming dispatch is the one step that
-#   spends a shared quota, and every guard here stops short of it.
+# TRAP: it NEVER writes a crontab. dose-project.sh runs in --check (preview)
+#   and the --apply is PRINTED for a human. Arming dispatch is the one step
+#   that spends a shared quota, and every guard here stops short of it.
 # TRAP: ancestry is vkv/office/provision/land-office.sh -- same OK/MISSING/DO
 #   vocabulary, same idempotence, same refusal to arm without a flag.
 
@@ -186,17 +186,19 @@ fi
 
 echo
 echo "== dispatch preview (NOTHING armed) =="
-if [ -x "$PROJECTS/scheduler/bin/sync-crontab.sh" ]; then
-  ( cd "$PROJECTS/scheduler" && ./bin/sync-crontab.sh ) || true
+if [ -x "$PROJECTS/scheduler/bin/dose-project.sh" ]; then
+  ( cd "$PROJECTS/scheduler" && ./bin/dose-project.sh "$(id -un)" --check ) || true
 fi
 cat <<EOF
 
 land-selfdev: $PASS ok, $GAPS missing, $BAD bad.
 
 NOTHING IS SCHEDULED YET, deliberately. Read the preview above; there must be
-ZERO lines beginning "ERROR [". Then, and only as a separate act:
+ZERO lines beginning "BROKEN". A live schedule/ROSTER row for $(id -un) is a
+human-only act (dose <project> --arm, #291) and has to exist before this can
+converge. Then, and only as a separate act:
 
-    cd $PROJECTS/scheduler && ./bin/sync-crontab.sh --apply
+    cd $PROJECTS/scheduler && ./bin/dose-project.sh "$(id -un)" --apply
 
 Arming dispatch is the one step that spends a shared quota, and on this
 ecosystem's accounting mandark, dexter and this host all draw on the same

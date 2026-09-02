@@ -4,10 +4,10 @@
 # #282 (the remainder), #364 (the deletion this order gates).
 #
 # Other witnesses cover the rungs one at a time -- paced-conf-witness.sh,
-# paced-roster-authority-witness.sh, sync-crontab-paced-witness.sh. The LADDER
-# is what rots, because it is spread over four files that each state only
-# their own rung. It is not restated here: run this file and the assertions
-# print it, which is the point of pinning an order rather than describing one.
+# paced-roster-authority-witness.sh. The LADDER is what rots, because it is
+# spread over files that each state only their own rung. It is not restated
+# here: run this file and the assertions print it, which is the point of
+# pinning an order rather than describing one.
 #
 # Case 5 pins a DEFECT deliberately -- read its own comment before "fixing".
 set -uo pipefail
