@@ -210,9 +210,10 @@ Arming is one reviewed change, deliberately not made here:
        $HERE/enrole-selfdev.sh $PROJECT --check      # writes nothing
        $HERE/enrole-selfdev.sh $PROJECT --apply      # then review its diff, PR it
      (it is idempotent, and --retire is its exact reverse)
-  2. as $PROJECT on this host, once that lands:
+  2. as $PROJECT on this host, once that lands AND $PROJECT has a
+     schedule/ROSTER row (human-only, dose <project> --arm, #291):
        $HERE/enrole-selfdev.sh $PROJECT --apply --sync
-     which is `git pull --ff-only && ./bin/sync-crontab.sh --apply` as $PROJECT.
+     which is `git pull --ff-only && ./bin/dose-project.sh $PROJECT --apply` as $PROJECT.
 
 Adding a participant spends a shared weekly quota. That is a judgment, and it
 is why every guard in this ecosystem stops one step short of it.

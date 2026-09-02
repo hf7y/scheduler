@@ -7,15 +7,11 @@ bin/blockers-freshness-check.sh	SC2166
 bin/morning-report.sh	SC1090
 bin/overnight-dev.sh	SC2155
 bin/scheduler-completion.bash	SC2207
-bin/sync-crontab.sh	SC1090
-bin/sync-crontab.sh	SC2207
 bin/unprinted-facts.sh	SC2011
 bin/usage-gate.sh	SC1087
 bin/usage-paced-runner.sh	SC2155
 lib/sweep-loop-common.sh	SC2155
 tests/conf-field-witness.sh	SC2088
-tests/runner-conf-host-witness.sh	SC1090
-tests/runner-conf-host-witness.sh	SC2069
 tests/run-record-witness.sh	SC1010
 tests/run-record-witness.sh	SC2209
 tests/verdict-witness.sh	SC1010

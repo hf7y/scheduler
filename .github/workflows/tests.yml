@@ -62,9 +62,8 @@ jobs:
       # NOTHING IS INSTALLED ABOVE, and that is a finding rather than an
       # omission. The suite is hermetic: every witness builds its fixtures in
       # mktemp dirs, the three that touch `gh` stub it, no witness invokes
-      # `crontab`, `shellcheck` appears only as source/disable directives, and
-      # sync-crontab.sh is only ever run in preview mode, which reads and
-      # writes no crontab. Checked by running the whole suite under a scrubbed
+      # `crontab`, and `shellcheck` appears only as source/disable directives.
+      # Checked by running the whole suite under a scrubbed
       # HOME (no ~/.gitconfig, so no user identity and no init.defaultBranch,
       # which is a runner's condition): the result was identical to a normal
       # run. If that stops being true, the fix is an install step here, not a

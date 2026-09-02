@@ -85,10 +85,10 @@ disable=SC1091
 #           hand-run `shellcheck bin/verdict.sh` still shows it, which is
 #           exactly where it should stay visible.
 #
-#   SC1090  "can't follow non-constant source" -- only 5 hits, so the ratchet
-#           can hold them by name (bin/morning-report.sh, bin/sync-crontab.sh,
-#           tests/runner-conf-host-witness.sh) and a SIXTH still has to argue
-#           for itself. Disabling a 5-hit code buys nothing and gives up that.
+#   SC1090  "can't follow non-constant source" -- a handful of hits, so the
+#           ratchet can hold them by name (bin/morning-report.sh) and the
+#           next one still has to argue for itself. Disabling a low-hit code
+#           buys nothing and gives up that.
 #
 #   SC2181  "check exit code directly, not with $?" -- 7 hits. This is the
 #           exit-0-no-op shape in miniature, in a repository whose recorded

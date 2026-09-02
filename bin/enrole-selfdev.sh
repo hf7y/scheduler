@@ -21,8 +21,9 @@ CLI_USAGE='  enrole-selfdev.sh <project>                    --check (default): p
   enrole-selfdev.sh <project> --apply            ensure conf fields + an ENABLED rotation row
   enrole-selfdev.sh <project> --retire           set the rotation row back to |0| (keeps the row)
   enrole-selfdev.sh <project> --apply --host h   target another host'"'"'s _paced.<h>.conf
-  enrole-selfdev.sh <project> --apply --sync     ALSO run sync-crontab.sh --apply as <project>
-                                                 (host half; needs to be root or that user)
+  enrole-selfdev.sh <project> --apply --sync     ALSO run dose-project.sh <project> --apply
+                                                 (host half; needs to be root or that user;
+                                                 needs a schedule/ROSTER row for <project>)
 
   --repo <dir>   the scheduler clone to edit (default: $SCHEDULER_REPO, else
                  ~/Documents/Projects/scheduler)'
@@ -168,16 +169,15 @@ fi
 
 # Separate flag: the repo half edits a clone anywhere, the host half installs a crontab ON the host AS the account.
 if [ "$SYNC" -eq 1 ] && [ "$MODE" != --check ]; then
-  echo "-- host half (sync-crontab as $PROJECT)"
+  echo "-- host half (dose-project.sh as $PROJECT)"
   if [ "$(id -un)" = "$PROJECT" ]; then RUN=(bash -lc)
   elif [ "$(id -u)" -eq 0 ]; then RUN=(sudo -u "$PROJECT" -H bash -lc)
   else RUN=(); bad "--sync needs to run as root or as $PROJECT (this is $(id -un))"; fi
   if [ "${#RUN[@]}" -gt 0 ]; then
-    out="$("${RUN[@]}" 'cd ~/Documents/Projects/scheduler && git pull -q --ff-only && ./bin/sync-crontab.sh --apply' 2>&1)"; rc=$?
+    out="$("${RUN[@]}" "cd ~/Documents/Projects/scheduler && git pull -q --ff-only && ./bin/dose-project.sh '$PROJECT' --apply" 2>&1)"; rc=$?
     printf '%s\n' "$out" | sed 's/^/    /'
-    if [ "$rc" -ne 0 ]; then bad "sync-crontab.sh exited $rc as $PROJECT"
-    elif printf '%s' "$out" | grep -q '^ERROR \['; then bad "sync-crontab.sh printed ERROR lines -- read them above"
-    else ok "crontab synced for $PROJECT (previous crontab backed up under scheduler/.crontab-backups/)"; fi
+    if [ "$rc" -ne 0 ]; then bad "dose-project.sh exited $rc as $PROJECT -- if this is exit 4 (no roster row), $PROJECT needs a schedule/ROSTER row first"
+    else ok "crontab converged for $PROJECT"; fi
   fi
 elif [ "$SYNC" -eq 1 ]; then
   act "--sync ignored under --check"
