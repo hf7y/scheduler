@@ -285,7 +285,7 @@ fi
 # one node version -- tried FIRST by every account on every host. Monkey, the
 # only host that dispatches, does not use it: every cron-shaped PATH this repo
 # builds to reach `claude` there (bin/provision-selfdev-user.sh:174,
-# bin/setup-selfdev-project.sh:97, this file's own sudo line) names
+# bin/setup-selfdev-project.sh:124, this file's own sudo line) names
 # /usr/local/bin and ~/.local/bin and no node dir. The literal stays LAST, as
 # mandark's fallback, so that host resolves exactly as it did.
 node_bin_dir() {
