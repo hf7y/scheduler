@@ -338,19 +338,21 @@ own_repo_slug() {
 # OWN REPO ONLY, and never fatal -- same rules as reconcile_own_labels above.
 # Globals in: REPO_URL. tests/decision-default-witness.sh drives it directly.
 apply_decision_defaults() {
-  local slug now issues n num body days action age created
+  local slug now issues n num body days action age created labels
   command -v gh >/dev/null 2>&1 || { echo "defaults: SKIPPED -- no gh on PATH"; return 0; }
   slug="$(own_repo_slug)" || { echo "defaults: SKIPPED -- no GitHub owner/repo in REPO_URL '$REPO_URL'"; return 0; }
 
   issues="$(gh issue list -R "$slug" --state open --label needs-human \
-              --limit 100 --json number,createdAt --jq '.[]|"\(.number) \(.createdAt)"' 2>/dev/null)" || {
+              --limit 100 --json number,createdAt,labels \
+              --jq '.[]|"\(.number)\t\(.createdAt)\t\([.labels[].name]|join(","))"' 2>/dev/null)" || {
     echo "defaults: BLIND -- could not list $slug's needs-human issues; none applied"; return 0; }
   [ -n "$issues" ] || return 0
 
   now="$(date -u +%s)"
   n=0
-  while read -r num created; do
+  while IFS=$'\t' read -r num created labels; do
     [ -n "$num" ] || continue
+    case ",$labels," in *",defaulted,"*) continue ;; esac  # already acted on -- etiquette reasserts needs-human every tick otherwise (#29)
     body="$(gh issue view "$num" -R "$slug" --json body --jq .body 2>/dev/null)" || continue
     # exit 0 ONLY. 1 = blocks forever by design; 6 = could not read.
     read -r days action <<<"$(printf '%s' "$body" | gh --default-after - 2>/dev/null | tr '\t' ' ')" || continue
