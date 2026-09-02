@@ -39,8 +39,9 @@ commit at the end. If a step genuinely needs the user's own hands, do not route
 around it -- say on the issue what the wall is and what is needed from him.
 
 If this repo carries `tools/claim-issue.py`, run `python3
-tools/claim-issue.py <N>` before an issue: exit 1 skips it (claimed
-elsewhere); exit 2 proceeds (could not look). No tool, no change.
+tools/claim-issue.py <N>` before an issue: exit 1 means a live claim exists
+elsewhere, so skip it; exit 2 means it could not look, so proceed. No tool,
+no change.
 
 ## 4. Stress-test what you built
 
