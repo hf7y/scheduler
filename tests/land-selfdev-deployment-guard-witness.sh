@@ -59,6 +59,15 @@ exec /usr/bin/id "\$@"
 SHIM
 chmod +x "$FAKEBIN/id"
 
+# Stub so `command -v installe` is hermetic: whether the real tool happens to
+# be installed on the host running this test must not change land-selfdev's
+# path through the installe-bootstrap branch.
+cat > "$FAKEBIN/installe" <<SHIM
+#!/usr/bin/env bash
+exit 0
+SHIM
+chmod +x "$FAKEBIN/installe"
+
 export PATH="$FAKEBIN:$PATH"
 export INSTALLE_PROJECTS="$PROJECTS"
 export SELFDEV_GH_OWNER="fixtureowner"
