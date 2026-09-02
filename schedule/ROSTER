@@ -139,56 +139,51 @@ nine-speakers   | nine-speakers@monkey   | 20m | live
 sequestria      | sequestria@monkey      | 20m | live
 senechal        | senechal@monkey        | 20m | live
 
-# ADDED 2026-08-25, Zach-directed: "stand up abletim and crt". Unlike the
-# dcp-gate-site row below, this one is NOT aspirational -- the uid 3000-3099
-# account, both clones and schedule/abletim.conf are provisioned before this
-# row lands, in that order and deliberately: dose-project.sh's do_live exits 5
-# BROKEN ("names account 'abletim' but no such account exists") on a live row
-# whose account is missing, so merging this first would arm a break, not a
-# project. `dose <project> --check` is what re-verifies it.
+# abletim -- unlike the dcp-gate-site row below, this one is NOT aspirational:
+# the uid 3000-3099 account, both clones and schedule/abletim.conf are
+# provisioned before this row lands, in that order and deliberately.
+# dose-project.sh's do_live exits 5 BROKEN ("names account 'abletim' but no
+# such account exists") on a live row whose account is missing, so merging
+# this first would arm a break, not a project. `dose <project> --check` is
+# what re-verifies it.
 #
 # 20m is TEMPO_MIN_MIN, per the CEILING block above -- the ceiling, not the
 # pace. bin/tempo.sh sets the real interval from abletim's own backlog.
 abletim         | abletim@monkey         | 20m | live
 
-# ADDED 2026-08-25, Zach-directed: "yes stand up but ensure it has a no publish
-# to canvas guard." The guard is the precondition, not a follow-up: apms writes
-# into a LIVE Tulane course, its own NeverDelete rule means a wrong write can
-# only be followed up rather than withdrawn, and it reaches five students.
-# schedule/apms.conf exports APMS_READ_ONLY=1 and hf7y/apms-2173#23 is the
-# canvas.py guard that refuses every non-GET while it is set. A run that reads
-# Canvas and cannot change it is the whole shape of this row.
+# apms -- the guard is the precondition, not a follow-up: apms writes into a
+# LIVE Tulane course, its own NeverDelete rule means a wrong write can only be
+# followed up rather than withdrawn, and it reaches five students. A run that
+# reads Canvas and cannot change it is the whole shape of this row.
 #
 # Account uid 3016 and both clones are provisioned before this row lands, for
-# the same do_live reason as abletim above.
-# UN-PARKED 2026-08-25, Zach-directed: "../apms no longer has an agent working.
-# safe for you to stand up on monkey." Parked at birth earlier the same day for
-# a concurrent-writer reason only -- Zach was running a Claude session against
-# apms-2173 on mandark -- and that session is closed. Everything else was
-# already provisioned: account 3016, both clones, schedule/apms.conf, the git
-# credential helper, and the Canvas guard (hf7y/apms-2173#31).
+# the same do_live reason as abletim above, along with schedule/apms.conf, the
+# git credential helper, and the Canvas guard (hf7y/apms-2173#31). Parked at
+# birth for a concurrent-writer reason only -- a session was running against
+# apms-2173 on mandark -- and un-parked once that session closed.
 #
 # THE CANVAS GUARD IS WHAT MAKES THIS SAFE, in three independent layers:
-# schedule/apms.conf exports APMS_READ_ONLY=1; canvas.py's _guard refuses every
-# non-GET while it is set; and the account's clone has no canvas.token at all.
-# Reads work, writes do not. Do not "tidy" any of the three.
+# schedule/apms.conf exports APMS_READ_ONLY=1; canvas.py's _guard
+# (hf7y/apms-2173#23) refuses every non-GET while it is set; and the account's
+# clone has no canvas.token at all. Reads work, writes do not. Do not "tidy"
+# any of the three.
 apms            | apms@monkey            | 20m | live
 
-# UN-PAUSED 2026-08-28, Zach-directed ("1 and 3 so we can stop 3 in case it
-# hits a limit and 1 still works"). The 2026-08-06 pause was a missing
-# libatk-1.0.so.0 in this account; installed host-wide 2026-08-19 and
-# `npm run check` is green there (hf7y/chezz#41). 6h -> 20m per the CEILING
-# block: the parked-era ceiling is what left baudin at 0 dispatches in 24h.
+# chezz -- Zach-directed ("1 and 3 so we can stop 3 in case it hits a limit
+# and 1 still works"). The prior pause was a missing libatk-1.0.so.0 in this
+# account; installed host-wide and `npm run check` is green there
+# (hf7y/chezz#41). 20m per the CEILING block: the parked-era 6h ceiling is
+# what left chezz at 0 dispatches in 24h.
+#
 # chezz ALSO runs in GitHub Actions on free public-repo minutes
 # (hf7y/chezz#57). Nothing locks between the two; that is the point. Actions
 # is the runner that survives this row being turned off again.
 chezz           | chezz@monkey           | 20m | live
 
-# UN-PAUSED 2026-08-25, Zach-directed: "stand up abletim and crt and use the
-# ecosystem's native way to trigger them to develop unattended." The pause
-# recorded here on 2026-08-06 ("CRT also needs to pause pending Zach work")
-# named a PERSON as its un-pause condition, not a date; this is that person
-# saying so, which is the only thing that was ever going to move this row.
+# crt -- the pause recorded here ("CRT also needs to pause pending Zach work")
+# named a PERSON as its un-pause condition, not a date; un-paused once that
+# person said so, which was the only thing that was ever going to move this
+# row.
 #
 # The note this block used to carry -- that schedule/crt.conf sets no
 # CRON_HOST/CRON_ACCOUNT -- was true when it was written and is not now: that
@@ -203,35 +198,34 @@ chezz           | chezz@monkey           | 20m | live
 #   drive=12 want_min=120
 crt             | crt@monkey             | 20m | live
 
-# UN-PAUSED 2026-08-26, Zach-directed. The pause stated its own release
-# condition -- "un-pause condition is Zach deciding what baudin is for" -- and
-# he decided it: baudin's Home Assistant instance is the store and the MCP
-# surface for the voice -> shopping-list loop (hf7y/baudin#42,
-# hf7y/groc-mangr#59). RATE 6h -> 20m 2026-08-27: un-parking left the
-# parked-era ceiling, 6x coarser than tempo's floor -- 0 dispatches in 24h.
+# baudin -- the pause stated its own release condition -- "un-pause condition
+# is Zach deciding what baudin is for" -- and he decided it: baudin's Home
+# Assistant instance is the store and the MCP surface for the voice ->
+# shopping-list loop (hf7y/baudin#42, hf7y/groc-mangr#59). 20m per the CEILING
+# block: un-parking left the parked-era 6h ceiling, 6x coarser than tempo's
+# floor -- 0 dispatches in 24h.
 baudin          | baudin@monkey          | 20m | live
-# RE-ANIMATED 2026-08-28, Zach-directed: hf7y/secretaire#1 asked "re-animate,
-# park, or unregister" and he answered re-animate. This row was opened before
-# that answer and is correct under it. #1 is now the build ticket, and the
-# conf's brief no longer tells the run to record DONE and stop -- that
-# instruction was right for an empty queue and would otherwise have made every
-# armed run a no-op. 20m is the ceiling, not the pace.
+# secretaire -- hf7y/secretaire#1 asked "re-animate, park, or unregister" and
+# the answer was re-animate. This row was opened before that answer and is
+# correct under it. #1 is now the build ticket, and the conf's brief no longer
+# tells the run to record DONE and stop -- that instruction was right for an
+# empty queue and would otherwise have made every armed run a no-op. 20m is
+# the ceiling, not the pace.
 secretaire      | secretaire@monkey      | 20m | live
 
-# ONBOARDED 2026-08-28, Zach-directed ("onboard dcp-gate-site"), closing the
-# FOURTH state hf7y/scheduler#228 found it in: absent rather than parked. The
-# 2026-08-20 row was aspirational -- #228's option 1, explicitly not a decision
-# to dispatch agents at client work. This is that decision, and #228's three
-# costs are paid in this order deliberately: uid 3016 account and both clones,
-# then schedule/dcp-gate-site.conf, then this row. do_live exits 5 BROKEN on a
-# live row whose account is missing, so merging this first would arm a break.
+# dcp-gate-site -- closes the FOURTH state hf7y/scheduler#228 found this
+# project in: absent rather than parked. An earlier row was aspirational --
+# #228's option 1, explicitly not a decision to dispatch agents at client
+# work. This is that decision, and #228's three costs are paid in this order
+# deliberately: uid 3016 account and both clones, then
+# schedule/dcp-gate-site.conf, then this row. do_live exits 5 BROKEN on a live
+# row whose account is missing, so merging this first would arm a break.
 # The conf carries what this file cannot: the repo's own never-do list, and
 # that its default branch is `master`.
 dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
 
-# american-cycle -- REGISTERED 2026-09-02 08:12, uid-band account stood up
-# the same day. ARMED 2026-09-02 13:43 (#484). The conf carries what this
-# row cannot -- that DECISIONS.md holds a considered-and-cut list an eager
-# run will otherwise reinvent, and that ui/index.html is a committed bundle
-# a source change silently makes stale.
+# american-cycle -- arming is the one edit this file reserves for a human.
+# The conf carries what this row cannot -- that DECISIONS.md holds a
+# considered-and-cut list an eager run will otherwise reinvent, and that
+# ui/index.html is a committed bundle a source change silently makes stale.
 american-cycle  | american-cycle@monkey  | 20m | live
