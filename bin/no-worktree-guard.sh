@@ -8,19 +8,13 @@
 # GATE: default
 #
 # ---------------------------------------------------------------------------
-# WHY THIS EXISTS
+# WHY THIS EXISTS (hf7y/scheduler#49)
 #
-# Zach, 2026-08-06: "we should not have any more worktrees after tonight."
-# hf7y/scheduler#49 was filed the same evening, this repo's 8 linked worktrees
-# were removed, and five days later the estate was back to 30. Nothing had
-# gone wrong. Two production scripts here created one on every run:
-#
-#   bin/scheduler-dev-cycle.sh   `git worktree add -b paced/<date> ... main`
-#   bin/overnight-dev.sh         one per cycle, up to MAX_CYCLES a night
-#
-# Both now work in a clone. Removing today's instances is not the fix, because
-# 2026-08-06 already did exactly that and it did not hold. The fix is that a
-# third creator cannot appear without this going red.
+# Two production scripts here used to create a worktree on every run --
+# bin/scheduler-dev-cycle.sh and bin/overnight-dev.sh -- and a one-time
+# cleanup pass did not hold; the estate regrew them within days. Both now
+# work in a clone instead. Removing today's instances is not the fix: the
+# fix is that a third creator cannot appear without this going red.
 #
 # ---------------------------------------------------------------------------
 # WHAT IS AND IS NOT A VIOLATION
