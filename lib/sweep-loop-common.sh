@@ -45,6 +45,7 @@
 #                      the clone so it can inspect fresh repo state: exit 0 if
 #                      there is work, non-zero to skip `claude -p` entirely.
 #                      A nightly turn budget is not free on a quiet night.
+#   CONTAIN_CPU_QUOTA, CONTAIN_MEM_MAX ("150%", "3G") -- run_contained()'s cap.
 
 set -uo pipefail
 
@@ -181,6 +182,21 @@ if ! command -v claude >/dev/null 2>&1; then
   echo "$(date -Is) CRITICAL: no \`claude\` on PATH after resolution (NODE_BIN_DIR=$NODE_BIN_DIR, $([ -d "$NODE_BIN_DIR" ] && echo present || echo ABSENT)) -- this run cannot invoke claude at all." >> "$LOG"
   notify -u critical "$JOB_NAME: claude NOT FOUND" "NODE_BIN_DIR=$NODE_BIN_DIR did not resolve \`claude\` for OS user $(id -un) -- this run will fail outright. See $LOG"
 fi
+
+# Caps the claude dispatch (hf7y/scheduler#281, tests/run-contained-witness.sh); falls back to nice/ionice, loudly, if it can't.
+run_contained() {
+  local quota="${CONTAIN_CPU_QUOTA:-150%}" mem="${CONTAIN_MEM_MAX:-3G}"
+  if command -v systemd-run >/dev/null 2>&1 && \
+     systemd-run --user --scope --expand-environment=no -q \
+       -p "CPUQuota=$quota" -p "MemoryMax=$mem" -- true >/dev/null 2>&1; then
+    echo "containment: systemd --user scope, CPUQuota=$quota MemoryMax=$mem"
+    systemd-run --user --scope --expand-environment=no -q \
+      -p "CPUQuota=$quota" -p "MemoryMax=$mem" -- "$@"
+  else
+    echo "WARNING: containment: this account cannot create a systemd --user scope (checked with a no-op probe under the same cap) -- falling back to nice/ionice, which is NOT a hard ceiling. A CPU- or memory-hungry job can still affect the host (hf7y/scheduler#281)."
+    nice -n 10 ionice -c2 -n7 "$@"
+  fi
+}
 
 # claude_failure_detail() -- say WHY claude -p failed, when the cause is
 # recognizable from its own output, instead of every non-zero exit reading as
@@ -774,7 +790,7 @@ $PROMPT"
   if [ -n "$PRECHECK_CMD" ] && [ -z "${FEEDBACK_BLOCK:-}" ] && ! eval "$PRECHECK_CMD"; then
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
-  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
+  elif run_contained claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
     STATUS="done"
   else
     STATUS="FAILED"
