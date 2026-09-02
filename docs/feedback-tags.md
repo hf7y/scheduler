@@ -37,42 +37,27 @@ anchor is positional, not a manually-typed reference.
 ## Collection
 
 `bin/collect-feedback.sh <file>` scans a file for tags **and plain `> `
-blockquote replies** (added 2026-07-20 -- see "A real near-miss" below)
-and prints a structured block (keyword or `REPLY` + section + anchor +
-text) for every one found; exits 1 with no output if there are none.
-Consecutive `> ` lines merge into one `REPLY` block, not one per physical
-line, so a wrapped paragraph reads as a single reply. The shared engine
-(`lib/sweep-loop-common.sh`) runs this automatically against
-`~/reports/<project>/LATEST.md` right before invoking `claude`, and -- if
-anything was found -- prepends it to that run's prompt as "human feedback
-on the previous report, act on this first." The scheduler's own two
-bespoke wrappers (`scheduler-nightly-batch-loop.sh`,
-`scheduler-dev-cycle.sh`) used to do the same against their own report
-file, before both were retired (the batch loop before this doc's last
-edit; `scheduler-dev-cycle.sh` 2026-08-15, hf7y/scheduler#190). Scheduler's
-own self-dev now goes through the same `lib/sweep-loop-common.sh` path as
-every other project (`.scheduler/schedule.conf`'s `BATCH_PROMPT`).
+blockquote replies** and prints a structured block (keyword or `REPLY` +
+section + anchor + text) for every one found; exits 1 with no output if
+there are none. Consecutive `> ` lines merge into one `REPLY` block, not
+one per physical line, so a wrapped paragraph reads as a single reply.
+The shared engine (`lib/sweep-loop-common.sh`) runs this automatically
+against `~/reports/<project>/LATEST.md` right before invoking `claude`,
+and -- if anything was found -- prepends it to that run's prompt as
+"human feedback on the previous report, act on this first." Scheduler's
+own self-dev goes through the same path as every other project
+(`.scheduler/schedule.conf`'s `BATCH_PROMPT`).
 
-**A real near-miss that motivated the `> ` support:** a human reply
-written directly into a report's `LATEST.md` (using the same `> `
-convention `QUESTIONS.md`'s own contract documents) was, before this
-change, invisible to this script -- only `%%TAG` lines were recognized.
-Since `LATEST.md` gets wholly overwritten on the project's next run, that
-reply was one dispatch away from being silently destroyed, having never
-been read by anything. Recovered by hand that one time (copied into the
-project's own `QUESTIONS.md`/`FOCUS.md`, where the reply mechanism
-actually is wired); this fix closes the gap so it can't recur. Two
-distinct file/mechanism pairs, easy to conflate since the vim editing
-experience looks identical on both — worth remembering:
+Two distinct file/mechanism pairs, easy to conflate since the vim editing
+experience looks identical on both:
 - **`QUESTIONS.md`**: `> ` replies read directly by `/nightly-batch`'s own
   prompt instructions (not by this script at all) — durable, append-only,
   the one built for judgment calls.
-- **`LATEST.md`**: `> ` replies (now) AND `%%TAG` lines both read by this
+- **`LATEST.md`**: `> ` replies AND `%%TAG` lines both read by this
   script before the prompt is built. Ephemeral (overwritten wholesale each
   run) — a reply there only survives long enough to be read ONCE, on the
   very next dispatch; it is not a durable record the way a `QUESTIONS.md`
-  entry is. (`BLOCKERS.md` used to be a second file read the same way; see
-  "The retired cross-project channel" below -- nothing reads it now.)
+  entry is.
 
 No separate "mark as read" step is needed: each run overwrites
 `LATEST.md` with its own fresh report, so a tag naturally disappears once
@@ -84,9 +69,7 @@ retry until it's actually acted on).
 
 `~/.vimrc` defines buffer-local mappings (active on files under
 `~/reports/**/*.md`) that insert a tag on a new line below the cursor and
-drop straight into insert mode. (This repo's own `focus/*.md`/`questions/*.md`
-symlink farm and `BLOCKERS.md`, once also in scope here, were retired by
-#244 and #66 -- neither exists in this tree any more.)
+drop straight into insert mode.
 
 | Mapping | Inserts |
 |---|---|
@@ -97,56 +80,41 @@ symlink farm and `BLOCKERS.md`, once also in scope here, were retired by
 | `<leader>y` | `%%APPROVE ` |
 | `<leader>r` | `%%REJECT ` |
 
-## Auto-timestamp + signature on save (added 2026-07-20)
+## Auto-timestamp + signature on save
 
 Any `%%TAG` line or `> ` reply, wherever it's typed from (the mappings
 above or freehand), gets `[YYYY-MM-DDTHH:MM zach]` inserted right after
 its marker automatically when the file is saved — the human doesn't need
-to type it, and doesn't need to remember to. Motivation: since the paced
-governor moved projects off a fixed nightly rhythm, day-level dates in
-existing conventions are ambiguous (a project can now genuinely run more
-than once in a calendar day) — an agent reading a reply needs to know
-*when, to the minute* and *who* wrote it, especially as more sessions
-(human or agent, on this machine or elsewhere) touch these shared files.
+to type it. Dates alone are ambiguous since a project can run more than
+once a day, so a reply needs to say *when, to the minute* and *who* wrote
+it.
 
 Mechanics (`~/.vimrc`, `SchedulerFeedbackAutoStamp` augroup): on
 `BufRead`/`BufNewFile` the buffer's on-disk lines are snapshotted; on
 `BufWritePre`, any tag/reply line that is BOTH unstamped AND new-or-changed
-relative to that snapshot gets stamped. A line untouched since opening —
-including every pre-existing unstamped reply already in a file from before
-this feature existed — is left exactly as-is, so opening an old
-report/QUESTIONS.md and saving it (e.g. to fix an unrelated typo) never
-fabricates today's date onto yesterday's answers. Already-stamped lines
-are never re-stamped (checked directly, not just via the snapshot diff, so
-this holds even across separate vim sessions). Verified with a scripted
-headless-vim test: a new tagged line and a new freehand `> ` reply both
-got stamped correctly; an old, already-answered `> ` line was untouched;
-re-saving an already-stamped line left its timestamp unchanged.
+relative to that snapshot gets stamped. A line untouched since opening is
+left exactly as-is, so opening an old report/QUESTIONS.md and saving it
+(e.g. to fix an unrelated typo) never fabricates today's date onto
+yesterday's answers. Already-stamped lines are never re-stamped, checked
+directly rather than only via the snapshot diff, so this holds even
+across separate vim sessions.
 
-**Multi-line replies stamp once, on their first line only** (fixed
-2026-07-20 after a real multi-line reply in the wild got the same
-timestamp repeated on all six of its wrapped lines): a `> ` line is only
-a stamp candidate if the line immediately above it is NOT itself a `> `
-line — a continuation of an already-started reply never gets its own
-stamp. Re-verified with a scripted three-line reply: only line one got
-`[timestamp zach]`, lines two and three stayed plain.
+**Multi-line replies stamp once, on their first line only**: a `> ` line
+is only a stamp candidate if the line immediately above it is NOT itself
+a `> ` line — a continuation of an already-started reply never gets its
+own stamp.
 
 The signer is hardcoded `zach`, not derived from `$USER` — this is a
 personal dotfile answering "did zach write this or someone/something
 else," not a general multi-user attribution system. `collect-feedback.sh`
 needs no changes: its tag regex only matches on the `%%KEYWORD` prefix, so
-a bracketed stamp immediately after is just more of the tag's own text,
-visible to whatever reads it.
+a bracketed stamp immediately after is just more of the tag's own text.
 
-## Auto-commit on save (added 2026-07-20, scope broadened same day)
+## Auto-commit on save
 
-**Trigger scope is every `*.md`, anywhere — not a fixed literal list of
-scheduler-tracking files.** Broadened after a real gap: `RFP-GALLERY.md`
-(a normal crt project doc, not one of the four scheduler-tracking files)
-sat edited-but-uncommitted with zero safety net, purely because it fell
-outside the old narrow path list. The mappings and auto-stamp are
-harmless no-ops on a file that never uses the `%%TAG`/`> ` syntax, so
-broadening their trigger costs nothing.
+**Trigger scope is every `*.md`, anywhere** — not a fixed list of
+scheduler-tracking files. The mappings and auto-stamp are harmless no-ops
+on a file that never uses the `%%TAG`/`> ` syntax, so this costs nothing.
 
 **The one consequential action — the actual commit — has its own
 separate gate**, so the broad trigger can never turn into "auto-commit
@@ -154,50 +122,26 @@ every markdown file on this machine": a save only actually commits if
 the file's repo is the scheduler repo itself, or is listed as a
 `PROJECT_REPO_PATH` in some `schedule/*.conf`. A personal note or an
 unrelated, non-registered project's markdown resolves to a repo
-scheduler has never heard of and is silently skipped — verified with a
-scripted test (a "registered" and an "unregistered" throwaway repo,
-identical edit in both, only the registered one got committed) before
-touching the real dotfile, then re-confirmed the registry-lookup itself
-(`grep -Fxq 'PROJECT_REPO_PATH="..."' schedule/*.conf`) against the real
-`schedule/` directory for both a real registered project and an
-arbitrary unregistered path.
+scheduler has never heard of and is silently skipped.
 
-Every save of one of these now-broadly-scoped files also triggers a `git add` +
-`git commit` of just that one file, so a human's edit is never left
-sitting only in the working tree where it could get silently swept into
-an unrelated commit (this happened once, for real, before this existed —
-a batch of edits to `BLOCKERS.md` got bundled into an unrelated automated
-commit via `git add -A` and had to be split back out by hand afterward).
-This replaces "remember to commit your own edits" with "it's already
-done" — a discipline problem solved by automation instead of a habit to
-build.
+Every save of one of these files also triggers a `git add` + `git commit`
+of just that one file, so a human's edit is never left sitting only in
+the working tree where it could get silently swept into an unrelated
+commit. This replaces "remember to commit your own edits" with "it's
+already done."
 
 **Commits into whichever repo actually owns the file, not necessarily
 this one** — resolving a symlink to its real owning repo via `git
 rev-parse --show-toplevel` if the saved path is one. Files with no owning
 repo at all (`~/reports/**/*.md` — deliberately uncommitted, lives outside
-git by design) are silently skipped. (The `focus/*.md`/`questions/*.md`
-symlink farm this was written against, and `BLOCKERS.md`/
-`.scheduler/FOCUS.md`/`QUESTIONS.md`, are the same #244/#66 retirements
-noted above — this routing logic is dormant for this repo until something
-else supplies a symlinked path.)
+git by design) are silently skipped.
 
 **Fully backgrounded so vim never blocks**, using `setsid` plus full
 stdin/stdout/stderr detachment — some projects' pre-commit hooks are
 genuinely slow (chezz's runs a full Playwright suite, 2+ minutes), and a
 save must never hang the editor on that. Only the single saved file is
-staged (never `-A`), so this can never sweep in unrelated uncommitted
-work already sitting in that repo. The commit message is always prefixed
-`Human edit via scheduler vim hook:` so it's never mistaken for a
-hand-crafted one.
-
-Verified end-to-end in a sandboxed pair of throwaway repos linked by a
-symlink before touching the real `~/.vimrc`: committing through the
-symlink lands only in the external repo, the local one stays untouched;
-both return control to vim near-instantly. A naive first attempt
-(background the command with a bare `&`, no `setsid`/detachment) was
-confirmed to hang vim indefinitely — the tested form here is what
-avoids that.
+staged (never `-A`). The commit message is always prefixed `Human edit
+via scheduler vim hook:` so it's never mistaken for a hand-crafted one.
 
 ## The retired cross-project channel: BLOCKERS.md
 
