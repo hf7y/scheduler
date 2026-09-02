@@ -291,11 +291,6 @@ if [ "${PACED_SUPPRESS_BATCH:-0}" = "1" ]; then
   # this machine (see the double-dispatch guard) -- that question is
   # host-local, so it reads the host-resolved file, not the union.
   if resolve_paced_conf "$SCHED_DIR"; then
-    # `|| [ -n "$pname" ]`: without it a rotation file with no final newline
-    # drops its last row, and this loop then does not know that project is
-    # paced -- so it tries to write a FIXED nightly line into that account's
-    # crontab and fails on sudo. Seen 2026-09-02 for dcp-gate-site, the last
-    # row of schedule/_paced.monkey.conf.
     while IFS='|' read -r pname penabled _ || [ -n "$pname" ]; do
       case "$pname" in ''|\#*) continue ;; esac
       [ "${penabled// /}" = "1" ] && PACED_ENABLED_SET+="${pname// /} "

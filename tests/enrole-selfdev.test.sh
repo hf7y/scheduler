@@ -121,11 +121,7 @@ has "G5 accepts a brief at repo-root CLAUDE.md, the live convention" "$OUT" "bri
 rc  "G6 and exits 0" 0 "$RC"
 
 echo "-- I. a rotation file with NO trailing newline"
-# THE 2026-09-02 DEFECT: schedule/_paced.monkey.conf ended without a newline,
-# so >> fused the new row onto the last one -- "dcp-gate-site|1|1|...batch" +
-# "american-cycle|1|1|..." became ONE line that still parses as a row named
-# after neither project. Every fixture above ends in a newline, which is why
-# every earlier case passed while the live file was being corrupted.
+# Every fixture above ends in a newline; the live _paced.monkey.conf did not.
 C4="$(mkclone i)"
 printf '# rotation\nother|1|1|%s/other/x' "$HOMES" > "$C4/schedule/_paced.testhost.conf"
 git -C "$C4" -c user.email=t@t -c user.name=t commit -qam "no trailing newline"

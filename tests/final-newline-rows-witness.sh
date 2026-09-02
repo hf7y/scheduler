@@ -1,20 +1,6 @@
 #!/usr/bin/env bash
-# final-newline-rows-witness.sh -- a row file whose last line has no newline
-# still yields that row.
-#
-# WHY THIS EXISTS. schedule/_paced.monkey.conf and schedule/ROSTER both ended
-# without a final newline. `while IFS='|' read -r ...` returns non-zero on the
-# last, newline-less line -- after having assigned the variables -- so an
-# unguarded loop DROPS it. Measured 2026-09-02: sync-crontab.sh did not know
-# dcp-gate-site was a paced participant, so instead of suppressing its fixed
-# nightly line it tried to write one into that account's crontab and failed on
-# sudo. dcp-gate-site is `live`. Nothing was red; the row was simply not there.
-#
-# The newline is restored, but the newline is not the guarantee -- the next
-# writer can drop it again, and the failure is silent. The guarantee is that
-# every reader of these files tolerates it, which is what this asserts.
-#
-# HERMETIC: fixtures under a temp dir. Nothing reads the live schedule.
+# `read` returns non-zero on a newline-less last line AFTER assigning, so an
+# unguarded |-row loop drops it -- dcp-gate-site was invisible to four readers.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
@@ -25,18 +11,12 @@ bad() { printf '  FAIL: %s\n' "$*"; fail=$((fail+1)); }
 
 echo "final-newline-rows-witness.sh"
 
-# 1. Every reader of a |-delimited row file guards its loop. Grepped rather
-#    than driven, because these four live in three scripts with three
-#    different entry conditions (root, a resolved host file, a subcommand),
-#    and a grep that names the file and line is what a reader can act on.
 echo "-- every |-row reader tolerates a missing final newline"
 mapfile -t unguarded < <(
   grep -rn "while IFS='|' read -r" "$REPO/bin" "$REPO/lib" 2>/dev/null \
-    | grep -v '|| \[ -n' \
-    | grep -v '<<<'
+    | grep -v '|| \[ -n' | grep -v '<<<'
 )
-# Two readers are exempt because their input cannot lack a final newline:
-# dresse.sh reads a here-string block, and bin/scheduler:2254 reads a pipe.
+# Exempt: dresse.sh reads a here-string, bin/scheduler:2254 reads a pipe.
 filtered=()
 for u in "${unguarded[@]}"; do
   case "$u" in *dresse.sh*|*"} | while IFS="*) continue ;; esac
@@ -49,7 +29,6 @@ else
   printf '        %s\n' "${filtered[@]}"
 fi
 
-# 2. The behaviour itself, through the one reader that can be driven offline.
 echo "-- paced_membership_set reads the last row of a newline-less file"
 mkdir -p "$T/schedule"
 printf '# rotation\nalpha|1|1|/x/a\nomega|1|1|/x/o' > "$T/schedule/_paced.testhost.conf"

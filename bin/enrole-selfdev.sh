@@ -141,11 +141,7 @@ if [ -z "$cur_row" ]; then
   elif [ "$MODE" = --check ]; then act "add row: $PROJECT|1|1|$ROW_CMD"; GAPS=$((GAPS+1))
   else
     refuse_if_dirty "schedule/_paced.$HOST.conf" "$ROW_MINE"
-    # TRAP: >> onto a file with no final newline FUSES the new row onto the
-    # last one, and the fused line still parses -- as one row named
-    # "dcp-gate-site|1|1|...batchamerican-cycle". Neither project then has a
-    # readable row, and the diff reads as a one-line edit. _paced.monkey.conf
-    # arrived here with no trailing newline (2026-09-02).
+    # >> onto a newline-less file FUSES the new row onto the last one.
     [ -s "$PACED" ] && [ -n "$(tail -c1 "$PACED")" ] && printf '\n' >> "$PACED"
     printf '%s|1|1|%s\n' "$PROJECT" "$ROW_CMD" >> "$PACED"
     act "added row: $PROJECT|1|1|$ROW_CMD"; changed=1

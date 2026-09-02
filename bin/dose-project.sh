@@ -103,8 +103,6 @@ ROSTER_CONTENT="$(fetch_roster)" || exit $?
 SPRINT_REL=".local/share/scheduler-paced-runner/sprint"
 if [ "$MODE" = "--sprint-status" ]; then
   now_e="$(date +%s)"; found=0
-  # `|| [ -n "$f1" ]`: schedule/ROSTER's last line had no newline until
-  # 2026-09-02, so the last row read as absent -- exit 4, "not in roster".
   while IFS='|' read -r f1 f2 _ || [ -n "$f1" ]; do
     case "$f1" in ''|\#*) continue ;; esac
     p_name="$(xargs <<<"$f1")"; ah="$(xargs <<<"$f2")"

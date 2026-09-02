@@ -141,9 +141,6 @@ paced_membership_set() {
   fi
   local pname
   for f in "${files[@]}"; do
-    # `|| [ -n "$pname" ]`: a rotation file whose last line has no newline
-    # otherwise loses its last row silently. On 2026-09-02 that row was
-    # dcp-gate-site's, and it is `live`.
     while IFS='|' read -r pname _ || [ -n "$pname" ]; do
       # A COMMENTED-OUT line is not a participant -- `#scheduler|1|3|...`
       # means the rotation no longer owns it, which is exactly the
