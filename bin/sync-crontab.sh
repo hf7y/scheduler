@@ -291,7 +291,7 @@ if [ "${PACED_SUPPRESS_BATCH:-0}" = "1" ]; then
   # this machine (see the double-dispatch guard) -- that question is
   # host-local, so it reads the host-resolved file, not the union.
   if resolve_paced_conf "$SCHED_DIR"; then
-    while IFS='|' read -r pname penabled _; do
+    while IFS='|' read -r pname penabled _ || [ -n "$pname" ]; do
       case "$pname" in ''|\#*) continue ;; esac
       [ "${penabled// /}" = "1" ] && PACED_ENABLED_SET+="${pname// /} "
     done < "$PACED_CONF"

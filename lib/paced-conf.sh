@@ -141,7 +141,7 @@ paced_membership_set() {
   fi
   local pname
   for f in "${files[@]}"; do
-    while IFS='|' read -r pname _; do
+    while IFS='|' read -r pname _ || [ -n "$pname" ]; do
       # A COMMENTED-OUT line is not a participant -- `#scheduler|1|3|...`
       # means the rotation no longer owns it, which is exactly the
       # documented rollback path back to a fixed nightly cron line.

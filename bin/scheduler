@@ -81,7 +81,7 @@ load_paced_pool() {
   POOL_NAMES=(); POOL_CMDS=()
   [ -f "$PACED_CONF" ] || return 1
   local name enabled rest weight maybe_weight cmd _w
-  while IFS='|' read -r name enabled rest; do
+  while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
     case "$name" in ''|\#*) continue ;; esac
     [ "${enabled// /}" = "1" ] || continue
     name="${name// /}"
