@@ -45,12 +45,6 @@
 #                      the clone so it can inspect fresh repo state: exit 0 if
 #                      there is work, non-zero to skip `claude -p` entirely.
 #                      A nightly turn budget is not free on a quiet night.
-#   CONTAIN_CPU_QUOTA  ("150%") / CONTAIN_MEM_MAX ("3G") -- systemd --user
-#                      scope cap run_contained() wraps the claude invocation
-#                      in (hf7y/scheduler#281). bin/scheduler-run resolves
-#                      these from schedule/_contain.conf + a per-host
-#                      override and exports them; a caller that does not
-#                      (e.g. a legacy examples/ wrapper) gets these defaults.
 
 set -uo pipefail
 
@@ -188,37 +182,8 @@ if ! command -v claude >/dev/null 2>&1; then
   notify -u critical "$JOB_NAME: claude NOT FOUND" "NODE_BIN_DIR=$NODE_BIN_DIR did not resolve \`claude\` for OS user $(id -un) -- this run will fail outright. See $LOG"
 fi
 
-# run_contained() -- hf7y/scheduler#281: a dispatched claude run had NO
-# resource ceiling. chezz's headless Chromium drove monkey's CPU#2 into a
-# soft lockup twice on 2026-08-23, at dispatch CONCURRENCY 1 -- counting
-# concurrent jobs never catches this; only capping what one job may take
-# does, because the failure is one job's appetite, not how many are running.
-#
-# Wraps "$@" in a systemd --user transient SCOPE, not a service: a scope
-# execs the command directly as this shell's child, so it inherits PATH,
-# HOME, GH_TOKEN and $PWD exactly as an unwrapped call would (verified --
-# a --user SERVICE instead routes through the manager's own curated
-# environment and drops them). Capped at CONTAIN_CPU_QUOTA / CONTAIN_MEM_MAX,
-# both host-configurable: bin/scheduler-run sources schedule/_contain.conf
-# then schedule/_contain.<host>.conf (per-host override, same shape as
-# schedule/_runner.<host>.conf) and exports them; the defaults below are the
-# fallback for a caller that does not (e.g. a legacy examples/ wrapper that
-# sources this file directly).
-#
-# A REFUSAL MUST BE LOUD -- the issue's own words. An account that cannot
-# create a systemd scope silently running the job uncapped would be a
-# containment guard that is trusted and does nothing, which is worse than no
-# guard. So capability is PROBED first (a `true` under the same cap, cheap
-# and side-effect-free) and only on failure does this fall back to
-# nice/ionice -- printed as a WARNING naming exactly what that fallback does
-# NOT give: a hard ceiling.
-#
-# Globals in: CONTAIN_CPU_QUOTA, CONTAIN_MEM_MAX (both default when unset).
-# Exit status: exactly "$@"'s own -- a systemd --scope execs the command in
-# place, so its exit code IS the payload's, same as the nice/ionice fallback.
-# Witness: tests/run-contained-witness.sh.
 run_contained() {
-  local quota="${CONTAIN_CPU_QUOTA:-150%}" mem="${CONTAIN_MEM_MAX:-3G}"
+  local quota="${CONTAIN_CPU_QUOTA:-150%}" mem="${CONTAIN_MEM_MAX:-3G}"  # systemd scope cap for "$@" (hf7y/scheduler#281)
   if command -v systemd-run >/dev/null 2>&1 && \
      systemd-run --user --scope --expand-environment=no -q \
        -p "CPUQuota=$quota" -p "MemoryMax=$mem" -- true >/dev/null 2>&1; then

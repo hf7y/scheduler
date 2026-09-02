@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# Witness for lib/sweep-loop-common.sh's run_contained() -- hf7y/scheduler#281.
-#
-# THE GAP THIS CLOSES: a dispatched claude run had no resource ceiling.
-# chezz's headless Chromium drove monkey's CPU#2 into a soft lockup twice on
-# 2026-08-23 -- at dispatch CONCURRENCY 1, so counting jobs never catches
-# this; the fix has to cap what one job may take, not how many run at once.
-#
-# What must hold, and the second case is the one that rots first: the happy
-# path actually applies a cap (not just prints a line claiming to), AND a
-# host that cannot create the cap says so LOUDLY rather than silently
-# running the job uncapped -- the issue's own close condition names this
-# explicitly: a dropped containment must not be a dropped WARNING too.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,15 +7,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 command -v systemd-run >/dev/null 2>&1 || { echo "SKIP: no systemd-run on this host -- cannot witness the containment path"; echo "PASS=0 FAIL=0"; exit 0; }
 
-# Lift just the one function out of the engine -- sourcing the whole file
-# would run a real job (clone, claude, push). Same technique as
-# claude-failure-detail-witness.sh.
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 awk '/^run_contained\(\) \{$/,/^\}$/' "$LIB" > "$TMP/fn.sh"
 grep -q 'systemd-run' "$TMP/fn.sh" \
   || { echo "FAIL: could not extract run_contained() from $LIB"; exit 1; }
-# shellcheck disable=SC1090
-. "$TMP/fn.sh"
+. "$TMP/fn.sh"  # shellcheck disable=SC1090
 
 echo "== 1. happy path: a real cgroup cap is actually applied, not just claimed"
 unset CONTAIN_CPU_QUOTA CONTAIN_MEM_MAX
@@ -60,10 +44,6 @@ run_contained bash -c 'exit 17'; RC17=$?
   || bad "got rc0=$RC0 rc17=$RC17, wanted 0 and 17"
 
 echo "== 4. capability probe fails -> loud WARNING, job still runs (fallback), exit code still correct"
-# Shadow systemd-run with a function that always fails, simulating an
-# account that cannot create a --user scope at all (no session, no
-# delegation). command -v finds the function just as it would the real
-# binary, so this exercises the exact branch a broken host takes.
 systemd-run() { return 1; }
 OUT3="$(run_contained bash -c 'echo ran; exit 5' 2>&1)"; RC3=$?
 printf '%s\n' "$OUT3" | grep -q '^WARNING: containment:' \
