@@ -28,7 +28,6 @@ REPO_URL="https://github.com/hf7y/widget.git"
 SWEEP_JOB_NAME=""
 BATCH_JOB_NAME=""
 BATCH_PROMPT="/nightly-batch"
-BATCH_CRON=""
 AUTONOMY_TIER="medium"
 EOF
   printf '# rotation\nother|1|1|%s/other/x\n' "$HOMES" > "$d/schedule/_paced.testhost.conf"

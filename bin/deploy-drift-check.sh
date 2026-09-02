@@ -39,10 +39,11 @@
 #   check the DECLARED set, never the intersection, or absence reports clean.
 #
 # The declaration is DERIVED, not typed. This repo already says which of its
-# scripts must exist at an installed path, because its own config names them:
-#   schedule/_sweep.conf     SWEEP_TICK_CMD=".../.local/bin/scheduler sweep"
+# scripts must exist at an installed path, whenever a config names one, e.g.:
 #   schedule/_runner.conf    RUNNER_CMD=".../.local/bin/usage-paced-runner.sh"
-#   .scheduler/schedule.conf BATCH_SCRIPT=".../.local/bin/scheduler-dev-cycle.sh"
+# (schedule/_sweep.conf and .scheduler/schedule.conf's BATCH_SCRIPT used to be
+# examples too; both fields are gone now that scheduler-run tiers run from a
+# checkout instead -- #495.)
 # A config assignment naming $DEPLOY_DIR/<name> IS the declaration that <name>
 # must be installed -- that is exactly what made the July outage possible,
 # since sync-crontab.sh will happily write a cron line pointing at a path
