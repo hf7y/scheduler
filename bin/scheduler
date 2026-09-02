@@ -81,7 +81,11 @@ load_paced_pool() {
   POOL_NAMES=(); POOL_CMDS=()
   [ -f "$PACED_CONF" ] || return 1
   local name enabled rest weight maybe_weight cmd _w
-  while IFS='|' read -r name enabled rest; do
+  # `|| [ -n "$name" ]`: a rotation file whose last line has no final newline
+  # otherwise loses its last row -- silently, and here that means the project
+  # is not in the dispatch pool at all. schedule/_paced.monkey.conf ended that
+  # way until 2026-09-02, with dcp-gate-site (`live`) as the last row.
+  while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
     case "$name" in ''|\#*) continue ;; esac
     [ "${enabled// /}" = "1" ] || continue
     name="${name// /}"
