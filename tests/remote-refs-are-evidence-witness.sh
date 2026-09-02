@@ -6,13 +6,10 @@ source "$HERE/lib/witness-common.sh"
 
 echo "remote-refs-are-evidence-witness"
 
-# The engine's HEAD-did-not-move arm, lifted verbatim and closed with `fi`, so
-# this drives the shipped text rather than a paraphrase of it. Same extraction
-# idiom as tests/sweep-loop-node-bin-witness.sh.
 BLOCK="$(sed -n '/^  if \[ "\$AFTER_SHA" = "\$BEFORE_SHA" \]; then$/,/^  elif \[ "\$AFTER_SHA" = "\$REMOTE_SHA" \]; then$/p' "$ENGINE" \
          | sed '$d')"
 if ! printf '%s' "$BLOCK" | grep -q 'ls-remote --heads origin'; then
-  bad "could not lift the HEAD-unchanged arm out of the engine -- nothing below was tested"
+  bad "could not lift the HEAD-unchanged arm verbatim out of the engine (same sed-extract idiom as sweep-loop-node-bin-witness.sh) -- nothing below was tested"
   exit 1
 fi
 eval "report_unchanged_head() { $BLOCK fi; }"
@@ -36,13 +33,11 @@ case "$out" in
   *) bad "an idle run reported: $out" ;;
 esac
 
-# The shape the estate's own workflow produces: branch, commit, push, open a
-# PR, return to main. HEAD is byte-identical to where it started.
 git checkout -q -b feature
 echo two > g; git add g; git commit -qm two; git push -q origin feature
 git checkout -q main
 [ "$(git rev-parse HEAD)" = "$BEFORE_SHA" ] \
-  && ok "the fixture reproduces it: HEAD is exactly where the run started" \
+  && ok "the fixture reproduces the estate workflow -- branch, commit, push, return to main -- and HEAD is byte-identical to where the run started" \
   || bad "fixture is wrong -- HEAD moved, so the case under test is not the one being run"
 
 out="$(report_unchanged_head 2>&1)"
