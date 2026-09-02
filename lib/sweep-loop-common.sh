@@ -707,6 +707,7 @@ fi
     notify -u critical "$JOB_NAME" "previous run left work behind -- pushed to origin/$SALVAGE_REF for review${SALVAGE_ISSUE_URL:+ ($SALVAGE_ISSUE_URL)}"
   fi
   BEFORE_SHA=$(git rev-parse HEAD)
+  BEFORE_REMOTE_HEADS="$(git ls-remote --heads origin 2>/dev/null | sort)"
   echo "start commit: $BEFORE_SHA"
 
   # Release the brake the human already released, before this run reads its
@@ -820,7 +821,14 @@ $PROMPT"
   ELAPSED=$(( $(date +%s) - START_TS ))
 
   if [ "$AFTER_SHA" = "$BEFORE_SHA" ]; then
-    echo "pushed: no -- no new commits this run"
+    NEW_REMOTE_HEADS="$(comm -13 <(printf '%s\n' "$BEFORE_REMOTE_HEADS") \
+                                 <(git ls-remote --heads origin 2>/dev/null | sort))"
+    if [ -n "$NEW_REMOTE_HEADS" ]; then
+      echo "pushed: yes, but not onto $HEAD_BRANCH -- HEAD is where it started ($BEFORE_SHA) and origin gained $(printf '%s\n' "$NEW_REMOTE_HEADS" | grep -c .) ref(s) this run. A run that branches, pushes, opens a PR and returns to $BRANCH ends exactly here; commits_added counts $HEAD_BRANCH and reads 0 for it."
+      printf '%s\n' "$NEW_REMOTE_HEADS" | sed 's|^|  |'
+    else
+      echo "pushed: no -- no new commits this run, and origin gained no refs"
+    fi
   elif [ "$AFTER_SHA" = "$REMOTE_SHA" ]; then
     echo "pushed: yes -- $BEFORE_SHA -> $AFTER_SHA"
     git log --oneline "$BEFORE_SHA..$AFTER_SHA"
