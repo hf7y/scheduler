@@ -49,11 +49,8 @@ grep -q 'verdict\.sh set vim-arcade' <<<"$PROMPT" \
 for v in CONTINUE DONE IMPOSSIBLE; do
   grep -q "$v" <<<"$PROMPT" && ok "explains $v" || bad "never mentions $v"
 done
-# hf7y/scheduler#149: BLOCKED was chosen 0 times in 494 recorded runs while
-# agents wrote blocked-flavored CONTINUE 76 times -- because the word was
-# only ever a trailing aside ("record BLOCKED naming...") and never one of
-# the enumerated bullets next to CONTINUE/DONE/IMPOSSIBLE. A bare mention
-# passes the loop above already; this checks it reads as a real option.
+# A bare mention already passes the loop above (#149's trailing aside did
+# too) -- this checks BLOCKED reads as a real bullet, not just a footnote.
 grep -qE '^  BLOCKED  ' <<<"$PROMPT" \
   && ok "BLOCKED is an enumerated bullet, not just a trailing mention" \
   || bad "BLOCKED has no bullet next to CONTINUE/DONE/IMPOSSIBLE -- the #149 wording gap"

@@ -52,15 +52,10 @@
 #   verdict.sh clear <job>               # consume (call at dispatch)
 #   verdict.sh --selftest
 #
-# BLOCKED's optional [issue] (a bare number, resolved against the cwd's repo
-# by `gh`, or an explicit `owner/repo#N`) labels that issue `needs-human`.
-# hf7y/scheduler#149: BLOCKED was chosen 0 times in 494 recorded runs and
-# nothing ever applied the label tempo.sh already reads (TEMPO_BLOCKED_LABELS)
-# -- an alarm wired to nothing is the recurring failure shape here, so this is
-# the day-one consumer, not a second unused control symbol. Best-effort: a
-# `gh` failure (no network, no issue, no repo in cwd) is reported but does not
-# fail the verdict write -- the local backoff (LEDGER_BLOCKED_HOLD) must not
-# depend on GitHub being reachable.
+# BLOCKED's optional [issue] (bare number, cwd-resolved; or `owner/repo#N`)
+# labels that issue `needs-human` -- the consumer tempo.sh already reads
+# (TEMPO_BLOCKED_LABELS) but nothing ever fed, per hf7y/scheduler#149.
+# Best-effort: a `gh` failure is reported but does not fail the write.
 #
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
@@ -79,9 +74,7 @@ VERDICT_GH_BIN="${VERDICT_GH_BIN:-gh}"
 die() { echo "verdict: $*" >&2; exit 2; }
 vfile() { echo "$STATE_ROOT/scheduler-verdict/$1"; }
 
-# Best-effort: label the named issue needs-human so tempo.sh's existing
-# TEMPO_BLOCKED_LABELS consumer, and any human scanning the tracker, see the
-# block without reading this run's log. Never fails the caller.
+# Best-effort; never fails the caller.
 label_needs_human() {
   local issue="$1" args=(issue edit)
   case "$issue" in
@@ -210,9 +203,7 @@ cmd_selftest() {
     echo "FAIL: reasonless IMPOSSIBLE was accepted"; fails=1
   fi
 
-  # BLOCKED's optional 4th argument labels the named issue needs-human --
-  # hf7y/scheduler#149's "day-one consumer". A stub gh stands in so this
-  # never touches a real tracker.
+  # A stub gh stands in so labeling never touches a real tracker.
   local stubdir="$t/stub"; mkdir -p "$stubdir"
   cat > "$stubdir/gh" <<'STUB'
 #!/usr/bin/env bash
