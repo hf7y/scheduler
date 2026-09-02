@@ -120,6 +120,23 @@ OUT="$(HOME="$T/home" run "$C3" --check 2>&1)"; RC=$?
 has "G5 accepts a brief at repo-root CLAUDE.md, the live convention" "$OUT" "brief at CLAUDE.md"
 rc  "G6 and exits 0" 0 "$RC"
 
+echo "-- I. a rotation file with NO trailing newline"
+# THE 2026-09-02 DEFECT: schedule/_paced.monkey.conf ended without a newline,
+# so >> fused the new row onto the last one -- "dcp-gate-site|1|1|...batch" +
+# "american-cycle|1|1|..." became ONE line that still parses as a row named
+# after neither project. Every fixture above ends in a newline, which is why
+# every earlier case passed while the live file was being corrupted.
+C4="$(mkclone i)"
+printf '# rotation\nother|1|1|%s/other/x' "$HOMES" > "$C4/schedule/_paced.testhost.conf"
+git -C "$C4" -c user.email=t@t -c user.name=t commit -qam "no trailing newline"
+run "$C4" --apply >/dev/null 2>&1
+LAST_OTHER="$(grep -c '^other|1|1|[^|]*/other/x$' "$C4/schedule/_paced.testhost.conf")"
+[ "$LAST_OTHER" = 1 ] && ok "I1 the previous last row is left intact" \
+                      || bad "I1 the previous last row was fused with the new one"
+ROWS="$(grep -c '^widget|' "$C4/schedule/_paced.testhost.conf")"
+[ "$ROWS" = 1 ] && ok "I2 widget gets a row of its own" \
+                || bad "I2 expected 1 widget row, got $ROWS"
+
 echo "-- H. the argument contract (cli-guard)"
 "$SCRIPT" widget --not-a-real-flag >/dev/null 2>&1; rc "H1 unknown flag exits 2" 2 "$?"
 "$SCRIPT" --help >/dev/null 2>&1;                   rc "H2 --help exits 0" 0 "$?"

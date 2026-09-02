@@ -228,3 +228,11 @@ secretaire      | secretaire@monkey      | 20m | live
 # The conf carries what this file cannot: the repo's own never-do list, and
 # that its default branch is `master`.
 dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
+
+# american-cycle -- REGISTERED 2026-09-02, uid-band account stood up the same
+# day. PARKED on arrival, and not because anything is unproven: arming is the
+# one edit this file reserves for a human, and the account has never dispatched.
+# The conf carries what this row cannot -- that DECISIONS.md holds a
+# considered-and-cut list an eager run will otherwise reinvent, and that
+# ui/index.html is a committed bundle a source change silently makes stale.
+american-cycle  | american-cycle@monkey  | 20m | parked
