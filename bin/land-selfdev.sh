@@ -175,12 +175,6 @@ if [ -x "$PROJECTS/realisateur/bin/install-verbs.sh" ]; then
     && ok "verb surface installed" || gap "install-verbs.sh reported gaps -- read them above"
 fi
 
-# wire_repo's read-only credentials stop a `push` but nothing stops a `commit`
-# -- hf7y/scheduler#321: wtul's scheduler clone took a local commit, diverged,
-# and dispatched stale code for 3 ticks before a human reset it by hand.
-# guard-readonly-clone.sh closes that gap with a pre-commit hook, evaluated
-# live per-repo at commit time, so it also covers a project clone landed here
-# later.
 if [ -x "$PROJECTS/realisateur/bin/guard-readonly-clone.sh" ]; then
   act "guard-readonly-clone.sh --apply (refuse a local commit into realisateur/scheduler/senechal)"
   "$PROJECTS/realisateur/bin/guard-readonly-clone.sh" --apply \
