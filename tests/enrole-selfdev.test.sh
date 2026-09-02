@@ -49,9 +49,8 @@ OUT="$(run "$C" --check 2>&1)"; RC=$?
 rc  "A1 exits 0 with only would-changes" 0 "$RC"
 has "A2 names BATCH_JOB_NAME"   "$OUT" 'set BATCH_JOB_NAME="widget-nightly-batch"'
 has "A3 names CRON_ACCOUNT"     "$OUT" 'set CRON_ACCOUNT="widget"'
-has "A4 names SCHEDULER_SUBDIR" "$OUT" 'set SCHEDULER_SUBDIR=".scheduler"'
-has "A5 names the row it would add" "$OUT" 'add row: widget|1|1|'
-[ -z "$(git -C "$C" status --porcelain)" ] && ok "A6 tree is untouched" || bad "A6 --check wrote to the clone"
+has "A4 names the row it would add" "$OUT" 'add row: widget|1|1|'
+[ -z "$(git -C "$C" status --porcelain)" ] && ok "A5 tree is untouched" || bad "A5 --check wrote to the clone"
 
 echo "-- B. --apply sets every field and adds ONE enabled row"
 OUT="$(run "$C" --apply 2>&1)"; RC=$?

@@ -54,8 +54,7 @@ mkdir -p "$TMP/root/schedule" "$TMP/proj"
 ln -s "$ROOT/bin" "$TMP/root/bin"
 ln -s "$ROOT/lib" "$TMP/root/lib"
 printf 'scheduler|1|3\n' > "$TMP/root/schedule/_paced.conf"
-{ echo "PROJECT_REPO_PATH=\"$TMP/proj\""; echo 'SCHEDULER_SUBDIR=".scheduler"'; } \
-  > "$TMP/root/schedule/witnessproj.conf"
+echo "PROJECT_REPO_PATH=\"$TMP/proj\"" > "$TMP/root/schedule/witnessproj.conf"
 GEN="$TMP/proj/.scheduler/QUESTIONS.md"
 SCHED_ROOT="$TMP/root" SCHEDULER_ASK_VIA="questions-contract-witness" \
   "$ROOT/bin/scheduler" ask witnessproj "Does a file-channel project still get a QUESTIONS.md?" \

@@ -33,7 +33,6 @@ ln -s "$ROOT/lib" "$TMP/root/lib"
 printf 'witnessproj|1|3\n' > "$TMP/root/schedule/_paced.conf"
 {
   echo "PROJECT_REPO_PATH=\"$TMP/proj\""
-  echo 'SCHEDULER_SUBDIR=".scheduler"'
   echo 'ANSWER_CHANNEL="file"'
 } > "$TMP/root/schedule/witnessproj.conf"
 # No $TMP/root/focus and no $TMP/root/questions -- the retired-mirror state
