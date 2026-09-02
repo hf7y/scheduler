@@ -22,24 +22,13 @@
 # ---------------------------------------------------------------------------
 # WHY THIS EXISTS AT ALL
 #
-# 14,743 lines of tracked bash in this repository, and until 2026-08-11
-# ShellCheck had never once been RUN against them. It appeared in the tree
-# only as inline `# shellcheck source=` and disable directives -- annotations
-# written for a tool nobody invoked, and bin/overnight-dev.sh's own prompt
-# tells the overnight agent to prefer changes verifiable with "shellcheck".
-#
-# This is also the repository that writes every other project's crontab and
-# dispatches their work, as several different unix accounts, unattended. Its
-# silent-failure surface is the whole estate's. The failure mode this repo
-# documents most often -- the exit-0 no-op, the unguarded `cd`, the check that
-# cannot see and says fine -- has shellcheck codes: SC2164, SC2181, SC2086,
-# SC2115.
-#
-# The first run found 405 findings at default severity across 42 files (74 at
-# the warning-and-above level the ratchet reads). Three were dangerous enough
-# to fix in the same change: bin/overnight-dev.sh:88, :116 and
-# bin/scheduler-dev-cycle.sh:339, all unguarded `cd` on the line before
-# `git worktree remove --force`. The rest are held by the ratchet.
+# This is the repository that writes every other project's crontab and
+# dispatches their work, as several different unix accounts, unattended --
+# its silent-failure surface is the whole estate's. The failure mode this
+# repo documents most often -- the exit-0 no-op, the unguarded `cd`, the
+# check that cannot see and says fine -- has shellcheck codes: SC2164,
+# SC2181, SC2086, SC2115. Findings at default severity are held by the
+# ratchet below rather than fixed all at once.
 #
 # ---------------------------------------------------------------------------
 # WHY A RATCHET AND NOT A CONFORMANCE CHECK
@@ -188,9 +177,8 @@ baseline=""
 #
 # This is not hypothetical: 0.9.0 flags a comment line beginning with the bare
 # word `shellcheck` as a malformed directive and 0.10.0 does not, so the same
-# file is clean under one and carries two errors under the other. It cost
-# realisateur an evening (hf7y/realisateur#136) before the version was
-# recorded here.
+# file is clean under one and carries two errors under the other -- which is
+# why the version is recorded here rather than assumed.
 #
 # It WARNS rather than fails. Failing would break CI the moment a runner image
 # is bumped, which is a change nobody here made and cannot fix from this repo
