@@ -6,37 +6,19 @@
 # edits anything under $DEPLOY_DIR (installed wrappers are outside this
 # repo's write scope by standing rule); it only reports.
 #
-# Why this exists (found 2026-07-26, live, not hypothetical):
-# ~/.local/bin/usage-paced-runner.sh -- the script cron actually executes
-# every 5 minutes -- is a hand-made COPY of bin/usage-paced-runner.sh, not a
-# symlink into the checkout. Two things follow, both silent:
+# Why this exists: a hand-made COPY of a repo script at its installed path,
+# instead of a symlink into the checkout, can drift silently two ways --
+# improvements committed to the repo file never go live, and any logic in
+# the script that resolves its own repo from its own path (e.g. an
+# auto-pull block deriving REPO_ROOT from `readlink -f "$0"/..`) silently
+# stops working, because under a copy install that resolves to $DEPLOY_DIR,
+# not a git repo. A symlink install cannot drift either way; a copy can.
 #
-#   1. Every improvement committed to bin/usage-paced-runner.sh since the
-#      copy was made (2026-07-24 19:53) has never gone live. The repo file
-#      and the running file had diverged and nothing said so.
-#   2. A copied install also disables any logic in the script that resolves
-#      its own repo from its own path. Concretely: that script's auto-pull
-#      (built 2026-07-24 so a commit on one host reaches the other) derives
-#      REPO_ROOT from `readlink -f "$0"/..`, which under a copy install is
-#      ~/.local -- not a git repo -- so the whole pull block is skipped.
-#      Witness: 0 `PULL` lines in 1633 lines of that job's own run.log.
-#
-# So "deployed" was an assumed external dependency that had quietly stopped
-# being true -- exactly the failure class the stability milestone names. A
-# symlink install cannot drift; a copy can, and did.
-#
-# THE DECLARED SET, added 2026-08-02 -- and the reason is this script itself.
-# Everything below USED to iterate "per file in this repo's bin/ that ALSO
-# EXISTS in $DEPLOY_DIR" -- the intersection. A file that SHOULD be installed
-# and simply is not was never iterated over, so absence could not be reported;
-# only a DANGLING symlink was caught, never an ABSENT one. With no overlap at
-# all the summary printed "nothing in $DEPLOY_DIR shares a name with this
-# repo's bin/ -- nothing to check" and exited 0. That is an exit-0 no-op inside
-# the guard built to catch deploy problems, and it is the outage in the header
-# above one level up: on a BARE host this check reported clean.
-#
-# DEXTER-MIGRATION-NOTES-20260729.md states the rule this now keeps:
-#   check the DECLARED set, never the intersection, or absence reports clean.
+# THE DECLARED SET drives every check below: config assignments that name a
+# path under $DEPLOY_DIR are what get checked, not which repo/bin files
+# happen to already exist at $DEPLOY_DIR (the intersection) -- a file that
+# should be installed but simply is not can only be caught this way; the
+# intersection approach cannot see an absence at all.
 #
 # The declaration is DERIVED, not typed. This repo already says which of its
 # scripts must exist at an installed path, whenever a config names one, e.g.:
@@ -45,11 +27,11 @@
 # examples too; both fields are gone now that scheduler-run tiers run from a
 # checkout instead -- #495.)
 # A config assignment naming $DEPLOY_DIR/<name> IS the declaration that <name>
-# must be installed -- that is exactly what made the July outage possible,
-# since sync-crontab.sh will happily write a cron line pointing at a path
-# nothing ever created. Comment lines are excluded: several configs discuss
-# installed paths in prose, and dexter's deliberately use repo paths instead,
-# so a commented example is not a declaration.
+# must be installed -- sync-crontab.sh will happily write a cron line
+# pointing at a path nothing ever created. Comment lines are excluded:
+# several configs discuss installed paths in prose, and dexter's
+# deliberately use repo paths instead, so a commented example is not a
+# declaration.
 #
 # Checks, per DECLARED install:
 #   ABSENT  declared by config, not installed at all -- the case the
@@ -61,9 +43,8 @@
 #   DRIFT   copy whose content differs from $DEPLOY_REF (names the commit
 #           the copy DOES match, so "how stale" is a fact, not a guess)
 #   COPY    copy that matches $DEPLOY_REF today -- not broken now, but
-#           nothing keeps it in sync, and see (2) above for the sharper
-#           edge: a copy can disable repo-relative logic even when its
-#           bytes are current
+#           nothing keeps it in sync, and (see the header above) a copy can
+#           disable repo-relative logic even when its bytes are current
 #   BROKEN  symlink whose target no longer exists
 #
 # Findings are SIGNALS, not verdicts -- the fix (usually `ln -sfn`) is a
