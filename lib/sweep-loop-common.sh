@@ -31,9 +31,9 @@
 #                      PRECHECK_CMD: the precheck cuts HOW OFTEN claude runs,
 #                      MODEL cuts what each run costs.
 #   ALLOWED_TOOLS      ("Bash,Read,Write,Edit,Glob,Grep")
-#   NODE_BIN_DIR       (/home/zach/.nvm/versions/node/v25.2.1/bin) wherever
-#                      `claude` resolves from. TRAP: cron's PATH is minimal and
-#                      will not find it otherwise.
+#   NODE_BIN_DIR       (this account's newest ~/.nvm/versions/node/*/bin)
+#                      wherever `claude` resolves from. TRAP: cron's PATH is
+#                      minimal and will not find it otherwise.
 #   BRANCH             ("main") branch this job resets to and pushes against
 #   SECRETS_SRC_DIR    (unset) a local dir of non-git secrets, gitignored by
 #                      design. Copied into the clone EVERY run, not just on
@@ -58,7 +58,12 @@ set -uo pipefail
 : "${MAX_TURNS:=40}"
 : "${MODEL:=}"
 : "${ALLOWED_TOOLS:=Bash,Read,Write,Edit,Glob,Grep}"
-: "${NODE_BIN_DIR:=/home/zach/.nvm/versions/node/v25.2.1/bin}"
+node_bin_dir() {
+  local newest
+  newest="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  printf '%s' "${newest:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+}
+: "${NODE_BIN_DIR:=$(node_bin_dir)}"
 # Empty = resolve from origin's own default HEAD after the clone (below),
 # NOT the literal string "main". Hardcoding "main" silently half-broke
 # every home-assistant run for weeks: baudin's only branch is master, so
@@ -141,7 +146,7 @@ REGISTRY_DIR="$HOME/.local/share/scheduler-registry"
 REGISTRY_LOCK="$REGISTRY_DIR/${PROJECT_KEY}.lock"
 REGISTRY_MARKER="$REGISTRY_DIR/${PROJECT_KEY}.active"
 
-export PATH="${NODE_BIN_DIR}:$PATH"
+[ -d "$NODE_BIN_DIR" ] && export PATH="${NODE_BIN_DIR}:$PATH"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
@@ -171,6 +176,11 @@ notify() {
   fi
   return 0
 }
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "$(date -Is) CRITICAL: no \`claude\` on PATH after resolution (NODE_BIN_DIR=$NODE_BIN_DIR, $([ -d "$NODE_BIN_DIR" ] && echo present || echo ABSENT)) -- this run cannot invoke claude at all." >> "$LOG"
+  notify -u critical "$JOB_NAME: claude NOT FOUND" "NODE_BIN_DIR=$NODE_BIN_DIR did not resolve \`claude\` for OS user $(id -un) -- this run will fail outright. See $LOG"
+fi
 
 # claude_failure_detail() -- say WHY claude -p failed, when the cause is
 # recognizable from its own output, instead of every non-zero exit reading as
