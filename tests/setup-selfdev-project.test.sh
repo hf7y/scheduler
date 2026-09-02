@@ -23,6 +23,7 @@ PROJECT=fixtureproj
 BIN="$TMP/bin"                 # stands in for the script's own $HERE
 HOMES="$TMP/homes"             # what the stub `getent passwd` reports
 PHOME="$HOMES/$PROJECT"
+CALL_ORDER="$TMP/call-order"   # baked into the stubs below, read by setup()
 mkdir -p "$BIN" "$TMP/stub" "$PHOME"
 
 cp "$SETUP" "$BIN/setup-selfdev-project.sh"
@@ -51,11 +52,15 @@ fi
 echo "  OK      WITNESS: GitHub served $repo"
 STUB
 
-cat > "$BIN/land-selfdev.sh" <<'STUB'
+# CALL_ORDER's path is baked in literally (unquoted heredoc), not read from
+# the environment at runtime: land-selfdev.sh runs through run_as()'s
+# `env -i`, which clears everything this test would otherwise export.
+cat > "$BIN/land-selfdev.sh" <<STUB
 #!/usr/bin/env bash
-d="$(cd "$(dirname "$0")/.." && pwd)"
-: > "$d/LANDED"
-echo "land stub: $*"
+d="\$(cd "\$(dirname "\$0")/.." && pwd)"
+: > "\$d/LANDED"
+echo "land" >> "$CALL_ORDER"
+echo "land stub: \$*"
 STUB
 
 cat > "$BIN/wire-release-channel.sh" <<'STUB'
@@ -63,6 +68,15 @@ cat > "$BIN/wire-release-channel.sh" <<'STUB'
 d="$(cd "$(dirname "$0")/.." && pwd)"
 : > "$d/RELEASE-BOOTSTRAPPED"
 echo "release-channel stub: $*"
+STUB
+
+# hf7y/scheduler#309: land-selfdev.sh clones private repos over https, which
+# needs this account already able to read the host-wide App key -- so this
+# stub must be called, and must run, before land-selfdev.sh.
+cat > "$BIN/selfdev-app-key.sh" <<STUB
+#!/usr/bin/env bash
+echo "appkey" >> "$CALL_ORDER"
+echo "app-key stub: \$*"
 STUB
 chmod +x "$BIN"/*.sh
 
@@ -115,7 +129,7 @@ chmod +x "$TMP/stub"/*
 
 # setup <failing repo>... -- one run of the script under test.
 setup() {
-    rm -f "$PHOME/wire-calls" "$PHOME/LANDED" "$TMP/RELEASE-BOOTSTRAPPED"
+    rm -f "$PHOME/wire-calls" "$PHOME/LANDED" "$TMP/RELEASE-BOOTSTRAPPED" "$CALL_ORDER"
     : > "$PHOME/wire-fail-list"
     for r in "$@"; do printf '%s\n' "$r" >> "$PHOME/wire-fail-list"; done
     PATH="$TMP/stub:$PATH" SUDO_USER=fixturehands \
@@ -135,6 +149,8 @@ check "...all four repos were wired" "$(sort -u "$PHOME/wire-calls" | tr '\n' ' 
 check "...landing ran" "$([ -f "$PHOME/LANDED" ] && echo ran || echo skipped)" "ran"
 check "...and the release bootstrap ran" \
       "$([ -f "$TMP/RELEASE-BOOTSTRAPPED" ] && echo ran || echo skipped)" "ran"
+check "...the App credential (group membership) is wired before land (#309)" \
+      "$(grep -v '^$' "$CALL_ORDER" | head -2 | tr '\n' ' ')" "appkey land "
 
 # --- 2. ONE repo failing stops the run and names it ----------------------
 # This is the account-#4 case exactly: the deploy key for one repo does not
