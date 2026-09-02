@@ -87,11 +87,15 @@ SWEEP_MAX_TURNS=40
 # ===========================================================================
 
 BATCH_JOB_NAME="<project>-nightly-batch"
-BATCH_CRON="auto"                       # "auto" (or blank) lets sync-crontab.sh
-                                         # assign a staggered slot (see
-                                         # schedule/_batch.conf). Set an explicit
-                                         # "MIN HOUR * * *" only if this project's
-                                         # cadence genuinely isn't nightly.
+BATCH_CRON="auto"                       # No auto-stagger installs this any more
+                                         # (bin/sync-crontab.sh retired, #471/#488)
+                                         # -- dispatch is the paced runner or an
+                                         # actual crontab line you install by hand.
+                                         # Kept non-blank per bin/enrole-selfdev.sh:
+                                         # a blank CRON with a job name set reads
+                                         # as a half-configured tier, and
+                                         # bin/build-services-view.sh's audit view
+                                         # still displays this value.
 
 # --- new-style runtime config (used when BATCH_SCRIPT is blank) ---
 BATCH_PROMPT="/nightly-batch

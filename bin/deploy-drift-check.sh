@@ -40,7 +40,6 @@
 #
 # The declaration is DERIVED, not typed. This repo already says which of its
 # scripts must exist at an installed path, because its own config names them:
-#   schedule/_sweep.conf     SWEEP_TICK_CMD=".../.local/bin/scheduler sweep"
 #   schedule/_runner.conf    RUNNER_CMD=".../.local/bin/usage-paced-runner.sh"
 #   .scheduler/schedule.conf BATCH_SCRIPT=".../.local/bin/scheduler-dev-cycle.sh"
 # A config assignment naming $DEPLOY_DIR/<name> IS the declaration that <name>
