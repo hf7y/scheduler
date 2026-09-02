@@ -59,6 +59,5 @@ what breaks; name what is genuinely out of scope tonight.
 
 ## 6. Before finishing
 
-Nothing may be left only in this run's memory: every meaningful change has a
-real commit and is pushed, and the tree is clean at exit. A dirty tree is a
-failed run, not a handoff.
+Nothing is left only in memory: every meaningful change is committed, pushed,
+and the tree is clean at exit -- a dirty tree is a failed run, not a handoff.
