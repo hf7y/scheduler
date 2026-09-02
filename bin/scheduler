@@ -941,8 +941,42 @@ cmd_ask() {
     # The DEFERRED/DELIVERS ledgers are genuinely empty at file time: filing
     # a question defers nothing (the question itself isn't deferred work,
     # it's the ask) and ships nothing outside this repo.
+    #
+    # The ANSWER CONTRACT (rules A-D) is no longer owned here: hf7y/realisateur
+    # bin/lib/answer-contract.sh (#395) is the one executable copy, since this
+    # file is itself scheduled for deletion (#350, #364). Prefer the deployed
+    # copy so both estates read the same text; fall back to the literal below
+    # so `ask` still works on a host whose verb build predates that carry.
+    local contract
+    # shellcheck disable=SC1090
+    [ -r "${ANSWER_CONTRACT_LIB:-/usr/local/libexec/selfdev/lib/answer-contract.sh}" ] &&
+      source "${ANSWER_CONTRACT_LIB:-/usr/local/libexec/selfdev/lib/answer-contract.sh}"
+    if command -v answer_contract_text >/dev/null 2>&1; then
+      contract="$(answer_contract_text)"
+    else
+      contract="$(cat <<'EOF'
+How an answer binds (the ANSWER CONTRACT, rules A-D, 2026-07-29):
+
+- **A. Direction, not instruction.** A reply states standing intent;
+  whoever acts re-derives the concrete action from CURRENT state, not
+  from the state the question described. So a reply never goes stale.
+- **B. Re-probe the premise.** An instruction carries state claims;
+  re-probe them. Premise false + action reversible -> act on the intent
+  and flag the correction. Premise false + action irreversible -> stop
+  and surface.
+- **C. Extract standing direction silently.** A reply that generalizes
+  past its question is folded into the tracker, quoted and dated,
+  without asking first.
+- **D. No clean-check reports.** A re-probe that confirms the human was
+  right produces no output at all.
+EOF
+)"
+    fi
     body="$(printf '%s\n' \
       "DECISION: @hf7y -- $text" \
+      "" \
+      "DEFAULT-AFTER 0d: block -- irreversible, no default." \
+      "This asks a question; nothing acts on your behalf until you answer it." \
       "" \
       "---" \
       "\`$id\` · filed $today · via $via" \
@@ -952,21 +986,7 @@ cmd_ask() {
       "just reply here. A comment is the answer — leave the issue open, no" \
       "label needed." \
       "" \
-      "How an answer binds (the ANSWER CONTRACT, rules A-D, 2026-07-29 — carried" \
-      "here since #66 retired the QUESTIONS.md that used to hold it):" \
-      "" \
-      "- **A. Direction, not instruction.** A reply states standing intent;" \
-      "  whoever acts re-derives the concrete action from CURRENT state, not" \
-      "  from the state the question described. So a reply never goes stale." \
-      "- **B. Re-probe the premise.** An instruction carries state claims;" \
-      "  re-probe them. Premise false + action reversible -> act on the intent" \
-      "  and flag the correction. Premise false + action irreversible -> stop" \
-      "  and surface." \
-      "- **C. Extract standing direction silently.** A reply that generalizes" \
-      "  past its question is folded into the tracker, quoted and dated," \
-      "  without asking first." \
-      "- **D. No clean-check reports.** A re-probe that confirms the human was" \
-      "  right produces no output at all." \
+      "$contract" \
       "" \
       "<!-- DEFERRED -->" \
       "- none" \
