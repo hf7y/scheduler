@@ -40,6 +40,14 @@ Scope is the open issues. Commit as you finish meaningful chunks, not one giant
 commit at the end. If a step genuinely needs the user's own hands, do not route
 around it -- say on the issue what the wall is and what is needed from him.
 
+Before starting work on a specific issue, if this repo carries
+`tools/claim-issue.py` (hf7y/senechal#485), run it against that issue number:
+`python3 tools/claim-issue.py <N>`. Exit 1 means a live claim from a different
+run is already there -- skip to the next issue instead of duplicating work.
+Exit 2 means it could not look -- proceed as you would have without it. Repos
+that do not carry the tool skip this exactly as they do today; it is not a
+new requirement on them.
+
 ## 4. Stress-test what you built
 
 Try the edge cases a first pass misses -- the empty case, the duplicate case, a
