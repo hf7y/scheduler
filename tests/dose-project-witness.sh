@@ -61,19 +61,10 @@ case "\$path" in
     echo "42 https://github.com/hf7y/scheduler/pull/42" ;;
   */pulls/*)
     echo "PR_kwFake" ;;
-  */contents/schedule/ROSTER*|*/contents/schedule/_paced.*.conf*)
-    dest="roster"
-    case "\$path" in */_paced.*.conf*) dest="paced" ;; esac
+  */contents/schedule/ROSTER*)
     if [ -n "\${F[content]:-}" ]; then
-      printf '%s' "\${F[content]}" | base64 -d > "\$WORK/written-\$dest"
-      printf 'write dest=%s branch=%s\n' "\$dest" "\${F[branch]:-}" >> "\$WORK/gh-calls.log"
-    elif [ "\$dest" = "paced" ]; then
-      if [ "\${FAKE_PACED_MODE:-ok}" = "absent" ]; then
-        echo "gh: Not Found (HTTP 404)" >&2; exit 1
-      fi
-      if [ "\$JQEXPR" = ".sha" ]; then echo "paced-sha-1"; else
-        printf '%s' "\${FAKE_PACED_CONTENT:-}" | base64 -w0
-      fi
+      printf '%s' "\${F[content]}" | base64 -d > "\$WORK/written-roster"
+      printf 'write dest=roster branch=%s\n' "\${F[branch]:-}" >> "\$WORK/gh-calls.log"
     else
       # absent: the FILE 404s but the REPO probe (the catch-all below) still
       # succeeds -- the exact pair that proves "not there" is knowable, and is
@@ -156,11 +147,7 @@ export PATH="$FAKEBIN:$PATH"
 export DOSE_HOST_OVERRIDE="testhost"
 ROSTER="ecosim | ecosim@testhost | 6h | live
 ghosttown | ghosttown@testhost | 6h | parked
-elsewhere-proj | elsewhere-proj@otherhost | 6h | live
-orphan-proj | orphan-proj@testhost | 6h | parked"
-FAKE_PACED_CONTENT='ecosim|1|1|/home/ecosim/Documents/Projects/scheduler/bin/scheduler-run ecosim batch
-ghosttown|0|1|/home/ghosttown/Documents/Projects/scheduler/bin/scheduler-run ghosttown batch
-'
+elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
 # scheduler#112: RUNNER_JOB/RUNNER_CMD/RUNNER_ENV come from schedule/_runner.conf
 # now, not a hardcoded second copy -- same values real _runner.conf carries
 # today, so the TAG/cmd-path assertions below read exactly as they did before.
@@ -269,8 +256,6 @@ grep -qF 'scheduler:scheduler-paced-runner:RUNNER' "$CRONFILE" \
   || bad "an unset host field should not have blanked the shared value: $(cat "$CRONFILE")"
 unset FAKE_RUNNER_HOST_MODE FAKE_RUNNER_HOST_CONTENT
 
-export FAKE_PACED_CONTENT
-
 # --- 8-9. --arm/--park (#291) guards, both refused before any gh write -----
 export FAKE_UID=3011
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
@@ -292,8 +277,8 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
 [ -f "$WORK/gh-calls.log" ] && bad "missing-account refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "missing-account refusal wrote nothing"
 
-# --- 10-12. arm/park writes both files together, opens the PR, arms it ----
-rm -f "$WORK/gh-calls.log" "$WORK/written-roster" "$WORK/written-paced"
+# --- 10-12. arm/park writes schedule/ROSTER only now (#429, case 4 above) -
+rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm on a parked project exits 0" || bad "--arm exited $rc: $out"
 grep -qF 'armed: PR #42' <<<"$out" && ok "--arm reports the PR armed for auto-merge" \
@@ -301,21 +286,15 @@ grep -qF 'armed: PR #42' <<<"$out" && ok "--arm reports the PR armed for auto-me
 grep -qF 'branch ref=refs/heads/dose-arm-ghosttown-' "$WORK/gh-calls.log" \
   && ok "a fresh branch was created for the write" \
   || bad "no branch-create call logged: $(cat "$WORK/gh-calls.log" 2>&1)"
-grep -qF 'write dest=roster' "$WORK/gh-calls.log" && grep -qF 'write dest=paced' "$WORK/gh-calls.log" \
-  && ok "both schedule/ROSTER and the paced conf were written on that branch" \
-  || bad "did not write both files: $(cat "$WORK/gh-calls.log" 2>&1)"
+grep -qF 'write dest=roster' "$WORK/gh-calls.log" \
+  && ok "schedule/ROSTER was written on that branch" \
+  || bad "no roster write logged: $(cat "$WORK/gh-calls.log" 2>&1)"
 grep -qF 'ghosttown | ghosttown@testhost | 6h | live' "$WORK/written-roster" \
   && ok "the written ROSTER flips ghosttown's row to live" \
   || bad "written ROSTER does not carry the flipped row: $(cat "$WORK/written-roster" 2>&1)"
 grep -qF 'ecosim | ecosim@testhost | 6h | live' "$WORK/written-roster" \
   && ok "the written ROSTER leaves ecosim's row untouched" \
   || bad "an unrelated row changed: $(cat "$WORK/written-roster" 2>&1)"
-grep -qF 'ghosttown|1|1|' "$WORK/written-paced" \
-  && ok "the written paced conf flips ghosttown's enabled flag to 1" \
-  || bad "written paced conf does not carry enabled=1: $(cat "$WORK/written-paced" 2>&1)"
-grep -qF 'ecosim|1|1|' "$WORK/written-paced" \
-  && ok "the written paced conf leaves ecosim's row untouched" \
-  || bad "an unrelated paced row changed: $(cat "$WORK/written-paced" 2>&1)"
 
 rm -f "$WORK/gh-calls.log"
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
@@ -325,22 +304,19 @@ grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" 
 [ -f "$WORK/gh-calls.log" ] && bad "a no-op --arm still wrote to gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "a no-op --arm wrote nothing"
 
-rm -f "$WORK/gh-calls.log" "$WORK/written-roster" "$WORK/written-paced"
+rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
 out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--park on a live project exits 0" || bad "--park exited $rc: $out"
 grep -qF 'ecosim | ecosim@testhost | 6h | parked' "$WORK/written-roster" \
   && ok "--park flips the ROSTER row to parked" \
   || bad "written ROSTER does not carry parked: $(cat "$WORK/written-roster" 2>&1)"
-grep -qF 'ecosim|0|1|' "$WORK/written-paced" \
-  && ok "--park flips the paced conf's enabled flag to 0" \
-  || bad "written paced conf does not carry enabled=0: $(cat "$WORK/written-paced" 2>&1)"
 export FAKE_GETENT_FAIL=ecosim
 out2="$("$TARGET" ecosim --park 2>&1)"; rc2=$?
 unset FAKE_GETENT_FAIL
 [ "$rc2" -eq 0 ] && ok "--park does not require the account to exist" \
   || bad "--park with no unix account exited $rc2, want 0: $out2"
 
-# --- 13-15. degrade/refuse paths: no auto-merge, no paced conf, no paced row
+# --- 13. degrade path: no auto-merge -----------------------------------
 rm -f "$WORK/gh-calls.log"
 export FAKE_GH_AUTOMERGE_MODE=fail
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
@@ -349,24 +325,6 @@ unset FAKE_GH_AUTOMERGE_MODE
   || bad "--arm exited $rc when auto-merge failed, want 0: $out"
 grep -qF 'opened: PR #42' <<<"$out" && ok "--arm reports opened-not-armed when auto-merge fails" \
   || bad "--arm did not degrade its message: $out"
-
-rm -f "$WORK/gh-calls.log"
-export FAKE_PACED_MODE=absent
-out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
-unset FAKE_PACED_MODE
-[ "$rc" -eq 5 ] && ok "--arm with no paced conf to converge exits 5 (broken)" \
-  || bad "--arm with no paced conf exited $rc, want 5: $out"
-grep -qi 'together' <<<"$out" && ok "the refusal explains the together-or-neither rule" \
-  || bad "exit 5 but the message doesn't explain why: $out"
-[ -f "$WORK/gh-calls.log" ] && bad "half-written refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
-  || ok "no paced conf: nothing written, not even the roster half"
-
-rm -f "$WORK/gh-calls.log"
-out="$("$TARGET" orphan-proj --arm 2>&1)"; rc=$?
-[ "$rc" -eq 5 ] && ok "--arm on a project absent from the paced conf exits 5 (broken)" \
-  || bad "--arm on orphan-proj exited $rc, want 5: $out"
-[ -f "$WORK/gh-calls.log" ] && bad "orphan-proj refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
-  || ok "orphan-proj refusal wrote nothing"
 
 echo
 echo "dose-project-witness: $PASS passed, $FAIL failed"

@@ -29,12 +29,11 @@ read fresh from GitHub via 'gh api' every run.
 
   --check   report what would change; writes nothing (default)
   --apply   write it, then re-read and verify
-  --arm     flip schedule/ROSTER's row to 'live' and the matching
-            schedule/_paced.<host>.conf 'enabled' flag to 1, together, as
-            one pull request with auto-merge armed. Human-only (#291):
-            refuses a uid 3000-3099 self-dev account, and refuses a
-            project whose unix account does not exist on the roster's host.
-  --park    the same, to 'parked' / 0.
+  --arm     flip schedule/ROSTER's row to 'live', opening a pull request
+            with auto-merge armed. Human-only (#291): refuses a uid
+            3000-3099 self-dev account, and refuses a project whose unix
+            account does not exist on the roster's host.
+  --park    the same, to 'parked'.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
             neither. Hops to the roster's host over ssh if you are elsewhere.
@@ -161,12 +160,9 @@ roster_with_state() {  # <content> <project> <new-state>
     }
   ' <<<"$1"
 }
-paced_with_enabled() {  # <content> <project> <new-enabled 0|1>
-  awk -v proj="$2" -v val="$3" 'BEGIN{FS=OFS="|"} $1 == proj { $2 = val } { print }' <<<"$1"
-}
 if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
-  NEW_STATE="live"; NEW_ENABLED=1
-  [ "$MODE" = "--park" ] && { NEW_STATE="parked"; NEW_ENABLED=0; }
+  NEW_STATE="live"
+  [ "$MODE" = "--park" ] && NEW_STATE="parked"
 
   if [ "$ROW_STATE" = "$NEW_STATE" ]; then
     echo "kept: '$PROJECT' is already $NEW_STATE in schedule/ROSTER"
@@ -187,30 +183,16 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
     fi
   fi
 
-  PACED_REL="schedule/_paced.${ROW_HOST}.conf"
-  PACED_CONTENT="$(fetch_repo_file "$PACED_REL")"; rc=$?
-  if [ "$rc" -ne 0 ]; then
-    echo "BROKEN: no $PACED_REL to converge alongside schedule/ROSTER -- #291 writes both together or neither" >&2
-    exit 5
-  fi
-  if ! grep -qE "^${PROJECT}\|" <<<"$PACED_CONTENT"; then
-    echo "BROKEN: '$PROJECT' has a schedule/ROSTER row but no line in $PACED_REL -- the two files already disagree, dose will not paper over that by hand" >&2
-    exit 5
-  fi
-
   NEW_ROSTER="$(roster_with_state "$ROSTER_CONTENT" "$PROJECT" "$NEW_STATE")"
-  NEW_PACED="$(paced_with_enabled "$PACED_CONTENT" "$PROJECT" "$NEW_ENABLED")"
 
   BRANCH="dose-${MODE#--}-${PROJECT}-$(date +%s)"
   TITLE="dose $PROJECT $MODE -> $NEW_STATE"
-  BODY="Opened by \`dose $PROJECT $MODE\` (hf7y/scheduler#291) -- schedule/ROSTER's state and $PACED_REL's enabled flag, together, so the two cannot disagree. Auto-merge is armed; this merges itself once 'suites' is green."
+  BODY="Opened by \`dose $PROJECT $MODE\` (hf7y/scheduler#291) -- flips schedule/ROSTER's state, the only field that arms or parks a project (#79, #429). Auto-merge is armed; this merges itself once 'suites' is green."
 
   create_repo_branch "$BRANCH" "$ROSTER_REF" \
     || { echo "BLIND: could not branch from '$ROSTER_REF' -- nothing written" >&2; exit 6; }
   write_repo_file schedule/ROSTER "$NEW_ROSTER" "$BRANCH" "ROSTER: $PROJECT -> $NEW_STATE" \
     || { echo "BROKEN: branched '$BRANCH' but could not write schedule/ROSTER on it -- delete the stray branch by hand: https://github.com/$REPO_SLUG/tree/$BRANCH" >&2; exit 5; }
-  write_repo_file "$PACED_REL" "$NEW_PACED" "$BRANCH" "$PACED_REL: $PROJECT enabled=$NEW_ENABLED" \
-    || { echo "BROKEN: wrote schedule/ROSTER on '$BRANCH' but not $PACED_REL -- the branch is half-written, fix it by hand or delete it: https://github.com/$REPO_SLUG/tree/$BRANCH" >&2; exit 5; }
 
   read -r PR_NUM PR_URL < <(open_repo_pr "$BRANCH" "$ROSTER_REF" "$TITLE" "$BODY")
   if [ -z "$PR_NUM" ]; then

@@ -108,14 +108,13 @@ done
   && ok "freeze-check is called at exactly the 2 dispatch sites, as an abort handle" \
   || bad "freeze-check has ${n:-0} dispatch call site(s), expected 2 -- the abort handle's blast radius changed"
 
-# --- 4. membership is not arming, which is why dose writes two files --------
-# `dose <p> --arm/--park` (bin/dose-project.sh:158-170) writes ROSTER AND
-# _paced.<host>.conf on one branch. ROSTER alone cannot do it: a fixed nightly
-# line is suppressed by the ROW existing, and ROSTER is not in that glob.
+# --- 4. membership (fixed-line suppression) is independent of arming --------
+# dose --arm/--park also flipped _paced.<host>.conf's 'enabled' column; #429
+# found it has no reader, so it's dropped -- membership is row PRESENCE.
 echo "== 4. membership (fixed-line suppression) vs arming (dispatch)"
 grep -qE '^\s*for f in "\$repo_root"/schedule/_paced\.conf "\$repo_root"/schedule/_paced\.\*\.conf; do' "$LIB" \
   && ok "the membership glob names _paced*.conf only -- ROSTER cannot suppress a fixed line" \
-  || bad "the membership glob changed; if ROSTER is now in it, dose's two-file write is the thing to collapse next"
+  || bad "the membership glob changed; if ROSTER is now in it, dose's ROSTER-only write is the thing to revisit"
 printf 'alpha | alpha@h | 20m | parked\n' > "$TMP/repo/schedule/ROSTER"
 out="$(with_lib "$TMP/repo" paced_membership_set PACED_MEMBERS)"
 case "$out" in
@@ -123,8 +122,8 @@ case "$out" in
   *) bad "parking in ROSTER dropped 'alpha' from membership, which ARMS its fixed nightly line (the #79 trap)" ;;
 esac
 grep -q 'write_repo_file "\$PACED_REL"' "$ROOT/bin/dose-project.sh" \
-  && ok "dose --arm/--park still writes both files, matching the split above" \
-  || bad "dose no longer writes the paced conf -- either the split collapsed (good, update this witness) or arming is now half-applied"
+  && bad "dose --arm/--park still writes the paced conf -- #429 said to drop it, not keep it in sync" \
+  || ok "dose --arm/--park writes schedule/ROSTER only, per #429"
 
 # --- 5. WHICH ROSTER: SCHEDULER_ROSTER_FILE, else the checkout ---------------
 # This case pinned a DEFECT until #412: host mode fetched ROSTER over gh, then
