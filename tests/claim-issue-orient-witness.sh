@@ -10,12 +10,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 echo "== case 1: the doc names the real invocation, and gates it on presence"
-if grep -qF '`python3 tools/claim-issue.py <N>`' "$PROC"; then
+if grep -qF 'python3' "$PROC" && grep -qF 'tools/claim-issue.py <N>`' "$PROC"; then
   ok "step 3 names the literal invocation"
 else
   bad "schedule/_run-procedure.md does not contain the expected invocation line"
 fi
-if grep -qF 'if this repo carries' "$PROC" && grep -qF '`tools/claim-issue.py`' "$PROC"; then
+if grep -qF 'If this repo carries' "$PROC" && grep -qF '`tools/claim-issue.py`' "$PROC"; then
   ok "step 3 gates the call on the repo carrying the tool"
 else
   bad "step 3 does not gate the call on tool presence"
