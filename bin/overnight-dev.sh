@@ -53,13 +53,20 @@ MAX_CYCLES="${MAX_CYCLES:-5}"
 GAP_MINUTES="${GAP_MINUTES:-55}"
 DEADLINE_HHMM="${DEADLINE_HHMM:-0830}"   # don't START a new cycle after this local time
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
-NODE_BIN_DIR="${NODE_BIN_DIR:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+node_bin_dir() {
+  local newest
+  newest="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  printf '%s' "${newest:-/home/zach/.nvm/versions/node/v25.2.1/bin}"
+}
+NODE_BIN_DIR="${NODE_BIN_DIR:-$(node_bin_dir)}"
 
-export PATH="$NODE_BIN_DIR:$PATH"
+[ -d "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
 mkdir -p "$STATE_DIR" "$REPORTS_DIR"
+
+command -v claude >/dev/null 2>&1 || echo "$(date -Is) CRITICAL: no \`claude\` on PATH after resolution (NODE_BIN_DIR=$NODE_BIN_DIR, $([ -d "$NODE_BIN_DIR" ] && echo present || echo ABSENT)) -- every cycle tonight will fail outright." >> "$LOG"
 
 exec 200>"$LOCK"
 if ! flock -n 200; then
