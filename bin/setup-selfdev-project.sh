@@ -22,16 +22,18 @@
 
 set -uo pipefail
 
+USAGE="usage: $0 <project> [--check|--apply] [--no-key]"
+
 PROJECT="${1:-}"; shift 2>/dev/null || true
 MODE="--check"; WANT_KEY=1
 for a in "$@"; do
   case "$a" in
     --check|--apply) MODE="$a" ;;
     --no-key)        WANT_KEY=0 ;;
-    *) echo "usage: $0 <project> [--check|--apply] [--no-key]" >&2; exit 2 ;;
+    *) echo "$USAGE" >&2; exit 2 ;;
   esac
 done
-case "$PROJECT" in ""|-*) echo "usage: $0 <project> [--check|--apply] [--no-key]" >&2; exit 2 ;; esac
+case "$PROJECT" in ""|-*) echo "$USAGE" >&2; exit 2 ;; esac
 
 [ "$(id -u)" -eq 0 ] || { echo "$0: run as root (sudo bash $0 $PROJECT $MODE)" >&2; exit 2; }
 
