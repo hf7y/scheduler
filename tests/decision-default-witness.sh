@@ -30,14 +30,15 @@ grep -q 'default-after' "$TMP/fn.sh" \
 mkdir -p "$TMP/bin" "$TMP/empty"
 # One stub answers every gh call this function makes, and records the writes.
 # AGE and DEFAULT are the fixture knobs.
-mk_gh() { # <days-old> <default-line> <default-after-rc>
+mk_gh() { # <days-old> <default-line> <default-after-rc> [<labels-csv>]
+  local labels="${4:-}"
   cat > "$TMP/bin/gh" <<STUB
 #!/usr/bin/env bash
 case "\$1" in
   --default-after) printf '$2'; exit $3 ;;
 esac
 case "\$1 \$2" in
-  "issue list")  printf '7 %s\n' "\$(date -u -d '-$1 days' +%Y-%m-%dT%H:%M:%SZ)"; exit 0 ;;
+  "issue list")  printf '7\t%s\t$labels\n' "\$(date -u -d '-$1 days' +%Y-%m-%dT%H:%M:%SZ)"; exit 0 ;;
   "issue view")  printf 'DECISION: @zach -- q\n'; exit 0 ;;
   "issue comment") printf '%s\n' "COMMENT \$*" >> "$TMP/writes"; exit 0 ;;
   "issue edit")    printf '%s\n' "EDIT \$*"    >> "$TMP/writes"; exit 0 ;;
@@ -78,6 +79,19 @@ case "$(cat "$TMP/writes")" in
   *"issue close"*) bad "the issue stays OPEN so Zach can reverse it -- it was closed" ;;
   *) ok "the issue stays OPEN, which is what makes the default reversible" ;;
 esac
+
+# --- 1b. already defaulted -- it does NOT re-fire ---------------------------
+# needs-human is DERIVED: etiquette --apply (run immediately before this
+# function in the dispatch path) reasserts it every tick straight from the
+# body's still-open DECISION line, so an issue that already proceeded on its
+# default reappears in this SAME --label needs-human query on the very next
+# tick even though nothing changed. Without checking for `defaulted` this
+# fires again, and again, forever -- measured as 6 duplicate comments in
+# under 12h on hf7y/baudin#29 before this test existed.
+mk_gh 20 '14\tclose it as declined' 0 'needs-human,defaulted'
+run
+eq "an issue already labelled defaulted is skipped, not re-defaulted" "$(cat "$TMP/writes")" ""
+eq "...and it still exits 0" "$RC" "0"
 
 # --- 2. inside its window, it does NOTHING ---------------------------------
 mk_gh 3 '14\tclose it as declined' 0
