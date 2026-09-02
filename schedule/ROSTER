@@ -235,4 +235,4 @@ dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
 # The conf carries what this row cannot -- that DECISIONS.md holds a
 # considered-and-cut list an eager run will otherwise reinvent, and that
 # ui/index.html is a committed bundle a source change silently makes stale.
-american-cycle  | american-cycle@monkey  | 20m | parked
+american-cycle  | american-cycle@monkey  | 20m | live
