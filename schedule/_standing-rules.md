@@ -49,15 +49,12 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    directly into another project's files needs `check-project-busy
    <project>` first; defer on BUSY and say what you deferred.
 
-7. WORK THE MILESTONE FIRST. An issue in an open milestone outranks a newer
-   one in no milestone. `gh issue list` shows no milestone column and sorts
-   by most recently updated, so a backlog issue filed this morning looks
-   identical to the generation every other project is waiting on. Before
-   picking work, run `gh issue list -R <repo> --milestone <name>` for each
-   open milestone and take from there while anything in it is actionable.
-   Name the milestone you worked in your report.
+7. WORK THE MILESTONE FIRST. `gh issue list` returns no milestone column and
+   sorts by most recently updated, so an issue filed this morning looks
+   identical to the generation every other project is waiting on. What is in
+   each open milestone of your repo, computed at dispatch:
 
-   Witness, 2026-09-03: scheduler took 65 sessions in seven days -- the
-   second-highest count in the fleet -- and left four of Zach's answered
-   decisions untouched while working issues filed that same morning. It was
-   never short of turns. It could not see which turns mattered.
+@@MILESTONE-QUEUE@@
+
+   Take from a milestone while anything in it is actionable, and name the
+   milestone you worked in your report.
