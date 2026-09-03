@@ -32,6 +32,13 @@
 #   NODE_BIN_DIR      (this account's newest ~/.nvm/versions/node/*/bin) the
 #                      dir holding `claude`, when discovery guesses wrong
 #   PACED_FORCE       (0)  1 = skip the gate AND tempo, run the next participant now (testing)
+#   PACED_DRY_RUN     (0)  1 = log WOULD-DISPATCH instead of exec'ing, and skip
+#                      the ledger row and run record. Everything upstream
+#                      (ROSTER fetch, gate, tempo, account resolution, the
+#                      sudo -n -u composition) still runs for real -- only the
+#                      final exec is suppressed. The rehearsal for the host-mode
+#                      cutover (#358): diff WOULD-DISPATCH against what the
+#                      per-account runners actually dispatched.
 #   PACED_MAX_PER_TICK (8) hard cap on dispatches in one tick, so one cron
 #                      firing cannot monopolize the flock. Rotation continues.
 #   GATE_ERROR_STREAK_THRESHOLD (5) consecutive gate rc=2 ticks before a
@@ -82,6 +89,11 @@ LEDGER_DONE_COOLDOWN="${LEDGER_DONE_COOLDOWN:-3}"
 # blockages and doubled again when the reason repeats. 0 disables the backoff.
 LEDGER_BLOCKED_HOLD="${LEDGER_BLOCKED_HOLD:-6}"
 PACED_HOST_MODE="${PACED_HOST_MODE:-0}"
+# Rehearse a cutover tick with zero blast radius: log what would be
+# dispatched instead of running it, and write neither a ledger row nor a
+# run record (the latter falls out for free -- it is scheduler-run, never
+# exec'd here, that would have written one). hf7y/scheduler#358.
+PACED_DRY_RUN="${PACED_DRY_RUN:-0}"
 
 # acct_of_prog <path> -- which account owns the row whose command is <path>.
 # A FUNCTION, not an inline sed, so tests/paced-host-mode-witness.sh can call
@@ -891,6 +903,17 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       continue
     fi
     cmd="sudo -n -u $acct -H env HOME=$acct_home USER=$acct LOGNAME=$acct PATH=$acct_home/.local/bin:/usr/local/bin:/usr/bin:/bin SCHEDULER_RESUME_PR=$_resume_pr SCHEDULER_RESUME_REPO=$_resume_repo $cmd"
+  fi
+
+  # Rehearsal: everything above (ROSTER, gate, tempo, account resolution, the
+  # sudo composition) already ran for real. Only the exec, the ledger row and
+  # the run record (implicit -- scheduler-run is what writes one, and it is
+  # never invoked here) are suppressed. #358.
+  if [ "$PACED_DRY_RUN" = 1 ]; then
+    log "WOULD-DISPATCH [$idx/$n] $name -> $cmd (host=$PACED_HOST conf=$PACED_CONF [$PACED_CONF_SRC] mode=$([ "$PACED_HOST_MODE" = 1 ] && echo host || echo account))"
+    unset _resume_pr _resume_repo
+    dispatched=$((dispatched + 1))
+    continue
   fi
 
   # conf= is an mktemp path in host mode; [$PACED_CONF_SRC] is the only part that names a surface.
