@@ -32,11 +32,11 @@ while [ $# -gt 0 ]; do
 done
 [[ "$WINDOW_H" =~ ^[0-9]+$ ]] && [ "$WINDOW_H" -gt 0 ] || { echo "$CLI_NAME: --window-hours wants a positive integer" >&2; exit 2; }
 
-blind() { printf 'verdict=BLIND reason=%s\n' "$1"; exit 6; }
-
 SELF_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)" || SELF_REAL="${BASH_SOURCE[0]}"
 REPO_ROOT="$(cd "$(dirname "$SELF_REAL")/.." && pwd)"
 CONF_DIR="${TEMPO_CONF_DIR:-$REPO_ROOT/schedule}"
+
+source "$REPO_ROOT/lib/blind-witness.sh"
 
 declare -A SLUG_OF
 for conf in "$CONF_DIR"/*.conf; do

@@ -18,8 +18,9 @@ fi
 WORK="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
-REPO="$WORK/repo"; mkdir -p "$REPO/bin" "$REPO/schedule"
+REPO="$WORK/repo"; mkdir -p "$REPO/bin" "$REPO/schedule" "$REPO/lib"
 cp "$SRC" "$REPO/bin/"
+cp "$PWD/lib/run-ledger.sh" "$PWD/lib/blind-witness.sh" "$REPO/lib/"
 printf 'REPO_URL="https://github.com/hf7y/quux.git"\n' > "$REPO/schedule/quux.conf"
 printf '#TEMPO_BASE_MIN=120\n' > "$REPO/schedule/_tempo.conf"
 
