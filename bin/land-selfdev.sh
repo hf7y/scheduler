@@ -138,6 +138,18 @@ clone_or_update() {
     git clone -q "$url" "$dir" || { bad "$name: clone failed"; return 1; }
     ok "$name cloned at $(git -C "$dir" rev-parse --short HEAD)"
   fi
+  guard_foreign_clone "$name" "$dir"
+}
+
+guard_foreign_clone() {
+  local name="$1" dir="$2" hook="$2/.git/hooks/pre-commit"
+  [ "$name" = "$(id -un)" ] && { rm -f "$hook"; return 0; }
+  cat > "$hook" <<'HOOK'
+#!/bin/sh
+echo "REFUSED: this is a deployment clone, pulled --ff-only, not a dev checkout -- a local commit here can never fast-forward past again and silently wedges every future pull. Develop this project from its own self-dev account instead." >&2
+exit 1
+HOOK
+  chmod +x "$hook"
 }
 
 # The two that must exist before anything can be derived from them.
