@@ -229,3 +229,21 @@ dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
 # considered-and-cut list an eager run will otherwise reinvent, and that
 # ui/index.html is a committed bundle a source change silently makes stale.
 american-cycle  | american-cycle@monkey  | 20m | live
+
+# --- vaporwave (realisateur#695) ------------------------------------------
+# A SECOND HOST, AND A SECOND QUOTA. vaporwave is a WSL2 distro on dexter with
+# its own Anthropic account, so these rows do not compete with the @monkey rows
+# above for the estate's weekly budget.
+#
+# ALL FOUR LAND `parked`, per provision/vaporwave-wsl2/runbook.1 section 6:
+# arming is a separate act, and none of these accounts has run clean once yet.
+# The accounts, clones, credential and App wiring are all in place and proven
+# (a private hf7y repo clones as the App), so `dose <project> --arm` is the
+# only thing between these and dispatch.
+#
+# 20m is TEMPO_MIN_MIN -- the CEILING, not the pace. All four have an empty
+# issue queue today, so bin/tempo.sh will ask for 1440 min until that changes.
+dog             | dog@vaporwave          | 20m | parked
+vibe-kiosk      | vibe-kiosk@vaporwave   | 20m | parked
+inv-redirects   | inv-redirects@vaporwave | 20m | parked
+vkv23           | vkv23@vaporwave        | 20m | parked
