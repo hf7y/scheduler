@@ -114,6 +114,45 @@ done
 PROJECT_KEY="${PROJECT_KEY:-$PROJECT}"
 : "${REPO_URL:?scheduler-run: REPO_URL must be set in $CONF}"
 REPO_SUBDIR="${REPO_SUBDIR:-.}"
+
+# @@MILESTONE-QUEUE@@ -- replaced with this repo's open milestones and what is
+# in them, COMPUTED AT DISPATCH. Data, not a rule: `gh issue list` returns no
+# milestone column and sorts newest-first, so an issue filed this morning and
+# the generation every other project waits on are indistinguishable at the
+# moment an agent picks. Measured 2026-09-03: scheduler took 65 sessions in
+# seven days, second-highest in the fleet, and left four answered decisions
+# rotting while working issues filed that same morning.
+#
+# FAILS OPEN, DELIBERATELY. Unreadable milestones resolve to a line saying so
+# and dispatch proceeds. A dispatcher that blocks on the network is worse than
+# one that dispatches uninformed, and this runs before every batch on 19
+# accounts. Every gh call is bounded by MILESTONE_QUEUE_TIMEOUT.
+#
+# It rides schedule/_standing-rules.md, so one marker reaches every conf that
+# sets USES_STANDING_RULES=1. Resolved AFTER the fragment loop above, because
+# the standing-rules block is prepended before it.
+# Witness: tests/milestone-queue-witness.sh.
+if [[ "$PROMPT" == *'@@MILESTONE-QUEUE@@'* ]]; then
+  mq_to="${MILESTONE_QUEUE_TIMEOUT:-20}"
+  mq_slug="$(printf '%s' "$REPO_URL" | sed -E 's#(\.git)?/?$##; s#^.*[:/]([^/]+/[^/]+)$#\1#')"
+  mq_body=""
+  if [ -n "$mq_slug" ]; then
+    while IFS=$'\t' read -r mq_title mq_n; do
+      [ -n "$mq_title" ] || continue
+      mq_nums="$(timeout "$mq_to" gh issue list --repo "$mq_slug" --milestone "$mq_title" \
+                   --state open --limit 60 --json number \
+                   --jq '[.[].number] | sort | map("#" + tostring) | join(" ")' 2>/dev/null)"
+      mq_body="${mq_body}  ${mq_title} (${mq_n} open): ${mq_nums:-could not be listed}"$'\n'
+    done < <(timeout "$mq_to" gh api "repos/$mq_slug/milestones" \
+               --jq '.[] | select(.state == "open") | "\(.title)\t\(.open_issues)"' 2>/dev/null)
+  fi
+  if [ -n "$mq_body" ]; then
+    mq_body="These ship together and outrank a newer issue in no milestone:"$'\n'"$mq_body"
+  else
+    mq_body="(no open milestone, or they could not be read at dispatch -- check with: gh issue list --repo ${mq_slug:-<repo>} --milestone <name>)"
+  fi
+  PROMPT="${PROMPT//@@MILESTONE-QUEUE@@/$mq_body}"
+fi
 # SECRETS_SRC_DIR / SECRETS_DEST_SUBDIR (optional) are already in scope from
 # sourcing the conf, if it set them; the engine defaults them otherwise.
 

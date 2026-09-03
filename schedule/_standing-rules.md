@@ -48,3 +48,13 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    Filing an issue is a front door and needs no busy check. Writing
    directly into another project's files needs `check-project-busy
    <project>` first; defer on BUSY and say what you deferred.
+
+7. WORK THE MILESTONE FIRST. `gh issue list` returns no milestone column and
+   sorts by most recently updated, so an issue filed this morning looks
+   identical to the generation every other project is waiting on. What is in
+   each open milestone of your repo, computed at dispatch:
+
+@@MILESTONE-QUEUE@@
+
+   Take from a milestone while anything in it is actionable, and name the
+   milestone you worked in your report.
