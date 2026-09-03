@@ -90,7 +90,9 @@ want() {
 ACT_NOW=$(( OPEN_NOW - BLOCKED_NOW )); ACT_THEN=$(( OPEN_THEN - BLOCKED_THEN ))
 WANT_NOW="$(want "$ACT_NOW")"; WANT_THEN="$(want "$ACT_THEN")"
 
-LEDGER="/home/$PROJECT/.local/share/scheduler-paced-runner/ledger.tsv"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/lib/run-ledger.sh"
+LEDGER="$(HOME="/home/$PROJECT" RUN_LEDGER_FILE= STATE_DIR= _ledger_file)"
 if [ -n "${THERMOSTAT_LEDGER_FILE:-}" ]; then
   ROWS="$(cat "$THERMOSTAT_LEDGER_FILE" 2>/dev/null)" || blind "unreadable $THERMOSTAT_LEDGER_FILE"
 else
