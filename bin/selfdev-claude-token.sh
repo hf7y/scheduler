@@ -20,11 +20,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UID_MIN="${SELFDEV_UID_MIN:-3000}"; UID_MAX="${SELFDEV_UID_MAX:-3099}"
 # Overridable so the suite exercises THIS path, not a shape production never writes.
 HOME_ROOT="${SELFDEV_HOME_ROOT:-/home}"
-PASS=0; GAPS=0; BAD=0; BLIND=0
-ok()    { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
-gap()   { printf '  GAP     %s\n' "$*"; GAPS=$((GAPS+1)); }
-bad()   { printf '  BAD     %s\n' "$*"; BAD=$((BAD+1)); }
-blind() { printf '  BLIND   %s\n' "$*"; BLIND=$((BLIND+1)); }
+PW_OK_FMT='  OK      %s\n'
+PW_GAP_FMT='  GAP     %s\n'
+PW_BAD_FMT='  BAD     %s\n'
+PW_BLIND_FMT='  BLIND   %s\n'
+. "$ROOT/../lib/provision-witness.sh"
 die()   { printf 'selfdev-claude-token: %s\n' "$*" >&2; exit 2; }
 
 # Prints the whole header: a fixed line range starts printing code once edited.

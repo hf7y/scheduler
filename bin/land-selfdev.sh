@@ -24,6 +24,12 @@ case "$MODE" in --check|--land) ;; *) echo "usage: $0 [--check|--land]" >&2; exi
 PROJECTS="${INSTALLE_PROJECTS:-$HOME/Documents/Projects}"
 GH_OWNER="${SELFDEV_GH_OWNER:-hf7y}"
 
+# NOT collapsed into lib/provision-witness.sh (#517): this script is staged
+# and run as a lone file with no lib/ sibling -- setup-selfdev-project.sh
+# `install`s it alone into $STAGE, and tests/land-selfdev-deployment-guard-
+# witness.sh proves --land works from a `cp`-of-one. A lib/ dependency here
+# breaks silently on both paths (bash -u treats the missing helpers as
+# unbound vars mid-run, past the point of a clean early exit).
 PASS=0; GAPS=0; BAD=0
 ok()  { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
 gap() { printf '  MISSING %s\n' "$*"; GAPS=$((GAPS+1)); }
