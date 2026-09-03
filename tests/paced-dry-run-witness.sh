@@ -32,7 +32,7 @@ echo ran >> "$TMP/EXECUTED"
 exit 0
 AGENT
   chmod +x "$TMP/agent.sh"
-  echo "alpha|1|1|$TMP/agent.sh" > "$TMP/rot.conf"
+  echo "alpha|1|$TMP/agent.sh" > "$TMP/rot.conf"
   # ROSTER is the only arming surface (#364); PACED_HOST is pinned so the row matches.
   echo 'alpha | alpha@testhost | 20m | live' > "$TMP/ROSTER"
 
@@ -82,7 +82,7 @@ echo ran >> "$TMP/EXECUTED"
 exit 0
 AGENT
 chmod +x "$TMP/agent.sh"
-echo "alpha|1|1|$TMP/agent.sh" > "$TMP/rot.conf"
+echo "alpha|1|$TMP/agent.sh" > "$TMP/rot.conf"
 echo 'alpha | alpha@testhost | 20m | live' > "$TMP/ROSTER"
 HOME="$TMP" PACED_CONF="$TMP/rot.conf" PACED_HOST=testhost \
   SCHEDULER_ROSTER_FILE="$TMP/ROSTER" PACED_FORCE=1 PACED_MAX_PER_TICK=1 \

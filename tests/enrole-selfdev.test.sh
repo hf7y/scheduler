@@ -30,7 +30,7 @@ BATCH_JOB_NAME=""
 BATCH_PROMPT="/nightly-batch"
 AUTONOMY_TIER="medium"
 EOF
-  printf '# rotation\nother|1|1|%s/other/x\n' "$HOMES" > "$d/schedule/_paced.testhost.conf"
+  printf '# rotation\nother|1|%s/other/x\n' "$HOMES" > "$d/schedule/_paced.testhost.conf"
   git -C "$d" init -q; git -C "$d" add -A
   git -C "$d" -c user.email=t@t -c user.name=t commit -qm init
   echo "$d"
@@ -48,7 +48,7 @@ OUT="$(run "$C" --check 2>&1)"; RC=$?
 rc  "A1 exits 0 with only would-changes" 0 "$RC"
 has "A2 names BATCH_JOB_NAME"   "$OUT" 'set BATCH_JOB_NAME="widget-nightly-batch"'
 has "A3 names CRON_ACCOUNT"     "$OUT" 'set CRON_ACCOUNT="widget"'
-has "A4 names the row it would add" "$OUT" 'add row: widget|1|1|'
+has "A4 names the row it would add" "$OUT" 'add row: widget|1|'
 [ -z "$(git -C "$C" status --porcelain)" ] && ok "A5 tree is untouched" || bad "A5 --check wrote to the clone"
 
 echo "-- B. --apply sets every field and adds ONE enabled row"
@@ -58,7 +58,7 @@ has "B2 conf carries the job name" "$(cat "$C/schedule/widget.conf")" 'BATCH_JOB
 has "B3 conf carries CRON_HOST"    "$(cat "$C/schedule/widget.conf")" 'CRON_HOST="testhost"'
 ROWS="$(grep -c '^widget|' "$C/schedule/_paced.testhost.conf")"
 [ "$ROWS" = 1 ] && ok "B4 exactly one row" || bad "B4 expected 1 row, got $ROWS"
-has "B5 the row is enabled" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" "widget|1|1|$HOMES/widget/Documents/Projects/scheduler/bin/scheduler-run widget batch"
+has "B5 the row is enabled" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" "widget|1|$HOMES/widget/Documents/Projects/scheduler/bin/scheduler-run widget batch"
 has "B6 prints the undo command" "$OUT" 'undo: git -C'
 
 echo "-- D. IDEMPOTENT: a second --apply changes nothing"
@@ -73,12 +73,12 @@ ROWS="$(grep -c '^widget|' "$C/schedule/_paced.testhost.conf")"
 echo "-- E. REVERSIBLE: --retire disables the row and KEEPS it"
 OUT="$(run "$C" --retire 2>&1)"; RC=$?
 rc  "E1 exits 0" 0 "$RC"
-has "E2 the row is now disabled" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" 'widget|0|1|'
+has "E2 the row is now disabled" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" 'widget|0|'
 ROWS="$(grep -c '^widget|' "$C/schedule/_paced.testhost.conf")"
 [ "$ROWS" = 1 ] && ok "E3 the row was kept, not deleted (deleting un-suppresses the fixed nightly line)" || bad "E3 the row was removed"
 has "E4 the conf fields survive retirement" "$(cat "$C/schedule/widget.conf")" 'BATCH_JOB_NAME="widget-nightly-batch"'
 OUT="$(run "$C" --apply 2>&1)"
-has "E5 --apply re-arms the same row" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" 'widget|1|1|'
+has "E5 --apply re-arms the same row" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" 'widget|1|'
 
 echo "-- F. it refuses rather than half-writing"
 OUT="$(run "$C" --apply --repo "$T/nope" 2>&1)"; RC=$?
@@ -95,11 +95,11 @@ OUT="$(run "$C2" --apply 2>&1)"; RC=$?
 rc  "F6 an uncommitted edit to the conf it would rewrite exits 5" 5 "$RC"
 has "F7 names the in-flight file" "$OUT" "schedule/widget.conf"
 
-printf 'another-project|1|1|%s/another-project/x\n' "$HOMES" >> "$C2/schedule/_paced.testhost.conf"
+printf 'another-project|1|%s/another-project/x\n' "$HOMES" >> "$C2/schedule/_paced.testhost.conf"
 git -C "$C2" checkout -q -- schedule/widget.conf
 OUT="$(run "$C2" --apply 2>&1)"; RC=$?
 rc  "F8 a foreign row added to the rotation exits 5" 5 "$RC"
-has "F9 quotes the foreign line, not ours" "$OUT" "another-project|1|1|"
+has "F9 quotes the foreign line, not ours" "$OUT" "another-project|1|"
 
 echo "-- G. the brief-location finding (the defect that hid behind a 404)"
 C3="$(mkclone g)"
@@ -122,10 +122,10 @@ rc  "G6 and exits 0" 0 "$RC"
 echo "-- I. a rotation file with NO trailing newline"
 # Every fixture above ends in a newline; the live _paced.monkey.conf did not.
 C4="$(mkclone i)"
-printf '# rotation\nother|1|1|%s/other/x' "$HOMES" > "$C4/schedule/_paced.testhost.conf"
+printf '# rotation\nother|1|%s/other/x' "$HOMES" > "$C4/schedule/_paced.testhost.conf"
 git -C "$C4" -c user.email=t@t -c user.name=t commit -qam "no trailing newline"
 run "$C4" --apply >/dev/null 2>&1
-LAST_OTHER="$(grep -c '^other|1|1|[^|]*/other/x$' "$C4/schedule/_paced.testhost.conf")"
+LAST_OTHER="$(grep -c '^other|1|[^|]*/other/x$' "$C4/schedule/_paced.testhost.conf")"
 [ "$LAST_OTHER" = 1 ] && ok "I1 the previous last row is left intact" \
                       || bad "I1 the previous last row was fused with the new one"
 ROWS="$(grep -c '^widget|' "$C4/schedule/_paced.testhost.conf")"

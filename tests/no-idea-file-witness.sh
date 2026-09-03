@@ -59,23 +59,7 @@ if [ "$rc" -eq 0 ]; then ok "exits 0 (the runner branches on exactly this)"; els
 found="$(idea_files)"
 if [ -z "$found" ]; then ok "wrote no .idea file"; else bad "wrote: $found"; fi
 
-echo "== 3. \`scheduler weight realisateur 5\` (was bin/scheduler:1883)"
-out="$(run_sched weight realisateur 5 2>&1)"; rc=$?
-if [ "$rc" -eq 0 ]; then ok "exits 0"; else bad "exited $rc: $out"; fi
-found="$(idea_files)"
-if [ -z "$found" ]; then ok "wrote no .idea file"; else bad "wrote: $found"; fi
-if grep -q '^realisateur|1|5|' "$TMP/root/schedule/_paced.conf"; then
-  ok "still edits the rotation file (5 written)"
-else
-  bad "weight edit lost: $(cat "$TMP/root/schedule/_paced.conf")"
-fi
-if printf '%s' "$out" | grep -q "flagged for realisateur"; then
-  bad "still announces a flag file: $out"
-else
-  ok "does not announce a flag file"
-fi
-
-echo "== 4. source: nothing in bin/ or lib/ writes a .idea path"
+echo "== 3. source: nothing in bin/ or lib/ writes a .idea path"
 writers="$(grep -rnE '(>|>>)[[:space:]]*"?[^"]*\.idea|\.idea"[[:space:]]*$|=[^=]*\.idea' \
              "$ROOT/bin" "$ROOT/lib" 2>/dev/null | grep -v '^\s*#' | grep -vE ':[0-9]+:[[:space:]]*#' || true)"
 if [ -z "$writers" ]; then

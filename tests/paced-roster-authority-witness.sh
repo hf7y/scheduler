@@ -115,7 +115,7 @@ out="$(roster_state_for omega testhost)"; rc=$?
 eval "$(sed -n '/^roster_rows() {/,/^}/p' "$R")"
 PACED_HOST=testhost
 rows="$(roster_rows < "$TMP/schedule/ROSTER")"
-printf '%s' "$rows" | grep -q '^omega|1|1|' \
+printf '%s' "$rows" | grep -q '^omega|1|' \
   && ok "roster_rows emits the newline-less last row too" \
   || bad "roster_rows still drops the last row (#430): got '$rows'"
 

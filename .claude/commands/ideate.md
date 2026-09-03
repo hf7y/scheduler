@@ -60,8 +60,9 @@ Pull real, current state before saying anything about status:
   open issue before treating it as unaddressed: Zach answers by commenting
   and leaving the issue open, so issue state is never an answer signal.
   Don't re-ask a settled decision.
-- `schedule/_paced.conf` weights + `docs/priority-weight.md` if the pass
-  is about relative project priority.
+- `schedule/_paced.conf` if the pass is about relative project priority
+  (the enabled/parked column; the per-project weight field was removed
+  by #528).
 
 ## 2. Find what's actually worth surfacing
 
@@ -99,7 +100,7 @@ For each decision (new or re-confirmed):
   credentials, a physical/account action, something outside this repo --
   that is an issue too, not just a mention in chat. Do not write it into a
   markdown file; that is the failure #66 retired.
-- Mechanical priority changes (`_paced.conf` weights) are fair game to
+- Mechanical priority changes (`_paced.conf` enable/park) are fair game to
   apply here when human-directed, but note in the comment that
   realisateur owns re-tuning them over time.
 - **Do not build feature/tooling code in this step.** Implementation is
