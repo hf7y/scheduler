@@ -50,7 +50,7 @@ case "$behaviour" in
 esac
 AGENT
   chmod +x "$TMP/agent.sh"
-  echo "alpha|1|1|$TMP/agent.sh" > "$TMP/rot.conf"
+  echo "alpha|1|$TMP/agent.sh" > "$TMP/rot.conf"
   # ROSTER is the only arming surface (#364); PACED_HOST is pinned so the row matches.
   echo 'alpha | alpha@testhost | 20m | live' > "$TMP/ROSTER"
 

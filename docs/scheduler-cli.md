@@ -123,7 +123,7 @@ against: which facts the machinery records and which views print them.
   not projects).
 - **The rotation this host runs** — `schedule/_paced.<short-hostname>.conf`
   if that file exists, otherwise the shared `schedule/_paced.conf`. Every
-  rotation-facing command (`next`, `run`, `weight`, `paced`/`-p`) resolves
+  rotation-facing command (`next`, `run`, `paced`/`-p`) resolves
   it through `lib/paced-conf.sh`, the same rule `bin/usage-paced-runner.sh`
   applies when it actually dispatches — so what `scheduler` reports and
   what runs here are the same file, on any host. `scheduler next` prints
@@ -139,7 +139,7 @@ against: which facts the machinery records and which views print them.
   guard checks. See `tests/sync-crontab-paced-witness.sh`.
 - The CLI resolves the same host-scoped rotation for every rotation-facing
   command, rather than always reading the shared `_paced.conf` — so on
-  `dexter` (which owns `_paced.dexter.conf`), `weight <p> <n>` writes into
+  `dexter` (which owns `_paced.dexter.conf`), `run <p>` dispatches against
   dexter's rotation, not mandark's. Set `PACED_CONF` to override, or
   `PACED_HOST` to ask what another host would resolve.
 - A project's GitHub issues (`ANSWER_CHANNEL=issues` only) — read live via
@@ -172,5 +172,4 @@ bin-drift check.
 
 `docs/feedback-tags.md` (the `%%TAG` / `> ` reply conventions),
 `docs/offline-first-checks.md` (the no-AI-by-default pattern),
-`docs/priority-weight.md` (`scheduler weight` semantics),
 `README.md` (architecture + per-script table).

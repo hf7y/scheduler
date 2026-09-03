@@ -125,11 +125,12 @@ roster_rows() {
     [ "${ah##*@}" = "$PACED_HOST" ] || continue
     acct="${ah%@*}"
     # enabled is the roster's ONE state field -- the whole point of #79 is that
-    # live/parked cannot disagree with a second file. weight is emitted as 1
-    # because it is inert (#55) and this is a translation, not a revival.
+    # live/parked cannot disagree with a second file. No weight field: #528
+    # deleted it (it was already inert here -- #55 -- and unexpressible under
+    # ROSTER).
     case "$state" in
-      live)   printf '%s|1|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
-      parked) printf '%s|0|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+      live)   printf '%s|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+      parked) printf '%s|0|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
     esac
   done
 }
@@ -484,8 +485,8 @@ elif [ "$PACED_HOST_MODE" = 1 ]; then
   # dispatch.
   #
   # A SECOND TEMPFILE, not PACED_CONF, and the distinction is load-bearing:
-  # PACED_CONF holds roster_rows' CONF-shaped translation (name|enabled|weight|
-  # cmd), while roster_state_for parses the roster's OWN shape (project |
+  # PACED_CONF holds roster_rows' CONF-shaped translation (name|enabled|cmd),
+  # while roster_state_for parses the roster's OWN shape (project |
   # account@host | rate | state). Pointing it at PACED_CONF would make every
   # row unmatchable, so roster_state_for would return 1 for everything and the
   # whole host would go dark (before #364, worse: it fell back to the conf
@@ -512,13 +513,10 @@ fi
 # <<< paced conf resolution
 
 # --- load enabled participants -------------------------------------------------
-# Format: name|enabled|command, with an OPTIONAL weight inserted as a third
-# field (name|enabled|weight|command) -- realisateur is expected to set this,
-# scheduler only enforces it mechanically (see docs/priority-weight.md).
-# Weight is a positive integer >=1; omitted/invalid defaults to 1. A weight-N
-# participant gets N turns in the rotation for every 1 turn a weight-1
-# participant gets (implemented by literally repeating it N times in the
-# rotation pool below), so ties still resolve by plain round-robin order.
+# Format: name|enabled|command. Used to carry an optional weight as a third
+# field, repeating a participant N times in the rotation pool below -- deleted
+# by #528 (host mode had already made it unexpressible: roster_rows emitted
+# weight 1 for every row, #55).
 names=(); cmds=()
 if [ ! -f "$PACED_CONF" ]; then
   log "FATAL no participants conf at $PACED_CONF [$PACED_CONF_SRC] host=$PACED_HOST"
@@ -526,26 +524,12 @@ if [ ! -f "$PACED_CONF" ]; then
 fi
 # `|| [ -n "$name" ]` because schedule/_paced.monkey.conf ends with no trailing
 # newline: a bare `read` saw 17 of its 18 rows and dropped the last silently.
-while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
+while IFS='|' read -r name enabled cmd || [ -n "$name" ]; do
   case "$name" in ''|\#*) continue ;; esac
   name="${name// /}"
   participant_enabled "$name" "$PACED_HOST" || continue
-  rest="${rest#"${rest%%[![:space:]]*}"}"
-  weight=1
-  case "$rest" in
-    [0-9]*'|'*)
-      maybe_weight="${rest%%|*}"
-      if [[ "$maybe_weight" =~ ^[0-9]+$ ]] && [ "$maybe_weight" -ge 1 ]; then
-        weight="$maybe_weight"
-        rest="${rest#*|}"
-        rest="${rest#"${rest%%[![:space:]]*}"}"
-      fi
-      ;;
-  esac
-  cmd="$rest"
-  for ((_w=0; _w<weight; _w++)); do
-    names+=("$name"); cmds+=("$cmd")
-  done
+  cmd="${cmd#"${cmd%%[![:space:]]*}"}"
+  names+=("$name"); cmds+=("$cmd")
 done < "$PACED_CONF"
 
 # --- EVERY RUNNER RUNS ONLY ITSELF (2026-08-19) -----------------------------

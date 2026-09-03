@@ -138,16 +138,17 @@ want_enabled=1; [ "$MODE" = --retire ] && want_enabled=0
 
 if [ -z "$cur_row" ]; then
   if [ "$MODE" = --retire ]; then ok "no row for $PROJECT -- nothing to retire"
-  elif [ "$MODE" = --check ]; then act "add row: $PROJECT|1|1|$ROW_CMD"; GAPS=$((GAPS+1))
+  elif [ "$MODE" = --check ]; then act "add row: $PROJECT|1|$ROW_CMD"; GAPS=$((GAPS+1))
   else
     refuse_if_dirty "schedule/_paced.$HOST.conf" "$ROW_MINE"
     # >> onto a newline-less file FUSES the new row onto the last one.
     [ -s "$PACED" ] && [ -n "$(tail -c1 "$PACED")" ] && printf '\n' >> "$PACED"
-    printf '%s|1|1|%s\n' "$PROJECT" "$ROW_CMD" >> "$PACED"
-    act "added row: $PROJECT|1|1|$ROW_CMD"; changed=1
+    printf '%s|1|%s\n' "$PROJECT" "$ROW_CMD" >> "$PACED"
+    act "added row: $PROJECT|1|$ROW_CMD"; changed=1
   fi
 else
-  # Field 2 is enabled; the row may or may not carry a weight in field 3.
+  # Field 2 is enabled; field 3 on is the command (#528 deleted the optional
+  # weight field this used to carry).
   IFS='|' read -r _n en rest <<<"$cur_row"
   if [ "${en// /}" = "$want_enabled" ]; then ok "row present, enabled=$want_enabled"
   elif [ "$MODE" = --check ]; then act "flip row enabled: $en -> $want_enabled"; GAPS=$((GAPS+1))

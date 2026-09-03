@@ -27,13 +27,13 @@ delta   | delta@testhost   | 6h | live'
 
 out="$(printf '%s\n' "$ROSTER" | roster_rows)"
 
-grep -q '^alpha|1|1|/home/alpha/Documents/Projects/scheduler/bin/scheduler-run alpha batch$' <<<"$out" \
+grep -q '^alpha|1|/home/alpha/Documents/Projects/scheduler/bin/scheduler-run alpha batch$' <<<"$out" \
   && ok "a live row becomes enabled=1 with the account's own command" || bad "live row wrong: $out"
-grep -q '^beta|0|1|' <<<"$out" && ok "a parked row becomes enabled=0, not omitted" \
+grep -q '^beta|0|' <<<"$out" && ok "a parked row becomes enabled=0, not omitted" \
   || bad "parked row missing or wrong -- omitting it would ARM it (_paced.conf TRAP 1)"
 grep -q 'gamma' <<<"$out" && bad "a row for another host leaked in" \
   || ok "a row naming another host is excluded"
-grep -q '^delta|1|1|' <<<"$out" && ok "a row after a blank line still parses" || bad "blank line ate a row"
+grep -q '^delta|1|' <<<"$out" && ok "a row after a blank line still parses" || bad "blank line ate a row"
 [ "$(grep -c . <<<"$out")" -eq 3 ] && ok "exactly 3 rows for this host" \
   || bad "got $(grep -c . <<<"$out") rows, want 3"
 

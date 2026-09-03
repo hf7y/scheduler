@@ -69,10 +69,10 @@ fi
 PACED_PTR="$HOME/.local/share/scheduler-paced-runner/rotation.idx"
 
 # load_paced_pool -- parses PACED_CONF the exact same way
-# bin/usage-paced-runner.sh does (name|enabled|[weight|]command, weight
-# defaults to 1, repeated N times in the pool for a weight-N participant)
-# so `scheduler next`/`run`/`weight` stay in lockstep with what the real
-# runner will actually do -- no second source of truth for this parsing.
+# bin/usage-paced-runner.sh does (name|enabled|command) so `scheduler
+# next`/`run` stay in lockstep with what the real runner will actually do --
+# no second source of truth for this parsing. Used to also parse an optional
+# weight field, repeating a participant N times in the pool; deleted by #528.
 # Lockstep on WHICH FILE is a separate guarantee and used to be missing
 # entirely: see lib/paced-conf.sh, which now resolves PACED_CONF above, and
 # tests/paced-conf-witness.sh, which fails if the runner's copy drifts.
@@ -80,27 +80,13 @@ PACED_PTR="$HOME/.local/share/scheduler-paced-runner/rotation.idx"
 load_paced_pool() {
   POOL_NAMES=(); POOL_CMDS=()
   [ -f "$PACED_CONF" ] || return 1
-  local name enabled rest weight maybe_weight cmd _w
-  while IFS='|' read -r name enabled rest || [ -n "$name" ]; do
+  local name enabled cmd
+  while IFS='|' read -r name enabled cmd || [ -n "$name" ]; do
     case "$name" in ''|\#*) continue ;; esac
     [ "${enabled// /}" = "1" ] || continue
     name="${name// /}"
-    rest="${rest#"${rest%%[![:space:]]*}"}"
-    weight=1
-    case "$rest" in
-      [0-9]*'|'*)
-        maybe_weight="${rest%%|*}"
-        if [[ "$maybe_weight" =~ ^[0-9]+$ ]] && [ "$maybe_weight" -ge 1 ]; then
-          weight="$maybe_weight"
-          rest="${rest#*|}"
-          rest="${rest#"${rest%%[![:space:]]*}"}"
-        fi
-        ;;
-    esac
-    cmd="$rest"
-    for ((_w=0; _w<weight; _w++)); do
-      POOL_NAMES+=("$name"); POOL_CMDS+=("$cmd")
-    done
+    cmd="${cmd#"${cmd%%[![:space:]]*}"}"
+    POOL_NAMES+=("$name"); POOL_CMDS+=("$cmd")
   done < "$PACED_CONF"
   [ "${#POOL_NAMES[@]}" -gt 0 ]
 }
@@ -188,9 +174,9 @@ usage: scheduler [command] [project]
   report [project], -r  open a project's latest report (LATEST.md)
   next [n], -n           what usage-paced-runner.sh will actually dispatch
                          next, in real rotation order (reads its rotation
-                         pointer + THIS HOST's rotation-file weights --
-                         same round-robin math, and the same host-scoped
-                         file, the runner itself uses; no new state).
+                         pointer against THIS HOST's rotation file -- same
+                         round-robin math, and the same host-scoped file,
+                         the runner itself uses; no new state).
                          Defaults to the next 8 slots.
   run <project>          dispatch one project's paced wrapper right now,
                          bypassing usage-gate.sh (each wrapper is already
@@ -198,14 +184,6 @@ usage: scheduler [command] [project]
                          if the project is currently disabled in this
                          host's rotation -- runs it once, doesn't re-enable
                          it.
-  weight <project> [n]  show (no n) or set (with n) a project's pace weight
-                         in THIS HOST's rotation file
-                         (schedule/_paced.<host>.conf if it exists, else
-                         schedule/_paced.conf). Setting it commits that
-                         file, naming the old and new value, so the
-                         override has a trace (see docs/priority-weight.md
-                         -- the number itself is realisateur's judgment
-                         call, this command only edits, never silently).
   paced, -p              open THIS HOST's rotation file directly
                          (enable/disable participants, reorder round-robin
                          tie-breaks). A host with its own
@@ -1531,7 +1509,7 @@ cmd_next() {
     printf '  %2d. %s\n' "$i" "${POOL_NAMES[$idx]}"
   done
   echo
-  echo "(rotation pool size $n, incl. weight-repeats -- from $PACED_CONF [$PACED_CONF_SRC];"
+  echo "(rotation pool size $n -- from $PACED_CONF [$PACED_CONF_SRC];"
   echo " last actually dispatched pool slot: $last -- see ~/.local/share/scheduler-paced-runner/run.log)"
 }
 
@@ -1550,16 +1528,10 @@ cmd_run() {
     echo "scheduler: '$proj' is not a participant in $PACED_CONF" >&2
     exit 1
   fi
-  local name enabled rest maybe_weight cmd
-  IFS='|' read -r name enabled rest <<<"$line"
-  rest="${rest#"${rest%%[![:space:]]*}"}"
-  case "$rest" in
-    [0-9]*'|'*)
-      maybe_weight="${rest%%|*}"
-      if [[ "$maybe_weight" =~ ^[0-9]+$ ]]; then rest="${rest#*|}"; fi
-      ;;
-  esac
-  cmd="${rest%%#*}"
+  local name enabled cmd
+  IFS='|' read -r name enabled cmd <<<"$line"
+  cmd="${cmd#"${cmd%%[![:space:]]*}"}"
+  cmd="${cmd%%#*}"
   cmd="$(printf '%s' "$cmd" | sed -e 's/[[:space:]]*$//')"
   if [ "${enabled// /}" != "1" ]; then
     echo "NOTE: $proj is disabled (enabled=0) in $PACED_CONF -- running it once anyway;"
@@ -1568,63 +1540,6 @@ cmd_run() {
   echo "scheduler run: dispatching $proj -> $cmd (bypassing usage-gate.sh, one cycle, right now)"
   # shellcheck disable=SC2086
   exec $cmd
-}
-
-cmd_weight() {
-  local proj="${1:-}" newval="${2:-}"
-  if [ -z "$proj" ]; then
-    echo "usage: scheduler weight <project> [n]"
-    exit 1
-  fi
-  local line
-  line="$(paced_conf_line "$proj")"
-  if [ -z "$line" ]; then
-    echo "scheduler: '$proj' is not a participant in $PACED_CONF" >&2
-    exit 1
-  fi
-  local name enabled rest maybe_weight cur_weight=1 tail_field
-  IFS='|' read -r name enabled rest <<<"$line"
-  tail_field="${rest#"${rest%%[![:space:]]*}"}"
-  case "$tail_field" in
-    [0-9]*'|'*)
-      maybe_weight="${tail_field%%|*}"
-      if [[ "$maybe_weight" =~ ^[0-9]+$ ]]; then
-        cur_weight="$maybe_weight"
-        tail_field="${tail_field#*|}"
-      fi
-      ;;
-  esac
-
-  if [ -z "$newval" ]; then
-    echo "$proj: weight=$cur_weight enabled=$enabled"
-    return
-  fi
-  if ! [[ "$newval" =~ ^[0-9]+$ ]] || [ "$newval" -lt 1 ]; then
-    echo "scheduler: weight must be a positive integer" >&2
-    exit 1
-  fi
-  if [ "$newval" = "$cur_weight" ]; then
-    echo "$proj: weight already $cur_weight, nothing to change"
-    return
-  fi
-
-  local newline="${name}|${enabled}|${newval}|${tail_field}"
-  awk -v proj="$proj" -v newline="$newline" -F'|' '
-    $1==proj { print newline; next } { print }
-  ' "$PACED_CONF" > "$PACED_CONF.tmp" && mv "$PACED_CONF.tmp" "$PACED_CONF"
-  echo "set $proj weight: $cur_weight -> $newval"
-  cmd_commit_file "$PACED_CONF" "scheduler weight: $proj $cur_weight -> $newval in $PACED_CONF_SRC (human override via \`scheduler weight\`)"
-
-  # The commit above IS the trace. This used to ALSO drop a
-  # `weight-override-<proj>-<ts>.idea` file into realisateur's checkout, to
-  # tell its next pass a human had overridden the value (docs/priority-weight.md
-  # -- the weight VALUE is realisateur's judgment call, this command only edits
-  # + flags, never silently). Retired 2026-08-29 with the rest of the `.idea`
-  # channel: the flag carried nothing the commit does not already carry -- it
-  # named the project, both values, and which host's rotation file (that is
-  # $PACED_CONF_SRC, recorded in the commit) -- and it bought that redundancy
-  # by requiring a clone of realisateur under the caller's own $HOME.
-  echo "recorded in $PACED_CONF_SRC's history -- no separate flag file"
 }
 
 # Prints "<unanswered> <answered>" for one QUESTIONS.md. One
@@ -1994,8 +1909,8 @@ cmd_glance() {
 
     # ETA: this project's own backlog size x its own recent dispatch cadence
     # (see project_cadence_seconds) -- deliberately per-project, not a share
-    # of some global rate, since cadence already reflects this project's
-    # rotation weight and how often the gate has actually let it run.
+    # of some global rate, since cadence already reflects how often the gate
+    # has actually let this project run.
     local etalabel="-"
     [ "$focus_mirror_available" -eq 0 ] && etalabel="?"
     if [ -n "$f_total" ] && [ "$f_total" -gt 0 ] 2>/dev/null; then
@@ -2997,7 +2912,6 @@ case "${1:-}" in
   ask) cmd_ask "${2:-}" "${3:-}" ;;
   next|-n) cmd_next "${2:-}" ;;
   run) cmd_run "${2:-}" ;;
-  weight) cmd_weight "${2:-}" "${3:-}" ;;
   paced|-p) open_file "$PACED_CONF" ;;
   pacing) shift; cmd_pacing "$@" ;;
   man|-m) cmd_man ;;
