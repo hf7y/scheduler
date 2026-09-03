@@ -182,6 +182,20 @@ if ! command -v claude >/dev/null 2>&1; then
   notify -u critical "$JOB_NAME: claude NOT FOUND" "NODE_BIN_DIR=$NODE_BIN_DIR did not resolve \`claude\` for OS user $(id -un) -- this run will fail outright. See $LOG"
 fi
 
+run_contained() {
+  local quota="${CONTAIN_CPU_QUOTA:-150%}" mem="${CONTAIN_MEM_MAX:-3G}"  # systemd scope cap for "$@" (hf7y/scheduler#281)
+  if command -v systemd-run >/dev/null 2>&1 && \
+     systemd-run --user --scope --expand-environment=no -q \
+       -p "CPUQuota=$quota" -p "MemoryMax=$mem" -- true >/dev/null 2>&1; then
+    echo "containment: systemd --user scope, CPUQuota=$quota MemoryMax=$mem"
+    systemd-run --user --scope --expand-environment=no -q \
+      -p "CPUQuota=$quota" -p "MemoryMax=$mem" -- "$@"
+  else
+    echo "WARNING: containment: this account cannot create a systemd --user scope (checked with a no-op probe under the same cap) -- falling back to nice/ionice, which is NOT a hard ceiling. A CPU- or memory-hungry job can still affect the host (hf7y/scheduler#281)."
+    nice -n 10 ionice -c2 -n7 "$@"
+  fi
+}
+
 # claude_failure_detail() -- say WHY claude -p failed, when the cause is
 # recognizable from its own output, instead of every non-zero exit reading as
 # the same generic FAILED. Takes the path to a captured claude -p transcript
@@ -777,7 +791,7 @@ $PROMPT"
   if [ -n "$PRECHECK_CMD" ] && [ -z "${FEEDBACK_BLOCK:-}" ] && ! eval "$PRECHECK_CMD"; then
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
-  elif claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
+  elif run_contained claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
     STATUS="done"
   else
     STATUS="FAILED"
