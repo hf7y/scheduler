@@ -43,12 +43,12 @@ CRED_GH_BIN="${CRED_GH_BIN:-gh}"
 CRED_SSH_TIMEOUT="${CRED_SSH_TIMEOUT:-20}"
 CRED_PASSWD_FILE="${CRED_PASSWD_FILE:-/etc/passwd}"       # a REMOTE path
 
-PASS=0; GAPS=0; BAD=0; BLIND_N=0
-ok()    { printf '  ok    %s\n' "$*"; PASS=$((PASS+1)); }
-gap()   { printf '  gap   %s\n' "$*"; GAPS=$((GAPS+1)); }
-bad()   { printf '  FLAG [drift] %s\n' "$*"; BAD=$((BAD+1)); }
-blind() { printf '  BLIND %s\n' "$*"; BLIND_N=$((BLIND_N+1)); }
-act()   { printf '  DO    %s\n' "$*"; }
+PW_OK_FMT='  ok    %s\n'
+PW_GAP_FMT='  gap   %s\n'
+PW_BAD_FMT='  FLAG [drift] %s\n'
+PW_BLIND_FMT='  BLIND %s\n'
+PW_ACT_FMT='  DO    %s\n'
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/provision-witness.sh"
 
 # THE REMOTE PROBE -- the ONLY place this script touches the network.
 fetch_remote() { # fetch_remote [account-filter]
@@ -321,8 +321,8 @@ cmd_audit() {
 
   echo
   printf 'selfdev-credentials: %d ok, %d gap, %d FLAG, %d BLIND, %d account(s)\n' \
-    "$PASS" "$GAPS" "$BAD" "$BLIND_N" "${#accounts[@]}"
-  if [ "$BAD" -gt 0 ] || [ "$BLIND_N" -gt 0 ]; then
+    "$PASS" "$GAPS" "$BAD" "$BLIND" "${#accounts[@]}"
+  if [ "$BAD" -gt 0 ] || [ "$BLIND" -gt 0 ]; then
     return 1
   fi
   return 0

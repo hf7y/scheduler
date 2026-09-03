@@ -31,6 +31,11 @@ ALIAS="github-$REPO"
 # The title carries host and account: whoever revokes one needs to know which machine loses access.
 TITLE="$HOST_NAME-$USER_NAME-$REPO"
 
+# NOT collapsed into lib/provision-witness.sh (#517): setup-selfdev-project.sh
+# `install`s this alone into $HOME_DIR/.selfdev-setup/, with no lib/ sibling,
+# and runs it from there as the project user. A lib/ dependency here breaks
+# that staged copy silently (bash -u treats the missing helpers as unbound
+# vars mid-run, not a clean early exit) -- see the same note on land-selfdev.sh.
 PASS=0; GAPS=0; BAD=0
 ok()  { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
 gap() { printf '  MISSING %s\n' "$*"; GAPS=$((GAPS+1)); }
