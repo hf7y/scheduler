@@ -24,6 +24,13 @@ case "$MODE" in --check|--land) ;; *) echo "usage: $0 [--check|--land]" >&2; exi
 PROJECTS="${INSTALLE_PROJECTS:-$HOME/Documents/Projects}"
 GH_OWNER="${SELFDEV_GH_OWNER:-hf7y}"
 
+# NOT collapsed into lib/provision-witness.sh (#517): this script is landed by
+# copying the file ALONE onto a host that has no clone yet (see header --
+# "RUN THIS ON THE TARGET HOST" -- it is what CREATES the clone), so it must
+# stay runnable with nothing beside it. tests/land-selfdev-deployment-guard-
+# witness.sh:16 exercises exactly that by copying only this file into an
+# isolated bin/ and would go BLIND (missing sourced file) if this depended on
+# a sibling lib/.
 PASS=0; GAPS=0; BAD=0
 ok()  { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
 gap() { printf '  MISSING %s\n' "$*"; GAPS=$((GAPS+1)); }

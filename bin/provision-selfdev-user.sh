@@ -24,11 +24,9 @@ SRC_HOST="$(selfdev_token_path)"
 SRC_SETTINGS="${SELFDEV_TOKEN_SRC:-$CRED_HOME/.claude/settings.json}"
 SRC_TOKEN_FILE="$CRED_HOME/.claude-token"
 
-PASS=0; GAPS=0; BAD=0
-ok()  { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
-gap() { printf '  MISSING %s\n' "$*"; GAPS=$((GAPS+1)); }
-bad() { printf '  BAD     %s\n' "$*"; BAD=$((BAD+1)); }
-act() { printf '  DO      %s\n' "$*"; }
+OK_PREFIX='  OK      '; GAP_PREFIX='  MISSING '; BAD_PREFIX='  BAD     '; ACT_PREFIX='  DO      '
+# shellcheck source=../lib/provision-witness.sh
+. "$ROOT/../lib/provision-witness.sh"
 die() { printf 'provision-selfdev-user: FATAL %s\n' "$*" >&2; exit 1; }
 
 HOME_DIR="/home/$PROJECT"

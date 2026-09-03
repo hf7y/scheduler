@@ -31,11 +31,9 @@ ALIAS="github-$REPO"
 # The title carries host and account: whoever revokes one needs to know which machine loses access.
 TITLE="$HOST_NAME-$USER_NAME-$REPO"
 
-PASS=0; GAPS=0; BAD=0
-ok()  { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
-gap() { printf '  MISSING %s\n' "$*"; GAPS=$((GAPS+1)); }
-bad() { printf '  BAD     %s\n' "$*"; BAD=$((BAD+1)); }
-act() { printf '  DO      %s\n' "$*"; }
+OK_PREFIX='  OK      '; GAP_PREFIX='  MISSING '; BAD_PREFIX='  BAD     '; ACT_PREFIX='  DO      '
+# shellcheck source=../lib/provision-witness.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/provision-witness.sh"
 
 echo "== wire-selfdev-git $OWNER/$REPO ($MODE, $ACCESS) -- $USER_NAME@$HOST_NAME =="
 

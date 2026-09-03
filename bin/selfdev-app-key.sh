@@ -59,11 +59,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-PASS=0; GAPS=0; BAD=0
-ok()  { printf '  OK      %s\n' "$*"; PASS=$((PASS+1)); }
-gap() { printf '  MISSING %s\n' "$*"; GAPS=$((GAPS+1)); }
-bad() { printf '  BAD     %s\n' "$*"; BAD=$((BAD+1)); }
-act() { printf '  DO      %s\n' "$*"; }
+OK_PREFIX='  OK      '; GAP_PREFIX='  MISSING '; BAD_PREFIX='  BAD     '; ACT_PREFIX='  DO      '
+# shellcheck source=../lib/provision-witness.sh
+. "$HERE/../lib/provision-witness.sh"
 die() { printf '\n%s: %s\n' "$CLI_NAME" "$*" >&2; exit "${2:-5}"; }
 
 CONF="$SELFDEV_APP_CONF_DEFAULT"; PEM="$SELFDEV_APP_PEM_DEFAULT"

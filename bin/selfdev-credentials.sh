@@ -43,12 +43,11 @@ CRED_GH_BIN="${CRED_GH_BIN:-gh}"
 CRED_SSH_TIMEOUT="${CRED_SSH_TIMEOUT:-20}"
 CRED_PASSWD_FILE="${CRED_PASSWD_FILE:-/etc/passwd}"       # a REMOTE path
 
-PASS=0; GAPS=0; BAD=0; BLIND_N=0
-ok()    { printf '  ok    %s\n' "$*"; PASS=$((PASS+1)); }
-gap()   { printf '  gap   %s\n' "$*"; GAPS=$((GAPS+1)); }
-bad()   { printf '  FLAG [drift] %s\n' "$*"; BAD=$((BAD+1)); }
+OK_PREFIX='  ok    '; GAP_PREFIX='  gap   '; BAD_PREFIX='  FLAG [drift] '; ACT_PREFIX='  DO    '
+# shellcheck source=../lib/provision-witness.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/provision-witness.sh"
+BLIND_N=0
 blind() { printf '  BLIND %s\n' "$*"; BLIND_N=$((BLIND_N+1)); }
-act()   { printf '  DO    %s\n' "$*"; }
 
 # THE REMOTE PROBE -- the ONLY place this script touches the network.
 fetch_remote() { # fetch_remote [account-filter]
