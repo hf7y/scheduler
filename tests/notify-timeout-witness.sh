@@ -5,9 +5,10 @@
 # wedging the job it decorates. `notify-send ... 2>/dev/null || true`
 # guards a notify-send that FAILS and does nothing about one that HANGS
 # (live instance 2026-07-28: dbus socket present, nobody listening --
-# see lib/deadman-switch.sh:82). In sweep-loop-common.sh the hang is
-# worse than elsewhere, because the caller holds $LOCK and the registry
-# marker, so it blocks the project's OTHER tier too.
+# see lib/deadman-switch.sh's deadman_check for the same guard applied
+# there). In sweep-loop-common.sh the hang is worse than elsewhere, because
+# the caller holds $LOCK and the registry marker, so it blocks the
+# project's OTHER tier too.
 #
 # Two things must both hold, and the second is the one that rots first:
 # the job survives (bounded), and the dropped notification is NOT silent.

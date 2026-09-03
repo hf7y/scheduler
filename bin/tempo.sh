@@ -217,9 +217,8 @@ if [ -z "$OPEN" ]; then
     *[!0-9]*) blind "could not parse a count out of gh's answer for $SLUG" ;;
   esac
   # THE CLOSURE TERM, read separately. `gh issue list --search` and not
-  # `gh search issues`: the search index lags the list API -- measured
-  # 2026-08-21, 206 against 226 for the same estate -- and pacing on a stale
-  # low number is pacing on a lie in the slow direction.
+  # `gh search issues`: the search index lags the list API, and pacing on a
+  # stale low number is pacing on a lie in the slow direction.
   since7="$(date -u -d '7 days ago' +%Y-%m-%d 2>/dev/null || true)"
   if [ -n "$since7" ]; then
     CLOSED7="$(gh issue list --repo "$SLUG" --state closed \
@@ -237,17 +236,13 @@ ACTIONABLE=$(( OPEN - BLOCKED ))
 
 # THE SIGN OF THE FEEDBACK. Until 2026-08-22 the drive was `actionable` alone,
 # which made this a POSITIVE loop: more open issues -> shorter interval -> more
-# runs -> more issues filed. Over 7 days the estate opened 380 and closed 364,
-# retiring only 76 that predated the window against 132 new survivors: +56/week
-# with 405 PRs merged. Filing bought dispatch; closing bought nothing.
+# runs -> more issues filed, while closing one bought nothing.
 #
 # A project now earns its pace by CLOSING. Capping drive at last week's closures
 # means a tracker that only grows falls to MAX_MIN and is dispatched daily --
-# still enough to close one thing and earn the pace back. That is the
-# saturation term Theraulaz names as the other half of self-organisation: a
-# positive feedback with no exhaustion term is not organisation, it is
-# amplification. min() and not a second divisor, because you also cannot claim
-# more pace than you have work for.
+# still enough to close one thing and earn the pace back. min() and not a
+# second divisor, because you also cannot claim more pace than you have work
+# for.
 #
 # FAIL OPEN. An unreadable closure count falls back to the old drive and says
 # so. Failing closed would collapse every project to 1 and freeze the whole

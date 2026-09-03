@@ -1,11 +1,7 @@
 # scheduler(1) — the scheduler CLI, explained
 
 The maintained man page for `bin/scheduler`, viewable any time with
-`scheduler man` (or read this file directly). Started 2026-07-25 per the
-FOCUS.md backlog ask ("start developing and maintaining a man page for
-scheduler that explains its use"; also where the glance view's former
-in-screen explanation text moved — the glance now carries a one-line
-legend and points here).
+`scheduler man` (or read this file directly).
 
 **Maintenance contract:** the terse per-command reference deliberately
 stays in ONE place — `scheduler --help` (the `usage()` function in
@@ -140,15 +136,11 @@ against: which facts the machinery records and which views print them.
   fixed line for a project *another* host's runner dispatches is
   cross-host double dispatch. "Does it dispatch *here*, as this account,
   right now?" stays host-resolved — that is what the foreign-`CRON_ACCOUNT`
-  guard checks. **This was broken until 2026-07-29**: `sync-crontab.sh`
-  read only the shared file, so commenting out mandark's `scheduler|1|3`
-  line to make its self-dev dark *armed* an auto-staggered nightly
-  `scheduler-dev-cycle.sh` for the next `--apply`. See
-  `tests/sync-crontab-paced-witness.sh`.
-- **This was broken until 2026-07-29** (the CLI half): these commands
-  hardcoded the shared file, so on `dexter`
-  (which owns `_paced.dexter.conf`) they described — and `weight <p> <n>`
-  *wrote into* — `mandark`'s rotation. Set `PACED_CONF` to override, or
+  guard checks. See `tests/sync-crontab-paced-witness.sh`.
+- The CLI resolves the same host-scoped rotation for every rotation-facing
+  command, rather than always reading the shared `_paced.conf` — so on
+  `dexter` (which owns `_paced.dexter.conf`), `weight <p> <n>` writes into
+  dexter's rotation, not mandark's. Set `PACED_CONF` to override, or
   `PACED_HOST` to ask what another host would resolve.
 - A project's GitHub issues (`ANSWER_CHANNEL=issues` only) — read live via
   `gh`, no local file. Every other project has no read path at all: the

@@ -2,5 +2,5 @@
 # Written by markdown-cost.sh --accept, which refuses to raise it. A hand
 # edit that raises it is rejected by --census. See bin/markdown-cost.sh.
 # unit: 3 -- what was measured. A number from another unit is not a floor.
-# accepted 2026-09-01T17:46:15-05:00
-9262
+# accepted 2026-09-02T19:19:09-05:00
+8368

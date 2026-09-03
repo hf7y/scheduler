@@ -11,25 +11,14 @@
 # "which participants file". This file exists because the rule had ONE
 # implementation and TWO callers who needed it.
 #
-# THE BUG THIS RETIRES (found 2026-07-29 on dexter, live):
-# bin/scheduler -- the human front door -- hardcoded
-# "$SCHED_ROOT/schedule/_paced.conf" and had no host resolution at all, while
-# the runner beside it did. Its own comment claimed `next`/`run`/`weight`
-# "stay in lockstep with what the real runner will actually do -- no second
-# source of truth for this parsing". The PARSING was in lockstep. The FILE
-# SELECTION was not, and nothing said so. On dexter that produced:
-#
-#   $ scheduler weight scheduler
-#   scheduler: 'scheduler' is not a participant in .../schedule/_paced.conf
-#
-# ...about the one project that IS enabled in dexter's rotation, and the only
-# project whose self-dev dexter now owns outright (58d6495). `scheduler weight
-# crt` answered "weight=3 enabled=0" from mandark's file where dexter's says
-# `crt|0|0`. Worst of the three: `scheduler weight <p> <n>` EDITS AND COMMITS
-# $PACED_CONF, so on dexter it rewrote MANDARK's rotation while the operator
-# believed they were retuning dexter's -- a cross-host write, which is the
-# exact two-writer hazard the per-host split was introduced to make
-# structurally impossible.
+# THE BUG THIS RETIRES: bin/scheduler (the human front door) once hardcoded
+# schedule/_paced.conf with no host resolution, while the runner beside it
+# did -- so on dexter it answered "not a participant" about the one project
+# dexter's rotation had enabled, and its edit-and-commit path (`scheduler
+# weight <p> <n>`) wrote into MANDARK's rotation while the operator believed
+# they were retuning dexter's, the exact cross-host write the per-host split
+# exists to make impossible. Full account in tests/paced-conf-witness.sh's
+# own header.
 #
 # So: one resolver, sourced by the front door, and tests/paced-conf-witness.sh
 # asserts the runner's inline copy still agrees with it. Drift fails loud
@@ -89,24 +78,18 @@ resolve_paced_conf() {
 #   resolve_paced_conf blanks PACED_CONF.
 #
 # WHY A UNION RATHER THAN THIS HOST'S FILE, and it is the whole point of the
-# function. There are two DIFFERENT questions a caller can be asking, and
-# before 2026-07-29 bin/sync-crontab.sh answered both from `_paced.conf`:
+# function. There are two DIFFERENT questions a caller can be asking:
 #
 #   "does the paced system own this project's Tier 2?"   -> membership, UNION
 #   "does it dispatch HERE, as this account, right now?" -> resolve_paced_conf
 #
-# The first is what decides whether to install a FIXED nightly cron line.
-# Answering it per-host is wrong in BOTH directions: a project in mandark's
-# rotation but not dexter's would get a fixed line installed on dexter --
-# a second dispatcher for a project the other host's runner already
-# dispatches, which is the cross-host double dispatch the crt and wtul
-# blocks in the rotation files exist to prevent. And a project in dexter's
-# rotation but not mandark's (today: `scheduler` itself, whose _paced.conf
-# line was commented out by 58d6495 when mandark self-dev went dark) had its
-# fixed line ARMED by that very act -- `sync-crontab.sh --apply` would have
-# re-installed an auto-staggered nightly scheduler-dev-cycle.sh, restoring
-# mandark as a second writer of scheduler's own git history one --apply after
-# the decision to stop being one. Reproduced in a sandbox before the fix.
+# The first decides whether to install a FIXED nightly cron line, and
+# answering it per-host is wrong in both directions: a project enabled on one
+# host but not the other would either get a second, redundant dispatcher
+# installed on the host that doesn't own it, or have its fixed line silently
+# re-armed on the host that no longer does -- restoring a second writer of
+# that project's git history, the exact hazard the per-host split exists to
+# prevent.
 #
 # One host means one thing (resolve_paced_conf). "Somebody's runner owns
 # this" is an ecosystem-wide fact, so it reads ecosystem-wide.

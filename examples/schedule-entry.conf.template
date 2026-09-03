@@ -1,16 +1,26 @@
-# Schedule entry template -- copy to ../schedule/<project>.conf, fill in,
-# then run ../bin/sync-crontab.sh (prints a preview; add --apply to
-# actually write it) to install/update this project's crontab lines.
+# Schedule entry template -- copy to ../schedule/<project>.conf, fill in.
 #
-# ONE FILE per project. This conf is the single source of truth for both
-# *when* each job fires (the scheduling fields) and *how* it runs (the
-# runtime fields) -- ../bin/scheduler-run reads the runtime fields and
+# ONE FILE per project. This conf is the single source of truth for *how*
+# each job runs (the runtime fields) -- ../bin/scheduler-run reads them and
 # sources ../lib/sweep-loop-common.sh, so there is no separate per-project
 # wrapper script to write or keep in sync.
 #
-# "Registering" a project IS this: drop a file here with real values, run
-# bin/sync-crontab.sh --apply. Deregistering is deleting this file and
-# running sync again.
+# It is NOT the source of truth for *when*/*whether* Tier 2 fires any more --
+# ../bin/sync-crontab.sh, which used to read the CRON fields below and write
+# per-project crontab lines, was retired (#454/#488). "Registering" a Tier 2
+# project today is dropping this file, landing it, enrolling it into the
+# paced rotation (../bin/enrole-selfdev.sh <project> --apply), a human
+# adding its "<project>|account@host|rate|parked" row to ../schedule/ROSTER
+# by hand (dose --arm below only flips an EXISTING row -- it exits GAP for
+# a project the roster doesn't name yet), then ../bin/dose-project.sh
+# <project> --arm (human-only, opens a self-merging PR) and --apply once
+# that merges. See ../README.md's "Registering a project" section for the
+# full sequence. Deregistering: dose --park, then delete this file and
+# enrole-selfdev.sh --retire.
+#
+# Tier 1 (SWEEP_CRON below) has no automated installer at all since
+# sync-crontab.sh's retirement -- add its crontab line by hand, tagged
+# "# scheduler:<project>:SWEEP".
 #
 # Two registries, don't conflate (see README):
 #   - THIS file = the config-time "which hours does this project run"
@@ -63,7 +73,12 @@ REPO_SUBDIR="."
 SWEEP_JOB_NAME="<project>-bug-sweep"   # names this job's state/expiry dir
                                          # (~/.local/share/$SWEEP_JOB_NAME)
 SWEEP_CRON="*/15 9-21 * * *"           # fixed daytime window -- fill in real
-                                         # hours, don't ship the placeholder
+                                         # hours, don't ship the placeholder.
+                                         # Nothing installs this into a
+                                         # crontab any more (sync-crontab.sh
+                                         # is gone, #488) -- add the line by
+                                         # hand, tagged
+                                         # "# scheduler:<project>:SWEEP".
 
 # --- new-style runtime config (used when SWEEP_SCRIPT is blank) ---
 SWEEP_PROMPT="/bug-sweep
@@ -87,15 +102,14 @@ SWEEP_MAX_TURNS=40
 # ===========================================================================
 
 BATCH_JOB_NAME="<project>-nightly-batch"
-BATCH_CRON="auto"                       # No auto-stagger installs this any more
-                                         # (bin/sync-crontab.sh retired, #471/#488)
-                                         # -- dispatch is the paced runner or an
-                                         # actual crontab line you install by hand.
-                                         # Kept non-blank per bin/enrole-selfdev.sh:
-                                         # a blank CRON with a job name set reads
-                                         # as a half-configured tier, and
-                                         # bin/build-services-view.sh's audit view
-                                         # still displays this value.
+BATCH_CRON="auto"                       # vestigial: "auto" used to let
+                                         # bin/sync-crontab.sh assign a
+                                         # staggered slot. That script is gone
+                                         # (#488) and nothing installs a batch
+                                         # tier into cron any more -- dispatch
+                                         # is via bin/scheduler-run under the
+                                         # paced runner, which ignores this
+                                         # field entirely.
 
 # --- new-style runtime config (used when BATCH_SCRIPT is blank) ---
 BATCH_PROMPT="/nightly-batch

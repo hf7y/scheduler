@@ -136,6 +136,20 @@ done
 # so never has PREFIX) needs that fallback.
 : "${AUTONOMY_TIER:=}"
 
+# CONTAIN_CPU_QUOTA / CONTAIN_MEM_MAX (hf7y/scheduler#281) -- host-configurable,
+# so read HERE (where SCHED_ROOT and the host are known) rather than in
+# lib/sweep-loop-common.sh, which is not. Global default, then a per-host
+# override sourced after it so it wins per field it sets -- same shape as
+# schedule/_runner.<host>.conf. Both optional: run_contained() falls back to
+# its own built-in defaults when neither file sets them, so a host with no
+# _contain.conf at all still gets a cap, just an untuned one.
+for _contain_f in "$SCHED_ROOT/schedule/_contain.conf" \
+                   "$SCHED_ROOT/schedule/_contain.$(hostname -s 2>/dev/null || echo unknown).conf"; do
+  # shellcheck disable=SC1090
+  [ -f "$_contain_f" ] && source "$_contain_f"
+done
+unset _contain_f
+
 # GH_TOKEN -- mint a one-hour GitHub App installation token when this account
 # is wired for one. Witness: tests/gh-app-token-witness.sh.
 # TRAP: without this, `gh` uses whatever long-lived token sits in the account
@@ -194,6 +208,7 @@ if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_APP_CONF" ] && [ -x "$GH_APP_HELPER" ]; t
 fi
 
 export JOB_NAME PROJECT_KEY TIER PREFIX REPO_URL REPO_SUBDIR PROMPT AUTONOMY_TIER
+export CONTAIN_CPU_QUOTA CONTAIN_MEM_MAX
 
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/sweep-loop-common.sh"

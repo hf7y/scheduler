@@ -81,7 +81,7 @@ out="$(with_lib "$TMP/repo" resolve_paced_conf PACED_CONF)"
   || bad "resolve_paced_conf gave '$out', expected the host-scoped file"
 out="$(with_lib "$TMP/repo" paced_membership_set PACED_MEMBERS)"
 case "$out" in
-  *" beta "*) ok "membership STILL reads the shared file (union glob, lib/paced-conf.sh:133)" ;;
+  *" beta "*) ok "membership STILL reads the shared file (union glob in paced_membership_set)" ;;
   *) bad "the shared file dropped out of the membership union -- got '$out'" ;;
 esac
 
