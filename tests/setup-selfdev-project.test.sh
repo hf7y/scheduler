@@ -186,7 +186,10 @@ check "...naming all three, not just the first" "$named" "3"
 check "...having tried all four repos rather than stopping at the first failure" \
       "$(sort -u "$PHOME/wire-calls" | wc -l | tr -d ' ')" "4"
 case "$(cat "$TMP/err")" in
-    *scheduler*) bad "the refusal names only what failed" "scheduler wired fine and is named: $(cat "$TMP/err")" ;;
+    # "scheduler(rc=" is how a FAILED repo is named (bin/setup-selfdev-project.sh:149);
+    # a bare *scheduler* substring also matches this account's own $HOME/$TMPDIR
+    # (/home/scheduler/tmp/...) baked into the re-run hint, which is not the check.
+    *"scheduler(rc="*) bad "the refusal names only what failed" "scheduler wired fine and is named: $(cat "$TMP/err")" ;;
     *) ok "...and NOT the repo that wired cleanly" ;;
 esac
 
