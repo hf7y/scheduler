@@ -237,3 +237,12 @@ dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
 # considered-and-cut list an eager run will otherwise reinvent, and that
 # ui/index.html is a committed bundle a source change silently makes stale.
 american-cycle  | american-cycle@monkey  | 20m | live
+
+# --- vaporwave (realisateur#695): own host, own Anthropic account, so these do
+# not compete with the @monkey rows. Parked -- arming is a separate act
+# (runbook.1 s6) and none has run clean once. 20m is the ceiling; with empty
+# queues tempo asks 1440. Notes: schedule/_paced.vaporwave.conf.
+dog             | dog@vaporwave           | 20m | parked
+vibe-kiosk      | vibe-kiosk@vaporwave    | 20m | parked
+inv-redirects   | inv-redirects@vaporwave | 20m | parked
+vkv23           | vkv23@vaporwave         | 20m | parked
