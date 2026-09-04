@@ -11,7 +11,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "derive-verdict-witness"
 
 BLOCK="$TMP/derive-verdict.sh"
-awk '/^derive_no_verdict_reason\(\) \{/,/^\}/' "$RUNNER" > "$BLOCK"
+# TWO functions: #541 moved the slug sed out; lift both or all tests test "".
+awk '/^repo_slug_of\(\) \{/,/^\}/' "$RUNNER"            > "$BLOCK"
+awk '/^derive_no_verdict_reason\(\) \{/,/^\}/' "$RUNNER" >> "$BLOCK"
+grep -q 'repo_slug_of()' "$BLOCK" \
+  || { echo "FAIL: no repo_slug_of() extracted -- derive cannot resolve a repo without it"; exit 1; }
 grep -q 'derive_no_verdict_reason' "$BLOCK" \
   || { echo "FAIL: no derive_no_verdict_reason() extracted -- lift failed"; exit 1; }
 grep -q 'DERIVED-CONTINUE' "$BLOCK" \

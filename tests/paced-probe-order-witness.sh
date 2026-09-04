@@ -121,6 +121,7 @@ EOF
     SCHEDULER_FREEZE_FILE="$SCHEDULER_FREEZE_FILE" \
     SCHEDULER_FREEZE_CACHE="$SCHEDULER_FREEZE_CACHE" \
     TEMPO_ENABLED=0 \
+    MILESTONE_GATE=0 \
     USAGE_GATE="$h/gate.sh" "$RUNNER" >/dev/null 2>&1
 
   local log="$h/.local/share/scheduler-paced-runner/run.log"
