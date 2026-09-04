@@ -36,6 +36,8 @@ AGENT
   # ROSTER is the only arming surface (#364); PACED_HOST is pinned so the row matches.
   echo 'alpha | alpha@testhost | 20m | live' > "$TMP/ROSTER"
 
+  # MILESTONE_GATE=0: the gate reads real milestones; not this test (#541).
+  MILESTONE_GATE=0 \
   HOME="$TMP" \
   PACED_CONF="$TMP/rot.conf" \
   PACED_HOST=testhost \
@@ -86,7 +88,7 @@ echo "alpha|1|$TMP/agent.sh" > "$TMP/rot.conf"
 echo 'alpha | alpha@testhost | 20m | live' > "$TMP/ROSTER"
 HOME="$TMP" PACED_CONF="$TMP/rot.conf" PACED_HOST=testhost \
   SCHEDULER_ROSTER_FILE="$TMP/ROSTER" PACED_FORCE=1 PACED_MAX_PER_TICK=1 \
-  SCHEDULER_FREEZE_FILE="$TMP/no-such-freeze" \
+  SCHEDULER_FREEZE_FILE="$TMP/no-such-freeze" MILESTONE_GATE=0 \
   bash "$RUNNER" >/dev/null 2>&1
 [ -f "$TMP/EXECUTED" ] && ok "unset PACED_DRY_RUN still dispatches for real" \
   || bad "unset PACED_DRY_RUN changed behaviour -- it must default to off"

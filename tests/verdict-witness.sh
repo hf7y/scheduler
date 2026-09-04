@@ -59,6 +59,7 @@ AGENT
     STATE_ROOT="$TMP/.local/share" "$VERDICT" set alpha "$pre_verdict" "left over from a previous run" >/dev/null
   fi
 
+  MILESTONE_GATE=0 \
   HOME="$TMP" \
   PACED_CONF="$TMP/rot.conf" \
   PACED_HOST=testhost \

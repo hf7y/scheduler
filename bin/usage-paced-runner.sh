@@ -88,6 +88,12 @@ LEDGER_DONE_COOLDOWN="${LEDGER_DONE_COOLDOWN:-3}"
 # Base hold after a BLOCKED verdict, multiplied by the number of consecutive
 # blockages and doubled again when the reason repeats. 0 disables the backoff.
 LEDGER_BLOCKED_HOLD="${LEDGER_BLOCKED_HOLD:-6}"
+# MILESTONE GATE (#541, Zach 2026-09-03): dispatch only while the repo has an
+# open milestone with an open issue. No milestone = paused; none open = stop.
+MILESTONE_GATE="${MILESTONE_GATE:-1}"
+# Unreadable list: 1 = hold ("no setpoint is not permission").
+MILESTONE_GATE_BLIND_HOLDS="${MILESTONE_GATE_BLIND_HOLDS:-1}"
+MILESTONE_GATE_TIMEOUT="${MILESTONE_GATE_TIMEOUT:-15}"
 PACED_HOST_MODE="${PACED_HOST_MODE:-0}"
 # Rehearse a cutover tick with zero blast radius: log what would be
 # dispatched instead of running it, and write neither a ledger row nor a
@@ -615,11 +621,24 @@ fi
 #   examined   -- rows this account LOOKED AT. Bounded by $n, the rotation
 #                 length, so the loop terminates after one full lap no matter
 #                 how many rows turn out to belong to somebody else.
+# repo_slug_of <project> -- owner/name from REPO_URL. ONE copy, two callers.
+repo_slug_of() {
+  local conf="$REPO_ROOT/schedule/${1:?}.conf" url
+  url="$(grep -E '^REPO_URL=' "$conf" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
+  sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$url"
+}
+
+# milestone_actionable <slug> -- open milestones having an open issue, or
+# NOTHING if it could not ask. Empty is BLIND and must NEVER read as 0: that
+# would stop all nineteen accounts on one outage, logged as deliberate.
+milestone_actionable() {
+  timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${1:?}/milestones?state=open" \
+    --jq '[.[] | select(.open_issues > 0)] | length' 2>/dev/null
+}
+
 derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch seconds)
-  local name="$1" since="$2" conf repo_url repo pr
-  conf="$REPO_ROOT/schedule/$name.conf"
-  repo_url="$(grep -E '^REPO_URL=' "$conf" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
-  repo="$(sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$repo_url")"
+  local name="$1" since="$2" repo pr
+  repo="$(repo_slug_of "$name")"
   if [ -z "$repo" ]; then
     echo "DERIVED-SILENT: no-verdict, and $name.conf names no REPO_URL to check for a live PR"
     return
@@ -794,6 +813,39 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       unset _brun _bwant _r1 _r2
     fi
     unset _bsince
+  fi
+
+  # NOT A ROSTER WRITE: `state` is the human's field (#291). A finished project
+  # is live and idle; a new milestone resumes it. Slot consumed, like COOLDOWN.
+  if [ "${MILESTONE_GATE:-1}" -ne 0 ]; then
+    _mslug="$(repo_slug_of "$name")"
+    _mcount=""
+    [ -n "$_mslug" ] && _mcount="$(milestone_actionable "$_mslug")"
+    if [ -z "$_mcount" ]; then
+      if [ -n "$_mslug" ]; then
+        _mwhy="could not read the milestone list for $_mslug"
+      else
+        _mwhy="schedule/$name.conf names no REPO_URL"
+      fi
+      if [ "${MILESTONE_GATE_BLIND_HOLDS:-1}" -ne 0 ]; then
+        ledger_append "$name" "${TIER:-batch}" - MILESTONE-BLIND "$_mwhy" 2>/dev/null || true
+        log "MILESTONE-BLIND $name -- $_mwhy. Holding: a predicate that could not run is not permission. MILESTONE_GATE_BLIND_HOLDS=0 to dispatch anyway."
+        dispatched=$((dispatched + 1))
+        unset _mslug _mcount _mwhy
+        continue
+      fi
+      log "MILESTONE-BLIND $name -- $_mwhy; MILESTONE_GATE_BLIND_HOLDS=0, so dispatching without the gate's answer."
+    elif [ "$_mcount" -eq 0 ]; then
+      ledger_append "$name" "${TIER:-batch}" - MILESTONE-HELD "no open milestone with an open issue on $_mslug" 2>/dev/null || true
+      log "MILESTONE-HELD $name -- $_mslug has no open milestone with an open issue. Nothing to work toward; give it one and it resumes on its own. The roster row is untouched and still live."
+      dispatched=$((dispatched + 1))
+      unset _mslug _mcount _mwhy
+      continue
+    elif [ "$(ledger_run "$name" MILESTONE-DONE MILESTONE-HELD 2>/dev/null || echo 0)" -gt 0 ]; then
+      # Proposed MILESTONE-DONE, predicate disagrees: only it may stop (#291).
+      log "MILESTONE-DISAGREE $name -- last verdict was MILESTONE-DONE but $_mslug still has $_mcount open milestone(s) with open issues. Dispatching anyway; the predicate is the authority."
+    fi
+    unset _mslug _mcount _mwhy
   fi
 
   # TEMPO. The setpoint, hf7y/scheduler#147 (#66 §3): dispatch this project at

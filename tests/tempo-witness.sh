@@ -214,6 +214,7 @@ RLEDGER="$H/.local/share/scheduler-paced-runner/ledger.tsv"
 tick() {
   HOME="$H" PACED_CONF="$conf" PACED_HOST=monkey PACED_MAX_PER_TICK=1 \
     SCHEDULER_ROSTER_FILE="$roster" \
+    MILESTONE_GATE=0 \
     USAGE_GATE="$H/gate.sh" RUN_LEDGER_FILE="$RLEDGER" \
     SCHEDULER_FREEZE_FILE="$T/no-such-freeze" \
     TEMPO_REPO="fake/repo" TEMPO_CACHE_MIN=0 \
