@@ -339,8 +339,8 @@ do_live() {
 # WHY THIS EXISTS. `dose --apply` installs a cron line and that is ALL it does.
 # usage-gate.sh is an EVEN-BURN regulator -- it dispatches only when a project
 # is BEHIND pace -- so a freshly armed account reports HOLD ... (on-pace) and
-# runs nothing. Until #292 lands a real sprint, the only override is
-# scheduler-run, which consults neither the gate nor tempo. That was reachable
+# runs nothing. `--sprint` (#292) landed and is the paced override; the other
+# is scheduler-run, consulting neither gate nor tempo, reachable
 # only by hand-typing setsid/nohup/sudo -u over ssh, and getting any part of it
 # wrong fails in a different way each time.
 do_now() {
