@@ -13,11 +13,19 @@
 # mode having really dispatched from here.
 # WITNESS: tests/paced-roster-authority-witness.sh.
 #
-# ONLY A HUMAN EDITS THIS FILE'S `state` COLUMN. Editing a row here IS arming
-# or parking a project, once #80's `dose <project>` reads this file to
-# converge a host -- an agent doing that to itself is the one thing this
-# guard exists to prevent. `dose <project> --arm/--park` (#291) writes it on
-# a human's behalf, refusing a uid 3000-3099 self-dev caller outright.
+# `dose <project> --arm` / `--park` (#291) is the only supported way to
+# change `state`. It opens a PR with auto-merge armed, so a person MERGES and
+# the verb WRITES -- it does not hand-edit this file. It refuses a uid
+# 3000-3099 self-dev caller, and refuses a project with no unix account on
+# the row's host, so no project can arm itself and arming cannot converge to
+# a break. (#521: an earlier header said "ONLY A HUMAN EDITS THIS FILE'S
+# `state` COLUMN", read cold as "a person types the change"; that is false
+# and misled an agent into reporting it as fact on 2026-09-03.)
+#
+# A new project is REGISTERED first -- a `parked` row plus
+# `schedule/<project>.conf`, and the unix account provisioned -- and only
+# then armed. `--arm` on an absent project reports `GAP`; it does not create
+# the row.
 #
 # `state` is ONE field (live/parked) -- the whole point, per #79: it is what
 # makes "enabled=1 in one file but EXEMPT commented in another" unrepresentable.
