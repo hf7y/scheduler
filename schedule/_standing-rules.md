@@ -11,30 +11,24 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
 1. CLOSE WHAT YOU RESOLVED, in the same run that resolved it. An issue you
    fixed and left open is work nobody can see.
 
-2. DEBT RULE. You may not open more issues than you close. If the run would
-   end with more opened than closed, you are not finished: close a dead one,
-   or do not open yours. Settled 2026-08-28 (hf7y/scheduler#314) after the
-   two-week trial: stays as a self-enforced rule here, not as a computed gate
-   -- the post-hoc version in lib/run-record.sh never once fired across the
-   trial and its author:@me count is only as sound as the shared identity
-   issuing it (#310), so it was retired rather than kept as a mechanism.
-
-3. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
+2. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
    command you ran, the error it returned, the permission you lack. A note
    saying this needs a decision, with no attempt named, is deferral, not a
-   blocker, and it lands on Zach for no reason.
+   blocker, and it lands on Zach for no reason. `verdict.sh set <job>
+   BLOCKED` now refuses a reason with no attempt named in it (#522) --
+   this is enforced, not merely asked for.
 
-4. LAND YOUR WORK. Commits on a branch nobody merges are not delivered.
+3. LAND YOUR WORK. Commits on a branch nobody merges are not delivered.
    Open a PR against main and merge it when checks pass. Before pushing,
    check git symbolic-ref refs/remotes/origin/HEAD -- a wrong cached value
    stranded work on two separate clones this week, and five commits are
    sitting unmerged on tmux-pane-mechanic right now because of it.
 
-5. NO NEW MARKDOWN FILES. Do not write a handoff, session record, design
+4. NO NEW MARKDOWN FILES. Do not write a handoff, session record, design
    note, sprint summary, or retrospective. Prose is not a deliverable.
    Findings go in the issue they belong to, and then you close it.
 
-6. WORK THAT BELONGS TO ANOTHER REPO GOES THERE AS A DRAFT PR, NOT AS A
+5. WORK THAT BELONGS TO ANOTHER REPO GOES THERE AS A DRAFT PR, NOT AS A
    NOTE. If the fix is in someone else's repository, do the work: clone it,
    make the change, open a DRAFT pull request there carrying the actual
    diff, and open an issue in that same repo asking its self-dev to
@@ -49,7 +43,7 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    directly into another project's files needs `check-project-busy
    <project>` first; defer on BUSY and say what you deferred.
 
-7. WORK THE MILESTONE FIRST. `gh issue list` returns no milestone column and
+6. WORK THE MILESTONE FIRST. `gh issue list` returns no milestone column and
    sorts by most recently updated, so an issue filed this morning looks
    identical to the generation every other project is waiting on. What is in
    each open milestone of your repo, computed at dispatch:

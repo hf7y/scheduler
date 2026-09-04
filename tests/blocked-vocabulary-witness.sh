@@ -27,7 +27,7 @@ out="$(STATE_ROOT="$W/a" bash "$V" set j BLOCKED 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && ok "BLOCKED without a reason is refused" || bad "accepted a reasonless BLOCKED (rc=$rc)"
 grep -qi 'requires a reason' <<<"$out" && ok "the refusal says a reason is required" || bad "no reason demanded: $out"
 
-STATE_ROOT="$W/b" bash "$V" set j BLOCKED "no credential provisioned" >/dev/null 2>&1
+STATE_ROOT="$W/b" bash "$V" set j BLOCKED "asked for the credential, nobody has provisioned it yet" >/dev/null 2>&1
 o="$(STATE_ROOT="$W/b" bash "$V" classify j 1 2>/dev/null)"; rc=$?
 [ "$o" = "BLOCKED" ] && ok "classify prints BLOCKED" || bad "classify printed '$o'"
 [ "$rc" -eq 4 ] && ok "classify exits 4, distinct from NOT-DONE's 1 and GAVE-UP's 3" \
