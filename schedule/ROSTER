@@ -141,7 +141,7 @@ vim-arcade      | vim-arcade@monkey      | 20m | parked
 realisateur     | realisateur@monkey     | 20m | live
 scheduler       | scheduler@monkey       | 20m | live
 groc-mangr      | groc-mangr@monkey      | 20m | live
-wtul            | wtul@monkey            | 20m | parked
+wtul            | wtul@monkey            | 20m | live
 gardien         | gardien@monkey         | 20m | parked
 nine-speakers   | nine-speakers@monkey   | 20m | parked
 sequestria      | sequestria@monkey      | 20m | live
@@ -219,7 +219,7 @@ baudin          | baudin@monkey          | 20m | live
 # tells the run to record DONE and stop -- that instruction was right for an
 # empty queue and would otherwise have made every armed run a no-op. 20m is
 # the ceiling, not the pace.
-secretaire      | secretaire@monkey      | 20m | live
+secretaire      | secretaire@monkey      | 20m | parked
 
 # dcp-gate-site -- closes the FOURTH state hf7y/scheduler#228 found this
 # project in: absent rather than parked. An earlier row was aspirational --
