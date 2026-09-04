@@ -137,7 +137,7 @@ wtul            | wtul@monkey            | 20m | live
 gardien         | gardien@monkey         | 20m | parked
 nine-speakers   | nine-speakers@monkey   | 20m | live
 sequestria      | sequestria@monkey      | 20m | live
-senechal        | senechal@monkey        | 20m | parked
+senechal        | senechal@monkey        | 20m | live
 
 # abletim -- unlike the dcp-gate-site row below, this one is NOT aspirational:
 # the uid 3000-3099 account, both clones and schedule/abletim.conf are
