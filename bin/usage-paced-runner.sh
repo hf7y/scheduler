@@ -654,18 +654,7 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
   fi
 }
 
-# rr_last_verdict <project> <home> [acct] -- the RR_VERDICT lib/run-record.sh
-# computed for the run that JUST finished (its own git/gh-derived verdict,
-# never the agent's self-report), read off the JSONL row run_record_closeout
-# just appended. Empty on anything unreadable -- absence must mean "nothing
-# extra known", never a guessed verdict (hf7y/scheduler#347).
-#
-# <home> is the account's $HOME the run executed under -- $HOME itself outside
-# host mode, $acct_home inside it, matching the same split the sudo
-# composition above already makes. In host mode the file is owned by <acct>,
-# not by whoever runs this loop, so it is read the same way it is dispatched:
-# as that account, not as a guess at a shared path this loop can see directly.
-rr_last_verdict() {
+rr_last_verdict() {  # <project> <home> [acct] -> run-record.sh's git/gh verdict for the run just finished, or empty (#347)
   local name="${1:?}" home="${2:?}" acct="${3:-}" f line
   f="$home/.local/share/scheduler-runs/$name.jsonl"
   if [ -n "$acct" ]; then
@@ -677,22 +666,7 @@ rr_last_verdict() {
   printf '%s' "$line" | grep -o '"verdict_computed":"[^"]*"' | head -1 | sed -E 's/^"verdict_computed":"(.*)"$/\1/'
 }
 
-# typed_ledger_outcome <project> <verdict.sh-classified outcome> <home> [acct]
-# -- the outcome to WRITE to the run ledger. Identical to <outcome> unless
-# <outcome> is NOT-DONE -- a self-report that is silent, by construction,
-# about whether real work happened before the ceiling (57 of 60 truncated
-# runs wrote no verdict at all, per hf7y/scheduler#347) -- AND run-record.sh's
-# own git/gh-derived verdict for this exact run says WORKED-CUTOFF. In that
-# one case the ledger row is typed WORKED-CUTOFF instead of the generic
-# NOT-DONE, so a run that pushed something before the ceiling stops being
-# indistinguishable from one that touched nothing at all. Reuses
-# run-record.sh's own vocabulary verbatim -- no new outcome word is invented,
-# per the issue's own constraint.
-#
-# Every OTHER outcome (DONE, BLOCKED, GAVE-UP, a hand-written CONTINUE reason)
-# is the agent's own explicit claim and is left exactly as classified: this
-# enriches an unclaimed run, it does not second-guess a claimed one.
-typed_ledger_outcome() {
+typed_ledger_outcome() {  # <project> <outcome> <home> [acct] -> outcome, upgraded to rr_last_verdict's WORKED-CUTOFF when NOT-DONE and that applies
   local name="${1:?}" outcome="${2:-NOT-DONE}" home="${3:?}" acct="${4:-}"
   if [ "$outcome" != "NOT-DONE" ]; then printf '%s' "$outcome"; return 0; fi
   local rr; rr="$(rr_last_verdict "$name" "$home" "$acct")"
@@ -703,12 +677,7 @@ resume_hint_for_project() {
   local name="${1:?}" last_outcome last_reason
   declare -F ledger_last >/dev/null 2>&1 || return 0
   last_outcome="$(ledger_last "$name" 2>/dev/null || true)"
-  # WORKED-CUTOFF rides the same resume path as NOT-DONE (#347): it is the
-  # exact same "ran out of turns" row, just typed with the extra evidence that
-  # real work happened first. Excluding it here would silently regress the
-  # one case this issue is about -- a cut-off run that pushed something no
-  # longer gets its PR-with-a-failing-check nudge, the moment it gets typed.
-  case "$last_outcome" in
+  case "$last_outcome" in  # WORKED-CUTOFF is a typed NOT-DONE (#347); both take this path
     NOT-DONE|WORKED-CUTOFF) ;;
     *) return 0 ;;
   esac
@@ -1053,10 +1022,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     else
       _lreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
     fi
-    # Type the silence (#347): if run-record.sh's own git/gh-derived verdict
-    # for this run says WORKED-CUTOFF, the ledger row says so too instead of
-    # the generic NOT-DONE -- see typed_ledger_outcome's header.
-    _rr_home="$HOME"
+    _rr_home="$HOME"  # type the silence (#347): see typed_ledger_outcome
     [ "$PACED_HOST_MODE" = 1 ] && _rr_home="$acct_home"
     _ledger_outcome="$(typed_ledger_outcome "$name" "${outcome:-NOT-DONE}" "$_rr_home" "${acct:-}")"
     if [ "$_ledger_outcome" != "${outcome:-NOT-DONE}" ]; then

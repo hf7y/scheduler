@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# cutoff-ledger-witness.sh -- hf7y/scheduler#347 item 1: a NOT-DONE ledger row
-# is typed WORKED-CUTOFF when run-record.sh's own git/gh-derived verdict for
-# that exact run says so, so a run that pushed something before the ceiling
-# stops being indistinguishable from one that touched nothing at all.
-#
-# Extracts rr_last_verdict() and typed_ledger_outcome() straight out of
-# bin/usage-paced-runner.sh, same technique as resume-hint-witness.sh, so this
-# tests the real function bodies rather than a reimplementation of them.
-set -uo pipefail
+set -uo pipefail  # rr_last_verdict/typed_ledger_outcome (#347), extracted like resume-hint-witness.sh
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNNER="$ROOT/bin/usage-paced-runner.sh"
@@ -17,8 +9,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "cutoff-ledger-witness"
 
 BLOCK="$TMP/funcs.sh"
-awk '/^rr_last_verdict\(\) \{$/,/^\}$/' "$RUNNER"       >  "$BLOCK"
-awk '/^typed_ledger_outcome\(\) \{$/,/^\}$/' "$RUNNER"  >> "$BLOCK"
+awk '/^rr_last_verdict\(\) \{/,/^\}$/' "$RUNNER"       >  "$BLOCK"
+awk '/^typed_ledger_outcome\(\) \{/,/^\}$/' "$RUNNER"  >> "$BLOCK"
 grep -q 'rr_last_verdict'      "$BLOCK" || { echo "FAIL: could not extract rr_last_verdict() from $RUNNER"; exit 1; }
 grep -q 'typed_ledger_outcome' "$BLOCK" || { echo "FAIL: could not extract typed_ledger_outcome() from $RUNNER"; exit 1; }
 . "$BLOCK"
