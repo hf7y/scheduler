@@ -57,6 +57,9 @@
 # (TEMPO_BLOCKED_LABELS) but nothing ever fed, per hf7y/scheduler#149.
 # Best-effort: a `gh` failure is reported but does not fail the write.
 #
+# BLOCKED also refuses a reason under 6 words -- "waiting on a human" is a
+# deferral, not a blocker (#522).
+#
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
 #   1  NOT-DONE -- truncated/silent/CONTINUE; re-dispatch, metabolism unchanged
@@ -113,6 +116,10 @@ cmd_set() {
   # and one repeated blockage are indistinguishable.
   if [ "$v" = "BLOCKED" ] && [ -z "$reason" ]; then
     die "BLOCKED requires a reason -- name what you are waiting on (a credential, a human, another project). It is compared against the last one to detect the same blocker twice."
+  fi
+  # A short reason is a deferral wearing BLOCKED's label, not a blocker (#522).
+  if [ "$v" = "BLOCKED" ] && [ "$(wc -w <<<"$reason")" -lt 6 ]; then
+    die "BLOCKED reason reads as a deferral, not a blocker -- name what you TRIED and the EXACT wall (the command you ran, the error it returned, the permission you lack). Got: '$reason'"
   fi
   local d; d="$(dirname "$(vfile "$job")")"
   mkdir -p "$d" || die "cannot create $d"
@@ -215,21 +222,31 @@ STUB
   VERDICT_GH_BIN="$stubdir/gh"
   export GH_CALLS_LOG="$t/gh-calls.log"; : > "$GH_CALLS_LOG"
 
-  out="$(cmd_set j BLOCKED "waiting on a human" 458 2>&1)"
+  out="$(cmd_set j BLOCKED "ran gh api PATCH, auto-mode classifier refused it" 458 2>&1)"
   grep -q 'gh issue edit 458 --add-label needs-human' "$GH_CALLS_LOG" \
     || { echo "FAIL: bare issue number did not call gh issue edit 458 --add-label needs-human"; fails=1; }
   grep -q 'labeled 458 needs-human' <<<"$out" || { echo "FAIL: BLOCKED-with-issue did not report the label"; fails=1; }
 
   : > "$GH_CALLS_LOG"
-  cmd_set j BLOCKED "waiting" "hf7y/other#12" >/dev/null 2>&1
+  cmd_set j BLOCKED "asked for a credential nobody has granted yet" "hf7y/other#12" >/dev/null 2>&1
   grep -q 'gh issue edit 12 --repo hf7y/other --add-label needs-human' "$GH_CALLS_LOG" \
     || { echo "FAIL: owner/repo#N form did not resolve to --repo hf7y/other issue 12"; fails=1; }
 
   : > "$GH_CALLS_LOG"
-  out="$(GH_SHOULD_FAIL=1 cmd_set j BLOCKED "waiting" 999 2>&1)"; rc=$?
+  out="$(GH_SHOULD_FAIL=1 cmd_set j BLOCKED "tried the merge, host credential is still missing" 999 2>&1)"; rc=$?
   [ $rc -eq 0 ] || { echo "FAIL: a gh failure must not fail the verdict write itself (rc=$rc)"; fails=1; }
   grep -q 'could not label 999 needs-human' <<<"$out" || { echo "FAIL: gh failure was not reported"; fails=1; }
   unset VERDICT_GH_BIN GH_CALLS_LOG
+
+  if ( cmd_set j BLOCKED "waiting on a human" >/dev/null 2>&1 ); then
+    echo "FAIL: a 4-word BLOCKED reason (deferral, not a blocker) was accepted"; fails=1
+  fi
+  if ( cmd_set j BLOCKED "needs a decision" >/dev/null 2>&1 ); then
+    echo "FAIL: 'needs a decision' with no attempt named was accepted"; fails=1
+  fi
+  if ! ( cmd_set j BLOCKED "ran the deploy script and it hit a permission wall" >/dev/null 2>&1 ); then
+    echo "FAIL: a 9-word reason naming an attempt was refused"; fails=1
+  fi
 
   # An issue argument makes no sense outside BLOCKED (it is not a reason).
   if ( cmd_set j DONE "bar met" "458" >/dev/null 2>&1 ); then
@@ -241,7 +258,7 @@ STUB
   out="$(cmd_classify j 1 2>/dev/null)"; rc=$?
   [ "$out" = "NOT-DONE" ] && [ $rc -eq 1 ] || { echo "FAIL: malformed verdict must degrade to NOT-DONE (got $out/$rc)"; fails=1; }
 
-  [ "$fails" -eq 0 ] && echo "selftest OK (13 cases; every classify branch and the BLOCKED needs-human labeling observed firing, incl. all refusals)"
+  [ "$fails" -eq 0 ] && echo "selftest OK (16 cases; every classify branch, the BLOCKED needs-human labeling, and the deferral-reason refusal observed firing, incl. all refusals)"
   return "$fails"
 }
 
