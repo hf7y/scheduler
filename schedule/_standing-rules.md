@@ -14,9 +14,9 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
 2. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
    command you ran, the error it returned, the permission you lack. A note
    saying this needs a decision, with no attempt named, is deferral, not a
-   blocker, and it lands on Zach for no reason. `verdict.sh set <job>
-   BLOCKED` now refuses a reason with no attempt named in it (#522) --
-   this is enforced, not merely asked for.
+   blocker, and it lands on Zach for no reason. Enforced, not just asked
+   for: `verdict.sh set <job> BLOCKED` refuses a reason with no attempt
+   named (#522).
 
 3. LAND YOUR WORK. Commits on a branch nobody merges are not delivered.
    Open a PR against main and merge it when checks pass. Before pushing,

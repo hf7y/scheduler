@@ -58,10 +58,7 @@
 # Best-effort: a `gh` failure is reported but does not fail the write.
 #
 # BLOCKED also refuses a reason under 6 words -- "waiting on a human" is a
-# deferral, not a blocker, and _standing-rules.md rule 2 asks for the command
-# you ran and the exact error, which does not fit in 5 words. Per #522: a
-# rule that must be remembered mostly is not, so this is checked at the
-# write instead of asked for in prose.
+# deferral, not a blocker (#522).
 #
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
@@ -120,11 +117,7 @@ cmd_set() {
   if [ "$v" = "BLOCKED" ] && [ -z "$reason" ]; then
     die "BLOCKED requires a reason -- name what you are waiting on (a credential, a human, another project). It is compared against the last one to detect the same blocker twice."
   fi
-  # A short reason is a deferral wearing BLOCKED's label, not a blocker --
-  # _standing-rules.md rule 2: name what you TRIED and the EXACT wall. That
-  # takes more than a few words ("waiting on a human", "needs a decision");
-  # refuse at the write rather than trust the caller to have said enough,
-  # per hf7y/scheduler#522.
+  # A short reason is a deferral wearing BLOCKED's label, not a blocker (#522).
   if [ "$v" = "BLOCKED" ] && [ "$(wc -w <<<"$reason")" -lt 6 ]; then
     die "BLOCKED reason reads as a deferral, not a blocker -- name what you TRIED and the EXACT wall (the command you ran, the error it returned, the permission you lack). Got: '$reason'"
   fi
@@ -245,15 +238,12 @@ STUB
   grep -q 'could not label 999 needs-human' <<<"$out" || { echo "FAIL: gh failure was not reported"; fails=1; }
   unset VERDICT_GH_BIN GH_CALLS_LOG
 
-  # A short reason is a deferral wearing BLOCKED's label -- refused, not
-  # silently accepted (_standing-rules.md rule 2, hf7y/scheduler#522).
   if ( cmd_set j BLOCKED "waiting on a human" >/dev/null 2>&1 ); then
     echo "FAIL: a 4-word BLOCKED reason (deferral, not a blocker) was accepted"; fails=1
   fi
   if ( cmd_set j BLOCKED "needs a decision" >/dev/null 2>&1 ); then
     echo "FAIL: 'needs a decision' with no attempt named was accepted"; fails=1
   fi
-  # A reason with room to actually name a command and a wall is accepted.
   if ! ( cmd_set j BLOCKED "ran the deploy script and it hit a permission wall" >/dev/null 2>&1 ); then
     echo "FAIL: a 9-word reason naming an attempt was refused"; fails=1
   fi
