@@ -57,6 +57,20 @@
 # (TEMPO_BLOCKED_LABELS) but nothing ever fed, per hf7y/scheduler#149.
 # Best-effort: a `gh` failure is reported but does not fail the write.
 #
+# EXCEPT when the issue's own body opens `NO-DECISION:`. The estate's label
+# grammar (realisateur's bin/lib/labels.tsv) declares `needs-human` as
+# `derived:decision` -- "line 1 declares DECISION: and nobody has answered,
+# NEVER typed" -- and a repo running `etiquette --apply` reconciliation will
+# strip a hand-typed `needs-human` right back off a `NO-DECISION:` issue,
+# every time it runs. Hand-labeling one anyway does not fail, it just starts
+# an unwinnable tug-of-war: this script re-applies it next BLOCKED verdict,
+# etiquette removes it again, forever, with zero net effect and a growing
+# label-event trail. Observed live on hf7y/crt#149 (2026-09-04/05, five
+# label/unlabel cycles across one night). So: read the body first, and skip
+# the write on a `NO-DECISION:` issue. A `DECISION:` issue (or a repo with no
+# such convention at all -- most repos) is unaffected and still gets labeled
+# immediately, same as before.
+#
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
 #   1  NOT-DONE -- truncated/silent/CONTINUE; re-dispatch, metabolism unchanged
@@ -76,12 +90,27 @@ vfile() { echo "$STATE_ROOT/scheduler-verdict/$1"; }
 
 # Best-effort; never fails the caller.
 label_needs_human() {
-  local issue="$1" args=(issue edit)
+  local issue="$1" num="$issue" repo="" args=(issue edit) view_args body
   case "$issue" in
-    */*'#'*) args+=("${issue##*#}" --repo "${issue%#*}") ;;
+    */*'#'*) num="${issue##*#}"; repo="${issue%#*}"; args+=("$num" --repo "$repo") ;;
     *)       args+=("$issue") ;;
   esac
   args+=(--add-label needs-human)
+
+  # A body read failure (gh down, no permission, rate-limited) falls through
+  # to the pre-existing behavior below -- $body stays empty, which is not a
+  # NO-DECISION: match, so this never blocks the label on a read it cannot do.
+  view_args=(issue view "$num")
+  [ -n "$repo" ] && view_args+=(--repo "$repo")
+  view_args+=(--json body -q .body)
+  body="$("$VERDICT_GH_BIN" "${view_args[@]}" 2>/dev/null)"
+  case "$body" in
+    NO-DECISION:*)
+      echo "verdict: $issue opens NO-DECISION: -- skipping needs-human (it is derived:decision in the estate grammar; etiquette would just strip it back off)"
+      return 0
+      ;;
+  esac
+
   if "$VERDICT_GH_BIN" "${args[@]}" >/dev/null 2>&1; then
     echo "verdict: labeled $issue needs-human"
   else
@@ -209,6 +238,7 @@ cmd_selftest() {
 #!/usr/bin/env bash
 echo "gh $*" >> "$GH_CALLS_LOG"
 [ "${GH_SHOULD_FAIL:-0}" = 1 ] && exit 1
+[ "$1 $2" = "issue view" ] && printf '%s' "${GH_ISSUE_BODY:-}"
 exit 0
 STUB
   chmod +x "$stubdir/gh"
@@ -216,12 +246,16 @@ STUB
   export GH_CALLS_LOG="$t/gh-calls.log"; : > "$GH_CALLS_LOG"
 
   out="$(cmd_set j BLOCKED "waiting on a human" 458 2>&1)"
+  grep -q 'gh issue view 458 --json body -q .body' "$GH_CALLS_LOG" \
+    || { echo "FAIL: BLOCKED-with-issue did not check the body before labeling"; fails=1; }
   grep -q 'gh issue edit 458 --add-label needs-human' "$GH_CALLS_LOG" \
     || { echo "FAIL: bare issue number did not call gh issue edit 458 --add-label needs-human"; fails=1; }
   grep -q 'labeled 458 needs-human' <<<"$out" || { echo "FAIL: BLOCKED-with-issue did not report the label"; fails=1; }
 
   : > "$GH_CALLS_LOG"
   cmd_set j BLOCKED "waiting" "hf7y/other#12" >/dev/null 2>&1
+  grep -q 'gh issue view 12 --repo hf7y/other --json body -q .body' "$GH_CALLS_LOG" \
+    || { echo "FAIL: owner/repo#N form did not check the body via --repo hf7y/other issue 12"; fails=1; }
   grep -q 'gh issue edit 12 --repo hf7y/other --add-label needs-human' "$GH_CALLS_LOG" \
     || { echo "FAIL: owner/repo#N form did not resolve to --repo hf7y/other issue 12"; fails=1; }
 
@@ -229,6 +263,27 @@ STUB
   out="$(GH_SHOULD_FAIL=1 cmd_set j BLOCKED "waiting" 999 2>&1)"; rc=$?
   [ $rc -eq 0 ] || { echo "FAIL: a gh failure must not fail the verdict write itself (rc=$rc)"; fails=1; }
   grep -q 'could not label 999 needs-human' <<<"$out" || { echo "FAIL: gh failure was not reported"; fails=1; }
+
+  # NO-DECISION: is derived:decision's escape hatch -- etiquette would strip a
+  # hand-typed needs-human right back off, so this must skip the label, not
+  # just skip silently: the skip has to be reported too.
+  : > "$GH_CALLS_LOG"
+  export GH_ISSUE_BODY=$'NO-DECISION: build ticket, not a decision request\nmore body below'
+  out="$(cmd_set j BLOCKED "waiting" 777 2>&1)"
+  unset GH_ISSUE_BODY
+  grep -q 'gh issue edit 777 --add-label needs-human' "$GH_CALLS_LOG" \
+    && { echo "FAIL: labeled a NO-DECISION: issue needs-human -- etiquette will just strip it back off"; fails=1; }
+  grep -q 'skipping needs-human' <<<"$out" \
+    || { echo "FAIL: NO-DECISION: skip was not reported (got: $out)"; fails=1; }
+
+  # A DECISION: ticket (or any issue with no such line-1 convention at all --
+  # most repos) is unaffected and still gets labeled immediately.
+  : > "$GH_CALLS_LOG"
+  export GH_ISSUE_BODY=$'DECISION: pick an approach\nDEFAULT-AFTER 3d'
+  cmd_set j BLOCKED "waiting" 778 >/dev/null 2>&1
+  unset GH_ISSUE_BODY
+  grep -q 'gh issue edit 778 --add-label needs-human' "$GH_CALLS_LOG" \
+    || { echo "FAIL: a DECISION: ticket should still be labeled needs-human"; fails=1; }
   unset VERDICT_GH_BIN GH_CALLS_LOG
 
   # An issue argument makes no sense outside BLOCKED (it is not a reason).
@@ -241,7 +296,7 @@ STUB
   out="$(cmd_classify j 1 2>/dev/null)"; rc=$?
   [ "$out" = "NOT-DONE" ] && [ $rc -eq 1 ] || { echo "FAIL: malformed verdict must degrade to NOT-DONE (got $out/$rc)"; fails=1; }
 
-  [ "$fails" -eq 0 ] && echo "selftest OK (13 cases; every classify branch and the BLOCKED needs-human labeling observed firing, incl. all refusals)"
+  [ "$fails" -eq 0 ] && echo "selftest OK (16 cases; every classify branch and the BLOCKED needs-human labeling observed firing, incl. all refusals and the NO-DECISION: skip)"
   return "$fails"
 }
 
