@@ -63,12 +63,12 @@ for r in "$REF_MAIN" "$REF_BASH"; do
     printf '\ncarry-drift-witness: BLIND\n'; exit 2; }
 done
 
-carried="$(  # schedule/_runner*.conf mirrors bin/carry.sh's own carried set (#350)
+carried="$(  # schedule/*.conf + schedule/_*.md mirrors bin/carry.sh's schedule_confs() (#350)
   { comm -12 \
       <(git ls-tree -r --name-only "$REF_MAIN"  -- bin/ lib/ | sort) \
       <(git ls-tree -r --name-only "$REF_BASH" -- bin/ lib/ | sort)
     git ls-tree -r --name-only "$REF_MAIN" -- schedule/ 2>/dev/null \
-      | grep -E '^schedule/_runner(\.[^/]+)?\.conf$'
+      | grep -E '^schedule/(_[^/]+\.md|[^/]+\.conf)$'
   } | sort -u
 )"
 
