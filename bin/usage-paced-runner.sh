@@ -636,6 +636,18 @@ milestone_actionable() {
     --jq '[.[] | select(.open_issues > 0)] | length' 2>/dev/null
 }
 
+milestone_self_fed() {  # <slug> -> 1 iff every actionable issue's last body line stamps an account other than zach, 0 if any doesn't, empty if unreadable (#575)
+  timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${1:?}/issues?state=open&per_page=100" --paginate \
+    --jq '[.[] | select(.milestone != null and .milestone.state == "open" and .milestone.open_issues > 0)
+               | (.body // "") | split("\n") | map(gsub("^\\s+|\\s+$";"")) | map(select(length>0))
+               | (if length == 0 then "" else .[-1] end) as $last
+               | ($last | capture("^<!--\\s*agent:\\s*(?<who>[^@]+)@")?) as $c
+               | if $c == null then "human" else $c.who end]
+          | if length == 0 then empty
+            elif any(. == "human" or . == "zach") then "0"
+            else "1" end' 2>/dev/null
+}
+
 derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch seconds)
   local name="$1" since="$2" repo pr
   repo="$(repo_slug_of "$name")"
@@ -863,9 +875,16 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       dispatched=$((dispatched + 1))
       unset _mslug _mcount _mwhy
       continue
-    elif [ "$(ledger_run "$name" MILESTONE-DONE MILESTONE-HELD 2>/dev/null || echo 0)" -gt 0 ]; then
-      # Proposed MILESTONE-DONE, predicate disagrees: only it may stop (#291).
-      log "MILESTONE-DISAGREE $name -- last verdict was MILESTONE-DONE but $_mslug still has $_mcount open milestone(s) with open issues. Dispatching anyway; the predicate is the authority."
+    else
+      if [ "$(ledger_run "$name" MILESTONE-DONE MILESTONE-HELD 2>/dev/null || echo 0)" -gt 0 ]; then
+        log "MILESTONE-DISAGREE $name -- last verdict was MILESTONE-DONE but $_mslug still has $_mcount open milestone(s) with open issues. Dispatching anyway; the predicate is the authority."
+      fi
+      _mfed="$(milestone_self_fed "$_mslug" 2>/dev/null)"
+      if [ "$_mfed" = "1" ]; then
+        ledger_append "$name" "${TIER:-batch}" - MILESTONE-SELF-FED "$_mslug's actionable milestone(s) hold only agent-filed issues, no human's" 2>/dev/null || true
+        log "MILESTONE-SELF-FED $name -- $_mslug's actionable milestone(s) hold only agent-filed issues. Dispatching anyway."
+      fi
+      unset _mfed
     fi
     unset _mslug _mcount _mwhy
   fi
