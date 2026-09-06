@@ -278,7 +278,10 @@ if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_APP_CONF" ] && [ -x "$GH_APP_HELPER" ]; t
   unset _gh_tok
 fi
 
-export JOB_NAME PROJECT_KEY TIER PREFIX REPO_URL REPO_SUBDIR PROMPT AUTONOMY_TIER
+# SCHED_ROOT too: schedule/_standing-rules.md cites four tools that live HERE,
+# and the agent runs with its cwd in its OWN project clone, where a bare
+# bin/<tool> path resolves to nothing on 18 of 19 accounts.
+export JOB_NAME PROJECT_KEY TIER PREFIX REPO_URL REPO_SUBDIR PROMPT AUTONOMY_TIER SCHED_ROOT
 export CONTAIN_CPU_QUOTA CONTAIN_MEM_MAX
 
 # shellcheck disable=SC1091

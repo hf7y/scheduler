@@ -9,19 +9,19 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    failure.
 
 1. CLOSE WHAT YOU RESOLVED, in the same run -- left open, it's work nobody
-   can see. Checkable: `bin/close-audit.sh <owner/repo>` flags it (#522).
+   can see. Checkable: `$SCHED_ROOT/bin/close-audit.sh <owner/repo>` flags it (#522).
 
 2. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
    command you ran, the error it returned, the permission you lack. A note
    saying this needs a decision, with no attempt named, is deferral, not a
    blocker, and it lands on Zach for no reason. Enforced, not just asked
-   for: `verdict.sh set <job> BLOCKED` refuses a reason with no attempt
+   for: `$SCHED_ROOT/bin/verdict.sh set <job> BLOCKED` refuses a reason with no attempt
    named (#522).
 
 3. LAND YOUR WORK. Commits on a branch nobody merges are not delivered.
    Open a PR against main and merge it when checks pass. Before pushing,
    check git symbolic-ref refs/remotes/origin/HEAD -- a wrong cached value
-   stranded work on two clones. Checkable: `bin/unlanded-work-check.sh` (#522).
+   stranded work on two clones. Checkable: `$SCHED_ROOT/bin/unlanded-work-check.sh` (#522).
 
 4. NO NEW MARKDOWN FILES. Do not write a handoff, session record, design
    note, sprint summary, or retrospective. Prose is not a deliverable.
@@ -29,7 +29,7 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
 
 5. WORK THAT BELONGS TO ANOTHER REPO GOES THERE AS A DRAFT PR, NOT AS A NOTE
    -- check first: that repo is one you do not watch. Checkable:
-   `bin/cross-repo-dupe-check.sh <owner/repo> <term>`. Otherwise, clone it,
+   `$SCHED_ROOT/bin/cross-repo-dupe-check.sh <owner/repo> <term>`. Otherwise, clone it,
    open a DRAFT PR there carrying the diff, and open an issue asking its
    self-dev to validate, ready and merge it. Filing an issue that only
    DESCRIBES the fix is rule 0 across a repo boundary.

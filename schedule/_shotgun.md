@@ -6,7 +6,7 @@ the same issue twice.
    to "pick an issue": two that both run `gh issue list` pick the same top one
    and open competing PRs, which is worse than working serially. Rank what you
    hand out -- milestone issues first (rule 6 above lists them), then
-   `bin/next-issue.sh hf7y/<repo>`, which is oldest-first and skips anything
+   `$SCHED_ROOT/bin/next-issue.sh hf7y/<repo>`, oldest-first, skipping anything
    whose body names a still-open "Depends on #N".
 2. NO SUBAGENT TOUCHES THE WORKING TREE. You share one with every subagent you
    launch, so two editing it collide and their git operations race. Push
