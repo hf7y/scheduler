@@ -8,9 +8,8 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    diagnosis was right and the fix was right. Stopping there was the
    failure.
 
-1. CLOSE WHAT YOU RESOLVED, in the same run that resolved it. An issue you
-   fixed and left open is work nobody can see. Checkable, not self-reported:
-   `bin/close-audit.sh <owner/repo>` flags a merged PR whose issue is still open (#522).
+1. CLOSE WHAT YOU RESOLVED, in the same run -- left open, it's work nobody
+   can see. Checkable: `bin/close-audit.sh <owner/repo>` flags it (#522).
 
 2. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
    command you ran, the error it returned, the permission you lack. A note
@@ -22,9 +21,7 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
 3. LAND YOUR WORK. Commits on a branch nobody merges are not delivered.
    Open a PR against main and merge it when checks pass. Before pushing,
    check git symbolic-ref refs/remotes/origin/HEAD -- a wrong cached value
-   stranded work on two separate clones this week, and five commits are
-   sitting unmerged on tmux-pane-mechanic right now because of it. Checkable:
-   `bin/unlanded-work-check.sh` catches both cases against branch/PR state (#522).
+   stranded work on two clones. Checkable: `bin/unlanded-work-check.sh` (#522).
 
 4. NO NEW MARKDOWN FILES. Do not write a handoff, session record, design
    note, sprint summary, or retrospective. Prose is not a deliverable.
