@@ -133,14 +133,7 @@ HEARTBEAT_FILE="$STATE_DIR/last_heartbeat"
 # below. Lives in STATE_DIR (survives between runs, unlike the disposable clone).
 CEILING_BREADCRUMB_FILE="$STATE_DIR/ceiling_breadcrumb.txt"
 
-# hf7y/scheduler#347 item 3 -- see provisional_verdict_watch/_stop/_check_stale
-# below. Written mid-run, from OUTSIDE claude's own process tree, so it
-# survives the one failure mode nothing else here covers: the whole wrapper
-# (this bash script, not just `claude -p`) dying before it ever reaches
-# run_record_closeout -- host reboot, OOM-killed script, `kill -9` on the
-# job. That run leaves no ledger row at all. This file is the only trace it
-# left, and only if it got at least PROVISIONAL_VERDICT_TURNS deep first.
-PROVISIONAL_VERDICT_FILE="$STATE_DIR/provisional_verdict.txt"
+PROVISIONAL_VERDICT_FILE="$STATE_DIR/provisional_verdict.txt"  # #347 item 3, see provisional_verdict_watch()
 : "${PROVISIONAL_VERDICT_TURNS:=10}"
 : "${PROVISIONAL_VERDICT_POLL_S:=5}"
 : "${PROVISIONAL_VERDICT_MAX_WAIT_S:=900}"
@@ -329,25 +322,10 @@ $PROMPT"
   unset SCHEDULER_RESUME_PR SCHEDULER_RESUME_REPO
 }
 
-# provisional_verdict_watch() / _stop() / _check_stale() -- hf7y/scheduler#347
-# item 3: "a run that chose silence" (bin/verdict.sh's self-report never
-# written) is indistinguishable today from a run that never got the chance to
-# speak because the whole wrapper died first -- host reboot, OOM, `kill -9`.
-# Both leave nothing. This does not fix that for every case; it makes ONE
-# case visible: a run that got at least PROVISIONAL_VERDICT_TURNS deep before
-# going dark now leaves a file that says so, written from a process outside
-# claude's own tree so it survives claude (or the wrapper) dying uncleanly.
-#
-# --session-id pins the transcript this run writes to a UUID we chose, so
-# the watcher can find it by name instead of reconstructing Claude Code's
-# own cwd-escaping scheme (fragile, undocumented, and wrong the day it
-# changes). "turn" here means an assistant message in that transcript --
-# an approximation of --max-turns' own counter, not the same number, but
-# close enough to prove real progress happened.
-#
-# Runs as an ordinary background job (caller backgrounds the call and keeps
-# the PID), not a subshell-in-command-substitution -- that would detach it
-# from job control in a way `wait` cannot reach back into.
+# #347 item 3: tails this run's transcript (named via --session-id, so we
+# don't have to reconstruct Claude Code's own cwd-escaping) and drops a file
+# outside claude's process tree once it sees enough assistant turns to prove
+# the wrapper -- not just claude -- was still alive and working past $2.
 provisional_verdict_watch() {
   local session_id="$1" threshold="$2" outfile="$3" poll="$4" max_wait="$5"
   local transcript="" elapsed=0 turns
@@ -372,10 +350,7 @@ provisional_verdict_watch() {
   done
 }
 
-# Kills the background watch started above, if still running. A run that
-# finished (or failed) before the threshold leaves nothing to kill and
-# nothing was written -- correctly: it never proved it got that far.
-provisional_verdict_watch_stop() {
+provisional_verdict_watch_stop() {   # kills the watch above, if still running
   local pid="${1:-}"
   [ -n "$pid" ] || return 0
   kill "$pid" 2>/dev/null
@@ -383,12 +358,8 @@ provisional_verdict_watch_stop() {
   return 0
 }
 
-# Read near the top of a run, before starting this run's own watch (same
-# slot as read_ceiling_breadcrumb/read_resume_hint above). A file here means
-# the PREVIOUS run of this job reached the checkpoint and then the wrapper
-# never made it back to clear it -- i.e. it went dark, not silent-by-choice.
-# Logged, not fed into PROMPT: unlike the breadcrumb this carries no task
-# context to resume, only the fact that something got that far.
+# A leftover file: the PREVIOUS run reached the checkpoint and its wrapper
+# never came back to clear it -- it went dark, not silent by choice.
 provisional_verdict_check_stale() {
   [ -f "${PROVISIONAL_VERDICT_FILE:-}" ] || return 0
   echo "STALE PROVISIONAL VERDICT from a previous run of this job that never reached closeout -- it got at least this far before going dark:"
@@ -867,10 +838,7 @@ $PROMPT"
 
   read_resume_hint
 
-  # hf7y/scheduler#347 item 3 -- see provisional_verdict_check_stale's own
-  # comment. Read-only, informational: unlike the two calls above this never
-  # touches PROMPT, because a "got this far" fact carries no task context.
-  provisional_verdict_check_stale
+  provisional_verdict_check_stale   # hf7y/scheduler#347 item 3
 
   # claude's own output is tee'd to a per-run capture file (as well as
   # flowing into $LOG via the enclosing block redirect) so that a FAILED
@@ -884,13 +852,7 @@ $PROMPT"
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
   else
-    # hf7y/scheduler#347 item 3: pin this run's transcript to a UUID we
-    # chose so provisional_verdict_watch can find it by name (see its own
-    # comment), then watch it in the background while claude runs. Stopped
-    # and cleared unconditionally below, once we're back from `claude -p`
-    # -- reaching that line already proves the wrapper survived, so the
-    # provisional file's job is done either way.
-    PROVISIONAL_SESSION_ID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"
+    PROVISIONAL_SESSION_ID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"  # #347 item 3
     PROVISIONAL_WATCH_PID=""
     if [ -n "$PROVISIONAL_SESSION_ID" ]; then
       provisional_verdict_watch "$PROVISIONAL_SESSION_ID" "$PROVISIONAL_VERDICT_TURNS" \

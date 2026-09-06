@@ -1,20 +1,7 @@
 #!/usr/bin/env bash
 # Witness for lib/sweep-loop-common.sh's provisional-verdict mechanism --
-# hf7y/scheduler#347 item 3.
-#
-# THE GAP: a run that hits --max-turns still runs run_record_closeout and
-# gets a real ledger row (#31, #544, #615). What has NEVER left a trace is
-# the wrapper itself dying before it gets back there -- host reboot, OOM,
-# `kill -9` on the whole job, not just `claude -p`. That run is completely
-# silent, identical in every log to one that simply chose not to answer.
-#
-# THE FIX under test: a background watcher tails this run's OWN transcript
-# (named by a UUID we pass via --session-id, not by reconstructing Claude
-# Code's cwd-escaping) and, once it sees PROVISIONAL_VERDICT_TURNS assistant
-# turns, drops a file outside claude's process tree. If the wrapper makes it
-# back, the file is deleted (superseded by the real computed verdict). If it
-# doesn't, the file survives to the NEXT run, which must say so instead of
-# staying silent about it.
+# hf7y/scheduler#347 item 3: makes a wrapper that dies mid-run (not just
+# `claude -p` hitting --max-turns) leave a trace instead of pure silence.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,10 +9,8 @@ LIB="$ROOT/lib/sweep-loop-common.sh"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
-# Lift just the three functions out of the engine -- sourcing the whole file
-# would run a real job. Same technique as ceiling-breadcrumb-witness.sh. An
-# extraction that stops matching is a FAILURE: the functions were renamed or
-# reshaped without this witness tracking them.
+# Lift the three functions out rather than sourcing the whole engine (which
+# would run a real job) -- same technique as ceiling-breadcrumb-witness.sh.
 awk '/^provisional_verdict_watch\(\) \{$/,/^\}$/' "$LIB" > "$TMP/fn.sh"
 awk '/^provisional_verdict_watch_stop\(\) \{$/,/^\}$/' "$LIB" >> "$TMP/fn.sh"
 awk '/^provisional_verdict_check_stale\(\) \{$/,/^\}$/' "$LIB" >> "$TMP/fn.sh"
