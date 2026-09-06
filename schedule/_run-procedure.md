@@ -14,6 +14,14 @@ The backlog is the open GitHub issues, nothing else. Build first, don't just
 analyze: take the most reasonable reading and build it. Don't build something
 merely because it's easy -- if it serves no open issue, file it and move on.
 
+Scratch files go under `$TMPDIR` (already set per account, e.g.
+`/home/<account>/tmp`) or a fresh `mktemp`/`mktemp -d`, never a hardcoded
+`/tmp/...` path. The bare `/tmp` directory is shared, unnamespaced, across
+every tenant on the host: two jobs racing to write the same fixed filename
+(`/tmp/pr_body.md`, `/tmp/comment89.md`, ...) can silently publish one
+tenant's content under another's identity on a public issue or PR, with no
+error to catch it (scheduler#576).
+
 ## 1. Orient
 
 `git log --oneline -10`, `README.md`, `CLAUDE.md`, `gh issue list`. If the last
