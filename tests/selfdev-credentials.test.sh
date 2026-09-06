@@ -250,8 +250,8 @@ FULL_DRIFT_ROWS='fleet-drift	missing	missing	n/a	pat	x.pem	0	3	3	3	-	-'
 O="$(STUB_ROWS="$FULL_DRIFT_ROWS" CRED_SSH_BIN="$STUB/ssh" CRED_GH_BIN=/nonexistent-gh "$SCRIPT" --audit 2>&1)"; R=$?
 t_rc "a drifted fleet exits 1" 1 "$R"
 t_has "drifted fleet: FLAG on missing pem" "$O" "no host-wide App key"
-t_has "drifted fleet: prints the redundancy note" "$O" "redundant on that path"
-t_has "drifted fleet: names hf7y/scheduler#103" "$O" "scheduler#103"
+t_has "drifted fleet: prints the kept-by-design note" "$O" "kept by design, not pending removal"
+t_has "drifted fleet: names hf7y/scheduler#310's ruling" "$O" "scheduler#310"
 
 MIXED_ROWS=$'fleet-clean\tok:600\tok\tmatch\tgho\t-\tapp\t0\t0\t0\t4521586\thf7y\nfleet-blind\tBLIND'
 O="$(STUB_ROWS="$MIXED_ROWS" CRED_SSH_BIN="$STUB/ssh" CRED_GH_BIN=/nonexistent-gh "$SCRIPT" --audit 2>&1)"; R=$?

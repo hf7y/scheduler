@@ -311,13 +311,16 @@ cmd_audit() {
   cred_check_deploy_keys "${accounts[@]}"
 
   echo
-  echo "-- the redundancy note (informational; nothing acted on) --"
+  echo "-- gho_ token: kept by design, not pending removal (informational) --"
   echo "  every 'gho'/'pat' token above lives in ~/.config/gh/hosts.yml and is"
   echo "  used by the gh CLI (issue/PR listing, deploy-key registration)."
-  echo "  hf7y/scheduler#103 (merged 2026-08-11) now mints a GitHub App"
-  echo "  installation token at DISPATCH time, which makes this stored,"
-  echo "  long-lived token redundant on that path. Not removed here -- see"
-  echo "  this script's header. Filing the removal is a separate decision."
+  echo "  hf7y/scheduler#103 (merged 2026-08-11) mints a separate GitHub App"
+  echo "  installation token at DISPATCH time, for git pushes -- that token"
+  echo "  does not replace gh's own auth, so this is not a stale duplicate."
+  echo "  Retirement was ruled NOT NOW (hf7y/scheduler#310, 2026-08-28):"
+  echo "  provisioning a new account still copies this token via sudo, and"
+  echo "  the App mints full-installation-scope tokens anyway, so swapping"
+  echo "  would not narrow blast radius."
 
   echo
   printf 'selfdev-credentials: %d ok, %d gap, %d FLAG, %d BLIND, %d account(s)\n' \
