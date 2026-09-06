@@ -76,10 +76,7 @@ case "\$path" in
         printf '%s' "\$FAKE_ROSTER_CONTENT" | base64 -w0
       fi
     fi ;;
-  */contents/schedule/_runner*)
-    # hf7y/scheduler#350: these ship beside the script now and are a local
-    # file read (see DOSE_SCHEDULE_DIR below) -- gh must never be asked for
-    # them. Reaching this arm at all is the regression.
+  */contents/schedule/_runner*)  # #350: local read now, not gh -- reaching this arm is the regression
     echo "gh: dose-project.sh must not fetch \$path -- it ships in the build" >&2; exit 1 ;;
   *)
     # repo-reachability probe (repos/<slug>, no /contents/) -- always
@@ -143,11 +140,7 @@ export DOSE_HOST_OVERRIDE="testhost"
 ROSTER="ecosim | ecosim@testhost | 6h | live
 ghosttown | ghosttown@testhost | 6h | parked
 elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
-# scheduler#112 introduced RUNNER_JOB/RUNNER_CMD/RUNNER_ENV out of a config
-# file instead of a hardcoded second copy; hf7y/scheduler#350 moved that
-# file's read from `gh` to local disk, beside the script -- same values real
-# _runner.conf carries today, so the TAG/cmd-path assertions below read
-# exactly as they did before.
+# scheduler#112/#350: RUNNER_JOB/RUNNER_CMD/RUNNER_ENV, real values, now a local file.
 RUNNER_CONTENT='RUNNER_JOB="scheduler-paced-runner"
 RUNNER_CMD="bin/usage-paced-runner.sh"
 RUNNER_ENV="PACED_MAX_PER_TICK=1"
@@ -156,9 +149,7 @@ export DOSE_SCHEDULE_DIR="$WORK/schedule"
 mkdir -p "$DOSE_SCHEDULE_DIR"
 printf '%s' "$RUNNER_CONTENT" > "$DOSE_SCHEDULE_DIR/_runner.conf"
 
-# The installed build abs_cmd now resolves into (#350) -- a stub executable
-# at the path RUNNER_CMD names, so do_live()'s existence check passes without
-# a real verb build anywhere near this sandbox.
+# stub abs_cmd resolves into (#350), so do_live()'s -x check passes
 export VERB_HOST_BUILD_ROOT="$WORK/verb-builds"
 mkdir -p "$VERB_HOST_BUILD_ROOT/current/scheduler/bin"
 cat > "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" <<'STUB'
@@ -235,11 +226,7 @@ grep -qi 'REFUSED' <<<"$out" && ok "the refusal is named, not a generic error" \
 [ "$before" = "$after" ] && ok "wrong-host row: fixture crontab byte-unchanged (nothing touched)" \
   || bad "wrong-host row MODIFIED the crontab -- the guard is supposed to stop before any write: $out"
 
-# --- 6. schedule/_runner.conf is read fresh off disk, not hardcoded (#112,
-# re-pointed at a local file by #350) --------------------------------------
-# A shared RUNNER_JOB of "renamed-job" (no host override) must show up in the
-# emitted crontab TAG -- proves the value came from the file beside the
-# script, not a literal "scheduler-paced-runner" constant.
+# --- 6. schedule/_runner.conf is read fresh off disk, not hardcoded (#112/#350) --
 export CRONFILE="$WORK/cron6"; : > "$CRONFILE"
 printf '%s' 'RUNNER_JOB="renamed-job"
 RUNNER_CMD="bin/usage-paced-runner.sh"
@@ -252,11 +239,8 @@ grep -qF 'scheduler:renamed-job:RUNNER' "$CRONFILE" \
   && ok "the emitted crontab TAG carries the on-disk RUNNER_JOB, not a hardcoded one" \
   || bad "crontab does not reflect the on-disk RUNNER_JOB: $(cat "$CRONFILE")"
 printf '%s' "$RUNNER_CONTENT" > "$DOSE_SCHEDULE_DIR/_runner.conf"
-# The fake gh above exits nonzero for any schedule/_runner* path -- test 6
-# passing with rc=0 is itself the proof gh was never asked (#350).
 
-# --- 6c. schedule/_runner.conf missing beside the script is BROKEN, not a
-# silent empty-string converge --------------------------------------------
+# --- 6c. schedule/_runner.conf missing beside the script is BROKEN (#350) --
 export CRONFILE="$WORK/cron6c"; : > "$CRONFILE"
 mv "$DOSE_SCHEDULE_DIR/_runner.conf" "$WORK/_runner.conf.bak"
 out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
@@ -267,8 +251,7 @@ grep -qi 'shipped beside this script' <<<"$out" \
   && ok "the failure names what's missing, not a generic error" \
   || bad "exit 5 but the message doesn't name the missing payload: $out"
 
-# --- 6d. no installed build at the resolved command path is BROKEN, never a
-# silently-written clone path (#350 item 2) --------------------------------
+# --- 6d. no installed build at the command path is BROKEN, never a clone path (#350) --
 export CRONFILE="$WORK/cron6d"; : > "$CRONFILE"
 mv "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" "$WORK/usage-paced-runner.sh.bak"
 out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
@@ -285,8 +268,7 @@ else
   ok "nothing was written to the crontab when the build was missing"
 fi
 
-# --- 7. a HOST-scoped override wins over the shared conf, per field (#112,
-# re-pointed at a local file by #350) --------------------------------------
+# --- 7. a HOST-scoped override wins over the shared conf, per field (#112/#350) --
 export CRONFILE="$WORK/cron7"; : > "$CRONFILE"
 printf '%s' 'RUNNER_ENV="PACED_MAX_PER_TICK=3"
 ' > "$DOSE_SCHEDULE_DIR/_runner.testhost.conf"
