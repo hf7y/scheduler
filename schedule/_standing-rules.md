@@ -9,10 +9,8 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    failure.
 
 1. CLOSE WHAT YOU RESOLVED, in the same run that resolved it. An issue you
-   fixed and left open is work nobody can see. Checkable without trusting
-   the agent's own report: `bin/close-audit.sh <owner/repo>` reads
-   GitHub's own closingIssuesReferences on each merged PR and flags one
-   whose linked issue is still open (#522).
+   fixed and left open is work nobody can see. Checkable, not self-reported:
+   `bin/close-audit.sh <owner/repo>` flags a merged PR whose issue is still open (#522).
 
 2. IF YOU ARE BLOCKED, name what you TRIED and the EXACT wall -- the
    command you ran, the error it returned, the permission you lack. A note
@@ -25,10 +23,8 @@ STANDING RULES (2026-08-07, Zach-directed). These override everything below.
    Open a PR against main and merge it when checks pass. Before pushing,
    check git symbolic-ref refs/remotes/origin/HEAD -- a wrong cached value
    stranded work on two separate clones this week, and five commits are
-   sitting unmerged on tmux-pane-mechanic right now because of it. Checkable
-   against the branch and PR state, not the agent's memory: run
-   `bin/unlanded-work-check.sh` before ending a run -- it catches both the
-   stale origin/HEAD and a branch with commits no PR names (#522).
+   sitting unmerged on tmux-pane-mechanic right now because of it. Checkable:
+   `bin/unlanded-work-check.sh` catches both cases against branch/PR state (#522).
 
 4. NO NEW MARKDOWN FILES. Do not write a handoff, session record, design
    note, sprint summary, or retrospective. Prose is not a deliverable.

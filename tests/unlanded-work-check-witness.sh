@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# unlanded-work-check-witness.sh -- unlanded-work-check.sh must catch a
-# stale cached origin/HEAD and a branch with commits no PR names, while
-# staying quiet on salvage/* branches and branches a PR (any state) covers.
-#
-# HERMETICITY: full. A real throwaway git repo (bare "origin" + clone)
-# under mktemp, and a stub `gh` (via UNLANDED_GH_BIN) that answers
-# `repo view` and `pr list` from env-configured fixtures -- no network, no
-# live tracker.
+# HERMETIC: a real throwaway git repo (bare origin + clone) under mktemp,
+# and a stub gh (UNLANDED_GH_BIN) answering from env-configured fixtures.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 U="$HERE/../bin/unlanded-work-check.sh"

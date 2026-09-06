@@ -1,20 +1,7 @@
 #!/usr/bin/env bash
-# close-audit.sh -- is a PR's own claim to close an issue actually true?
-#
-# hf7y/scheduler#522, rule 1 (CLOSE WHAT YOU RESOLVED): "a run whose PR
-# merged and whose issue is still open is visible without trusting the
-# agent." Self-report already failed once here: the DEBT RULE asked agents
-# to grade their own close ratio and never fired across its two-week trial
-# (#314, dropped in #522/#564). This checks GitHub's own computed state
-# instead of anything an agent typed: a merged PR's closingIssuesReferences
-# (GitHub parses "Fixes #N"/"Closes #N" itself) against whether that issue
-# is actually closed right now.
-#
-# Read-only, one GraphQL call. Prints one row per MISMATCH: a merged PR
-# whose linked issue is still open -- work that landed but nobody closed
-# the door on. Silent besides a summary line when there is nothing to
-# report.
-#
+# close-audit.sh -- checks GitHub's own closingIssuesReferences on merged
+# PRs against issue state, so rule 1 (CLOSE WHAT YOU RESOLVED, #522) does
+# not depend on an agent's own report.
 # exit: 0 clean   1 mismatch(es) found (printed)   2 usage/broken
 set -uo pipefail
 

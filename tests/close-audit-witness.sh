@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# close-audit-witness.sh -- close-audit.sh must find a merged PR whose
-# closingIssuesReferences GitHub itself still shows OPEN, and must stay
-# silent (besides the summary) when everything is closed.
-#
-# HERMETICITY: full. A stub `gh` on PATH via CLOSE_AUDIT_GH_BIN answers
-# both `repo view` (repo resolution) and `api graphql` (the query) from
-# fixture JSON -- no network, no live tracker.
+# HERMETIC: a stub gh (CLOSE_AUDIT_GH_BIN) answers `repo view`/`api graphql`
+# from fixture JSON -- no network, no live tracker.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 C="$HERE/../bin/close-audit.sh"

@@ -1,39 +1,10 @@
 #!/usr/bin/env bash
-# unlanded-work-check.sh -- did every commit here actually reach main, or is
-# it sitting on a clone nobody merged?
-#
-# hf7y/scheduler#522, rule "LAND YOUR WORK": "checkable against the branch
-# and PR state" instead of trusting a run's own report. Two live incidents
-# named in that rule's own prose are exactly what this checks for:
-#
-#   - a stale cached origin/HEAD stranded work on two separate clones (the
-#     symbolic-ref check below)
-#   - five commits sat unmerged on tmux-pane-mechanic with nothing watching
-#     for it (the per-branch check below)
-#
-# Checks, against <repo> (default: cwd):
-#   1. refs/remotes/origin/HEAD, after a fetch, must point at the SAME
-#      branch GitHub itself reports as the repo's default. A stale cache
-#      here is the exact failure the rule names.
-#   2. every local branch other than the default, and not the one checked
-#      out (a worktree in progress is not yet a verdict), must either be
-#      fully merged into origin/<default>, or have a PR GitHub knows about
-#      -- in ANY state. Ancestry alone under-reports here: this repo squash
-#      merges, so a landed branch's own commits are never an ancestor of
-#      main; only the PR record proves it was seen. A CLOSED PR still
-#      counts -- closing one is a human decision, not the failure this
-#      checks for. A branch with no PR at all, in no state, is commits
-#      nobody can see landing.
-#
-# EXCLUDED: `salvage/*` branches (lib/salvage.sh). Those are pushed
-# deliberately as a crash-recovery net for a DIRTY WORKSPACE, not as
-# reviewable work -- salvage.sh's own header says preserve where it can be
-# SEEN, not preserve as a PR. Flagging every one would be noise on the
-# scale of every crash on every account; a real witness caught this
-# building the check against this very repo's own branch list.
-#
-# Read/fetch only -- never pushes, merges, or deletes a branch.
-#
+# unlanded-work-check.sh -- checks a stale cached origin/HEAD against
+# GitHub's real default branch, and flags a local branch with commits no
+# PR (any state) names, for rule "LAND YOUR WORK" (#522). Squash merges
+# here mean ancestry alone under-reports, so a PR in ANY state (not just
+# OPEN/MERGED) counts as landed. Excludes salvage/* (lib/salvage.sh's
+# crash-recovery net, not reviewable work).
 # exit: 0 clean   2 drift or unlanded work found (printed)   3 usage/broken
 set -uo pipefail
 
