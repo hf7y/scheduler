@@ -91,6 +91,8 @@ $PROMPT"
   fi
 fi
 
+# Markers expand AFTER the conf is sourced, so a $VAR inside a fragment reaches
+# the agent as literal text; anything that must expand belongs in the conf.
 # Fragment markers: @@FRAGMENT:<name>@@ anywhere in PROMPT is replaced with
 # the verbatim contents of schedule/_<name>.md. Additive alongside
 # USES_STANDING_RULES above, not a replacement for it -- that mechanism only
