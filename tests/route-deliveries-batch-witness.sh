@@ -54,7 +54,6 @@ case "\$1 \$2" in
     ;;
   "issue view")
     echo "issue-view-call \$*" >> "$CALLS"
-    # Mimics gh's own --jq filtering: one comment body per line, nothing else.
     if [ "\${FAKE_GH_MODE:-ok}" = "race-apply" ]; then
       echo '<!-- routed-delivery:hf7y/other#10 -->'
     fi
@@ -131,9 +130,6 @@ out="$(FAKE_GH_MODE=list-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-delive
 out="$(FAKE_GH_MODE=graphql-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --check proj 2>&1)"; rc=$?
 [ "$rc" -eq 6 ] && ok "BLIND (exit 6) when the batched graphql call fails" || bad "expected exit 6, got $rc"
 
-# --apply: the pre-write re-check narrows the gap between the batch snapshot
-# and the write (hf7y/scheduler#XXX). Single-issue set so a comment-call
-# count of 0 or 1 is unambiguous.
 cat > "$ISSUES_JSON" <<'EOF'
 [
   {"number": 1, "labels": [{"name": "deferred"}],

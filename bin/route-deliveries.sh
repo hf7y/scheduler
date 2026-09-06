@@ -124,14 +124,6 @@ for item in "${work[@]}"; do
     printf '  WOULD ROUTE  %s#%s <- %s closed\n' "$SLUG" "$num" "$ref"
     continue
   fi
-  # The marker check above reads ONE shared snapshot taken at the top of this
-  # run (#580) -- fine for a single run, but nothing serializes runs across
-  # accounts, and this project's own tick is worked by several. Between that
-  # snapshot and this write, another account's run can post the identical
-  # marker; six duplicate routed-delivery comments landed on hf7y/chezz#67
-  # this way within one 70-minute window. This re-read right before the write
-  # does not add a lock -- it only shrinks the gap from "the whole run" to
-  # one round trip, which is the cheapest thing that measurably helps.
   if gh issue view "$num" -R "$SLUG" --json comments --jq '.comments[].body' 2>/dev/null \
        | grep -qF "$(marker "$ref")"; then
     printf '  SKIP  %s#%s <- %s already routed (raced)\n' "$SLUG" "$num" "$ref"
