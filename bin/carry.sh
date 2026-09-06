@@ -59,11 +59,7 @@ for r in "$REF_MAIN" "$REF_BASH"; do
     || blind "$r is not readable here -- refusing to carry against a ref I cannot see"
 done
 
-# schedule_confs <ref> -- every schedule/<p>.conf, _*.conf and _*.md, by
-# pattern (not the bin/+lib/ intersection) so a first appearance carries at
-# once; #350. Excludes ROSTER/FREEZE structurally -- no .conf/.md suffix,
-# and both must stay live gh-api reads, never build content.
-schedule_confs() {  # <ref>
+schedule_confs() {  # <ref> -- schedule/*.conf and schedule/_*.md, by pattern; excludes ROSTER/FREEZE (#350)
   git ls-tree -r --name-only "$1" -- schedule/ 2>/dev/null \
     | grep -E '^schedule/(_[^/]+\.md|[^/]+\.conf)$'
 }
