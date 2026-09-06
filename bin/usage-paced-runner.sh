@@ -636,11 +636,7 @@ milestone_actionable() {
     --jq '[.[] | select(.open_issues > 0)] | length' 2>/dev/null
 }
 
-# milestone_self_fed <slug> -- 1 when every actionable milestoned issue's LAST
-# body line is a gh-sign `<!-- agent: X@host -->` stamp with X != zach, 0 if
-# any is unstamped or zach's (a human's hand), empty if unreadable -- never
-# log on empty (#575; same stamp rule as realisateur's answered.jq).
-milestone_self_fed() {
+milestone_self_fed() {  # <slug> -> 1 iff every actionable issue's last body line stamps an account other than zach, 0 if any doesn't, empty if unreadable (#575)
   timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${1:?}/issues?state=open&per_page=100" --paginate \
     --jq '[.[] | select(.milestone != null and .milestone.state == "open" and .milestone.open_issues > 0)
                | (.body // "") | split("\n") | map(gsub("^\\s+|\\s+$";"")) | map(select(length>0))
@@ -880,13 +876,9 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       unset _mslug _mcount _mwhy
       continue
     else
-      # Actionable. Neither notice below holds -- only the predicate itself
-      # may stop dispatch (#291).
       if [ "$(ledger_run "$name" MILESTONE-DONE MILESTONE-HELD 2>/dev/null || echo 0)" -gt 0 ]; then
         log "MILESTONE-DISAGREE $name -- last verdict was MILESTONE-DONE but $_mslug still has $_mcount open milestone(s) with open issues. Dispatching anyway; the predicate is the authority."
       fi
-      # #575 option (b): count self-filed issues as actionable, but surface
-      # it -- a human's queue and a self-refilling one must not look alike.
       _mfed="$(milestone_self_fed "$_mslug" 2>/dev/null)"
       if [ "$_mfed" = "1" ]; then
         ledger_append "$name" "${TIER:-batch}" - MILESTONE-SELF-FED "$_mslug's actionable milestone(s) hold only agent-filed issues, no human's" 2>/dev/null || true
