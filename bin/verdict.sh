@@ -55,7 +55,12 @@
 # BLOCKED's optional [issue] (bare number, cwd-resolved; or `owner/repo#N`)
 # labels that issue `needs-human` -- the consumer tempo.sh already reads
 # (TEMPO_BLOCKED_LABELS) but nothing ever fed, per hf7y/scheduler#149.
-# Best-effort: a `gh` failure is reported but does not fail the write.
+# Best-effort: a `gh` failure is reported but does not fail the write. Skipped
+# instead on a NO-DECISION: issue -- etiquette's derived:decision grammar
+# would just strip a hand-typed label back off (hf7y/crt#149).
+#
+# BLOCKED also refuses a reason under 6 words -- "waiting on a human" is a
+# deferral, not a blocker (#522).
 #
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
@@ -76,12 +81,24 @@ vfile() { echo "$STATE_ROOT/scheduler-verdict/$1"; }
 
 # Best-effort; never fails the caller.
 label_needs_human() {
-  local issue="$1" args=(issue edit)
+  local issue="$1" num="$issue" repo="" args=(issue edit) view_args body
   case "$issue" in
-    */*'#'*) args+=("${issue##*#}" --repo "${issue%#*}") ;;
+    */*'#'*) num="${issue##*#}"; repo="${issue%#*}"; args+=("$num" --repo "$repo") ;;
     *)       args+=("$issue") ;;
   esac
   args+=(--add-label needs-human)
+
+  view_args=(issue view "$num")
+  [ -n "$repo" ] && view_args+=(--repo "$repo")
+  view_args+=(--json body -q .body)
+  body="$("$VERDICT_GH_BIN" "${view_args[@]}" 2>/dev/null)"
+  case "$body" in
+    NO-DECISION:*)
+      echo "verdict: $issue opens NO-DECISION: -- skipping needs-human (it is derived:decision in the estate grammar; etiquette would just strip it back off)"
+      return 0
+      ;;
+  esac
+
   if "$VERDICT_GH_BIN" "${args[@]}" >/dev/null 2>&1; then
     echo "verdict: labeled $issue needs-human"
   else
@@ -104,15 +121,15 @@ cmd_set() {
   if [ "$v" = "IMPOSSIBLE" ] && [ -z "$reason" ]; then
     die "IMPOSSIBLE requires a reason -- name the probe that proves it. This claim slows every project down."
   fi
-  # BLOCKED CARRIES A MANDATORY REASON, for the same purpose as IMPOSSIBLE's and
-  # one further one. A blocked run that does not name its blocker is a shrug
-  # that slows the project down -- and the reason is also the KEY the ledger
-  # compares to detect the same blocker twice, which is the signal Zach asked
-  # for (hf7y/scheduler#63: "agents who encounter the same blocker twice in a
-  # row need a way to slow metabolism"). Without it, two different blockages
-  # and one repeated blockage are indistinguishable.
+  # BLOCKED requires a reason too: it is the KEY the ledger compares to catch
+  # the same blocker recurring (hf7y/scheduler#63), and a blocked run that
+  # does not name its blocker is a shrug that stalls the project.
   if [ "$v" = "BLOCKED" ] && [ -z "$reason" ]; then
     die "BLOCKED requires a reason -- name what you are waiting on (a credential, a human, another project). It is compared against the last one to detect the same blocker twice."
+  fi
+  # A short reason is a deferral wearing BLOCKED's label, not a blocker (#522).
+  if [ "$v" = "BLOCKED" ] && [ "$(wc -w <<<"$reason")" -lt 6 ]; then
+    die "BLOCKED reason reads as a deferral, not a blocker -- name what you TRIED and the EXACT wall (the command you ran, the error it returned, the permission you lack). Got: '$reason'"
   fi
   local d; d="$(dirname "$(vfile "$job")")"
   mkdir -p "$d" || die "cannot create $d"
@@ -209,27 +226,58 @@ cmd_selftest() {
 #!/usr/bin/env bash
 echo "gh $*" >> "$GH_CALLS_LOG"
 [ "${GH_SHOULD_FAIL:-0}" = 1 ] && exit 1
+[ "$1 $2" = "issue view" ] && printf '%s' "${GH_ISSUE_BODY:-}"
 exit 0
 STUB
   chmod +x "$stubdir/gh"
   VERDICT_GH_BIN="$stubdir/gh"
   export GH_CALLS_LOG="$t/gh-calls.log"; : > "$GH_CALLS_LOG"
 
-  out="$(cmd_set j BLOCKED "waiting on a human" 458 2>&1)"
+  out="$(cmd_set j BLOCKED "ran gh api PATCH, auto-mode classifier refused it" 458 2>&1)"
+  grep -q 'gh issue view 458 --json body -q .body' "$GH_CALLS_LOG" \
+    || { echo "FAIL: BLOCKED-with-issue did not check the body before labeling"; fails=1; }
   grep -q 'gh issue edit 458 --add-label needs-human' "$GH_CALLS_LOG" \
     || { echo "FAIL: bare issue number did not call gh issue edit 458 --add-label needs-human"; fails=1; }
   grep -q 'labeled 458 needs-human' <<<"$out" || { echo "FAIL: BLOCKED-with-issue did not report the label"; fails=1; }
 
   : > "$GH_CALLS_LOG"
-  cmd_set j BLOCKED "waiting" "hf7y/other#12" >/dev/null 2>&1
+  cmd_set j BLOCKED "asked for a credential nobody has granted yet" "hf7y/other#12" >/dev/null 2>&1
+  grep -q 'gh issue view 12 --repo hf7y/other --json body -q .body' "$GH_CALLS_LOG" \
+    || { echo "FAIL: owner/repo#N form did not check the body via --repo hf7y/other issue 12"; fails=1; }
   grep -q 'gh issue edit 12 --repo hf7y/other --add-label needs-human' "$GH_CALLS_LOG" \
     || { echo "FAIL: owner/repo#N form did not resolve to --repo hf7y/other issue 12"; fails=1; }
 
   : > "$GH_CALLS_LOG"
-  out="$(GH_SHOULD_FAIL=1 cmd_set j BLOCKED "waiting" 999 2>&1)"; rc=$?
+  out="$(GH_SHOULD_FAIL=1 cmd_set j BLOCKED "tried the merge, host credential is still missing" 999 2>&1)"; rc=$?
   [ $rc -eq 0 ] || { echo "FAIL: a gh failure must not fail the verdict write itself (rc=$rc)"; fails=1; }
   grep -q 'could not label 999 needs-human' <<<"$out" || { echo "FAIL: gh failure was not reported"; fails=1; }
+
+  : > "$GH_CALLS_LOG"
+  export GH_ISSUE_BODY=$'NO-DECISION: build ticket, not a decision request\nmore body below'
+  out="$(cmd_set j BLOCKED "ran the deploy script and it hit a permission wall" 777 2>&1)"
+  unset GH_ISSUE_BODY
+  grep -q 'gh issue edit 777 --add-label needs-human' "$GH_CALLS_LOG" \
+    && { echo "FAIL: labeled a NO-DECISION: issue needs-human -- etiquette will just strip it back off"; fails=1; }
+  grep -q 'skipping needs-human' <<<"$out" \
+    || { echo "FAIL: NO-DECISION: skip was not reported (got: $out)"; fails=1; }
+
+  : > "$GH_CALLS_LOG"
+  export GH_ISSUE_BODY=$'DECISION: pick an approach\nDEFAULT-AFTER 3d'
+  cmd_set j BLOCKED "ran the deploy script and it hit a permission wall" 778 >/dev/null 2>&1
+  unset GH_ISSUE_BODY
+  grep -q 'gh issue edit 778 --add-label needs-human' "$GH_CALLS_LOG" \
+    || { echo "FAIL: a DECISION: ticket should still be labeled needs-human"; fails=1; }
   unset VERDICT_GH_BIN GH_CALLS_LOG
+
+  if ( cmd_set j BLOCKED "waiting on a human" >/dev/null 2>&1 ); then
+    echo "FAIL: a 4-word BLOCKED reason (deferral, not a blocker) was accepted"; fails=1
+  fi
+  if ( cmd_set j BLOCKED "needs a decision" >/dev/null 2>&1 ); then
+    echo "FAIL: 'needs a decision' with no attempt named was accepted"; fails=1
+  fi
+  if ! ( cmd_set j BLOCKED "ran the deploy script and it hit a permission wall" >/dev/null 2>&1 ); then
+    echo "FAIL: a 9-word reason naming an attempt was refused"; fails=1
+  fi
 
   # An issue argument makes no sense outside BLOCKED (it is not a reason).
   if ( cmd_set j DONE "bar met" "458" >/dev/null 2>&1 ); then
@@ -241,7 +289,7 @@ STUB
   out="$(cmd_classify j 1 2>/dev/null)"; rc=$?
   [ "$out" = "NOT-DONE" ] && [ $rc -eq 1 ] || { echo "FAIL: malformed verdict must degrade to NOT-DONE (got $out/$rc)"; fails=1; }
 
-  [ "$fails" -eq 0 ] && echo "selftest OK (13 cases; every classify branch and the BLOCKED needs-human labeling observed firing, incl. all refusals)"
+  [ "$fails" -eq 0 ] && echo "selftest OK (19 cases; every classify branch, the BLOCKED needs-human labeling, the NO-DECISION: skip, and the deferral-reason refusal observed firing, incl. all refusals)"
   return "$fails"
 }
 

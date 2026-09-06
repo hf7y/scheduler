@@ -135,16 +135,16 @@
 # CRON_HOST/CRON_ACCOUNT. That seeding is history: this file is the authority
 # now, not a derivation of those, and nothing corroborates it against them.
 
-ecosim          | ecosim@monkey          | 20m | live
-bibliothecaire  | bibliothecaire@monkey  | 20m | live
+ecosim          | ecosim@monkey          | 20m | parked
+bibliothecaire  | bibliothecaire@monkey  | 20m | parked
 vim-arcade      | vim-arcade@monkey      | 20m | live
-realisateur     | realisateur@monkey     | 20m | live
-scheduler       | scheduler@monkey       | 20m | live
+realisateur     | realisateur@monkey     | 20m | parked
+scheduler       | scheduler@monkey       | 20m | parked
 groc-mangr      | groc-mangr@monkey      | 20m | live
 wtul            | wtul@monkey            | 20m | live
 gardien         | gardien@monkey         | 20m | parked
-nine-speakers   | nine-speakers@monkey   | 20m | live
-sequestria      | sequestria@monkey      | 20m | live
+nine-speakers   | nine-speakers@monkey   | 20m | parked
+sequestria      | sequestria@monkey      | 20m | parked
 senechal        | senechal@monkey        | 20m | live
 
 # abletim -- unlike the dcp-gate-site row below, this one is NOT aspirational:
@@ -157,7 +157,7 @@ senechal        | senechal@monkey        | 20m | live
 #
 # 20m is TEMPO_MIN_MIN, per the CEILING block above -- the ceiling, not the
 # pace. bin/tempo.sh sets the real interval from abletim's own backlog.
-abletim         | abletim@monkey         | 20m | live
+abletim         | abletim@monkey         | 20m | parked
 
 # apms -- the guard is the precondition, not a follow-up: apms writes into a
 # LIVE Tulane course, its own NeverDelete rule means a wrong write can only be
@@ -212,14 +212,14 @@ crt             | crt@monkey             | 20m | live
 # shopping-list loop (hf7y/baudin#42, hf7y/groc-mangr#59). 20m per the CEILING
 # block: un-parking left the parked-era 6h ceiling, 6x coarser than tempo's
 # floor -- 0 dispatches in 24h.
-baudin          | baudin@monkey          | 20m | live
+baudin          | baudin@monkey          | 20m | parked
 # secretaire -- hf7y/secretaire#1 asked "re-animate, park, or unregister" and
 # the answer was re-animate. This row was opened before that answer and is
 # correct under it. #1 is now the build ticket, and the conf's brief no longer
 # tells the run to record DONE and stop -- that instruction was right for an
 # empty queue and would otherwise have made every armed run a no-op. 20m is
 # the ceiling, not the pace.
-secretaire      | secretaire@monkey      | 20m | live
+secretaire      | secretaire@monkey      | 20m | parked
 
 # dcp-gate-site -- closes the FOURTH state hf7y/scheduler#228 found this
 # project in: absent rather than parked. An earlier row was aspirational --
@@ -242,7 +242,7 @@ american-cycle  | american-cycle@monkey  | 20m | live
 # not compete with the @monkey rows. Parked -- arming is a separate act
 # (runbook.1 s6) and none has run clean once. 20m is the ceiling; with empty
 # queues tempo asks 1440. Notes: schedule/_paced.vaporwave.conf.
-dog             | dog@vaporwave           | 20m | parked
+dog             | dog@vaporwave           | 20m | live
 vibe-kiosk      | vibe-kiosk@vaporwave    | 20m | parked
 inv-redirects   | inv-redirects@vaporwave | 20m | parked
 vkv23           | vkv23@vaporwave         | 20m | parked
