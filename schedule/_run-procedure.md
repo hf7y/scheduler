@@ -1,9 +1,8 @@
 RUN PROCEDURE -- the shared nightly-batch steps, held once. Nine repos each
 carried a hand-rewritten copy (hf7y/realisateur#744); this is the one.
 
-No project is named below: cwd is the clone, so `gh` resolves the repo from its
-own remote and needs no `-R`. Project specifics -- test command, hazards, what
-must never be touched -- belong in its `CLAUDE.md`, which step 1 reads.
+No project is named below -- cwd is the clone, so `gh` needs no `-R`. Test
+command, hazards, and untouchables belong in `CLAUDE.md`, read at step 1.
 
 The run is unattended overnight; nobody reviews it until morning. Stop and wait
 only when the action itself cannot be reverted. A commit, branch or PR never
