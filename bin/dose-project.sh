@@ -9,6 +9,8 @@
 # indistinguishable from here and BLIND (exit 6) -- never a silent "no rows
 # found" (exit 4 is for a roster dose COULD read that has no row for this).
 # schedule/_runner.conf is a different kind of fact, and reads local (#350).
+# NOT HOSTLESS: gh_as() borrows a logged-in $SUDO_USER's session under sudo,
+# so this only reads as hostless with a human logged in, BLIND otherwise (#570).
 #
 # THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming/parking is reserved
 # for a human at a terminal -- an agent that edited the roster and converged
@@ -88,14 +90,10 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
 fi
 
 # --- the shared half, sourced so `dose host` cannot drift from it (#119) ---
-# RESOLVABLE BY STATIC READING, deliberately. bashify/lib/closure.sh scores a
-# script's transitive source closure to decide whether it may move onto the
-# bashified branch, and it reports a source path it cannot resolve as
-# UNRESOLVED -- which is "NEVER CLEAN, full stop". A `$(cd ... && pwd)`
-# computed inside the source line is exactly that, and the first spelling of
-# this line scored UNRESOLVED for that reason alone. The two-step keeps the
-# same runtime behaviour (symlink-safe, works from the build or a checkout)
-# while leaving a literal relative path on the `.` line for the tool to read.
+# RESOLVABLE BY STATIC READING, deliberately: bashify/lib/closure.sh flags an
+# unresolvable `$(cd ... && pwd)` source path as UNRESOLVED ("never clean").
+# This two-step keeps the same runtime behaviour (symlink-safe, build or
+# checkout) while leaving a literal path on the `.` line for the tool to read.
 DOSE_LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # shellcheck source=../lib/dose-common.sh
 . "$DOSE_LIB_DIR/lib/dose-common.sh"
