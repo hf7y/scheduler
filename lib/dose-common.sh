@@ -187,12 +187,9 @@ enable_pr_auto_merge() {  # <pr-number> -- GraphQL only; best-effort, PR still e
     }' -f id="$node_id" >/dev/null 2>&1
 }
 
-# runner_tag <schedule-dir> <host> -- the crontab marker dose-project.sh's
-# do_live() converges a live project's RUNNER line to (schedule/_runner.conf
-# plus its host override, local files, #350), shared so a second caller
-# (#305) can check for it without a second, driftable copy of the parse.
-# Returns 5 if no _runner.conf ships beside the caller, or it names no
-# RUNNER_JOB.
+# runner_tag <schedule-dir> <host> -- dose-project.sh's do_live() RUNNER tag,
+# shared so #305's audit can't compute a different one. Returns 5 if
+# _runner.conf is missing or names no RUNNER_JOB.
 runner_tag() {
   local sched_dir="${1:?runner_tag needs a schedule dir}" host="${2:?runner_tag needs a host}"
   local conf_path="$sched_dir/_runner.conf"

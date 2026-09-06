@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Witness for bin/roster-arm-audit.sh (#305). Hermetic: fake gh, fake sudo,
-# fake crontab -- never the live estate.
+# Witness for bin/roster-arm-audit.sh (#305). Hermetic: fake gh/sudo/crontab.
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
@@ -39,10 +38,8 @@ exit 1
 EOF
 chmod +x "$FAKEBIN/gh"
 
-# crontab is per-account: fake sudo passes the -u account through an env var
-# so the fake crontab can pick the right fixture file -- a real crontab -l
-# has no such seam, but this witness only needs "account X's crontab has
-# these lines", not the real multiplexed-user machinery.
+# fake sudo passes -u's account through an env var so fake crontab below
+# can pick the right fixture file per account.
 cat > "$FAKEBIN/sudo" <<'EOF'
 #!/usr/bin/env bash
 acct=""

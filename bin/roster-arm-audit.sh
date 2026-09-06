@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# roster-arm-audit.sh -- catches a ROSTER row marked 'live' whose crontab
-# never got the memo (#305): `--arm` merges a PR but does not, itself,
-# converge any crontab -- that's a separate, easy-to-forget `--apply`.
-# Read-only; the tag it checks for comes from dose-common.sh's runner_tag()
-# so it can't drift from what `dose --apply` actually converges to.
-#
-# RUNNER: tests/roster-arm-audit-witness.sh
+# roster-arm-audit.sh -- read-only: is every 'live' ROSTER row's crontab
+# actually armed? (#305) RUNNER: tests/roster-arm-audit-witness.sh
 set -uo pipefail
 
 CLI_NAME="roster-arm-audit.sh"
