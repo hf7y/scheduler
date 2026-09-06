@@ -153,6 +153,30 @@ if [[ "$PROMPT" == *'@@MILESTONE-QUEUE@@'* ]]; then
   fi
   PROMPT="${PROMPT//@@MILESTONE-QUEUE@@/$mq_body}"
 fi
+
+if source "$SCHED_ROOT/lib/run-ledger.sh" 2>/dev/null && source "$SCHED_ROOT/lib/answer-registry.sh" 2>/dev/null; then  # shellcheck disable=SC1091
+  _ans_since="$(ledger_last_ts "$PROJECT" 2>/dev/null || true)"
+  _ans_rows="$(answer_registry_unread "$PROJECT" "$_ans_since" 2>/dev/null || true)"
+  if [ -n "$_ans_rows" ]; then
+    _ans_block=""
+    while IFS=$'\t' read -r _ans_ts _ans_issue _ans_marker _ans_text; do
+      [ -n "$_ans_ts" ] || continue
+      _ans_block="${_ans_block}#${_ans_issue} (${_ans_ts}): $(printf '%b' "$_ans_text")
+
+"
+    done <<< "$_ans_rows"
+    if [ -n "$_ans_block" ]; then
+      echo "scheduler-run: found unread answer row(s) for $PROJECT -- prepending to prompt" >&2
+      PROMPT="Zach answered the following since your last run -- read these FIRST, before picking anything else (hf7y/scheduler#149):
+
+${_ans_block}---
+
+$PROMPT"
+    fi
+  fi
+  unset _ans_since _ans_rows _ans_block _ans_ts _ans_issue _ans_marker _ans_text
+fi
+
 # SECRETS_SRC_DIR / SECRETS_DEST_SUBDIR (optional) are already in scope from
 # sourcing the conf, if it set them; the engine defaults them otherwise.
 

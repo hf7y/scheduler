@@ -97,5 +97,18 @@ ledger_append q batch 1 NOT-DONE "new work arrived"
 [ "$(ledger_streak q DONE)" = "0" ] && ok "new work resets the DONE streak immediately" \
   || bad "a NOT-DONE did not clear the streak"
 
+export RUN_LEDGER_FILE="$W/lastts.tsv"
+[ -z "$(ledger_last_ts never-seen)" ] && ok "an unknown project has no last timestamp" \
+  || bad "unknown project produced a timestamp"
+ledger_append r batch 0 DONE "first"
+first_ts="$(ledger_last_ts r)"
+[ -n "$first_ts" ] && ok "a dispatched project has a last timestamp" \
+  || bad "ledger_last_ts returned nothing after an append"
+sleep 1
+ledger_append r batch - COOLDOWN "held"
+second_ts="$(ledger_last_ts r)"
+[ "$second_ts" != "$first_ts" ] && ok "ledger_last_ts advances on a hold row too, not only a real dispatch" \
+  || bad "ledger_last_ts did not advance across rows: $first_ts / $second_ts"
+
 printf '\nrun-ledger-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

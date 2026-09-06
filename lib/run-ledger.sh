@@ -118,6 +118,13 @@ ledger_last() {
   awk -F'\t' -v p="$proj" '$4==p {o=$7} END{if(o!="") print o}' "$f"
 }
 
+ledger_last_ts() {
+  local proj="${1:?}"
+  local f; f="$(_ledger_file)"
+  [ -r "$f" ] || return 0
+  awk -F'\t' -v p="$proj" '$4==p {ts=$1} END{if(ts!="") print ts}' "$f"
+}
+
 # ledger_since <project> <outcome> -- how many rows for <project> have been
 # appended SINCE its most recent <outcome> row. Empty/absent history prints a
 # number large enough to mean "no reason to hold back" rather than 0, because
