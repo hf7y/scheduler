@@ -242,28 +242,35 @@ claude_failure_detail() {
 # was cut off, and the following tick had no way to know "Bump pawn spawn
 # allowance" was step one of a larger change already underway.
 #
-# write_ceiling_breadcrumb runs at the end of a run (after push status is
-# known); read_ceiling_breadcrumb runs near the top of the NEXT run, before
-# the claude invocation, alongside the existing FEEDBACK_BLOCK/BLOCKERS_BLOCK
-# prepending below. Same shape as those and as claude_failure_detail() above
-# -- globals in/out rather than a return value, so tests/
-# ceiling-breadcrumb-witness.sh can lift them out of the engine and drive
-# them directly without running a real job.
+# #347 item 2: trigger widened to RR_VERDICT=WORKED-CUTOFF too (any shipped
+# run that exits rc!=0, not just a recognized ceiling string) -- a non-ceiling
+# cutoff shipped work and got no breadcrumb before this. Ceiling string stays
+# its own trigger: it can fire with zero commits, which WORKED-CUTOFF cannot
+# (see run_record_compute_verdict). Call site moved after run_record_closeout,
+# which is what sets RR_VERDICT.
+#
+# read_ceiling_breadcrumb runs near the top of the NEXT run, before the claude
+# invocation, alongside FEEDBACK_BLOCK/BLOCKERS_BLOCK below -- globals in/out,
+# same shape as claude_failure_detail() above, so tests/
+# ceiling-breadcrumb-witness.sh can drive both without running a real job.
 #
 # Does NOT change dispatch behaviour: a cutoff run is still NOT-DONE, still
 # re-dispatched next tick. This only restores context for that re-dispatch.
-#
-# Globals in: STATUS_DETAIL, BEFORE_SHA, AFTER_SHA, CLAUDE_OUT, MAX_TURNS,
-# CEILING_BREADCRUMB_FILE. No-op (and no file left behind) unless
-# STATUS_DETAIL names a ceiling cutoff -- an unrelated FAILED run must not
-# leave a stale breadcrumb for the next dispatch to misread as "resume this".
 write_ceiling_breadcrumb() {
+  local cause=""
   case "${STATUS_DETAIL:-}" in
-    *"ceiling: max turns reached"*) ;;
-    *) return 0 ;;
+    *"ceiling: max turns reached"*) cause="ceiling" ;;
   esac
+  if [ -z "$cause" ]; then
+    [ "${RR_VERDICT:-}" = "WORKED-CUTOFF" ] || return 0
+    cause="cutoff"
+  fi
   {
-    echo "Cut off $(date -Is) by --max-turns ($MAX_TURNS)."
+    if [ "$cause" = "ceiling" ]; then
+      echo "Cut off $(date -Is) by --max-turns ($MAX_TURNS)."
+    else
+      echo "Cut off $(date -Is): run exited rc=${RUN_RC:-?} after shipping work (computed verdict: WORKED-CUTOFF). Cause not recognized as the turn ceiling -- see the transcript tail below."
+    fi
     if [ "$AFTER_SHA" != "$BEFORE_SHA" ]; then
       echo "Commits made this run (${BEFORE_SHA:0:12}..${AFTER_SHA:0:12}):"
       git log --oneline "$BEFORE_SHA..$AFTER_SHA"
@@ -879,12 +886,6 @@ $PROMPT"
     fi
   fi
 
-  # Resume breadcrumb for the NEXT run, if this one was cut off by
-  # --max-turns -- see write_ceiling_breadcrumb above. No-op for every other
-  # STATUS/STATUS_DETAIL. Placed after push status is known (the breadcrumb
-  # names the commit range).
-  write_ceiling_breadcrumb
-
   if [ "$STATUS" = "FAILED" ]; then
     RUN_RC=1
     notify -u critical "$JOB_NAME FAILED" "See log: $LOG"
@@ -916,6 +917,11 @@ $PROMPT"
     RUN_RC=1
     notify -u critical "$JOB_NAME COMPUTED-FAILED" "verdict computed from git/gh, not self-reported. See $LOG"
   fi
+
+  # Resume breadcrumb for the NEXT run -- see write_ceiling_breadcrumb above.
+  # Placed after run_record_closeout (just above), which is what sets
+  # RR_VERDICT for its #347 item 2 trigger.
+  write_ceiling_breadcrumb
 
   # ALIVE. Reaching this line means the engine ran end to end, which is the
   # only thing a dead-man switch can honestly measure -- see deadman_renew's
