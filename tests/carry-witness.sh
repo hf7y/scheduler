@@ -37,7 +37,7 @@ run() { CARRY_REPO="$1" CARRY_REMOTE=origin CARRY_BRANCH=bashified \
         CARRY_REF_MAIN=origin/main CARRY_REF_BASH=origin/bashified \
         bash "$CARRY" "${@:2}" 2>&1; }
 
-schedule_fixture() {  # like fixture(), plus schedule/_runner*.conf+ROSTER, main only (#350)
+schedule_fixture() {  # like fixture(), plus every schedule_confs() class + ROSTER, main only (#350)
   local d="$TMP/$1" bare="$TMP/$1.git"
   git init -q --bare "$bare"
   git init -q -b main "$d"
@@ -53,6 +53,12 @@ schedule_fixture() {  # like fixture(), plus schedule/_runner*.conf+ROSTER, main
   mkdir -p "$d/schedule"
   printf 'RUNNER_JOB="x"\n' > "$d/schedule/_runner.conf"
   printf 'RUNNER_ENV="y"\n' > "$d/schedule/_runner.somehost.conf"
+  printf 'BATCH_JOB_NAME="scratch-batch"\n' > "$d/schedule/scratch.conf"
+  printf 'These override everything below.\n' > "$d/schedule/_standing-rules.md"
+  printf 'a fragment body\n' > "$d/schedule/_shotgun.md"
+  printf 'scratch|1|dummy\n' > "$d/schedule/_paced.conf"
+  printf 'scratch|1|dummy\n' > "$d/schedule/_paced.somehost.conf"
+  printf 'PACED_MAX_PER_TICK=1\n' > "$d/schedule/_contain.conf"
   printf 'scratch | scratch@host | 4h | live\n' > "$d/schedule/ROSTER"
   git -C "$d" add -A; git -C "$d" commit -qm "schedule confs, main only"
   git -C "$d" push -q origin main
@@ -135,6 +141,24 @@ case "$out" in *"none drifted"*) ok "a second run is a no-op once bootstrapped" 
 echo "== 8. schedule/ROSTER is never carried -- it is live state, read fresh, not build content"
 out="$(run "$d")"
 case "$out" in *ROSTER*) bad "ROSTER was named by the carry -- live state must never be baked into a build: $out" ;; *) ok "ROSTER is not part of the carried set" ;; esac
+
+echo "== 9. the other four checkout-resolving read sites #634 left behind also bootstrap (#350, reopened)"
+d="$(schedule_fixture allconfs)"
+out="$(run "$d")"
+for f in schedule/scratch.conf schedule/_standing-rules.md schedule/_shotgun.md \
+         schedule/_paced.conf schedule/_paced.somehost.conf schedule/_contain.conf; do
+  case "$out" in *"$f"*) ok "names $f as drifted though bashified never had it" ;; *) bad "did not surface $f: $out" ;; esac
+done
+run "$d" --apply >/dev/null
+git -C "$d" fetch -q origin
+for f in schedule/scratch.conf schedule/_standing-rules.md schedule/_shotgun.md \
+         schedule/_paced.conf schedule/_paced.somehost.conf schedule/_contain.conf; do
+  git -C "$d" cat-file -e "origin/bashified:$f" 2>/dev/null \
+    && ok "$f now exists on bashified" || bad "$f was not carried"
+done
+out="$(run "$d")"
+case "$out" in *ROSTER*) bad "ROSTER leaked into the broadened carry: $out" ;; *) ok "ROSTER still excluded once every other class is carried" ;; esac
+case "$out" in *"none drifted"*) ok "a second run is a no-op once every class is bootstrapped" ;; *) bad "not idempotent: $out" ;; esac
 
 printf '\ncarry-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

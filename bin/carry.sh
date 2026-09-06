@@ -59,19 +59,36 @@ for r in "$REF_MAIN" "$REF_BASH"; do
     || blind "$r is not readable here -- refusing to carry against a ref I cannot see"
 done
 
-runner_confs() {  # <ref> -- schedule/_runner.conf and its host overrides, by pattern
+# schedule_confs <ref> -- every schedule/ file scheduler-run, lib/paced-conf.sh
+# or dose-project.sh reads AS BUILD CONTENT: project confs (schedule/<p>.conf),
+# _standing-rules.md and every _<name>.md fragment, and every underscore-file
+# family read by a *<name>.conf glob at dispatch time -- _runner*.conf
+# (#350/#634), _paced*.conf and _contain*.conf (hf7y/scheduler#350, reopened
+# 2026-09-06: these were the other four of the five checkout-resolving read
+# sites #634 left behind).
+#
+# BY PATTERN, NOT THE bin/+lib/ INTERSECTION: a file's first appearance on
+# main must carry immediately (a new project's conf, a new host's _paced.conf)
+# -- the intersection method only ever carries what bashified already has.
+#
+# schedule/ROSTER and schedule/FREEZE MUST NEVER MATCH THIS PATTERN. Both are
+# live state, fetched fresh over `gh api` every read (lib/dose-common.sh's
+# fetch_repo_file) -- baking either into a build reintroduces the exact stale
+# clone this generation exists to remove. Neither carries a '.conf' or '.md'
+# suffix, so the glob excludes them structurally, not just by convention.
+schedule_confs() {  # <ref>
   git ls-tree -r --name-only "$1" -- schedule/ 2>/dev/null \
-    | grep -E '^schedule/_runner(\.[^/]+)?\.conf$'
+    | grep -E '^schedule/(_[^/]+\.md|[^/]+\.conf)$'
 }
 
 carried="$(
   { comm -12 \
       <(git ls-tree -r --name-only "$REF_MAIN"  -- bin/ lib/ | sort) \
       <(git ls-tree -r --name-only "$REF_BASH" -- bin/ lib/ | sort)
-    runner_confs "$REF_MAIN"
+    schedule_confs "$REF_MAIN"
   } | sort -u
 )"
-[ -n "$carried" ] || blind "no file is tracked on both refs, and no schedule/_runner*.conf exists on $REF_MAIN -- either nothing is carried, or the refs are wrong"
+[ -n "$carried" ] || blind "no file is tracked on both refs, and no schedule/*.conf or schedule/_*.md exists on $REF_MAIN -- either nothing is carried, or the refs are wrong"
 
 drifted=(); n=0
 while IFS= read -r f; do
