@@ -352,10 +352,8 @@ do_live() {
 # is scheduler-run, consulting neither gate nor tempo, reachable
 # only by hand-typing setsid/nohup/sudo -u over ssh, and getting any part of it
 # wrong fails in a different way each time.
-# TIER is the ONE difference between --now and --shotgun. Everything else
-# here -- the account lookup, the already-running refusal, the pull-first
-# guard, the 120s pgrep witness -- is tier-agnostic and is why this is one
-# function with an argument rather than two that drift apart.
+# TIER is the only difference between --now and --shotgun; everything else here
+# is tier-agnostic, so this is one function rather than two that drift apart.
 do_now() {
   local tier="${1:-batch}"
   local home clone log

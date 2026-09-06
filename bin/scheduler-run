@@ -27,12 +27,8 @@ TIER_ARG="${2:?usage: scheduler-run <project> <sweep|batch>}"
 case "$TIER_ARG" in
   sweep) PREFIX="SWEEP"; TIER="bug-sweep" ;;
   batch) PREFIX="BATCH"; TIER="nightly-batch" ;;
-  # A shotgun is a batch that fans out: one `claude -p` whose ALLOWED_TOOLS
-  # carry `Agent`, splitting its own queue N ways. Measured 2026-09-06: six
-  # subagents in one session cost ~390 MB RSS against ~1680 MB for six
-  # processes, and `--max-turns` does not bind them -- each Agent call is one
-  # parent turn. So the PROJECT_KEY lock in lib/sweep-loop-common.sh needs no
-  # relaxing (hf7y/scheduler#586): the fan-out happens inside one lock hold.
+  # One `claude -p` whose ALLOWED_TOOLS carry `Agent`, so the fan-out is inside
+  # one PROJECT_KEY lock hold and the lock needs no relaxing (#586).
   shotgun) PREFIX="SHOTGUN"; TIER="shotgun" ;;
   *) echo "scheduler-run: tier must be 'sweep', 'batch' or 'shotgun', got '$TIER_ARG'" >&2; exit 2 ;;
 esac
@@ -198,12 +194,9 @@ for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH; do
   fi
 done
 
-# A shotgun's subagents each clone and work their own shard, so the ONE account
-# checkout lib/sweep-loop-common.sh hands a same-named job (SELFDEV_IN_ACCOUNT)
-# is exactly the tree they must not share -- and it is the tree the nightly
-# batch owns. Forced here rather than left to a per-tier conf field: a conf
-# that forgets it does not fail, it silently points six writers at one
-# checkout. Structural beats remembered.
+# Subagents clone their own shards, so the account checkout SELFDEV_IN_ACCOUNT
+# would hand a same-named job is the one tree they must not share. Forced, not
+# a conf field: forgetting it points every subagent at the batch's checkout.
 if [ "$TIER_ARG" = shotgun ]; then SELFDEV_IN_ACCOUNT=0; fi
 
 # AUTONOMY_TIER (see lib/autonomy-merge.sh) is project-level, not per-tier

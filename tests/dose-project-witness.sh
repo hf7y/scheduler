@@ -354,14 +354,10 @@ grep -qF 'opened: PR #42' <<<"$out" && ok "--arm reports opened-not-armed when a
   || bad "--arm did not degrade its message: $out"
 
 # --- 14. --shotgun: parses, and travels like --now (#586) -----------------
-# The fan-out tier's front door. Two things can silently break it: the flag
-# falling through to `unknown flag` (it is one token in a case arm, easy to
-# miss when a flag is added beside it), and the hop clause carrying the wrong
-# mode -- which would dispatch a NIGHTLY BATCH on the roster's host while
-# reporting a shotgun, the failure this case exists to catch.
+# A hop carrying the wrong mode would dispatch a NIGHTLY BATCH on the roster's
+# host while reporting a shotgun. That is what this case catches.
 cat > "$FAKEBIN/ssh" <<'SSH'
 #!/usr/bin/env bash
-# Echo the remote command instead of running it, so the hop is inspectable.
 for a in "$@"; do :; done
 echo "SSH-WOULD-RUN: $a"
 SSH
@@ -371,12 +367,10 @@ out="$("$TARGET" elsewhere-proj --shotgun 2>&1)"; rc=$?
 grep -qi 'unknown flag' <<<"$out"   && bad "--shotgun was not parsed as a flag: $out"   || ok "--shotgun parses"
 grep -qF "SSH-WOULD-RUN: sudo -n dose 'elsewhere-proj' --shotgun" <<<"$out"   && ok "--shotgun hops to the roster's host carrying --shotgun, not --now"   || bad "the hop did not carry --shotgun (rc=$rc): $out"
 
-# The same clause must still carry --now unchanged.
 out="$("$TARGET" elsewhere-proj --now 2>&1)"
 grep -qF "SSH-WOULD-RUN: sudo -n dose 'elsewhere-proj' --now" <<<"$out"   && ok "--now still hops as --now"   || bad "--now's hop regressed while --shotgun was added: $out"
 rm -f "$FAKEBIN/ssh"
 
-# --shotgun must appear where an operator looks for it.
 "$TARGET" --help 2>&1 | grep -qF -- '--shotgun'   && ok "--shotgun is in the usage block"   || bad "--shotgun works but --help never mentions it"
 
 echo

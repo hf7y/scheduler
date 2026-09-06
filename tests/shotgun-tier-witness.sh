@@ -1,33 +1,11 @@
 #!/usr/bin/env bash
 # Witness for the SHOTGUN tier in bin/scheduler-run (hf7y/scheduler#586).
 #
-# WHAT A SHOTGUN IS. One `claude -p` whose ALLOWED_TOOLS carry `Agent`, so it
-# splits its own issue queue N ways and works every shard at once, each in its
-# own clone. #586 frames the PROJECT_KEY lock in lib/sweep-loop-common.sh as
-# the thing to break; measured 2026-09-06, six subagents in ONE process cost
-# ~390 MB RSS against ~1680 MB for six processes, on a host capped at
-# memory=8GB. So the fan-out goes INSIDE one lock hold and the lock is
-# untouched.
-#
-# THE TWO THINGS THAT SILENTLY UNDO IT, which is why they are asserted and not
-# merely written down:
-#   * `Agent` missing from ALLOWED_TOOLS. The run still succeeds -- it is just
-#     a nightly batch with a different name and a second STATE_DIR. Nothing
-#     else in the estate would notice.
-#   * SELFDEV_IN_ACCOUNT left at `auto`. For an account whose name equals its
-#     project (realisateur@monkey is one), that resolves to the ONE account
-#     checkout the nightly batch owns, and points every subagent at it.
-#
-# Asserts:
-#   1. `scheduler-run <p> shotgun` selects PREFIX=SHOTGUN and TIER=shotgun,
-#      and reads the conf's SHOTGUN_* fields.
-#   2. the shotgun path forces SELFDEV_IN_ACCOUNT=0, overriding an inherited
-#      value; and the batch path does NOT (it stays whatever it was).
-#   3. an unknown tier still exits 2, and says all three names.
-#   4. schedule/_shotgun.md exists and is reachable as @@FRAGMENT:shotgun@@.
-#   5. EVERY conf declaring SHOTGUN_JOB_NAME carries `Agent` in its
-#      SHOTGUN_ALLOWED_TOOLS and references the fragment -- generalised, so a
-#      second project arming a shotgun cannot forget either.
+# TWO THINGS SILENTLY UNDO A SHOTGUN. `Agent` missing from ALLOWED_TOOLS: the
+# run still succeeds, as a nightly batch with a different name. And
+# SELFDEV_IN_ACCOUNT left at `auto`: for an account whose name equals its
+# project it resolves to the ONE checkout the batch owns, and points every
+# subagent at it. Neither fails loudly, so both are asserted here.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -44,8 +22,7 @@ mkdir -p "$FX/bin" "$FX/lib" "$FX/schedule"
 cp "$RUN" "$FX/bin/scheduler-run"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$FX/bin/freeze-check.sh"
 chmod +x "$FX/bin/freeze-check.sh" "$FX/bin/scheduler-run"
-# The stub reports the engine inputs this witness is about, one per line, so a
-# case can assert on any of them without a second fixture shape.
+# The stub reports the engine inputs, one per line.
 cat > "$FX/lib/sweep-loop-common.sh" <<'STUB'
 printf 'PREFIX=%s\n' "$PREFIX"
 printf 'TIER=%s\n' "$TIER"
