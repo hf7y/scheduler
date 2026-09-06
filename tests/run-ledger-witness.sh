@@ -97,7 +97,6 @@ ledger_append q batch 1 NOT-DONE "new work arrived"
 [ "$(ledger_streak q DONE)" = "0" ] && ok "new work resets the DONE streak immediately" \
   || bad "a NOT-DONE did not clear the streak"
 
-# --- 8. ledger_last_ts: the cutoff lib/answer-registry.sh's reader uses ---
 export RUN_LEDGER_FILE="$W/lastts.tsv"
 [ -z "$(ledger_last_ts never-seen)" ] && ok "an unknown project has no last timestamp" \
   || bad "unknown project produced a timestamp"

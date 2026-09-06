@@ -49,10 +49,8 @@ fi
 # <<< SCHED_ROOT resolution
 REPORTS_ROOT="$HOME/reports"
 # shellcheck disable=SC1091
-# shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/provenance.sh"   # PROVENANCE_ANSWERED_JQ -- what counts as an answer
-# shellcheck disable=SC1091
-source "$SCHED_ROOT/lib/answer-registry.sh"   # answer_registry_record -- cmd_questions_issues' relay, made readable (#149)
+source "$SCHED_ROOT/lib/answer-registry.sh"  # shellcheck disable=SC1091
 EDITOR="${EDITOR:-vim}"
 PACED_LOG="$HOME/.local/share/scheduler-paced-runner/run.log"
 # WHICH rotation file, resolved per host by the SAME rule the runner uses --
@@ -815,14 +813,8 @@ cmd_questions_issues() {
        && gh issue edit "$num" --repo "$slug" --add-label answered >/dev/null 2>&1; then
       echo "posted: #$num answered"
       posted=$(( posted + 1 ))
-      # A typed row, not just a tracker comment (#149 build item 2): $text is
-      # still \n-encoded from the awk parse above, so decode it the same way
-      # the posted comment itself was -- answer_registry_record re-encodes on
-      # its own, and encoding an already-encoded string would double it.
-      # Best-effort: a registry write failing must never turn a POSTED answer
-      # into a FAILED one, so this is never allowed to flip $failed.
       answer_registry_record "$proj" "$num" relay "$(printf '%b' "$text")" \
-        || echo "  (answer registry write failed for #$num -- posted to $slug regardless, but $proj's next run will not see it read mechanically)" >&2
+        || echo "  answer registry write failed for #$num -- posted regardless" >&2
     else
       echo "FAILED to post the answer to #$num -- it is NOT recorded. Your text:" >&2
       printf '  %b\n' "$text" >&2

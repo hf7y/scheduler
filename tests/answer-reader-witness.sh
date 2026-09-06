@@ -1,29 +1,4 @@
 #!/usr/bin/env bash
-# answer-reader-witness.sh -- bin/scheduler-run MUST read any answer relayed
-# into lib/answer-registry.sh since this project's last ledger row, and bake
-# it into PROMPT before the agent starts.
-#
-# THE GAP THIS CLOSES (hf7y/scheduler#149 build item 2). `scheduler questions
-# <proj>` posts Zach's answer as a GitHub comment (and, since this issue's
-# first build item, records it as a typed row) -- but a comment on a tracker
-# is exactly as unread as `<!-- DEFERRED -->` was before route-deliveries.sh:
-# a claim the write side enforces and the read side never checks. Evidence
-# in #149: one question re-posed 100 minutes after its answer; the same
-# question answered three separate times. This makes the read MECHANICAL,
-# the same way MILESTONE-QUEUE and the ceiling breadcrumb are -- baked into
-# the prompt, not left for the agent to rediscover on its own initiative.
-#
-# WITNESS-FIRST, PER STANDING RULE 5: bin/scheduler-run is one of the three
-# dispatch-path files that may never change un-witnessed. This file is
-# written to observe the NEW behaviour and FAILS against the code as it
-# stood before this change.
-#
-# HERMETICITY: full. Same fixture shape as tests/milestone-queue-witness.sh --
-# a copy of bin/scheduler-run, a stub sweep-loop-common.sh that just prints
-# PROMPT, and a stub freeze-check.sh. lib/answer-registry.sh and
-# lib/run-ledger.sh are the REAL libraries (pure, no network), pointed at
-# tempfiles via ANSWER_REGISTRY_FILE/RUN_LEDGER_FILE so nothing touches the
-# live estate.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,17 +18,14 @@ printf 'printf "%%s" "$PROMPT"\nexit 0\n' > "$FX/lib/sweep-loop-common.sh"
 cp "$ROOT/lib/answer-registry.sh" "$FX/lib/answer-registry.sh"
 cp "$ROOT/lib/run-ledger.sh" "$FX/lib/run-ledger.sh"
 
-mkconf() {  # $1=name $2=repo_url, rest=lines
+mkconf() {
   local name="$1" url="$2"; shift 2
   { echo "REPO_URL=\"$url\""; printf '%s\n' "$@"; } > "$FX/schedule/$name.conf"
 }
 
 export ANSWER_REGISTRY_FILE="$TMP/answers.tsv"
 export RUN_LEDGER_FILE="$TMP/ledger.tsv"
-# shellcheck disable=SC1091
-source "$ROOT/lib/answer-registry.sh"
-# shellcheck disable=SC1091
-source "$ROOT/lib/run-ledger.sh"
+source "$ROOT/lib/answer-registry.sh"; source "$ROOT/lib/run-ledger.sh"  # shellcheck disable=SC1091
 
 run() { ( cd "$FX" && bash bin/scheduler-run "$1" "$2" 2>"$TMP/err" ); }
 

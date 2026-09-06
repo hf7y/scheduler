@@ -118,12 +118,6 @@ ledger_last() {
   awk -F'\t' -v p="$proj" '$4==p {o=$7} END{if(o!="") print o}' "$f"
 }
 
-# ledger_last_ts <project> -- the iso8601 timestamp of the most recent row for
-# <project> (any outcome, holds included), or empty if it has never dispatched.
-# This is the cutoff lib/answer-registry.sh's mandatory reader compares
-# against: a row appended to that registry after this timestamp is an answer
-# posted SINCE the last time this project ran, and so is unread by
-# construction rather than by a second piece of consumed state.
 ledger_last_ts() {
   local proj="${1:?}"
   local f; f="$(_ledger_file)"

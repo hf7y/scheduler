@@ -154,21 +154,7 @@ if [[ "$PROMPT" == *'@@MILESTONE-QUEUE@@'* ]]; then
   PROMPT="${PROMPT//@@MILESTONE-QUEUE@@/$mq_body}"
 fi
 
-# Deliver any answer Zach relayed since this project's last dispatch, baked
-# into PROMPT rather than left as a tracker comment an agent might never
-# open (hf7y/scheduler#149 build item 2). `scheduler questions` already
-# records a typed row at relay time (lib/answer-registry.sh); this is the
-# MANDATORY READER half -- rows newer than PROJECT's last run-ledger entry
-# are unread by construction, so no separate "delivered" state is needed.
-# Evidence this answers: one question re-posed 100 minutes after its answer,
-# the same question answered three separate times (#149).
-#
-# NEVER FATAL, same posture as route-deliveries.sh above and MILESTONE-QUEUE:
-# a missing or unreadable registry is a missed delivery, not a blocked
-# dispatch -- `|| true` throughout, and the block is simply skipped.
-# shellcheck disable=SC1091
-if source "$SCHED_ROOT/lib/run-ledger.sh" 2>/dev/null && \
-   source "$SCHED_ROOT/lib/answer-registry.sh" 2>/dev/null; then
+if source "$SCHED_ROOT/lib/run-ledger.sh" 2>/dev/null && source "$SCHED_ROOT/lib/answer-registry.sh" 2>/dev/null; then  # shellcheck disable=SC1091
   _ans_since="$(ledger_last_ts "$PROJECT" 2>/dev/null || true)"
   _ans_rows="$(answer_registry_unread "$PROJECT" "$_ans_since" 2>/dev/null || true)"
   if [ -n "$_ans_rows" ]; then
