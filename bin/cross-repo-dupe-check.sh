@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# cross-repo-dupe-check.sh -- before writing into a repo you do not watch,
-# ask whether the work already exists there (#606: a run burned 28 minutes
-# duplicating hf7y/scheduler#599, which had merged 11 minutes earlier).
 set -uo pipefail
 
 CLI_NAME="cross-repo-dupe-check.sh"
