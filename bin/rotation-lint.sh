@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
 # rotation-lint.sh -- one project, one dispatcher, ACROSS the host split.
 #
-# Built 2026-07-29 (paced cycle, dexter). RETIRES a PROSE CONVENTION, not a
-# mechanism -- there was no mechanism. `schedule/_paced.conf` and
-# `schedule/_paced.<host>.conf` both carry the rule in capitals, four times
-# between them:
-#
-#   "DO NOT LAND THIS ALONE"                     (_paced.conf, crt block)
-#   "in the SAME change"                         (dexter wtul block, step 5)
-#   "PAIRED, NOT LANDED ALONE"                   (dexter realisateur block)
-#   "Both halves, or the double-dispatch comes back."
-#
-# Every host move is a two-file edit -- enable here, disable there -- and
-# until now the ONLY thing holding the two halves together was whoever was
-# editing remembering to do both. This repo's own doctrine says a convention
-# nobody can enforce is a latent bug; two participants were moved by hand on
-# 2026-07-29 alone (`c369c05`, `58d6495`), so the exposure is current, not
-# historical.
+# RETIRES a PROSE CONVENTION, not a mechanism -- there was no mechanism.
+# schedule/_paced.conf and schedule/_paced.<host>.conf state, in their own
+# comments, that a host move must land as one two-file edit (enable here,
+# park there); until this lint, the only thing enforcing that was whoever
+# was editing remembering to do both halves. tests/rotation-lint-witness.sh's
+# header and README.md's own table carry the hazard and its history in full.
 #
 # WHAT SPLIT INTENT COSTS, so this reads as a defect and not as tidiness:
 # each host runs bin/usage-paced-runner.sh out of the same git-tracked repo
