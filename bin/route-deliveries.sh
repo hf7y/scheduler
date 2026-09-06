@@ -80,7 +80,11 @@ issues="$(gh issue list -R "$SLUG" --state open --limit 100 --json number,body,l
 declare -A ref_needed ref_alias
 work=()
 checked=0
-while IFS=$'\t' read -r num body labels comments; do
+while IFS= read -r rawline; do
+  [ -n "$rawline" ] || continue
+  readarray -d $'\t' -t _fields <<< "$rawline"
+  num="${_fields[0]:-}"; body="${_fields[1]:-}"; labels="${_fields[2]:-}"
+  comments="${_fields[3]:-}"; comments="${comments%$'\n'}"
   [ -n "$num" ] || continue
   # Only the DEFERRED block. A ref elsewhere in a body is prose, not a claim.
   block="$(printf '%b' "$body" | awk '/<!--[[:space:]]*DEFERRED/{f=1;next} /<!--[[:space:]]*\/DEFERRED/{f=0} f')"
