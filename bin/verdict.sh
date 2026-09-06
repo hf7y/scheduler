@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
 # verdict.sh -- tell NOT-DONE from GAVE-UP, and act differently on each.
 #
-# THE PROBLEM, from this host's own run log on 2026-07-29:
-#
-#   12:41:02 DONE scheduler rc=1 (659s)
-#   13:05:12 DONE scheduler rc=0 (309s)
-#   14:08:57 DONE scheduler rc=1 (533s)
-#
-# `rc` is the only outcome signal the runner has, and it conflates at least
-# three different states: the agent hit --max-turns with work still to do; the
-# agent concluded the bar cannot be met from here; the wrapper itself broke.
-# Those want OPPOSITE responses. Truncated means dispatch it again -- the run
-# was progress, it just ran out of room. Gave-up means dispatch it again is a
-# waste of the whole ecosystem's quota, forever, and nobody will notice because
-# rc=1 looks like the truncation case.
+# THE PROBLEM. `rc` conflates at least three states the runner cannot tell
+# apart: the agent hit --max-turns with work left, the agent concluded the
+# bar cannot be met, or the wrapper itself broke. Those want OPPOSITE
+# responses -- truncated means dispatch it again (progress, just out of
+# room); gave-up means re-dispatching wastes quota forever, silently,
+# because rc=1 looks identical to the truncation case.
 #
 # An ecosystem that cannot tell those apart has no negative feedback: it either
 # retries forever (no braking) or backs off on truncation (brakes on progress).
@@ -31,13 +24,12 @@
 # STATE
 #   $STATE_ROOT/scheduler-verdict/<participant>    KEY=VALUE, one per line
 #
-# Keyed on the ROTATION PARTICIPANT NAME, not on the wrapper filename. The
-# expires_at convention derives its path from the wrapper basename, which is
-# fine there and wrong here: `scheduler-run realisateur batch` and
-# `scheduler-run crt batch` share a basename, so two participants would write
-# each other's verdicts and each would act on the other's. The participant
-# name is what the rotation, the log line, and the agent's own brief all
-# already agree on.
+# Keyed on the ROTATION PARTICIPANT NAME, not on the wrapper filename: the
+# expires_at convention's basename-derived path would let two participants
+# dispatched via same-named wrappers (`scheduler-run realisateur batch` /
+# `scheduler-run crt batch`) write and act on each other's verdicts. The
+# participant name is what the rotation, the log line, and the agent's own
+# brief all already agree on.
 #
 # The file is CONSUMED at dispatch (`clear`), so a verdict can never outlive
 # the run that wrote it. That is the `expires_at` lesson from
@@ -53,11 +45,10 @@
 #   verdict.sh --selftest
 #
 # BLOCKED's optional [issue] (bare number, cwd-resolved; or `owner/repo#N`)
-# labels that issue `needs-human` -- the consumer tempo.sh already reads
-# (TEMPO_BLOCKED_LABELS) but nothing ever fed, per hf7y/scheduler#149.
-# Best-effort: a `gh` failure is reported but does not fail the write. Skipped
-# instead on a NO-DECISION: issue -- etiquette's derived:decision grammar
-# would just strip a hand-typed label back off (hf7y/crt#149).
+# labels that issue `needs-human` -- tempo.sh reads TEMPO_BLOCKED_LABELS but
+# nothing fed it before hf7y/scheduler#149. A `gh` failure is reported but
+# does not fail the write; a NO-DECISION: issue is skipped, since etiquette's
+# derived:decision grammar would strip a hand-typed label back off (hf7y/crt#149).
 #
 # BLOCKED also refuses a reason under 6 words -- "waiting on a human" is a
 # deferral, not a blocker (#522).
@@ -67,10 +58,9 @@
 #   1  NOT-DONE -- truncated/silent/CONTINUE; re-dispatch, metabolism unchanged
 #   3  GAVE-UP  -- explicit IMPOSSIBLE; reduce metabolism and FILE IT
 #   4  BLOCKED  -- cannot proceed without something OUTSIDE this run (a
-#                  credential, a human, another project). LENGTHEN the interval;
-#                  do NOT give up. Distinct from NOT-DONE because "made
-#                  progress, ran out of room" and "cannot proceed at all" want
-#                  opposite responses, and until 2026-08-12 both were 1.
+#                  credential, a human, another project). LENGTHEN the
+#                  interval; do NOT give up -- "made progress, ran out of
+#                  room" and "cannot proceed at all" want opposite responses.
 set -uo pipefail
 
 STATE_ROOT="${STATE_ROOT:-$HOME/.local/share}"
