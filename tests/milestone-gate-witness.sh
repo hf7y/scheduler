@@ -34,7 +34,7 @@ tick() {
 case "\$*" in
   *milestones*)
     if [ "$ghmode" = blind ]; then exit 1; fi
-    echo "$ghmode"
+    printf '%s\t\n' "$ghmode"
     ;;
   *) echo "milestone-gate-witness: unexpected gh call: \$*" >&2; exit 64 ;;
 esac
