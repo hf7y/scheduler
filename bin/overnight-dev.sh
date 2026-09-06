@@ -8,14 +8,11 @@
 # crucially -- each productive cycle branches from the PREVIOUS productive
 # cycle so work ACCUMULATES instead of clobbering.
 #
-# IT WAS A WORKTREE UNTIL 2026-08-11 (hf7y/scheduler#49; Zach, 2026-08-06:
-# "we should not have any more worktrees after tonight"). Each cycle created
-# one and each cycle removed it, so this was the tidier of the two creators in
-# this repo -- but a cycle killed mid-run left the registration behind, and
-# the shared .git it borrowed is the concurrent-writer hazard CLAUDE.md's
-# subagent rules exist for. A clone gives the same isolation, registers
-# nothing, and costs one explicit push per productive cycle to publish the
-# branch the morning review reads.
+# IT WAS A WORKTREE UNTIL 2026-08-11 (hf7y/scheduler#49) -- a cycle killed
+# mid-run left the registration behind, and the shared .git it borrowed is
+# the concurrent-writer hazard CLAUDE.md's subagent rules exist for. A clone
+# gives the same isolation, registers nothing, and costs one explicit push
+# per productive cycle to publish the branch the morning review reads.
 #
 # Same conservative philosophy as the nightly job:
 #   * REVIEW GATE: every cycle's work lands on a branch overnight/<date>-cNN
@@ -167,9 +164,9 @@ Commit each finished change with a clear message. Then append a section for THIS
     CRON_AFTER="$(crontab -l 2>/dev/null | md5sum)"
     if [ "$CRON_BEFORE" != "$CRON_AFTER" ]; then
       echo "WARNING: live crontab CHANGED during cycle $i -- investigate"
-      # q-756f82: a bare `|| true` guards a notify-send that FAILS, not one
-      # that NEVER RETURNS (dbus socket present, nobody listening -- live
-      # 2026-07-28). Bounded so a decoration cannot wedge the job.
+      # A bare `|| true` guards a notify-send that FAILS, not one that NEVER
+      # RETURNS (dbus socket present, nobody listening). Bounded so a
+      # decoration cannot wedge the job.
       timeout 5 notify-send -u critical "$JOB_NAME" "live crontab modified during a self-run -- investigate $LOG" 2>/dev/null || true
     fi
 

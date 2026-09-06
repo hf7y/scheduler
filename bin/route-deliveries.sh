@@ -2,12 +2,10 @@
 # route-deliveries.sh -- tell a repo when something it was waiting on landed.
 #
 # THE GAP THIS FILLS (hf7y/scheduler#299). `<!-- DEFERRED -->` is enforced at
-# WRITE time by gh-sign and read by NOTHING. Measured 2026-08-25: five files
-# under bin/ mention the block and all five write it. So a dependency is
-# declared, machine-readable, pointing the right way -- and never delivered.
-# hf7y/crt#67 named hf7y/apms-2173#13 in exactly that block, crt shipped the
-# queue, and apms was never told; a human found the mismatch by reading both
-# repos an hour later.
+# WRITE time by gh-sign and read by NOTHING -- a dependency gets declared,
+# machine-readable, pointing the right way, and never delivered. hf7y/crt#67
+# named a dependency this way, shipped, and never told it; a human caught the
+# mismatch only by reading both repos.
 #
 # PULL, NOT PUSH, and that is the whole design. A closing repo would have to
 # find and write into every repo waiting on it -- cross-repo writes, and a
@@ -16,21 +14,18 @@
 # no new permission, and a project that never runs simply never learns -- which
 # is correct, because nothing was waiting on it either.
 #
-# NOTIFY AND UNBLOCK (Zach, 2026-08-25, choosing among three options in #299):
-# comment what landed, and drop the `deferred` label so the signal is visible
-# to the run and to a human. It does NOT close, reopen, or re-scope anything --
-# deciding what the unblocked work now is belongs to the run, not to this.
-# CLONE-FREE BY CONSTRUCTION, because per-account clones are being retired
-# (Zach, 2026-08-25: "clones need to get retired in v2"). This script resolves
-# schedule/<project>.conf relative to ITSELF, reads the tracker over `gh`, and
-# touches no working tree -- so it runs identically from a clone today and from
-# the verb build after clones go. It is carried on `bashified` for that reason.
+# NOTIFY AND UNBLOCK: comment what landed and drop the `deferred` label, so
+# the signal is visible to the run and to a human. It does NOT close, reopen,
+# or re-scope anything -- deciding what the unblocked work now is belongs to
+# the run, not to this.
+# CLONE-FREE BY CONSTRUCTION: this resolves schedule/<project>.conf relative
+# to ITSELF and reads the tracker over `gh`, touching no working tree -- so it
+# runs identically from a clone today and from the verb build after clones go
+# (why it is carried on `bashified`).
 #
 # ITS CALLER IS THE PART THAT IS NOT CLONE-FREE YET: bin/scheduler-run is not
-# carried (hf7y/scheduler#130, alongside usage-gate.sh and sync-crontab.sh), so
-# on a host with no checkout nothing invokes this. That gap is #130's, not a
-# new one -- this adds one more script waiting on it rather than pretending
-# otherwise.
+# carried (hf7y/scheduler#130), so on a host with no checkout nothing invokes
+# this -- that gap is #130's, not a new one.
 set -uo pipefail
 
 CLI_NAME='route-deliveries.sh'
