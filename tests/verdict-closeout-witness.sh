@@ -163,6 +163,33 @@ grep -qi 'fresh session\|no memory' <<<"$PROMPT" \
   && ok "and explains WHY: the next dispatch will not remember" \
   || bad "does not explain why 'I'll check later' fails"
 
+echo "== 8. the closeout tells the agent its own turn ceiling (hf7y/scheduler#527)"
+TIER="batch"; PROJECT_KEY="scheduler"; PROMPT="do the thing"; MAX_TURNS=120
+append_verdict_closeout >/dev/null
+grep -q '120 TURNS' <<<"$PROMPT" \
+  && ok "names its own --max-turns value" \
+  || bad "closeout never states the turn ceiling"
+grep -qE 'turn ~1[0-9][0-9]' <<<"$PROMPT" \
+  && ok "gives a concrete wind-down turn short of the hard ceiling" \
+  || bad "no concrete wind-down turn given"
+grep -q 'hf7y/scheduler#527' <<<"$PROMPT" \
+  && ok "cites the issue this closes" \
+  || bad "no issue reference"
+
+echo "== 9. a small MAX_TURNS still gets a usable (floored) reserve, not a rounded-to-nothing one"
+TIER="batch"; PROJECT_KEY="scheduler"; PROMPT="do the thing"; MAX_TURNS=40
+append_verdict_closeout >/dev/null
+grep -q 'turn ~32' <<<"$PROMPT" \
+  && ok "floors the reserve to 8 turns (40 - 8 = 32) rather than rounding down further" \
+  || bad "small-ceiling reserve was not floored as expected"
+
+echo "== 10. an unset MAX_TURNS still produces a sane ceiling line, not an empty one"
+TIER="batch"; PROJECT_KEY="scheduler"; PROMPT="do the thing"; unset MAX_TURNS
+append_verdict_closeout >/dev/null
+grep -qE '[0-9]+ TURNS' <<<"$PROMPT" \
+  && ok "falls back to a real number when MAX_TURNS is unset" \
+  || bad "ceiling line is blank/broken with MAX_TURNS unset"
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]
