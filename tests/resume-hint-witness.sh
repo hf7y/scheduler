@@ -54,13 +54,20 @@ out_b="$(resume_hint_for_project other-one)"
   && ok "each project's hint is keyed to its own rows" \
   || bad "cross-contamination: hasrepo='$out_a' other-one='$out_b'"
 
+echo "== 7. most recent row is DERIVED-CONTINUE WORKED-CUTOFF -- rides the same path as NOT-DONE (#347)"
+ledger_append typedcut batch 1 WORKED-CUTOFF "DERIVED-CONTINUE: open PR #21 on hf7y/typedcut has a failing check -- next dispatch should finish it, not start fresh"
+out="$(resume_hint_for_project typedcut)"
+[ "$out" = "21 hf7y/typedcut" ] \
+  && ok "WORKED-CUTOFF is not excluded just because it is typed differently from NOT-DONE" \
+  || bad "expected '21 hf7y/typedcut', got: '$out'"
+
 BLOCK2="$TMP/read-resume-hint.sh"
 awk '/^read_resume_hint\(\) \{$/,/^\}$/' "$SWEEP_LIB" > "$BLOCK2"
 grep -q 'read_resume_hint' "$BLOCK2" \
   || { echo "FAIL: could not extract read_resume_hint() from $SWEEP_LIB"; exit 1; }
 . "$BLOCK2"
 
-echo "== 7. neither env var set -- PROMPT untouched"
+echo "== 8. neither env var set -- PROMPT untouched"
 unset SCHEDULER_RESUME_PR SCHEDULER_RESUME_REPO
 PROMPT="original prompt text"
 read_resume_hint
@@ -68,7 +75,7 @@ read_resume_hint
   && ok "PROMPT unchanged with no resume hint in the environment" \
   || bad "PROMPT was rewritten with nothing to resume: $PROMPT"
 
-echo "== 8. only PR set, repo missing -- treated as no hint, not a partial one"
+echo "== 9. only PR set, repo missing -- treated as no hint, not a partial one"
 SCHEDULER_RESUME_PR=14
 unset SCHEDULER_RESUME_REPO
 PROMPT="original prompt text"
@@ -78,7 +85,7 @@ read_resume_hint
   || bad "a partial hint fired: $PROMPT"
 unset SCHEDULER_RESUME_PR
 
-echo "== 9. both set -- prepended to PROMPT, naming PR and repo, and consumed"
+echo "== 10. both set -- prepended to PROMPT, naming PR and repo, and consumed"
 SCHEDULER_RESUME_PR=14
 SCHEDULER_RESUME_REPO=hf7y/abletim
 PROMPT="the conf's own brief"
