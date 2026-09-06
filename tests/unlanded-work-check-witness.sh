@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# HERMETIC: a throwaway git repo under mktemp, and a stub gh from fixtures.
-set -uo pipefail
+set -uo pipefail  # HERMETIC: a throwaway git repo under mktemp, stub gh from fixtures
 HERE="$(cd "$(dirname "$0")" && pwd)"
 U="$HERE/../bin/unlanded-work-check.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # unlanded-work-check.sh -- flags a stale cached origin/HEAD and a local
-# branch with commits no PR names (rule LAND YOUR WORK, #522) -- ANY PR
-# state counts (this repo squash-merges); excludes salvage/*. Exit: usage().
+# branch with commits no PR (any state) names; excludes salvage/*. (#522)
 set -uo pipefail
 
 CLI_NAME="unlanded-work-check.sh"

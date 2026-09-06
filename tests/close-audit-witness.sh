@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# HERMETIC: stub gh answers from fixture JSON -- no network, no live tracker.
-set -uo pipefail
+set -uo pipefail  # HERMETIC: stub gh below answers from fixture JSON, no network
 HERE="$(cd "$(dirname "$0")" && pwd)"
 C="$HERE/../bin/close-audit.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"

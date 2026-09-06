@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# close-audit.sh -- flags a merged PR whose linked issue GitHub still
-# shows open (rule 1, CLOSE WHAT YOU RESOLVED, #522). Exit: see usage().
+# close-audit.sh -- flags a merged PR whose issue GitHub shows open (#522).
 set -uo pipefail
 
 CLI_NAME="close-audit.sh"
