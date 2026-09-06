@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# close-audit.sh -- flags a merged PR whose issue GitHub shows open (#522).
-set -uo pipefail
+set -uo pipefail  # flags a merged PR whose issue GitHub shows open (#522)
 
 CLI_NAME="close-audit.sh"
 GH_BIN="${CLOSE_AUDIT_GH_BIN:-gh}"
