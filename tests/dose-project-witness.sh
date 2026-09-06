@@ -353,6 +353,26 @@ unset FAKE_GH_AUTOMERGE_MODE
 grep -qF 'opened: PR #42' <<<"$out" && ok "--arm reports opened-not-armed when auto-merge fails" \
   || bad "--arm did not degrade its message: $out"
 
+# --- 14. --shotgun: parses, and travels like --now (#586) -----------------
+# A hop carrying the wrong mode would dispatch a NIGHTLY BATCH on the roster's
+# host while reporting a shotgun. That is what this case catches.
+cat > "$FAKEBIN/ssh" <<'SSH'
+#!/usr/bin/env bash
+for a in "$@"; do :; done
+echo "SSH-WOULD-RUN: $a"
+SSH
+chmod +x "$FAKEBIN/ssh"
+
+out="$("$TARGET" elsewhere-proj --shotgun 2>&1)"; rc=$?
+grep -qi 'unknown flag' <<<"$out"   && bad "--shotgun was not parsed as a flag: $out"   || ok "--shotgun parses"
+grep -qF "SSH-WOULD-RUN: sudo -n dose 'elsewhere-proj' --shotgun" <<<"$out"   && ok "--shotgun hops to the roster's host carrying --shotgun, not --now"   || bad "the hop did not carry --shotgun (rc=$rc): $out"
+
+out="$("$TARGET" elsewhere-proj --now 2>&1)"
+grep -qF "SSH-WOULD-RUN: sudo -n dose 'elsewhere-proj' --now" <<<"$out"   && ok "--now still hops as --now"   || bad "--now's hop regressed while --shotgun was added: $out"
+rm -f "$FAKEBIN/ssh"
+
+"$TARGET" --help 2>&1 | grep -qF -- '--shotgun'   && ok "--shotgun is in the usage block"   || bad "--shotgun works but --help never mentions it"
+
 echo
 echo "dose-project-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

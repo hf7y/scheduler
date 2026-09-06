@@ -27,7 +27,10 @@ TIER_ARG="${2:?usage: scheduler-run <project> <sweep|batch>}"
 case "$TIER_ARG" in
   sweep) PREFIX="SWEEP"; TIER="bug-sweep" ;;
   batch) PREFIX="BATCH"; TIER="nightly-batch" ;;
-  *) echo "scheduler-run: tier must be 'sweep' or 'batch', got '$TIER_ARG'" >&2; exit 2 ;;
+  # One `claude -p` whose ALLOWED_TOOLS carry `Agent`, so the fan-out is inside
+  # one PROJECT_KEY lock hold and the lock needs no relaxing (#586).
+  shotgun) PREFIX="SHOTGUN"; TIER="shotgun" ;;
+  *) echo "scheduler-run: tier must be 'sweep', 'batch' or 'shotgun', got '$TIER_ARG'" >&2; exit 2 ;;
 esac
 
 # Migration abort handle (2026-07-29, M1(a)). Checked HERE as well as in the
@@ -190,6 +193,11 @@ for knob in MAX_TURNS MODEL ALLOWED_TOOLS PRECHECK_CMD EXPIRY_DAYS BRANCH; do
     unset "$knob" 2>/dev/null || true
   fi
 done
+
+# Subagents clone their own shards, so the account checkout SELFDEV_IN_ACCOUNT
+# would hand a same-named job is the one tree they must not share. Forced, not
+# a conf field: forgetting it points every subagent at the batch's checkout.
+if [ "$TIER_ARG" = shotgun ]; then SELFDEV_IN_ACCOUNT=0; fi
 
 # AUTONOMY_TIER (see lib/autonomy-merge.sh) is project-level, not per-tier
 # like the knobs above -- it comes straight from the conf's own unprefixed
