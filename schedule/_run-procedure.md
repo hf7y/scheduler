@@ -14,9 +14,8 @@ The backlog is the open GitHub issues, nothing else. Build first, don't just
 analyze: take the most reasonable reading and build it. Don't build something
 merely because it's easy -- if it serves no open issue, file it and move on.
 
-Scratch files use `$TMPDIR` or `mktemp`, never a hardcoded `/tmp/...` path --
-`/tmp` is shared across every tenant, and a repeated fixed name can leak one
-tenant's content into another's PR or issue with no error (scheduler#576).
+Scratch files use `$TMPDIR`/`mktemp`, never a hardcoded `/tmp/...` path -- a
+fixed name can leak one tenant's content into another's PR (scheduler#576).
 
 ## 1. Orient
 

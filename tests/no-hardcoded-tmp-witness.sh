@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Backs schedule/_run-procedure.md's $TMPDIR/mktemp guidance (scheduler#576).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
