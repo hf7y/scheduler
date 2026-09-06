@@ -76,16 +76,11 @@ case "\$path" in
         printf '%s' "\$FAKE_ROSTER_CONTENT" | base64 -w0
       fi
     fi ;;
-  */contents/schedule/_runner.conf*)
-    printf '%s' "\${FAKE_RUNNER_CONTENT:-}" | base64 -w0 ;;
-  */contents/schedule/_runner.*.conf*)
-    # scheduler#112: dose-project.sh reads a host override the same way
-    # sync-crontab.sh does. Absent by default (most hosts have none of these
-    # three fields overridden); FAKE_RUNNER_HOST_MODE=present serves one.
-    if [ "\${FAKE_RUNNER_HOST_MODE:-absent}" = "absent" ]; then
-      echo "gh: Not Found (HTTP 404)" >&2; exit 1
-    fi
-    printf '%s' "\${FAKE_RUNNER_HOST_CONTENT:-}" | base64 -w0 ;;
+  */contents/schedule/_runner*)
+    # hf7y/scheduler#350: these ship beside the script now and are a local
+    # file read (see DOSE_SCHEDULE_DIR below) -- gh must never be asked for
+    # them. Reaching this arm at all is the regression.
+    echo "gh: dose-project.sh must not fetch \$path -- it ships in the build" >&2; exit 1 ;;
   *)
     # repo-reachability probe (repos/<slug>, no /contents/) -- always
     # succeeds here; FAKE_GH_MODE=fail above is the only "gh itself is down"
@@ -148,16 +143,33 @@ export DOSE_HOST_OVERRIDE="testhost"
 ROSTER="ecosim | ecosim@testhost | 6h | live
 ghosttown | ghosttown@testhost | 6h | parked
 elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
-# scheduler#112: RUNNER_JOB/RUNNER_CMD/RUNNER_ENV come from schedule/_runner.conf
-# now, not a hardcoded second copy -- same values real _runner.conf carries
-# today, so the TAG/cmd-path assertions below read exactly as they did before.
+# scheduler#112 introduced RUNNER_JOB/RUNNER_CMD/RUNNER_ENV out of a config
+# file instead of a hardcoded second copy; hf7y/scheduler#350 moved that
+# file's read from `gh` to local disk, beside the script -- same values real
+# _runner.conf carries today, so the TAG/cmd-path assertions below read
+# exactly as they did before.
 RUNNER_CONTENT='RUNNER_JOB="scheduler-paced-runner"
 RUNNER_CMD="bin/usage-paced-runner.sh"
 RUNNER_ENV="PACED_MAX_PER_TICK=1"
 '
+export DOSE_SCHEDULE_DIR="$WORK/schedule"
+mkdir -p "$DOSE_SCHEDULE_DIR"
+printf '%s' "$RUNNER_CONTENT" > "$DOSE_SCHEDULE_DIR/_runner.conf"
+
+# The installed build abs_cmd now resolves into (#350) -- a stub executable
+# at the path RUNNER_CMD names, so do_live()'s existence check passes without
+# a real verb build anywhere near this sandbox.
+export VERB_HOST_BUILD_ROOT="$WORK/verb-builds"
+mkdir -p "$VERB_HOST_BUILD_ROOT/current/scheduler/bin"
+cat > "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" <<'STUB'
+#!/usr/bin/env bash
+true
+STUB
+chmod +x "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
+DOSE_ABS_CMD="$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
 
 # --- 1. unknown project exits 4, not 0 --------------------------------------
-export FAKE_GH_MODE=ok FAKE_ROSTER_CONTENT="$ROSTER" FAKE_RUNNER_CONTENT="$RUNNER_CONTENT"
+export FAKE_GH_MODE=ok FAKE_ROSTER_CONTENT="$ROSTER"
 export CRONFILE="$WORK/cron1"; : > "$CRONFILE"
 out="$("$TARGET" nope-not-a-project --check 2>&1)"; rc=$?
 [ "$rc" -eq 4 ] && ok "unknown project exits 4 (gap)" || bad "unknown project exited $rc, want 4: $out"
@@ -223,28 +235,61 @@ grep -qi 'REFUSED' <<<"$out" && ok "the refusal is named, not a generic error" \
 [ "$before" = "$after" ] && ok "wrong-host row: fixture crontab byte-unchanged (nothing touched)" \
   || bad "wrong-host row MODIFIED the crontab -- the guard is supposed to stop before any write: $out"
 
-# --- 6. schedule/_runner.conf is read fresh, not hardcoded (#112) ----------
+# --- 6. schedule/_runner.conf is read fresh off disk, not hardcoded (#112,
+# re-pointed at a local file by #350) --------------------------------------
 # A shared RUNNER_JOB of "renamed-job" (no host override) must show up in the
-# emitted crontab TAG -- proves the value came from the fetched conf, not the
-# old literal "scheduler-paced-runner" constant.
+# emitted crontab TAG -- proves the value came from the file beside the
+# script, not a literal "scheduler-paced-runner" constant.
 export CRONFILE="$WORK/cron6"; : > "$CRONFILE"
-export FAKE_RUNNER_CONTENT='RUNNER_JOB="renamed-job"
+printf '%s' 'RUNNER_JOB="renamed-job"
 RUNNER_CMD="bin/usage-paced-runner.sh"
 RUNNER_ENV="PACED_MAX_PER_TICK=1"
-'
+' > "$DOSE_SCHEDULE_DIR/_runner.conf"
 out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "apply with a renamed shared RUNNER_JOB still converges" \
   || bad "apply exited $rc with a renamed RUNNER_JOB: $out"
 grep -qF 'scheduler:renamed-job:RUNNER' "$CRONFILE" \
-  && ok "the emitted crontab TAG carries the fetched RUNNER_JOB, not a hardcoded one" \
-  || bad "crontab does not reflect the fetched RUNNER_JOB: $(cat "$CRONFILE")"
-export FAKE_RUNNER_CONTENT="$RUNNER_CONTENT"
+  && ok "the emitted crontab TAG carries the on-disk RUNNER_JOB, not a hardcoded one" \
+  || bad "crontab does not reflect the on-disk RUNNER_JOB: $(cat "$CRONFILE")"
+printf '%s' "$RUNNER_CONTENT" > "$DOSE_SCHEDULE_DIR/_runner.conf"
+# The fake gh above exits nonzero for any schedule/_runner* path -- test 6
+# passing with rc=0 is itself the proof gh was never asked (#350).
 
-# --- 7. a HOST-scoped override wins over the shared conf, per field (#112) -
+# --- 6c. schedule/_runner.conf missing beside the script is BROKEN, not a
+# silent empty-string converge --------------------------------------------
+export CRONFILE="$WORK/cron6c"; : > "$CRONFILE"
+mv "$DOSE_SCHEDULE_DIR/_runner.conf" "$WORK/_runner.conf.bak"
+out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
+mv "$WORK/_runner.conf.bak" "$DOSE_SCHEDULE_DIR/_runner.conf"
+[ "$rc" -eq 5 ] && ok "missing schedule/_runner.conf exits 5 (broken)" \
+  || bad "missing _runner.conf exited $rc, want 5: $out"
+grep -qi 'shipped beside this script' <<<"$out" \
+  && ok "the failure names what's missing, not a generic error" \
+  || bad "exit 5 but the message doesn't name the missing payload: $out"
+
+# --- 6d. no installed build at the resolved command path is BROKEN, never a
+# silently-written clone path (#350 item 2) --------------------------------
+export CRONFILE="$WORK/cron6d"; : > "$CRONFILE"
+mv "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" "$WORK/usage-paced-runner.sh.bak"
+out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
+mv "$WORK/usage-paced-runner.sh.bak" "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
+chmod +x "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
+[ "$rc" -eq 5 ] && ok "no installed build at the command path exits 5 (broken)" \
+  || bad "missing installed build exited $rc, want 5: $out"
+grep -qi 'no installed scheduler build' <<<"$out" \
+  && ok "the failure names the missing build, not a generic error" \
+  || bad "exit 5 but the message doesn't name the missing build: $out"
+if [ -s "$CRONFILE" ]; then
+  bad "a crontab line was written even though the build was missing: $(cat "$CRONFILE")"
+else
+  ok "nothing was written to the crontab when the build was missing"
+fi
+
+# --- 7. a HOST-scoped override wins over the shared conf, per field (#112,
+# re-pointed at a local file by #350) --------------------------------------
 export CRONFILE="$WORK/cron7"; : > "$CRONFILE"
-export FAKE_RUNNER_HOST_MODE=present
-export FAKE_RUNNER_HOST_CONTENT='RUNNER_ENV="PACED_MAX_PER_TICK=3"
-'
+printf '%s' 'RUNNER_ENV="PACED_MAX_PER_TICK=3"
+' > "$DOSE_SCHEDULE_DIR/_runner.testhost.conf"
 out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "apply with a host-scoped RUNNER_ENV override converges" \
   || bad "apply exited $rc with a host override present: $out"
@@ -254,7 +299,7 @@ grep -qF 'PACED_MAX_PER_TICK=3' "$CRONFILE" \
 grep -qF 'scheduler:scheduler-paced-runner:RUNNER' "$CRONFILE" \
   && ok "RUNNER_JOB, which the host file does NOT set, still comes from the shared conf" \
   || bad "an unset host field should not have blanked the shared value: $(cat "$CRONFILE")"
-unset FAKE_RUNNER_HOST_MODE FAKE_RUNNER_HOST_CONTENT
+rm -f "$DOSE_SCHEDULE_DIR/_runner.testhost.conf"
 
 # --- 8-9. --arm/--park (#291) guards, both refused before any gh write -----
 export FAKE_UID=3011

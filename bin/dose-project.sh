@@ -9,6 +9,15 @@
 # indistinguishable from here and BLIND (exit 6) -- never a silent "no rows
 # found" (exit 4 is for a roster dose COULD read that has no row for this).
 #
+# schedule/_runner.conf and its host override are a DIFFERENT kind of fact --
+# they ship beside this very script in the verb build, so reading them is a
+# local file read relative to $DOSE_LIB_DIR below, never a second `gh` fetch
+# (hf7y/scheduler#350: dose made three repo reads per converge; this is two of
+# them retired). The crontab line's own command path is resolved the same
+# way, but against the BUILD's own "current" symlink rather than this
+# script's resolved location -- see do_live()'s own comment for why those
+# must not be the same variable.
+#
 # THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming/parking is reserved
 # for a human at a terminal -- an agent that edited the roster and converged
 # would have self-armed. --check/--apply/--now never write schedule/ROSTER;
@@ -18,7 +27,14 @@
 set -uo pipefail
 
 CLI_NAME="dose-project.sh"
+# SCHED_REL: a per-account CLONE path. Only do_now() still uses it (it hand-
+# dispatches by pulling and running that account's own checkout). do_live()
+# no longer does -- see DOSE_BUILD_ROOT and do_live()'s own comment.
 SCHED_REL="Documents/Projects/scheduler"
+# The shared installed build, through "current" LITERALLY -- never resolved
+# with readlink -f -- so a crontab line converged today keeps pointing at
+# whatever build is live when cron fires it next week (#350).
+DOSE_BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler"
 
 usage() {
   cat <<EOF
@@ -227,29 +243,38 @@ if [ "$ROW_HOST" != "$HOST" ]; then
 fi
 
 # --- 3b. the job this converges -- SAME source sync-crontab.sh already reads
-# (schedule/_runner.conf, host-overridable), fetched over the same GitHub path
-# as the roster rather than hardcoded here a second time (scheduler#112: two
-# writers for one fact drift silently, exactly hf7y/scheduler#119's shape).
-# Only RUNNER_CRON is deliberately NOT read from here -- that field is
-# roster-derived, the whole point of #81 retiring the global RUNNER_CRON.
+# (schedule/_runner.conf, host-overridable), read as a LOCAL file beside this
+# script rather than fetched from GitHub a second time (hf7y/scheduler#350:
+# "dose should not be making repo reads" -- the roster is the one genuinely
+# dynamic fact; these three constants ship in the same build as this script
+# and gain nothing from a network round trip). Only RUNNER_CRON is
+# deliberately NOT read from here -- that field is roster-derived, the whole
+# point of #81 retiring the global RUNNER_CRON.
 runner_field_present() { grep -qE "^${2}=" <<<"$1"; }
 runner_field_value() {
   grep -E "^${2}=" <<<"$1" | tail -1 | sed -E "s/^${2}=\"?([^\"]*)\"?.*/\1/"
 }
-RUNNER_CONF="$(fetch_repo_file schedule/_runner.conf)" || exit $?
+# DOSE_SCHEDULE_DIR is a seam for the witness (a fixture dir), not a knob a
+# real caller should ever set -- it defaults to "beside $DOSE_LIB_DIR", which
+# is this script's own resolved location whether that is a dev checkout or
+# the installed build.
+DOSE_SCHEDULE_DIR="${DOSE_SCHEDULE_DIR:-$DOSE_LIB_DIR/schedule}"
+RUNNER_CONF_PATH="$DOSE_SCHEDULE_DIR/_runner.conf"
+if [ ! -f "$RUNNER_CONF_PATH" ]; then
+  echo "BROKEN: no $RUNNER_CONF_PATH shipped beside this script -- nothing to converge to" >&2
+  exit 5
+fi
+RUNNER_CONF="$(cat "$RUNNER_CONF_PATH")"
 RUNNER_JOB="$(runner_field_value "$RUNNER_CONF" RUNNER_JOB)"
 RUNNER_CMD_REL="$(runner_field_value "$RUNNER_CONF" RUNNER_CMD)"
 RUNNER_ENV="$(runner_field_value "$RUNNER_CONF" RUNNER_ENV)"
-HOST_RUNNER_CONF="$(fetch_repo_file "schedule/_runner.${HOST}.conf")"; rc=$?
-case "$rc" in
-  0)
-    runner_field_present "$HOST_RUNNER_CONF" RUNNER_JOB && RUNNER_JOB="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_JOB)"
-    runner_field_present "$HOST_RUNNER_CONF" RUNNER_CMD && RUNNER_CMD_REL="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_CMD)"
-    runner_field_present "$HOST_RUNNER_CONF" RUNNER_ENV && RUNNER_ENV="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_ENV)"
-    ;;
-  4) : ;; # no host override on file -- shared value stands, not an error
-  *) exit "$rc" ;;
-esac
+HOST_RUNNER_CONF_PATH="$DOSE_SCHEDULE_DIR/_runner.${HOST}.conf"
+if [ -f "$HOST_RUNNER_CONF_PATH" ]; then
+  HOST_RUNNER_CONF="$(cat "$HOST_RUNNER_CONF_PATH")"
+  runner_field_present "$HOST_RUNNER_CONF" RUNNER_JOB && RUNNER_JOB="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_JOB)"
+  runner_field_present "$HOST_RUNNER_CONF" RUNNER_CMD && RUNNER_CMD_REL="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_CMD)"
+  runner_field_present "$HOST_RUNNER_CONF" RUNNER_ENV && RUNNER_ENV="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_ENV)"
+fi
 if [ -z "$RUNNER_JOB" ] || [ -z "$RUNNER_CMD_REL" ]; then
   echo "BROKEN: schedule/_runner.conf does not set both RUNNER_JOB and RUNNER_CMD -- nothing to converge to" >&2
   exit 5
@@ -283,12 +308,11 @@ do_parked() {
 
 # --- 5. live -> converge; 6. verify by re-reading, never trust the write ---
 do_live() {
-  local home
-  if [ "$ROW_ACCT" = "$LOCAL_ACCOUNT" ]; then
-    home="$HOME"
-  else
-    home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
-    [ -n "$home" ] || { echo "BROKEN: live project '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
+  # Account existence only -- $home itself is no longer part of abs_cmd
+  # (see below), so it is not worth naming a variable for.
+  if [ "$ROW_ACCT" != "$LOCAL_ACCOUNT" ]; then
+    getent passwd "$ROW_ACCT" >/dev/null 2>&1 \
+      || { echo "BROKEN: live project '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
   fi
 
   local rate_fields
@@ -296,8 +320,17 @@ do_live() {
     || { echo "BROKEN: roster rate '$ROW_RATE' for '$PROJECT' is not a form dose understands (want <N>h or <N>m)" >&2; exit 5; }
   validate_cron "$rate_fields" || { echo "BROKEN: derived cron '$rate_fields' is not 5 fields" >&2; exit 5; }
 
+  # BUILD-ROOTED, NOT $home-ROOTED. abs_cmd used to be $home/$SCHED_REL/... --
+  # a per-account clone path (#350). It now points at the shared installed
+  # build instead, through the "current" symlink literally, not resolved --
+  # DOSE_LIB_DIR (this script's OWN resolved path) would freeze today's dated
+  # build directory into the crontab line, so a later install would silently
+  # orphan every account's cron entry until dose ran again. Going through
+  # "current" unresolved means the line one converge writes keeps working
+  # across every install that follows, with no re-converge required.
   local abs_cmd desired cur curline
-  abs_cmd="$home/$SCHED_REL/$RUNNER_CMD_REL"
+  abs_cmd="$DOSE_BUILD_ROOT/$RUNNER_CMD_REL"
+  [ -x "$abs_cmd" ] || { echo "BROKEN: no installed scheduler build at $abs_cmd -- refusing to converge to a clone path instead" >&2; exit 5; }
   desired="$rate_fields ${RUNNER_ENV:+$RUNNER_ENV }$abs_cmd $TAG"
 
   cur="$(crontab_read "$ROW_ACCT")" || { echo "BROKEN: could not read $ROW_ACCT's crontab" >&2; exit 5; }
