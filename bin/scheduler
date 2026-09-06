@@ -2473,7 +2473,26 @@ cmd_sweep() {
     echo "== [rotation-lint] MISSING or not executable -- a wired check vanished =="
   fi
 
-  # Eleventh pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
+  # Eleventh pass: bin/debroussaille.sh, own clone only (#37) -- restores
+  # wiring #190 dropped when its caller was retired without repointing the
+  # call, invisible to check-witness-lint since its name matches neither
+  # *-check.sh nor *-lint.sh (#264).
+  if [ -x "$SCHED_ROOT/bin/debroussaille.sh" ]; then
+    local debrousse_out debrousse_rc
+    debrousse_out="$("$SCHED_ROOT/bin/debroussaille.sh" --apply "$SCHED_ROOT" 2>&1)"
+    debrousse_rc=$?
+    if [ "$debrousse_rc" -ne 0 ]; then
+      echo "== [debroussaille] could not clear this clone's debris =="
+      echo "$debrousse_out" | sed 's/^/  /'
+    elif printf '%s\n' "$debrousse_out" | grep -qE '^- cleared '; then
+      echo "== [debroussaille] cleared debris from this clone =="
+      printf '%s\n' "$debrousse_out" | grep -E '^- cleared ' | sed 's/^/  /'
+    fi
+  else
+    echo "== [debroussaille] MISSING or not executable -- a wired check vanished =="
+  fi
+
+  # Twelfth pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
   # built 2026-07-28 -- FOCUS.md step 1b). Answers "how do we make a
   # built-but-unwired check fail noisily?", which static analysis cannot: a
   # call site inside a branch that never executes greps identically to a live
