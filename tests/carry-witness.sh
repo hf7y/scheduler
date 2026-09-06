@@ -36,6 +36,29 @@ fixture() {
 run() { CARRY_REPO="$1" CARRY_REMOTE=origin CARRY_BRANCH=bashified \
         CARRY_REF_MAIN=origin/main CARRY_REF_BASH=origin/bashified \
         bash "$CARRY" "${@:2}" 2>&1; }
+
+schedule_fixture() {  # like fixture(), plus schedule/_runner*.conf+ROSTER, main only (#350)
+  local d="$TMP/$1" bare="$TMP/$1.git"
+  git init -q --bare "$bare"
+  git init -q -b main "$d"
+  git -C "$d" config user.email w@w.invalid; git -C "$d" config user.name w
+  mkdir -p "$d/bin" "$d/lib"
+  printf 'echo one\n' > "$d/bin/carried.sh"; chmod +x "$d/bin/carried.sh"
+  printf 'echo lib\n' > "$d/lib/carried.sh"
+  git -C "$d" add -A; git -C "$d" commit -qm base
+  git -C "$d" remote add origin "$bare"; git -C "$d" push -q origin main
+  git -C "$d" checkout -q -b bashified
+  git -C "$d" push -q origin bashified
+  git -C "$d" checkout -q main
+  mkdir -p "$d/schedule"
+  printf 'RUNNER_JOB="x"\n' > "$d/schedule/_runner.conf"
+  printf 'RUNNER_ENV="y"\n' > "$d/schedule/_runner.somehost.conf"
+  printf 'scratch | scratch@host | 4h | live\n' > "$d/schedule/ROSTER"
+  git -C "$d" add -A; git -C "$d" commit -qm "schedule confs, main only"
+  git -C "$d" push -q origin main
+  git -C "$d" fetch -q origin
+  printf '%s' "$d"
+}
 drift() {   # drift <repo> <file> <content>
   printf '%s\n' "$3" > "$1/$2"; git -C "$1" add -A
   git -C "$1" commit -qm "drift $2"; git -C "$1" push -q origin main
@@ -94,6 +117,24 @@ out="$(CARRY_REPO="$d" CARRY_REMOTE=origin CARRY_BRANCH=bashified \
        bash "$CARRY" 2>&1)"; rc=$?
 [ "$rc" -eq 6 ] && ok "a missing ref exits 6 (BLIND)" || bad "exited $rc, not 6: $out"
 case "$out" in *BLIND*) ok "BLIND is stated, not just an exit code" ;; *) bad "no BLIND wording: $out" ;; esac
+
+echo "== 7. schedule/_runner*.conf carries on its FIRST appearance, never having existed on bashified (#350)"
+d="$(schedule_fixture runnerconf)"
+out="$(run "$d")"
+case "$out" in *schedule/_runner.conf*) ok "names schedule/_runner.conf as drifted though bashified never had it" ;; *) bad "did not surface schedule/_runner.conf: $out" ;; esac
+case "$out" in *schedule/_runner.somehost.conf*) ok "names the host override too" ;; *) bad "did not surface the host override: $out" ;; esac
+run "$d" --apply >/dev/null
+git -C "$d" fetch -q origin
+[ "$(git -C "$d" show origin/bashified:schedule/_runner.conf)" = 'RUNNER_JOB="x"' ] \
+  && ok "schedule/_runner.conf now exists on bashified" || bad "the bootstrap carry did not land the file"
+[ "$(git -C "$d" show origin/bashified:schedule/_runner.somehost.conf)" = 'RUNNER_ENV="y"' ] \
+  && ok "the host override now exists on bashified too" || bad "the host override was not carried"
+out="$(run "$d")"
+case "$out" in *"none drifted"*) ok "a second run is a no-op once bootstrapped" ;; *) bad "not idempotent after bootstrap: $out" ;; esac
+
+echo "== 8. schedule/ROSTER is never carried -- it is live state, read fresh, not build content"
+out="$(run "$d")"
+case "$out" in *ROSTER*) bad "ROSTER was named by the carry -- live state must never be baked into a build: $out" ;; *) ok "ROSTER is not part of the carried set" ;; esac
 
 printf '\ncarry-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

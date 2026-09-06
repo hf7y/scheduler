@@ -63,9 +63,14 @@ for r in "$REF_MAIN" "$REF_BASH"; do
     printf '\ncarry-drift-witness: BLIND\n'; exit 2; }
 done
 
-carried="$(comm -12 \
-  <(git ls-tree -r --name-only "$REF_MAIN"  -- bin/ lib/ | sort) \
-  <(git ls-tree -r --name-only "$REF_BASH" -- bin/ lib/ | sort))"
+carried="$(  # schedule/_runner*.conf mirrors bin/carry.sh's own carried set (#350)
+  { comm -12 \
+      <(git ls-tree -r --name-only "$REF_MAIN"  -- bin/ lib/ | sort) \
+      <(git ls-tree -r --name-only "$REF_BASH" -- bin/ lib/ | sort)
+    git ls-tree -r --name-only "$REF_MAIN" -- schedule/ 2>/dev/null \
+      | grep -E '^schedule/_runner(\.[^/]+)?\.conf$'
+  } | sort -u
+)"
 
 [ -n "$carried" ] || { bad "no file is tracked on both refs -- either nothing is carried, or the refs are wrong"; \
   printf '\ncarry-drift-witness: %d passed, %d failed\n' "$PASS" "$((FAIL))"; exit 1; }
