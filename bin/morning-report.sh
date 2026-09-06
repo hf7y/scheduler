@@ -2,16 +2,10 @@
 # DEPRECATED (2026-07-20) -- superseded by `bin/scheduler` (installed at
 # ~/.local/bin/scheduler), a real interactive CLI covering the same ground
 # (glance view, per-project questions/focus/report drill-down, blockers)
-# more usably. (This header originally said "without this script's known
-# unresolved hang bug" -- stale on arrival: the hang WAS traced and fixed
-# earlier the same day, commit a224b41 -- `_paced.conf` sourced as a
-# project conf, executing a live wrapper. The one residual hang vector,
-# a DEPLOY_FRESH_CMD probe against an unreachable network target, got a
-# `timeout` guard 2026-07-25; see the deploy-freshness loop.) Confirmed
-# nothing besides this script itself reads DIGEST.md. Left working and
-# in-repo (not deleted) since it's harmless and low-risk to keep, but
-# `bin/scheduler` is the thing to actually use and build against now --
-# see .scheduler/FOCUS.md's Vision/Consolidation-roadmap sections.
+# more usably. Nothing besides this script itself reads DIGEST.md. Left
+# working and in-repo (not deleted) since it's harmless and low-risk to
+# keep, but `bin/scheduler` is the thing to actually use and build
+# against now.
 #
 # Original description below, still accurate for what THIS script does:
 #
@@ -92,12 +86,11 @@ if [ -d "$SCHEDULE_DIR" ]; then
   for conf in "$SCHEDULE_DIR"/*.conf; do
     [ -e "$conf" ] || continue
     # Skip ALL underscore-prefixed meta-confs (_batch.conf, _paced.conf,
-    # _runner.conf, ...), not just _batch.conf by name -- the same bug
-    # build-services-view.sh had (fixed 61f7dbd): _paced.conf's
+    # _runner.conf, ...), not just _batch.conf by name: _paced.conf's
     # `name|enabled|cmd` lines get sourced as shell if this only special-
     # cases one filename, which can pipe a real participant name into a
     # command lookup and actually execute a live wrapper as a side effect
-    # of sourcing -- this is exactly what was hanging this script.
+    # of sourcing.
     case "$(basename "$conf")" in _*) continue ;; esac
     # Source in a subshell (same idiom as build-services-view.sh) so a conf's
     # vars never leak; emit a tab-separated line on stdout only when stale.
@@ -110,10 +103,8 @@ if [ -d "$SCHEDULE_DIR" ]; then
       [ -n "${DEPLOY_FRESH_CMD:-}" ] || exit 0
       # Probe runs in its own shell under `timeout` -- a probe that touches
       # an unreachable network target must get cut off, not wedge the whole
-      # report (the deploy-probe half of this script's old hang risk; the
-      # other half, _paced.conf mis-sourcing, was fixed in a224b41). Using
-      # `bash -c` (not a bare eval) keeps the old guarantee that a probe
-      # written as `exit N` can't escape this capture before the printf.
+      # report. `bash -c` (not a bare eval) keeps a probe written as
+      # `exit N` from escaping this capture before the printf.
       probe_rc=0
       timeout "${DEPLOY_PROBE_TIMEOUT:-15}" bash -c "$DEPLOY_FRESH_CMD" >/dev/null 2>&1 || probe_rc=$?
       [ "$probe_rc" -eq 0 ] && exit 0   # 0 == fresh, nothing to say
