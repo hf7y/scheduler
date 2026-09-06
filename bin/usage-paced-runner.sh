@@ -654,12 +654,34 @@ derive_no_verdict_reason() {  # $1 = project name   $2 = dispatch start (epoch s
   fi
 }
 
+rr_last_verdict() {  # <project> <home> [acct] -> run-record.sh's git/gh verdict for the run just finished, or empty (#347)
+  local name="${1:?}" home="${2:?}" acct="${3:-}" f line
+  f="$home/.local/share/scheduler-runs/$name.jsonl"
+  if [ -n "$acct" ]; then
+    line="$(sudo -n -u "$acct" tail -n1 "$f" 2>/dev/null)"
+  else
+    line="$(tail -n1 "$f" 2>/dev/null)"
+  fi
+  [ -n "$line" ] || { printf ''; return 0; }
+  printf '%s' "$line" | grep -o '"verdict_computed":"[^"]*"' | head -1 | sed -E 's/^"verdict_computed":"(.*)"$/\1/'
+}
+
+typed_ledger_outcome() {  # <project> <outcome> <home> [acct] -> outcome, upgraded to rr_last_verdict's WORKED-CUTOFF when NOT-DONE and that applies
+  local name="${1:?}" outcome="${2:-NOT-DONE}" home="${3:?}" acct="${4:-}"
+  if [ "$outcome" != "NOT-DONE" ]; then printf '%s' "$outcome"; return 0; fi
+  local rr; rr="$(rr_last_verdict "$name" "$home" "$acct")"
+  if [ "$rr" = "WORKED-CUTOFF" ]; then printf 'WORKED-CUTOFF'; else printf '%s' "$outcome"; fi
+}
+
 resume_hint_for_project() {
   local name="${1:?}" last_outcome last_reason
   declare -F ledger_last >/dev/null 2>&1 || return 0
   last_outcome="$(ledger_last "$name" 2>/dev/null || true)"
-  [ "$last_outcome" = "NOT-DONE" ] || return 0
-  last_reason="$(ledger_reason "$name" NOT-DONE 1 2>/dev/null || true)"
+  case "$last_outcome" in  # WORKED-CUTOFF is a typed NOT-DONE (#347); both take this path
+    NOT-DONE|WORKED-CUTOFF) ;;
+    *) return 0 ;;
+  esac
+  last_reason="$(ledger_reason "$name" "$last_outcome" 1 2>/dev/null || true)"
   if [[ "$last_reason" =~ ^DERIVED-CONTINUE:\ open\ PR\ \#([0-9]+)\ on\ ([^[:space:]]+)\  ]]; then
     printf '%s %s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
   fi
@@ -1000,9 +1022,15 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     else
       _lreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
     fi
-    ledger_append "$name" "${TIER:-batch}" "$rc" "${outcome:-NOT-DONE}" "${_lreason:-}" \
+    _rr_home="$HOME"  # type the silence (#347): see typed_ledger_outcome
+    [ "$PACED_HOST_MODE" = 1 ] && _rr_home="$acct_home"
+    _ledger_outcome="$(typed_ledger_outcome "$name" "${outcome:-NOT-DONE}" "$_rr_home" "${acct:-}")"
+    if [ "$_ledger_outcome" != "${outcome:-NOT-DONE}" ]; then
+      log "CUTOFF-TYPED $name -- run-record.sh found real progress before the ceiling; ledger row typed WORKED-CUTOFF instead of generic NOT-DONE"
+    fi
+    ledger_append "$name" "${TIER:-batch}" "$rc" "$_ledger_outcome" "${_lreason:-}" \
       || log "LEDGER $name -- could not append to the run ledger; repetition is unobservable for this run"
-    unset _lreason
+    unset _lreason _rr_home _ledger_outcome
   fi
   unset _no_verdict _derived
 
