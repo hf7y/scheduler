@@ -133,6 +133,19 @@ HEARTBEAT_FILE="$STATE_DIR/last_heartbeat"
 # below. Lives in STATE_DIR (survives between runs, unlike the disposable clone).
 CEILING_BREADCRUMB_FILE="$STATE_DIR/ceiling_breadcrumb.txt"
 
+# hf7y/scheduler#347 item 3 -- see provisional_verdict_watch/_stop/_check_stale
+# below. Written mid-run, from OUTSIDE claude's own process tree, so it
+# survives the one failure mode nothing else here covers: the whole wrapper
+# (this bash script, not just `claude -p`) dying before it ever reaches
+# run_record_closeout -- host reboot, OOM-killed script, `kill -9` on the
+# job. That run leaves no ledger row at all. This file is the only trace it
+# left, and only if it got at least PROVISIONAL_VERDICT_TURNS deep first.
+PROVISIONAL_VERDICT_FILE="$STATE_DIR/provisional_verdict.txt"
+: "${PROVISIONAL_VERDICT_TURNS:=10}"
+: "${PROVISIONAL_VERDICT_POLL_S:=5}"
+: "${PROVISIONAL_VERDICT_MAX_WAIT_S:=900}"
+: "${PROVISIONAL_VERDICT_SEARCH_ROOT:=$HOME/.claude/projects}"
+
 # Cross-job, cross-tier registry -- one directory shared by EVERY project's
 # EVERY job, not per-job like STATE_DIR above. $LOCK (above) only stops
 # THIS SAME SCRIPT from double-running if one invocation runs long; it
@@ -314,6 +327,73 @@ read_resume_hint() {
 
 $PROMPT"
   unset SCHEDULER_RESUME_PR SCHEDULER_RESUME_REPO
+}
+
+# provisional_verdict_watch() / _stop() / _check_stale() -- hf7y/scheduler#347
+# item 3: "a run that chose silence" (bin/verdict.sh's self-report never
+# written) is indistinguishable today from a run that never got the chance to
+# speak because the whole wrapper died first -- host reboot, OOM, `kill -9`.
+# Both leave nothing. This does not fix that for every case; it makes ONE
+# case visible: a run that got at least PROVISIONAL_VERDICT_TURNS deep before
+# going dark now leaves a file that says so, written from a process outside
+# claude's own tree so it survives claude (or the wrapper) dying uncleanly.
+#
+# --session-id pins the transcript this run writes to a UUID we chose, so
+# the watcher can find it by name instead of reconstructing Claude Code's
+# own cwd-escaping scheme (fragile, undocumented, and wrong the day it
+# changes). "turn" here means an assistant message in that transcript --
+# an approximation of --max-turns' own counter, not the same number, but
+# close enough to prove real progress happened.
+#
+# Runs as an ordinary background job (caller backgrounds the call and keeps
+# the PID), not a subshell-in-command-substitution -- that would detach it
+# from job control in a way `wait` cannot reach back into.
+provisional_verdict_watch() {
+  local session_id="$1" threshold="$2" outfile="$3" poll="$4" max_wait="$5"
+  local transcript="" elapsed=0 turns
+  while [ "$elapsed" -lt "$max_wait" ]; do
+    if [ -z "$transcript" ]; then
+      transcript="$(find "$PROVISIONAL_VERDICT_SEARCH_ROOT" -maxdepth 2 \
+                      -name "${session_id}.jsonl" 2>/dev/null | head -n1)"
+    fi
+    if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+      turns="$(grep -c '"type":"assistant"' "$transcript" 2>/dev/null)"
+      case "$turns" in ''|*[!0-9]*) turns=0 ;; esac
+      if [ "$turns" -ge "$threshold" ]; then
+        {
+          echo "PROVISIONAL: session $session_id reached turn $turns (>= $threshold) at $(date -Is)"
+          echo "transcript: $transcript"
+        } > "$outfile"
+        return 0
+      fi
+    fi
+    sleep "$poll"
+    elapsed=$((elapsed + poll))
+  done
+}
+
+# Kills the background watch started above, if still running. A run that
+# finished (or failed) before the threshold leaves nothing to kill and
+# nothing was written -- correctly: it never proved it got that far.
+provisional_verdict_watch_stop() {
+  local pid="${1:-}"
+  [ -n "$pid" ] || return 0
+  kill "$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  return 0
+}
+
+# Read near the top of a run, before starting this run's own watch (same
+# slot as read_ceiling_breadcrumb/read_resume_hint above). A file here means
+# the PREVIOUS run of this job reached the checkpoint and then the wrapper
+# never made it back to clear it -- i.e. it went dark, not silent-by-choice.
+# Logged, not fed into PROMPT: unlike the breadcrumb this carries no task
+# context to resume, only the fact that something got that far.
+provisional_verdict_check_stale() {
+  [ -f "${PROVISIONAL_VERDICT_FILE:-}" ] || return 0
+  echo "STALE PROVISIONAL VERDICT from a previous run of this job that never reached closeout -- it got at least this far before going dark:"
+  cat "$PROVISIONAL_VERDICT_FILE"
+  rm -f "$PROVISIONAL_VERDICT_FILE"
 }
 
 # THE VERDICT CLOSEOUT -- appended to every batch brief, BY THE ENGINE, because the contract is the RUNNER's and the runner is shared. Until 2026-08-06 the only thing asking for a verdict was one paragraph in ONE conf, so bibliothecaire wrote verdicts and nobody else ever had -- and usage-paced-runner logged NO-VERDICT every tick and re-dispatched forever, the exact "retries forever, no braking" failure verdict.sh exists to end. Here, the next account armed is correct BY DEFAULT, and it works whether a conf spells its brief inline or as a bare slash command resolved in the project's own repo.
@@ -787,6 +867,11 @@ $PROMPT"
 
   read_resume_hint
 
+  # hf7y/scheduler#347 item 3 -- see provisional_verdict_check_stale's own
+  # comment. Read-only, informational: unlike the two calls above this never
+  # touches PROMPT, because a "got this far" fact carries no task context.
+  provisional_verdict_check_stale
+
   # claude's own output is tee'd to a per-run capture file (as well as
   # flowing into $LOG via the enclosing block redirect) so that a FAILED
   # run can be diagnosed against exactly THIS run's output -- $LOG
@@ -798,25 +883,42 @@ $PROMPT"
   if [ -n "$PRECHECK_CMD" ] && [ -z "${FEEDBACK_BLOCK:-}" ] && ! eval "$PRECHECK_CMD"; then
     echo "precheck said nothing to do -- skipping claude invocation this run"
     STATUS="skipped (precheck)"
-  elif run_contained claude -p "$PROMPT" --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
-    STATUS="done"
   else
-    STATUS="FAILED"
-    # STATUS itself stays the exact string "FAILED" -- the push-reason and
-    # exit-code blocks below compare it with = -- the detail rides in
-    # STATUS_DETAIL and is appended to the final === line (and, since
-    # hf7y/scheduler#31, into the durable run record's status field too --
-    # see the run_record_line call below).
-    STATUS_DETAIL="$(claude_failure_detail "$CLAUDE_OUT")"
-    case "$STATUS_DETAIL" in
-      " (auth: not logged in)")
-        echo "CRITICAL: claude authentication failure -- this account's CLI credentials have lapsed (\"Not logged in\"), NOT a quota/turn cutoff. Fix: run any interactive claude session as OS user $(id -un) to refresh the login, then this job recovers on its own next scheduled run."
-        notify -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG"
-        ;;
-      " (ceiling: max turns reached)")
-        echo "claude hit --max-turns ($MAX_TURNS) before finishing -- cut off, not broken. Any commits made before the cutoff are still evaluated below (pushed/not-pushed); this is NOT-DONE per bin/verdict.sh, re-dispatched next tick with metabolism unchanged. hf7y/scheduler#31."
-        ;;
-    esac
+    # hf7y/scheduler#347 item 3: pin this run's transcript to a UUID we
+    # chose so provisional_verdict_watch can find it by name (see its own
+    # comment), then watch it in the background while claude runs. Stopped
+    # and cleared unconditionally below, once we're back from `claude -p`
+    # -- reaching that line already proves the wrapper survived, so the
+    # provisional file's job is done either way.
+    PROVISIONAL_SESSION_ID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"
+    PROVISIONAL_WATCH_PID=""
+    if [ -n "$PROVISIONAL_SESSION_ID" ]; then
+      provisional_verdict_watch "$PROVISIONAL_SESSION_ID" "$PROVISIONAL_VERDICT_TURNS" \
+        "$PROVISIONAL_VERDICT_FILE" "$PROVISIONAL_VERDICT_POLL_S" "$PROVISIONAL_VERDICT_MAX_WAIT_S" &
+      PROVISIONAL_WATCH_PID=$!
+    fi
+    if run_contained claude -p "$PROMPT" ${PROVISIONAL_SESSION_ID:+--session-id "$PROVISIONAL_SESSION_ID"} --allowedTools "$ALLOWED_TOOLS" --max-turns "$MAX_TURNS" ${MODEL:+--model "$MODEL"} 2>&1 | tee "$CLAUDE_OUT"; then
+      STATUS="done"
+    else
+      STATUS="FAILED"
+      # STATUS itself stays the exact string "FAILED" -- the push-reason and
+      # exit-code blocks below compare it with = -- the detail rides in
+      # STATUS_DETAIL and is appended to the final === line (and, since
+      # hf7y/scheduler#31, into the durable run record's status field too --
+      # see the run_record_line call below).
+      STATUS_DETAIL="$(claude_failure_detail "$CLAUDE_OUT")"
+      case "$STATUS_DETAIL" in
+        " (auth: not logged in)")
+          echo "CRITICAL: claude authentication failure -- this account's CLI credentials have lapsed (\"Not logged in\"), NOT a quota/turn cutoff. Fix: run any interactive claude session as OS user $(id -un) to refresh the login, then this job recovers on its own next scheduled run."
+          notify -u critical "$JOB_NAME: claude NOT LOGGED IN" "CLI credentials lapsed for OS user $(id -un) -- run any interactive claude session to refresh. See $LOG"
+          ;;
+        " (ceiling: max turns reached)")
+          echo "claude hit --max-turns ($MAX_TURNS) before finishing -- cut off, not broken. Any commits made before the cutoff are still evaluated below (pushed/not-pushed); this is NOT-DONE per bin/verdict.sh, re-dispatched next tick with metabolism unchanged. hf7y/scheduler#31."
+          ;;
+      esac
+    fi
+    provisional_verdict_watch_stop "$PROVISIONAL_WATCH_PID"
+    rm -f "$PROVISIONAL_VERDICT_FILE"
   fi
 
   # Objective, tool-verified facts about what actually happened -- not
