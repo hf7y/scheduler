@@ -43,6 +43,16 @@ echo call >> "$GH_CALLS"
 # answering both from one file is what let the closure term read as BLIND in
 # every case here without any of them saying so.
 for a in "$@"; do [ "$a" = closed ] && { cat "$GH_CLOSED" 2>/dev/null; exit 0; }; done
+# When a fixture is set, run tempo.sh's OWN --jq argument (found in "$@")
+# against it with the real jq -- so case 3c below exercises the actual filter
+# string tempo.sh built, not a hand re-derivation of it that could drift.
+if [ -n "${GH_ISSUES_JSON:-}" ]; then
+  prev=''
+  for a in "$@"; do
+    [ "$prev" = --jq ] && { jq -r "$a" "$GH_ISSUES_JSON"; exit 0; }
+    prev="$a"
+  done
+fi
 cat "$GH_COUNTS"
 EOF
 chmod +x "$T/bin/gh"
@@ -148,6 +158,30 @@ case "$got_default" in
   *question*) fail "'question' is back in the blocked set. It was in use as a TOPIC label (chezz #4/#5/#6)" ;;
 esac
 pass "the default brakes on one label, and it is the one that means a human is in the way"
+
+echo "case 3c -- an assignee also counts as blocked, even with no label (#318)"
+# hf7y/scheduler#318 replaces the needs-human label with the GitHub assignee
+# field across three repos, but tempo's own site must not go first: landing
+# assignee-only detection here ahead of the other two repos would starve the
+# brake, since nothing assigns yet. ORing it onto the label instead is safe
+# in either order -- it only ever adds to the blocked count -- so this checks
+# the real filter tempo.sh sends to gh, not a re-derivation of it.
+FIXTURE="$T/issues.json"
+cat > "$FIXTURE" <<'JSON'
+[
+  {"number":1,"labels":[{"name":"needs-human"}],"assignees":[]},
+  {"number":2,"labels":[],"assignees":[{"login":"hf7y"}]},
+  {"number":3,"labels":[],"assignees":[]},
+  {"number":4,"labels":[{"name":"needs-human"}],"assignees":[{"login":"hf7y"}]}
+]
+JSON
+export GH_ISSUES_JSON="$FIXTURE"
+out="$(run_tempo p)"
+grep -q 'open=4 ' <<<"$out" || fail "expected open=4 from the 4-issue fixture, got: $out"
+grep -q 'blocked=3 ' <<<"$out" || fail "expected blocked=3 (label-only + assignee-only + both), got: $out"
+grep -q 'actionable=1' <<<"$out" || fail "expected actionable=1 (only #3, neither label nor assignee), got: $out"
+unset GH_ISSUES_JSON
+[ "$FAILED" = 0 ] && pass "an unlabelled but assigned issue is counted blocked too"
 
 echo "case 4 -- HOLD below want_min, RUN at or above"
 set_counts 12 0; : > "$LEDGER"; row 10
