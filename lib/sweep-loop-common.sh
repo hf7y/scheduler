@@ -322,10 +322,8 @@ $PROMPT"
   unset SCHEDULER_RESUME_PR SCHEDULER_RESUME_REPO
 }
 
-# #347 item 3: tails this run's transcript (named via --session-id, so we
-# don't have to reconstruct Claude Code's own cwd-escaping) and drops a file
-# outside claude's process tree once it sees enough assistant turns to prove
-# the wrapper -- not just claude -- was still alive and working past $2.
+# #347 item 3: tails this run's own --session-id transcript, drops a file
+# outside claude's process tree once it sees $2 assistant turns.
 provisional_verdict_watch() {
   local session_id="$1" threshold="$2" outfile="$3" poll="$4" max_wait="$5"
   local transcript="" elapsed=0 turns
@@ -350,7 +348,8 @@ provisional_verdict_watch() {
   done
 }
 
-provisional_verdict_watch_stop() {   # kills the watch above, if still running
+# kills the watch above, if still running
+provisional_verdict_watch_stop() {
   local pid="${1:-}"
   [ -n "$pid" ] || return 0
   kill "$pid" 2>/dev/null
@@ -358,8 +357,7 @@ provisional_verdict_watch_stop() {   # kills the watch above, if still running
   return 0
 }
 
-# A leftover file: the PREVIOUS run reached the checkpoint and its wrapper
-# never came back to clear it -- it went dark, not silent by choice.
+# a leftover file means the PREVIOUS run reached the checkpoint and went dark
 provisional_verdict_check_stale() {
   [ -f "${PROVISIONAL_VERDICT_FILE:-}" ] || return 0
   echo "STALE PROVISIONAL VERDICT from a previous run of this job that never reached closeout -- it got at least this far before going dark:"
