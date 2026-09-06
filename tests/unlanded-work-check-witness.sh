@@ -48,11 +48,11 @@ chmod +x "$W/gh"
 
 run() { GH_DEFAULT_BRANCH="${1:-main}" GH_PR_COUNT="${2:-}" UNLANDED_GH_BIN="$W/gh" bash "$U" "$REPO" 2>&1; }
 
-# --- 1. a genuinely clean repo --------------------------------------------
+echo "-- 1. a genuinely clean repo"
 out="$(run main '')"; rc=$?
 [ "$rc" -eq 0 ] && ok "a repo with origin/HEAD correct and no stray branches is clean" || bad "exited $rc: $out"
 
-# --- 2. stale cached origin/HEAD -------------------------------------------
+echo "-- 2. stale cached origin/HEAD"
 git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop 2>/dev/null \
   || git -C "$REPO" update-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop
@@ -61,7 +61,7 @@ out="$(run main '')"; rc=$?
 grep -q "DRIFT" <<<"$out" && ok "the stale-HEAD case is reported as DRIFT" || bad "no DRIFT line: $out"
 git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 
-# --- 3. a branch with commits and no PR at all -----------------------------
+echo "-- 3. a branch with commits and no PR at all"
 git -C "$REPO" checkout -q -b stray-branch
 echo b > "$REPO/b.txt"; git -C "$REPO" add b.txt; git -C "$REPO" commit -q -m "never opened a PR"
 git -C "$REPO" checkout -q main
@@ -69,11 +69,11 @@ out="$(run main '')"; rc=$?
 [ "$rc" -eq 2 ] && ok "a branch with commits and no PR is caught (rc=$rc)" || bad "exited $rc, want 2: $out"
 grep -q "UNLANDED: branch 'stray-branch'" <<<"$out" && ok "names the stray branch" || bad "did not name it: $out"
 
-# --- 4. same branch, but a PR (CLOSED) names it -> not flagged -------------
+echo "-- 4. same branch, but a PR (CLOSED) names it -> not flagged"
 out="$(run main 'stray-branch=1')"; rc=$?
 [ "$rc" -eq 0 ] && ok "a branch a PR names in ANY state is not flagged (squash-merge case)" || bad "exited $rc, want 0: $out"
 
-# --- 5. a salvage/* branch is excluded even with no PR ---------------------
+echo "-- 5. a salvage/* branch is excluded even with no PR"
 git -C "$REPO" branch -D stray-branch >/dev/null 2>&1
 git -C "$REPO" checkout -q -b salvage/crash-recovery-1
 echo c > "$REPO/c.txt"; git -C "$REPO" add c.txt; git -C "$REPO" commit -q -m "dirty workspace snapshot"
@@ -81,7 +81,7 @@ git -C "$REPO" checkout -q main
 out="$(run main '')"; rc=$?
 [ "$rc" -eq 0 ] && ok "a salvage/* branch is excluded from the unlanded check" || bad "exited $rc, want 0: $out"
 
-# --- 6. the checked-out branch itself is never flagged ---------------------
+echo "-- 6. the checked-out branch itself is never flagged"
 git -C "$REPO" branch -D salvage/crash-recovery-1 >/dev/null 2>&1
 git -C "$REPO" checkout -q -b in-progress
 echo d > "$REPO/d.txt"; git -C "$REPO" add d.txt; git -C "$REPO" commit -q -m "still being worked on"

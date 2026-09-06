@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # close-audit.sh -- checks GitHub's own closingIssuesReferences on merged
 # PRs against issue state, so rule 1 (CLOSE WHAT YOU RESOLVED, #522) does
-# not depend on an agent's own report.
-# exit: 0 clean   1 mismatch(es) found (printed)   2 usage/broken
+# not depend on an agent's own report. exit codes: see usage().
 set -uo pipefail
 
 CLI_NAME="close-audit.sh"

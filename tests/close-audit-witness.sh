@@ -28,7 +28,7 @@ STUB
   chmod +x "$W/gh"
 }
 
-# --- 1. a merged PR whose linked issue is still open ----------------------
+echo "-- 1. a merged PR whose linked issue is still open"
 mkstub '{"data":{"repository":{"pullRequests":{"nodes":[
   {"number":10,"url":"https://x/pr/10","closingIssuesReferences":{"nodes":[{"number":5,"state":"OPEN","url":"https://x/issues/5"}]}}
 ]}}}}'
@@ -37,7 +37,7 @@ out="$(CLOSE_AUDIT_GH_BIN="$W/gh" bash "$C" hf7y/scheduler 2>&1)"; rc=$?
 grep -q 'pr/10 -> https://x/issues/5' <<<"$out" && ok "the mismatch names both the PR and the open issue" \
   || bad "mismatch row missing or malformed: $out"
 
-# --- 2. a merged PR whose linked issue is closed: silent -------------------
+echo "-- 2. a merged PR whose linked issue is closed: silent"
 mkstub '{"data":{"repository":{"pullRequests":{"nodes":[
   {"number":11,"url":"https://x/pr/11","closingIssuesReferences":{"nodes":[{"number":6,"state":"CLOSED","url":"https://x/issues/6"}]}}
 ]}}}}'
@@ -45,18 +45,18 @@ out="$(CLOSE_AUDIT_GH_BIN="$W/gh" bash "$C" hf7y/scheduler 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "a merged PR whose linked issue is closed exits 0" || bad "exited $rc, want 0: $out"
 grep -qi 'clean' <<<"$out" && ok "reports clean" || bad "did not report clean: $out"
 
-# --- 3. a PR closing nothing (no Fixes/Closes) is not a mismatch ----------
+echo "-- 3. a PR closing nothing (no Fixes/Closes) is not a mismatch"
 mkstub '{"data":{"repository":{"pullRequests":{"nodes":[
   {"number":12,"url":"https://x/pr/12","closingIssuesReferences":{"nodes":[]}}
 ]}}}}'
 out="$(CLOSE_AUDIT_GH_BIN="$W/gh" bash "$C" hf7y/scheduler 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "a PR with no linked issue is not flagged" || bad "exited $rc, want 0: $out"
 
-# --- 4. --limit is validated ------------------------------------------------
+echo "-- 4. --limit is validated"
 out="$(bash "$C" --limit banana hf7y/scheduler 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] && ok "a non-numeric --limit is refused" || bad "exited $rc, want 2: $out"
 
-# --- 5. a broken gh call is BROKEN, not silently clean ----------------------
+echo "-- 5. a broken gh call is BROKEN, not silently clean"
 cat > "$W/gh-fail" <<'STUB'
 #!/usr/bin/env bash
 [ "$1 $2" = "repo view" ] && { echo "hf7y/scheduler"; exit 0; }
