@@ -55,21 +55,9 @@
 # BLOCKED's optional [issue] (bare number, cwd-resolved; or `owner/repo#N`)
 # labels that issue `needs-human` -- the consumer tempo.sh already reads
 # (TEMPO_BLOCKED_LABELS) but nothing ever fed, per hf7y/scheduler#149.
-# Best-effort: a `gh` failure is reported but does not fail the write.
-#
-# EXCEPT when the issue's own body opens `NO-DECISION:`. The estate's label
-# grammar (realisateur's bin/lib/labels.tsv) declares `needs-human` as
-# `derived:decision` -- "line 1 declares DECISION: and nobody has answered,
-# NEVER typed" -- and a repo running `etiquette --apply` reconciliation will
-# strip a hand-typed `needs-human` right back off a `NO-DECISION:` issue,
-# every time it runs. Hand-labeling one anyway does not fail, it just starts
-# an unwinnable tug-of-war: this script re-applies it next BLOCKED verdict,
-# etiquette removes it again, forever, with zero net effect and a growing
-# label-event trail. Observed live on hf7y/crt#149 (2026-09-04/05, five
-# label/unlabel cycles across one night). So: read the body first, and skip
-# the write on a `NO-DECISION:` issue. A `DECISION:` issue (or a repo with no
-# such convention at all -- most repos) is unaffected and still gets labeled
-# immediately, same as before.
+# Best-effort: a `gh` failure is reported but does not fail the write. Skipped
+# instead on a NO-DECISION: issue -- etiquette's derived:decision grammar
+# would just strip a hand-typed label back off (hf7y/crt#149).
 #
 # classify exit codes, for the runner to branch on:
 #   0  DONE     -- bar met; stop dispatching, this is success
@@ -97,9 +85,6 @@ label_needs_human() {
   esac
   args+=(--add-label needs-human)
 
-  # A body read failure (gh down, no permission, rate-limited) falls through
-  # to the pre-existing behavior below -- $body stays empty, which is not a
-  # NO-DECISION: match, so this never blocks the label on a read it cannot do.
   view_args=(issue view "$num")
   [ -n "$repo" ] && view_args+=(--repo "$repo")
   view_args+=(--json body -q .body)
@@ -133,13 +118,9 @@ cmd_set() {
   if [ "$v" = "IMPOSSIBLE" ] && [ -z "$reason" ]; then
     die "IMPOSSIBLE requires a reason -- name the probe that proves it. This claim slows every project down."
   fi
-  # BLOCKED CARRIES A MANDATORY REASON, for the same purpose as IMPOSSIBLE's and
-  # one further one. A blocked run that does not name its blocker is a shrug
-  # that slows the project down -- and the reason is also the KEY the ledger
-  # compares to detect the same blocker twice, which is the signal Zach asked
-  # for (hf7y/scheduler#63: "agents who encounter the same blocker twice in a
-  # row need a way to slow metabolism"). Without it, two different blockages
-  # and one repeated blockage are indistinguishable.
+  # BLOCKED requires a reason too: it is the KEY the ledger compares to catch
+  # the same blocker recurring (hf7y/scheduler#63), and a blocked run that
+  # does not name its blocker is a shrug that stalls the project.
   if [ "$v" = "BLOCKED" ] && [ -z "$reason" ]; then
     die "BLOCKED requires a reason -- name what you are waiting on (a credential, a human, another project). It is compared against the last one to detect the same blocker twice."
   fi
@@ -264,9 +245,6 @@ STUB
   [ $rc -eq 0 ] || { echo "FAIL: a gh failure must not fail the verdict write itself (rc=$rc)"; fails=1; }
   grep -q 'could not label 999 needs-human' <<<"$out" || { echo "FAIL: gh failure was not reported"; fails=1; }
 
-  # NO-DECISION: is derived:decision's escape hatch -- etiquette would strip a
-  # hand-typed needs-human right back off, so this must skip the label, not
-  # just skip silently: the skip has to be reported too.
   : > "$GH_CALLS_LOG"
   export GH_ISSUE_BODY=$'NO-DECISION: build ticket, not a decision request\nmore body below'
   out="$(cmd_set j BLOCKED "waiting" 777 2>&1)"
@@ -276,8 +254,6 @@ STUB
   grep -q 'skipping needs-human' <<<"$out" \
     || { echo "FAIL: NO-DECISION: skip was not reported (got: $out)"; fails=1; }
 
-  # A DECISION: ticket (or any issue with no such line-1 convention at all --
-  # most repos) is unaffected and still gets labeled immediately.
   : > "$GH_CALLS_LOG"
   export GH_ISSUE_BODY=$'DECISION: pick an approach\nDEFAULT-AFTER 3d'
   cmd_set j BLOCKED "waiting" 778 >/dev/null 2>&1
