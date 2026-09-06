@@ -24,7 +24,7 @@ DOSE_BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/s
 
 usage() {
   cat <<EOF
-usage: $CLI_NAME <project> [--check|--apply|--arm|--park|--now]
+usage: $CLI_NAME <project> [--check|--apply|--arm|--park|--now|--shotgun]
 
 Converge THIS host's crontab to match schedule/ROSTER's row for <project>,
 read fresh from GitHub via 'gh api' every run.
@@ -39,6 +39,11 @@ read fresh from GitHub via 'gh api' every run.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
             neither. Hops to the roster's host over ssh if you are elsewhere.
+  --shotgun dispatch this project ONCE as a FAN-OUT: one agent that
+            splits its own issue queue N ways and works every shard at
+            once, each in its own clone. Same bypasses as --now, and it
+            takes the same PROJECT_KEY lock -- the parallelism is inside
+            one run, not extra runs (hf7y/scheduler#586).
   --sprint <dur>
             let this project's own ticks ignore the gate's PACE hold and
             tempo until an absolute wall-clock time, <dur> from now
@@ -56,7 +61,7 @@ MODE="--check"; PROJECT=""; SPRINT_DUR=""
 # while/shift, not `for a in "$@"`: --sprint is the first flag carrying a value.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --check|--apply|--arm|--park|--now|--sprint-status) MODE="$1" ;;
+    --check|--apply|--arm|--park|--now|--shotgun|--sprint-status) MODE="$1" ;;
     --sprint)
       MODE="--sprint"; shift
       SPRINT_DUR="${1:-}"
@@ -215,9 +220,9 @@ if [ "$ROW_HOST" != "$HOST" ]; then
   # --now is the one mode that may travel. Converging a crontab is a WRITE and
   # stays refused off-host; dispatching is a request the roster already says
   # belongs to $ROW_HOST, so carrying it there is obedience, not a bypass.
-  if [ "$MODE" = --now ]; then
+  if [ "$MODE" = --now ] || [ "$MODE" = --shotgun ]; then
     echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
-    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --now"
+    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' $MODE"
   fi
   # It writes state the roster's host reads on its ticks -- travels like --now.
   if [ "$MODE" = --sprint ]; then
@@ -347,7 +352,12 @@ do_live() {
 # is scheduler-run, consulting neither gate nor tempo, reachable
 # only by hand-typing setsid/nohup/sudo -u over ssh, and getting any part of it
 # wrong fails in a different way each time.
+# TIER is the ONE difference between --now and --shotgun. Everything else
+# here -- the account lookup, the already-running refusal, the pull-first
+# guard, the 120s pgrep witness -- is tier-agnostic and is why this is one
+# function with an argument rather than two that drift apart.
 do_now() {
+  local tier="${1:-batch}"
   local home clone log
   home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
   [ -n "$home" ] || { echo "BROKEN: '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
@@ -375,13 +385,13 @@ do_now() {
   fi
   [ -f "$clone/schedule/$PROJECT.conf" ] || { echo "BROKEN: no schedule/$PROJECT.conf in $clone even after pulling -- is '$PROJECT' registered?" >&2; exit 5; }
 
-  log="$home/dose-now.log"
-  echo "dispatching '$PROJECT' as $ROW_ACCT on $HOST -- gate and tempo bypassed"
+  log="$home/dose-$tier.log"
+  echo "dispatching '$PROJECT' as $ROW_ACCT on $HOST -- tier '$tier', gate and tempo bypassed"
   # setsid+nohup because the caller is usually a soon-to-close ssh session, and
   # bash -lc because a non-interactive shell has no PATH and `claude` is not
   # found without it.
   sudo -n -u "$ROW_ACCT" -H bash -lc \
-    "cd '$clone' && setsid nohup ./bin/scheduler-run '$PROJECT' batch > '$log' 2>&1 < /dev/null &" \
+    "cd '$clone' && setsid nohup ./bin/scheduler-run '$PROJECT' '$tier' > '$log' 2>&1 < /dev/null &" \
     >/dev/null 2>&1
 
   # WITNESS BY LOOKING, not by trusting the launch. A backgrounded process that
@@ -431,7 +441,8 @@ do_sprint() {
   echo "note: the CEILING still holds, and this ends by itself -- 'dose $PROJECT --sprint 0' ends it now"
 }
 
-if [ "$MODE" = --now ]; then do_now; exit $?; fi
+if [ "$MODE" = --now ]; then do_now batch; exit $?; fi
+if [ "$MODE" = --shotgun ]; then do_now shotgun; exit $?; fi
 if [ "$MODE" = --sprint ]; then do_sprint; exit $?; fi
 
 case "$ROW_STATE" in
