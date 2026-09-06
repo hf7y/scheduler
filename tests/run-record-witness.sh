@@ -53,12 +53,24 @@ export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER
 mkdir -p "$TMP/bin"
 cat > "$TMP/bin/gh" <<'STUB'
 #!/usr/bin/env bash
-# $1=issue|pr  ... --state S --search Q
-kind="$1"; state=""; search=""
+# $1=issue|pr  $2=list|view  ... --state S --search Q
+kind="$1"; verb="$2"
+[ "${STUB_FAIL:-0}" = "1" ] && exit 1
+
+# pr view: STUB_PR_COMMITS/ADD/DEL/CHANGED apply to every number asked for.
+if [ "$kind" = "pr" ] && [ "$verb" = "view" ]; then
+  commits="${STUB_PR_COMMITS:-0}"
+  printf '{"additions":%d,"changedFiles":%d,"commits":[' \
+    "${STUB_PR_ADDITIONS:-0}" "${STUB_PR_CHANGED:-0}"
+  for ((i=0;i<commits;i++)); do [ $i -gt 0 ] && printf ','; printf '{"oid":"c%d"}' "$i"; done
+  printf '],"deletions":%d}\n' "${STUB_PR_DELETIONS:-0}"
+  exit 0
+fi
+
+state=""; search=""
 while [ $# -gt 0 ]; do
   case "$1" in --state) state="$2"; shift 2;; --search) search="$2"; shift 2;; *) shift;; esac
 done
-[ "${STUB_FAIL:-0}" = "1" ] && exit 1
 n=0
 case "$kind:$state" in
   issue:all)    n="${STUB_ISSUES_OPENED:-0}" ;;
@@ -73,6 +85,7 @@ STUB
 chmod +x "$TMP/bin/gh"
 RR_GH_BIN="$TMP/bin/gh"
 export STUB_ISSUES_OPENED=0 STUB_ISSUES_CLOSED=0 STUB_PRS_OPENED=0 STUB_PRS_MERGED=0 STUB_FAIL=0
+export STUB_PR_COMMITS=0 STUB_PR_ADDITIONS=0 STUB_PR_DELETIONS=0 STUB_PR_CHANGED=0
 
 # A bare origin plus a work tree, rebuilt per case.
 fresh() {
@@ -202,6 +215,41 @@ STUB_FAIL=1 run_record_probe_gh o/r 2026-08-07T00:00:00-05:00 >/dev/null
 RR_GH_BIN="$TMP/bin/nonexistent-gh" run_record_probe_gh o/r 2026-08-07T00:00:00-05:00 >/dev/null
 [ "$RR_GH" = "unavailable" ] && ok "a missing gh reports unavailable" || bad "gh=$RR_GH"
 
+echo "== 6b. gh diffstat (hf7y/scheduler#629): what a shotgun's own PRs add up to, git-blind"
+RR_COMMITS_ADDED=0
+STUB_PRS_OPENED=2 STUB_PR_COMMITS=3 STUB_PR_ADDITIONS=10 STUB_PR_DELETIONS=4 STUB_PR_CHANGED=2 \
+  run_record_probe_gh_diffstat o/r 2026-08-07T00:00:00-05:00
+rc=$?
+[ "$rc" = 0 ] && ok "diffstat reports success when PRs are found" || bad "diffstat rc=$rc"
+[ "$RR_COMMITS_ADDED" = "6" ] && ok "commits_added summed across both PRs (3+3)" || bad "commits_added=$RR_COMMITS_ADDED"
+[ "$RR_INSERTIONS" = "20" ] && ok "insertions summed (10+10)" || bad "insertions=$RR_INSERTIONS"
+[ "$RR_DELETIONS" = "8" ] && ok "deletions summed (4+4)" || bad "deletions=$RR_DELETIONS"
+[ "$RR_FILES_CHANGED" = "4" ] && ok "files_changed summed (2+2)" || bad "files_changed=$RR_FILES_CHANGED"
+[ "$RR_PUSHED" = "true" ] && ok "pushed=true -- this run's output reached GitHub, just not through this clone" || bad "pushed=$RR_PUSHED"
+
+echo "== 6c. gh diffstat: no PRs this run leaves git's zero standing"
+RR_COMMITS_ADDED=0; unset RR_PUSHED
+STUB_PRS_OPENED=0 run_record_probe_gh_diffstat o/r 2026-08-07T00:00:00-05:00
+rc=$?
+[ "$rc" != 0 ] && ok "returns non-zero when there is nothing to add" || bad "claimed success with no PRs"
+[ "$RR_COMMITS_ADDED" = "0" ] && ok "commits_added stays 0, not invented" || bad "commits_added=$RR_COMMITS_ADDED"
+[ -z "${RR_PUSHED:-}" ] && ok "and pushed is left alone" || bad "pushed was set to $RR_PUSHED with nothing to justify it"
+
+echo "== 6d. gh diffstat NEVER double-counts a run that already has local commits"
+RR_COMMITS_ADDED=5
+STUB_PRS_OPENED=2 STUB_PR_COMMITS=3 STUB_PR_ADDITIONS=10 STUB_PR_DELETIONS=4 STUB_PR_CHANGED=2 \
+  run_record_probe_gh_diffstat o/r 2026-08-07T00:00:00-05:00
+rc=$?
+[ "$rc" != 0 ] && ok "refuses to run against a nonzero local diff" || bad "ran anyway, rc=$rc"
+[ "$RR_COMMITS_ADDED" = "5" ] && ok "commits_added is untouched (still 5, not 5+6)" || bad "commits_added=$RR_COMMITS_ADDED -- double-counted"
+
+echo "== 6e. gh diffstat never turns an already-false pushed back to true"
+RR_COMMITS_ADDED=0; RR_PUSHED=false
+STUB_PRS_OPENED=1 STUB_PR_COMMITS=1 STUB_PR_ADDITIONS=1 STUB_PR_DELETIONS=1 STUB_PR_CHANGED=1 \
+  run_record_probe_gh_diffstat o/r 2026-08-07T00:00:00-05:00 >/dev/null
+[ "$RR_PUSHED" = "false" ] && ok "pushed stays false -- an unpushed local commit is still unpushed" || bad "pushed became $RR_PUSHED"
+STUB_PRS_OPENED=0 STUB_PR_COMMITS=0 STUB_PR_ADDITIONS=0 STUB_PR_DELETIONS=0 STUB_PR_CHANGED=0
+
 echo "== 7. THE REFUSAL: the ledger must never be written inside a work tree"
 fresh
 if run_record_append "$TMP/work/ledger.jsonl" '{"x":1}' >/dev/null 2>&1; then
@@ -289,6 +337,32 @@ if [ -f "$RUN_LEDGER_FILE" ]; then
   grep -q "\"participant\":\"crt\"" <<<"$LINE" \
     && ok "and it is a real record for this participant" || bad "wrong/garbled record: $LINE"
 fi
+
+echo "== 11. hf7y/scheduler#629 end to end: a shotgun's own clone never moves, its PRs still count"
+fresh
+B="$(git rev-parse HEAD)"
+# before=after=remote, the shape recorded on the first real shotgun dispatch.
+A="$B"; R="$B"
+BEFORE_SHA="$B"; AFTER_SHA="$A"; REMOTE_SHA="$R"
+git remote set-url origin git@github.com:test/fixture.git
+JOB_NAME=proj-shotgun; PROJECT_KEY=proj; TIER=shotgun; BRANCH=main
+START_TS=$(( $(date +%s) - 5 )); RUN_RC=0; STATUS=done
+RUN_LEDGER_FILE="$TMP/state/scheduler-runs/proj-shotgun.jsonl"
+STUB_ISSUES_OPENED=0 STUB_ISSUES_CLOSED=0 STUB_PRS_OPENED=5 STUB_PRS_MERGED=0 \
+  STUB_PR_COMMITS=1 STUB_PR_ADDITIONS=8 STUB_PR_DELETIONS=1 STUB_PR_CHANGED=1 \
+  run_record_closeout > "$TMP/closeout11.out" 2>&1
+STUB_PRS_OPENED=0 STUB_PR_COMMITS=0 STUB_PR_ADDITIONS=0 STUB_PR_DELETIONS=0 STUB_PR_CHANGED=0
+LINE="$(tail -1 "$RUN_LEDGER_FILE")"
+grep -q '"schema":"scheduler.run-record/2"' <<<"$LINE" && ok "schema bumped to /2" || bad "schema: $LINE"
+grep -q '"commits_added":5' <<<"$LINE" \
+  && ok "commits_added is the 5 PRs' own commits (1 each), not the clone's 0" || bad "commits_added wrong: $LINE"
+grep -q '"insertions":40' <<<"$LINE" && ok "insertions summed across all 5 PRs (8 each)" || bad "insertions wrong: $LINE"
+grep -q '"pushed":true' <<<"$LINE" && ok "pushed=true -- reached GitHub via 5 PRs, not this clone" || bad "pushed wrong: $LINE"
+grep -q '"verdict_computed":"WORKED"' <<<"$LINE" \
+  && ok "verdict is WORKED on the shotgun's own output, not just an incidental closed-issue count" \
+  || bad "verdict_computed wrong -- hf7y/scheduler#629 not fixed: $LINE"
+grep -q 'pushed 5 commit' <<<"$LINE" \
+  && ok "the ledger's own verdict_reasons names the pushed commits" || bad "reasons missing: $LINE"
 
 cd /
 echo
