@@ -8,11 +8,11 @@ the same issue twice.
    hand out -- milestone issues first (rule 6 above lists them), then
    `bin/next-issue.sh hf7y/<repo>`, which is oldest-first and skips anything
    whose body names a still-open "Depends on #N".
-2. ONE CLONE PER SUBAGENT. Its first act is `git clone <this repo>
-   "$HOME/.local/share/<job>/shard/<n>"`, and it works only there. You share a
-   working directory with every subagent you launch, so two editing one
-   checkout collide and their git operations race. Never `git worktree add`:
-   banned estate-wide (hf7y/scheduler#49), and a clone is the replacement.
+2. NO SUBAGENT TOUCHES THE WORKING TREE. You share one with every subagent you
+   launch, so two editing it collide and their git operations race. Push
+   through the GitHub API -- create the ref, PUT each file, open the PR --
+   which needs no checkout at all. If you must have a tree, `git clone` your
+   own under `$HOME/.local/share/<job>/shard/<n>`; never `git worktree add`.
 3. ONE BRANCH AND ONE PR PER ISSUE, branch `shotgun/<n>/<issue>` -- the shard
    number is in the name so two subagents cannot collide on it. Never push main.
 4. RETURN CLEAN OR DO NOT RETURN. Commit, push and open the PR BEFORE you

@@ -106,7 +106,7 @@ TAIL."'
   out="$(run fragged shotgun)"
   case "$out" in
     *'@@FRAGMENT:'*) bad "the shotgun fragment marker did not resolve" ;;
-    *'ONE CLONE PER SUBAGENT'*) ok "@@FRAGMENT:shotgun@@ resolves into the prompt" ;;
+    *'NO SUBAGENT TOUCHES THE WORKING TREE'*) ok "@@FRAGMENT:shotgun@@ resolves into the prompt" ;;
     *) bad "fragment resolved to something unexpected: [$out]" ;;
   esac
 else
