@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# A hardcoded /tmp/<name> path is shared, unnamespaced, across every tenant on
-# the host: two jobs racing on the same fixed filename can silently publish
-# one tenant's content under another's identity (scheduler#576, apms-2173#89).
-# schedule/_run-procedure.md tells every run to use $TMPDIR/mktemp instead --
-# this witness is what keeps this repo's own scripts honest about it.
+# Backs schedule/_run-procedure.md's $TMPDIR/mktemp guidance (scheduler#576).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
