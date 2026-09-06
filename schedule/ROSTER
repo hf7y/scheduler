@@ -137,14 +137,14 @@
 
 ecosim          | ecosim@monkey          | 20m | parked
 bibliothecaire  | bibliothecaire@monkey  | 20m | parked
-vim-arcade      | vim-arcade@monkey      | 20m | parked
-realisateur     | realisateur@monkey     | 20m | live
+vim-arcade      | vim-arcade@monkey      | 20m | live
+realisateur     | realisateur@monkey     | 20m | parked
 scheduler       | scheduler@monkey       | 20m | parked
 groc-mangr      | groc-mangr@monkey      | 20m | live
 wtul            | wtul@monkey            | 20m | live
 gardien         | gardien@monkey         | 20m | parked
-nine-speakers   | nine-speakers@monkey   | 20m | live
-sequestria      | sequestria@monkey      | 20m | live
+nine-speakers   | nine-speakers@monkey   | 20m | parked
+sequestria      | sequestria@monkey      | 20m | parked
 senechal        | senechal@monkey        | 20m | live
 
 # abletim -- unlike the dcp-gate-site row below, this one is NOT aspirational:
@@ -204,7 +204,7 @@ chezz           | chezz@monkey           | 20m | live
 # 2026-08-25, not assumed:
 #   verdict=RUN project=crt open=12 blocked=0 actionable=12 closed7d=30
 #   drive=12 want_min=120
-crt             | crt@monkey             | 20m | parked
+crt             | crt@monkey             | 20m | live
 
 # baudin -- the pause stated its own release condition -- "un-pause condition
 # is Zach deciding what baudin is for" -- and he decided it: baudin's Home
