@@ -128,6 +128,11 @@ for item in "${work[@]}"; do
     printf '  WOULD ROUTE  %s#%s <- %s closed\n' "$SLUG" "$num" "$ref"
     continue
   fi
+  if gh issue view "$num" -R "$SLUG" --json comments --jq '.comments[].body' 2>/dev/null \
+       | grep -qF "$(marker "$ref")"; then
+    printf '  SKIP  %s#%s <- %s already routed (raced)\n' "$SLUG" "$num" "$ref"
+    continue
+  fi
   gh issue comment "$num" -R "$SLUG" --body "**$ref is $state** — something this issue declared itself waiting on has landed.
 
 Routed automatically by \`route-deliveries.sh\` on ${PROJECT}'s dispatch, reading this issue's own \`<!-- DEFERRED -->\` block. It says what landed, not what to do about it: whether the remaining work here is still correct is this repo's call.

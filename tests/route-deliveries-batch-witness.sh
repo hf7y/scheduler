@@ -57,7 +57,9 @@ case "\$1 \$2" in
     ;;
   "issue view")
     echo "issue-view-call \$*" >> "$CALLS"
-    echo "{}"
+    if [ "\${FAKE_GH_MODE:-ok}" = "race-apply" ]; then
+      echo '<!-- routed-delivery:hf7y/other#10 -->'
+    fi
     ;;
   "api graphql")
     echo "graphql-call" >> "$CALLS"
@@ -133,6 +135,32 @@ out="$(FAKE_GH_MODE=list-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-delive
 : > "$CALLS"
 out="$(FAKE_GH_MODE=graphql-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --check proj 2>&1)"; rc=$?
 [ "$rc" -eq 6 ] && ok "BLIND (exit 6) when the batched graphql call fails" || bad "expected exit 6, got $rc"
+
+cat > "$ISSUES_JSON" <<'EOF'
+[
+  {"number": 1, "labels": [{"name": "deferred"}],
+   "body": "waiting.\n<!-- DEFERRED -->\n- hf7y/other#10\n<!-- /DEFERRED -->",
+   "comments": []}
+]
+EOF
+
+: > "$CALLS"
+out="$(FAKE_GH_MODE=race-apply PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --apply proj 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "exits 0 when the pre-write check catches a race" || bad "exit=$rc out=[$out]"
+grep -q "^comment-call" "$CALLS" \
+  && bad "posted a duplicate comment despite the marker already being present at write time" \
+  || ok "raced write is skipped -- no duplicate comment posted"
+echo "$out" | grep -q "SKIP  hf7y/proj#1 <- hf7y/other#10 already routed (raced)" \
+  && ok "reports the raced skip" || bad "missing raced-skip report, out=[$out]"
+
+: > "$CALLS"
+out="$(FAKE_GH_MODE=ok PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --apply proj 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "exits 0 on a clean --apply run" || bad "exit=$rc out=[$out]"
+comment_calls="$(grep -c "^comment-call" "$CALLS")"
+[ "$comment_calls" -eq 1 ] && ok "posts exactly one comment when the pre-write check finds nothing" \
+  || bad "expected 1 comment-call, got $comment_calls"
+grep -q "^edit-call" "$CALLS" && ok "drops the deferred label after routing" \
+  || bad "expected an edit-call removing the deferred label"
 
 echo "route-deliveries-batch-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
