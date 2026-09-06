@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# unlanded-work-check.sh -- flags a stale cached origin/HEAD and a local
-# branch with commits no PR (any state) names; excludes salvage/*. (#522)
+# unlanded-work-check.sh -- flags stale origin/HEAD, an unlanded branch (#522)
 set -uo pipefail
 
 CLI_NAME="unlanded-work-check.sh"
