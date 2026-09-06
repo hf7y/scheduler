@@ -4,10 +4,9 @@ carried a hand-rewritten copy (hf7y/realisateur#744); this is the one.
 No project is named below -- cwd is the clone, so `gh` needs no `-R`. Test
 command, hazards, and untouchables belong in `CLAUDE.md`, read at step 1.
 
-The run is unattended overnight; nobody reviews it until morning. Stop and wait
-only when the action itself cannot be reverted. A commit, branch or PR never
-qualifies; running destructively against Zach's real data, hosts or hardware --
-as opposed to a temp dir or a sandbox -- does.
+The run is unattended overnight; nobody reviews it until morning. Stop only
+when the action cannot be reverted -- a commit, branch or PR never qualifies;
+running destructively against Zach's real data, hosts or hardware does.
 
 The backlog is the open GitHub issues, nothing else. Build first, don't just
 analyze: take the most reasonable reading and build it. Don't build something
