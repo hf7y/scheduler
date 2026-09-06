@@ -441,16 +441,23 @@ pull_advanced() {
 }
 
 if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  # #596: root here would leave root-owned refs in an account-owned checkout.
+  _pull_owner="$(stat -c '%U' "$REPO_ROOT" 2>/dev/null || echo root)"
+  if [ "$(id -u)" = 0 ] && [ "$_pull_owner" != root ]; then
+    _pull_git=(sudo -n -u "$_pull_owner" -H git -C "$REPO_ROOT")
+  else
+    _pull_git=(git -C "$REPO_ROOT")
+  fi
+  if [ -n "$("${_pull_git[@]}" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
     pull_blocked dirty-tracked "PULL skip -- $REPO_ROOT has uncommitted changes to TRACKED files"
-  elif ! timeout 20 git -C "$REPO_ROOT" fetch --quiet origin main 2>>"$LOG"; then
+  elif ! timeout 20 "${_pull_git[@]}" fetch --quiet origin main 2>>"$LOG"; then
     pull_blocked fetch-failed "PULL skip -- fetch failed or timed out (network/auth?)"
-  elif git -C "$REPO_ROOT" merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+  elif "${_pull_git[@]}" merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
     pull_advanced  # already up to date (or ahead) -- nothing to log every 5 minutes
-  elif git -C "$REPO_ROOT" merge --ff-only origin/main --quiet 2>>"$LOG"; then
+  elif "${_pull_git[@]}" merge --ff-only origin/main --quiet 2>>"$LOG"; then
     pull_advanced
-    log "PULL fast-forwarded to $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
-  elif git -C "$REPO_ROOT" merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
+    log "PULL fast-forwarded to $("${_pull_git[@]}" rev-parse --short HEAD)"
+  elif "${_pull_git[@]}" merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
     # TRAP: a fast-forward WAS possible by ancestry, so the merge refused for a working-tree reason -- almost always an untracked file colliding. Name it: a "diverged" message here is a lie that costs an hour.
     pull_blocked untracked-collision "PULL BLOCKED -- ff-only refused despite clean ancestry; an untracked file in $REPO_ROOT likely collides with an incoming tracked file (see merge error above). Code here is STALE until a human moves it."
   else
