@@ -635,12 +635,23 @@ repo_slug_of() {
   sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$url"
 }
 
-# milestone_actionable <slug> -- open milestones having an open issue, or
-# NOTHING if it could not ask. Empty is BLIND and must NEVER read as 0: that
-# would stop all nineteen accounts on one outage, logged as deliberate.
-milestone_actionable() {
+# milestone_gate_probe <slug> -> "<count>\t<next>", or NOTHING if it could
+# not ask. <count> is open milestones having an open issue; <next> is the
+# title named by a `NEXT: <title>` line in an open milestone's description,
+# or empty if none declares one (#582 -- GitHub milestones have no successor
+# field, so this is the whole chain-declaration contract: written into the
+# CURRENT milestone's description, by a human or a run, same as any other
+# milestoned content per #575's ruling on authorship).
+#
+# Empty is BLIND and must NEVER read as count=0: that would stop all
+# nineteen accounts on one outage, logged as deliberate. ONE call answers
+# both questions, so a chained project costs no second probe.
+milestone_gate_probe() {
   timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${1:?}/milestones?state=open" \
-    --jq '[.[] | select(.open_issues > 0)] | length' 2>/dev/null
+    --jq '. as $ms
+      | ([$ms[] | select(.open_issues > 0)] | length) as $count
+      | ([$ms[].description // "" | capture("(?m)^NEXT:[ \t]*(?<t>.+)$")? | .t] | .[0] // "") as $next
+      | [$count, $next] | @tsv' 2>/dev/null
 }
 
 milestone_self_fed() {  # <slug> -> 1 iff every actionable issue's last body line stamps an account other than zach, 0 if any doesn't, empty if unreadable (#575)
@@ -860,9 +871,9 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # is live and idle; a new milestone resumes it. Slot consumed, like COOLDOWN.
   if [ "${MILESTONE_GATE:-1}" -ne 0 ]; then
     _mslug="$(repo_slug_of "$name")"
-    _mcount=""
-    [ -n "$_mslug" ] && _mcount="$(milestone_actionable "$_mslug")"
-    if [ -z "$_mcount" ]; then
+    _mprobe=""
+    [ -n "$_mslug" ] && _mprobe="$(milestone_gate_probe "$_mslug")"
+    if [ -z "$_mprobe" ]; then
       if [ -n "$_mslug" ]; then
         _mwhy="could not read the milestone list for $_mslug"
       else
@@ -872,28 +883,38 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
         ledger_append "$name" "${TIER:-batch}" - MILESTONE-BLIND "$_mwhy" 2>/dev/null || true
         log "MILESTONE-BLIND $name -- $_mwhy. Holding: a predicate that could not run is not permission. MILESTONE_GATE_BLIND_HOLDS=0 to dispatch anyway."
         dispatched=$((dispatched + 1))
-        unset _mslug _mcount _mwhy
+        unset _mslug _mprobe _mwhy
         continue
       fi
       log "MILESTONE-BLIND $name -- $_mwhy; MILESTONE_GATE_BLIND_HOLDS=0, so dispatching without the gate's answer."
-    elif [ "$_mcount" -eq 0 ]; then
-      ledger_append "$name" "${TIER:-batch}" - MILESTONE-HELD "no open milestone with an open issue on $_mslug" 2>/dev/null || true
-      log "MILESTONE-HELD $name -- $_mslug has no open milestone with an open issue. Nothing to work toward; give it one and it resumes on its own. The roster row is untouched and still live."
-      dispatched=$((dispatched + 1))
-      unset _mslug _mcount _mwhy
-      continue
     else
-      if [ "$(ledger_run "$name" MILESTONE-DONE MILESTONE-HELD 2>/dev/null || echo 0)" -gt 0 ]; then
-        log "MILESTONE-DISAGREE $name -- last verdict was MILESTONE-DONE but $_mslug still has $_mcount open milestone(s) with open issues. Dispatching anyway; the predicate is the authority."
+      _mcount="${_mprobe%%$'\t'*}"
+      _mnext="${_mprobe#*$'\t'}"
+      case "$_mcount" in ''|*[!0-9]*) _mcount=0 ;; esac  # a malformed probe must hold, never pass through as actionable
+      if [ "$_mcount" -eq 0 ]; then
+        if [ -n "$_mnext" ]; then
+          ledger_append "$name" "${TIER:-batch}" - MILESTONE-CHAIN-HELD "chained to '$_mnext' on $_mslug, which has no open issue yet" 2>/dev/null || true
+          log "MILESTONE-CHAIN-HELD $name -- $_mslug names '$_mnext' as its successor, but it has no open issue yet. Holding, not done: populate '$_mnext' and it resumes on its own."
+        else
+          ledger_append "$name" "${TIER:-batch}" - MILESTONE-HELD "no open milestone with an open issue on $_mslug" 2>/dev/null || true
+          log "MILESTONE-HELD $name -- $_mslug has no open milestone with an open issue and none names a successor. Nothing to work toward; give it one and it resumes on its own. The roster row is untouched and still live."
+        fi
+        dispatched=$((dispatched + 1))
+        unset _mslug _mprobe _mcount _mnext _mwhy
+        continue
+      else
+        if [ "$(ledger_run "$name" MILESTONE-DONE MILESTONE-HELD 2>/dev/null || echo 0)" -gt 0 ]; then
+          log "MILESTONE-DISAGREE $name -- last verdict was MILESTONE-DONE but $_mslug still has $_mcount open milestone(s) with open issues. Dispatching anyway; the predicate is the authority."
+        fi
+        _mfed="$(milestone_self_fed "$_mslug" 2>/dev/null)"
+        if [ "$_mfed" = "1" ]; then
+          ledger_append "$name" "${TIER:-batch}" - MILESTONE-SELF-FED "$_mslug's actionable milestone(s) hold only agent-filed issues, no human's" 2>/dev/null || true
+          log "MILESTONE-SELF-FED $name -- $_mslug's actionable milestone(s) hold only agent-filed issues. Dispatching anyway."
+        fi
+        unset _mfed
       fi
-      _mfed="$(milestone_self_fed "$_mslug" 2>/dev/null)"
-      if [ "$_mfed" = "1" ]; then
-        ledger_append "$name" "${TIER:-batch}" - MILESTONE-SELF-FED "$_mslug's actionable milestone(s) hold only agent-filed issues, no human's" 2>/dev/null || true
-        log "MILESTONE-SELF-FED $name -- $_mslug's actionable milestone(s) hold only agent-filed issues. Dispatching anyway."
-      fi
-      unset _mfed
     fi
-    unset _mslug _mcount _mwhy
+    unset _mslug _mprobe _mcount _mnext _mwhy
   fi
 
   # TEMPO. The setpoint, hf7y/scheduler#147 (#66 §3): dispatch this project at
