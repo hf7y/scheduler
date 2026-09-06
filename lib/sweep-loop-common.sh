@@ -495,6 +495,10 @@ append_verdict_closeout() {
     echo "WARNING: verdict closeout NOT appended -- '${VERDICT_BIN:-<unset>}' is missing or not executable. This run will log NO-VERDICT and be re-dispatched."
     return 0
   fi
+  local MT_RESOLVED="${MAX_TURNS:-40}" MT_RESERVE MT_WINDDOWN
+  MT_RESERVE=$(( MT_RESOLVED / 6 ))
+  [ "$MT_RESERVE" -ge 8 ] || MT_RESERVE=8
+  MT_WINDDOWN=$(( MT_RESOLVED - MT_RESERVE ))
   PROMPT="$PROMPT
 
 ---
@@ -525,6 +529,16 @@ only signal that can ever stop this job being dispatched again.
              the next run (or Zach) can find it without re-reading this one:
 
                $VERDICT_BIN set $PROJECT_KEY BLOCKED \"<reason>\" <issue#>
+
+YOUR CEILING THIS RUN IS $MT_RESOLVED TURNS (this job's --max-turns). Nothing
+inside this session counts them out loud, so pace against that number rather
+than against how much work still looks open. Budget roughly the last
+$MT_RESERVE turns for closing out, not new work -- once you judge you are past
+turn ~$MT_WINDDOWN, stop opening new threads and write the verdict above. A hard
+--max-turns cutoff cannot write anything: it ends the session with no verdict
+no matter how much landed, and the run reads NOT-DONE regardless of commits
+already pushed. Winding down $MT_RESERVE turns early with a verdict recorded
+beats being cut off with more nominally left to do (hf7y/scheduler#527).
 
 If you ran out of room mid-task, write NOTHING: silence already classifies as
 NOT-DONE, which is the correct reading of a truncated run.
