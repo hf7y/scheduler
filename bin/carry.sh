@@ -59,19 +59,19 @@ for r in "$REF_MAIN" "$REF_BASH"; do
     || blind "$r is not readable here -- refusing to carry against a ref I cannot see"
 done
 
-runner_confs() {  # <ref> -- schedule/_runner.conf and its host overrides, by pattern
+schedule_confs() {  # <ref> -- schedule/*.conf and schedule/_*.md, by pattern; excludes ROSTER/FREEZE (#350)
   git ls-tree -r --name-only "$1" -- schedule/ 2>/dev/null \
-    | grep -E '^schedule/_runner(\.[^/]+)?\.conf$'
+    | grep -E '^schedule/(_[^/]+\.md|[^/]+\.conf)$'
 }
 
 carried="$(
   { comm -12 \
       <(git ls-tree -r --name-only "$REF_MAIN"  -- bin/ lib/ | sort) \
       <(git ls-tree -r --name-only "$REF_BASH" -- bin/ lib/ | sort)
-    runner_confs "$REF_MAIN"
+    schedule_confs "$REF_MAIN"
   } | sort -u
 )"
-[ -n "$carried" ] || blind "no file is tracked on both refs, and no schedule/_runner*.conf exists on $REF_MAIN -- either nothing is carried, or the refs are wrong"
+[ -n "$carried" ] || blind "no file is tracked on both refs, and no schedule/*.conf or schedule/_*.md exists on $REF_MAIN -- either nothing is carried, or the refs are wrong"
 
 drifted=(); n=0
 while IFS= read -r f; do
