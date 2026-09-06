@@ -128,8 +128,11 @@ for item in "${work[@]}"; do
     printf '  WOULD ROUTE  %s#%s <- %s closed\n' "$SLUG" "$num" "$ref"
     continue
   fi
-  if gh issue view "$num" -R "$SLUG" --json comments --jq '.comments[].body' 2>/dev/null \
-       | grep -qF "$(marker "$ref")"; then
+  if ! recheck="$(gh issue view "$num" -R "$SLUG" --json comments --jq '.comments[].body' 2>/dev/null)"; then
+    printf '  SKIP  %s#%s <- %s could not re-check before writing (BLIND, not absent); not posting\n' "$SLUG" "$num" "$ref" >&2
+    continue
+  fi
+  if printf '%s' "$recheck" | grep -qF "$(marker "$ref")"; then
     printf '  SKIP  %s#%s <- %s already routed (raced)\n' "$SLUG" "$num" "$ref"
     continue
   fi

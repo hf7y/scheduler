@@ -50,6 +50,10 @@ fi
 if [ "\${FAKE_GH_MODE:-ok}" = "graphql-fail" ] && [ "\$1 \$2" = "api graphql" ]; then
   echo "fake gh: simulated failure" >&2; exit 1
 fi
+if [ "\${FAKE_GH_MODE:-ok}" = "recheck-fail" ] && [ "\$1 \$2" = "issue view" ]; then
+  echo "issue-view-call \$*" >> "$CALLS"
+  echo "fake gh: simulated transient failure" >&2; exit 1
+fi
 case "\$1 \$2" in
   "issue list")
     echo "issue-view-or-list-call" >> "$CALLS"
@@ -152,6 +156,15 @@ grep -q "^comment-call" "$CALLS" \
   || ok "raced write is skipped -- no duplicate comment posted"
 echo "$out" | grep -q "SKIP  hf7y/proj#1 <- hf7y/other#10 already routed (raced)" \
   && ok "reports the raced skip" || bad "missing raced-skip report, out=[$out]"
+
+: > "$CALLS"
+out="$(FAKE_GH_MODE=recheck-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --apply proj 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "exits 0 when the pre-write recheck itself fails" || bad "exit=$rc out=[$out]"
+grep -q "^comment-call" "$CALLS" \
+  && bad "posted a duplicate comment despite being unable to confirm the marker's absence" \
+  || ok "a failed recheck is not treated as a clear marker -- no duplicate posted"
+echo "$out" | grep -q "BLIND" \
+  && ok "reports the recheck failure as BLIND, not as a routed skip" || bad "missing BLIND report, out=[$out]"
 
 : > "$CALLS"
 out="$(FAKE_GH_MODE=ok PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --apply proj 2>&1)"; rc=$?
