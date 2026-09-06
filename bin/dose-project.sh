@@ -8,6 +8,7 @@
 # stale truth. `gh` unauthenticated, unreachable, or the file missing are all
 # indistinguishable from here and BLIND (exit 6) -- never a silent "no rows
 # found" (exit 4 is for a roster dose COULD read that has no row for this).
+# schedule/_runner.conf is a different kind of fact, and reads local (#350).
 #
 # THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming/parking is reserved
 # for a human at a terminal -- an agent that edited the roster and converged
@@ -18,7 +19,8 @@
 set -uo pipefail
 
 CLI_NAME="dose-project.sh"
-SCHED_REL="Documents/Projects/scheduler"
+SCHED_REL="Documents/Projects/scheduler"  # do_now()'s own hand-dispatch clone only, not do_live() (#350)
+DOSE_BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler"  # "current" UNRESOLVED (#350)
 
 usage() {
   cat <<EOF
@@ -227,29 +229,30 @@ if [ "$ROW_HOST" != "$HOST" ]; then
 fi
 
 # --- 3b. the job this converges -- SAME source sync-crontab.sh already reads
-# (schedule/_runner.conf, host-overridable), fetched over the same GitHub path
-# as the roster rather than hardcoded here a second time (scheduler#112: two
-# writers for one fact drift silently, exactly hf7y/scheduler#119's shape).
-# Only RUNNER_CRON is deliberately NOT read from here -- that field is
-# roster-derived, the whole point of #81 retiring the global RUNNER_CRON.
+# (schedule/_runner.conf, host-overridable), read LOCAL now, not fetched
+# (#350). Only RUNNER_CRON is deliberately not read here -- roster-derived,
+# the whole point of #81 retiring the global RUNNER_CRON.
 runner_field_present() { grep -qE "^${2}=" <<<"$1"; }
 runner_field_value() {
   grep -E "^${2}=" <<<"$1" | tail -1 | sed -E "s/^${2}=\"?([^\"]*)\"?.*/\1/"
 }
-RUNNER_CONF="$(fetch_repo_file schedule/_runner.conf)" || exit $?
+DOSE_SCHEDULE_DIR="${DOSE_SCHEDULE_DIR:-$DOSE_LIB_DIR/schedule}"  # override is a witness-only seam
+RUNNER_CONF_PATH="$DOSE_SCHEDULE_DIR/_runner.conf"
+if [ ! -f "$RUNNER_CONF_PATH" ]; then
+  echo "BROKEN: no $RUNNER_CONF_PATH shipped beside this script -- nothing to converge to" >&2
+  exit 5
+fi
+RUNNER_CONF="$(cat "$RUNNER_CONF_PATH")"
 RUNNER_JOB="$(runner_field_value "$RUNNER_CONF" RUNNER_JOB)"
 RUNNER_CMD_REL="$(runner_field_value "$RUNNER_CONF" RUNNER_CMD)"
 RUNNER_ENV="$(runner_field_value "$RUNNER_CONF" RUNNER_ENV)"
-HOST_RUNNER_CONF="$(fetch_repo_file "schedule/_runner.${HOST}.conf")"; rc=$?
-case "$rc" in
-  0)
-    runner_field_present "$HOST_RUNNER_CONF" RUNNER_JOB && RUNNER_JOB="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_JOB)"
-    runner_field_present "$HOST_RUNNER_CONF" RUNNER_CMD && RUNNER_CMD_REL="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_CMD)"
-    runner_field_present "$HOST_RUNNER_CONF" RUNNER_ENV && RUNNER_ENV="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_ENV)"
-    ;;
-  4) : ;; # no host override on file -- shared value stands, not an error
-  *) exit "$rc" ;;
-esac
+HOST_RUNNER_CONF_PATH="$DOSE_SCHEDULE_DIR/_runner.${HOST}.conf"
+if [ -f "$HOST_RUNNER_CONF_PATH" ]; then
+  HOST_RUNNER_CONF="$(cat "$HOST_RUNNER_CONF_PATH")"
+  runner_field_present "$HOST_RUNNER_CONF" RUNNER_JOB && RUNNER_JOB="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_JOB)"
+  runner_field_present "$HOST_RUNNER_CONF" RUNNER_CMD && RUNNER_CMD_REL="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_CMD)"
+  runner_field_present "$HOST_RUNNER_CONF" RUNNER_ENV && RUNNER_ENV="$(runner_field_value "$HOST_RUNNER_CONF" RUNNER_ENV)"
+fi
 if [ -z "$RUNNER_JOB" ] || [ -z "$RUNNER_CMD_REL" ]; then
   echo "BROKEN: schedule/_runner.conf does not set both RUNNER_JOB and RUNNER_CMD -- nothing to converge to" >&2
   exit 5
@@ -283,12 +286,9 @@ do_parked() {
 
 # --- 5. live -> converge; 6. verify by re-reading, never trust the write ---
 do_live() {
-  local home
-  if [ "$ROW_ACCT" = "$LOCAL_ACCOUNT" ]; then
-    home="$HOME"
-  else
-    home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
-    [ -n "$home" ] || { echo "BROKEN: live project '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
+  if [ "$ROW_ACCT" != "$LOCAL_ACCOUNT" ]; then  # account existence only, $home is no longer part of abs_cmd
+    getent passwd "$ROW_ACCT" >/dev/null 2>&1 \
+      || { echo "BROKEN: live project '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
   fi
 
   local rate_fields
@@ -296,8 +296,12 @@ do_live() {
     || { echo "BROKEN: roster rate '$ROW_RATE' for '$PROJECT' is not a form dose understands (want <N>h or <N>m)" >&2; exit 5; }
   validate_cron "$rate_fields" || { echo "BROKEN: derived cron '$rate_fields' is not 5 fields" >&2; exit 5; }
 
+  # abs_cmd used to be $home/$SCHED_REL/... (#350). DOSE_BUILD_ROOT, not
+  # DOSE_LIB_DIR, because the latter is THIS run's own resolved path and
+  # would freeze today's dated build dir into the crontab line.
   local abs_cmd desired cur curline
-  abs_cmd="$home/$SCHED_REL/$RUNNER_CMD_REL"
+  abs_cmd="$DOSE_BUILD_ROOT/$RUNNER_CMD_REL"
+  [ -x "$abs_cmd" ] || { echo "BROKEN: no installed scheduler build at $abs_cmd -- refusing to converge to a clone path instead" >&2; exit 5; }
   desired="$rate_fields ${RUNNER_ENV:+$RUNNER_ENV }$abs_cmd $TAG"
 
   cur="$(crontab_read "$ROW_ACCT")" || { echo "BROKEN: could not read $ROW_ACCT's crontab" >&2; exit 5; }
