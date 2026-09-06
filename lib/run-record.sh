@@ -33,9 +33,12 @@
 # can source this file, drive each probe directly, and read the results -- the
 # same shape as lib/salvage.sh and append_verdict_closeout() in the engine, and
 # for the same reason: a function buried in the run body cannot be witnessed.
+#
+# /1 -> /2, 2026-09-06 (#629): commits_added et al now describe what reached
+# GitHub, not only this tree -- see run_record_probe_gh_diffstat.
 set -uo pipefail
 
-RUN_RECORD_SCHEMA="scheduler.run-record/1"
+RUN_RECORD_SCHEMA="scheduler.run-record/2"
 
 # gh is invoked through this indirection so the witness can hand the probes a
 # stub and drive every branch (ok / unavailable / error) without a network.
@@ -136,18 +139,10 @@ run_record_repo_slug() {
 # Args: <owner/repo> <since ISO8601>
 # Sets: RR_ISSUES_OPENED RR_ISSUES_CLOSED RR_PRS_OPENED RR_PRS_MERGED RR_GH
 #
-# SCOPE, stated plainly because run_record_compute_verdict's NET-closed check
-# is built on it:
-#   opened  -- author:@me, i.e. attributable to the account this run ran as.
-#   closed  -- everything closed in the window, whoever closed it. GitHub
-#              search has no closed-by: qualifier, so this cannot be narrowed.
-# That asymmetry makes the count LENIENT (a human closing something in the
-# same window credits the run) and never harsh.
-#
-# gh missing, unauthenticated, or erroring is RR_GH != ok and NULL counts --
-# never zero. Unmeasured must read as unmeasured, not as a real zero; that is
-# the same asymmetry as bin/verdict.sh's "absence of a verdict is never
-# GAVE-UP".
+# SCOPE (the NET-closed check below is built on it): opened=author:@me;
+# closed=anyone, any time in the window (search has no closed-by:) -- lenient,
+# never harsh. gh missing/erroring is RR_GH!=ok with NULL counts, never a real
+# zero -- same "absence is never GAVE-UP" asymmetry as bin/verdict.sh.
 run_record_probe_gh() {
   local slug="$1" since="$2"
   RR_ISSUES_OPENED=""; RR_ISSUES_CLOSED=""; RR_PRS_OPENED=""; RR_PRS_MERGED=""
@@ -193,6 +188,74 @@ rr_gh_count() {
     '['*) printf '%s' "$out" | grep -o '"number"' | wc -l | tr -d ' ' ; return 0 ;;
     *) rr_log "WARNING: unparseable gh output for $kind/$slug"; return 1 ;;
   esac
+}
+
+rr_gh_numbers() {
+  local kind="$1" slug="$2" state="$3" search="$4" out
+  out="$(timeout "$RR_GH_TIMEOUT" "$RR_GH_BIN" "$kind" list -R "$slug" \
+          --state "$state" --search "$search" --limit 200 --json number 2>/dev/null)" || {
+    rr_log "WARNING: gh $kind list failed for $slug ($search)"
+    return 1
+  }
+  case "$out" in
+    '[]') return 0 ;;
+    '['*) printf '%s' "$out" | grep -oE '"number":[0-9]+' | grep -oE '[0-9]+' ; return 0 ;;
+    *) rr_log "WARNING: unparseable gh output for $kind/$slug"; return 1 ;;
+  esac
+}
+
+rr_gh_pr_diffstat() {
+  local slug="$1" num="$2" out commits additions deletions changed
+  out="$(timeout "$RR_GH_TIMEOUT" "$RR_GH_BIN" pr view "$num" -R "$slug" \
+          --json additions,deletions,changedFiles,commits 2>/dev/null)" || return 1
+  commits="$(printf '%s' "$out" | grep -o '"oid"' | wc -l | tr -d ' ')"
+  additions="$(printf '%s' "$out" | grep -oE '"additions":[0-9]+' | grep -oE '[0-9]+$')"
+  deletions="$(printf '%s' "$out" | grep -oE '"deletions":[0-9]+' | grep -oE '[0-9]+$')"
+  changed="$(printf '%s' "$out" | grep -oE '"changedFiles":[0-9]+' | grep -oE '[0-9]+$')"
+  [ -n "$additions" ] && [ -n "$deletions" ] && [ -n "$changed" ] || return 1
+  printf '%s %s %s %s' "${commits:-0}" "$additions" "$deletions" "$changed"
+}
+
+# #629: a shotgun's PRs never touch this clone, so git reads them as zero.
+# Folds each PR's own stats into the same fields, only when git read zero
+# (else a run ending on its own feature branch double-counts).
+run_record_probe_gh_diffstat() {
+  local slug="$1" since="$2"
+  local numbers num stat commits add del changed
+  local sum_commits=0 sum_add=0 sum_del=0 sum_changed=0 found=0
+
+  [ "${RR_COMMITS_ADDED:-0}" = "0" ] || return 1
+  [ -n "$slug" ] || return 1
+  command -v "$RR_GH_BIN" >/dev/null 2>&1 || return 1
+
+  numbers="$(rr_gh_numbers pr "$slug" all "created:>=$since author:@me")" || {
+    rr_log "WARNING: could not list this run's own PRs for diffstat"
+    return 1
+  }
+  [ -n "$numbers" ] || return 1
+
+  while IFS= read -r num; do
+    [ -n "$num" ] || continue
+    stat="$(rr_gh_pr_diffstat "$slug" "$num")" || {
+      rr_log "WARNING: could not read PR #$num's own commit/line counts -- excluded from the total, not counted as zero"
+      continue
+    }
+    read -r commits add del changed <<< "$stat"
+    sum_commits=$(( sum_commits + commits ))
+    sum_add=$(( sum_add + add ))
+    sum_del=$(( sum_del + del ))
+    sum_changed=$(( sum_changed + changed ))
+    found=1
+  done <<< "$numbers"
+
+  [ "$found" = 1 ] || return 1
+
+  RR_COMMITS_ADDED=$sum_commits
+  RR_FILES_CHANGED=$sum_changed
+  RR_INSERTIONS=$sum_add
+  RR_DELETIONS=$sum_del
+  [ "${RR_PUSHED:-null}" = "false" ] || RR_PUSHED="true"
+  return 0
 }
 
 # --- THE VERDICT, COMPUTED -------------------------------------------------
@@ -339,6 +402,7 @@ run_record_closeout() {
 
   run_record_probe_git "$BEFORE_SHA" "$AFTER_SHA" "${REMOTE_SHA:-}" || true
   run_record_probe_gh "$slug" "$started" || true
+  run_record_probe_gh_diffstat "$slug" "$started" || true
   run_record_compute_verdict "${RUN_RC:-0}"
 
   # The agent's own words, if it left any. Read AFTER everything above is
