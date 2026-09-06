@@ -52,6 +52,8 @@ Knobs, resolved env > schedule/_tempo.<host>.conf > schedule/_tempo.conf > defau
   TEMPO_MIN_MIN         20       never faster than this
   TEMPO_MAX_MIN         1440     never slower than this
   TEMPO_BLOCKED_LABELS  needs-human   (one label; see `etiquette`)
+                        an issue with any GitHub assignee also counts as
+                        blocked, label or not (hf7y/scheduler#318)
   TEMPO_CACHE_MIN       30       how long a tracker count may be reused
 
 This utility cannot spend money. It has no --summon flag.
@@ -208,8 +210,18 @@ if [ -z "$OPEN" ]; then
   case "$BLOCKED_LABELS" in
     *['"'\\\$\`]*) blind "TEMPO_BLOCKED_LABELS carries a quote or shell metacharacter: $BLOCKED_LABELS" ;;
   esac
-  raw="$(gh issue list --repo "$SLUG" --state open --limit 300 --json number,labels \
-           --jq "[ length, ([ .[] | select( [.labels[].name] as \$l | (\"$BLOCKED_LABELS\"|split(\",\")) | any(. as \$b | \$l | index(\$b)) ) ] | length) ] | @tsv" 2>/dev/null)" \
+  # ALSO blocked: an issue with a nonempty GitHub assignee list. hf7y/scheduler#318
+  # is replacing the `needs-human` label with the assignee field across three
+  # repos ("assigned to hf7y" = waiting on him, unassigned = agent work), but
+  # its own ordering note says the label site must not go BEFORE the two repos
+  # that populate/clear the field -- doing so today would starve the fleet's
+  # only working brake, since nothing assigns yet. ORing the two predicates
+  # instead of replacing is safe in either order: it can only mark MORE issues
+  # blocked than the label alone, never fewer, so it ships now and quietly
+  # becomes the live signal as the other two sites land, with no second edit
+  # here required.
+  raw="$(gh issue list --repo "$SLUG" --state open --limit 300 --json number,labels,assignees \
+           --jq "[ length, ([ .[] | select( ( [.labels[].name] as \$l | (\"$BLOCKED_LABELS\"|split(\",\")) | any(. as \$b | \$l | index(\$b)) ) or ((.assignees // []) | length > 0) ) ] | length) ] | @tsv" 2>/dev/null)" \
     || blind "gh could not read $SLUG's open issues"
   [ -n "$raw" ] || blind "gh returned nothing for $SLUG -- an unreadable tracker is not an empty one"
   IFS=$'\t' read -r OPEN BLOCKED <<<"$raw"
