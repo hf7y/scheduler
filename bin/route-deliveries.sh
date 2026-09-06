@@ -80,20 +80,28 @@ issues="$(gh issue list -R "$SLUG" --state open --limit 100 --json number,body,l
 declare -A ref_needed ref_alias
 work=()
 checked=0
-while IFS=$'\t' read -r num body labels comments; do
+# Fields are \x1f-joined and records \0-terminated, not tab/newline (as `@tsv`
+# gives): tab is IFS *whitespace* even when IFS is set to nothing but tab, so
+# `read` collapses an empty field adjacent to it into the next one instead of
+# preserving it -- an issue with no labels loses its whole `comments` field to
+# `labels` this way, `already`'s marker-grep against it always misses, and
+# route-deliveries re-posts the same delivery every tick (measured on
+# hf7y/crt#148, labelless, 5 duplicate comments in an hour before this fix).
+# \x1f is not IFS whitespace, so an empty field between two of them survives.
+while IFS=$'\x1f' read -r -d '' num body labels comments; do
   [ -n "$num" ] || continue
   # Only the DEFERRED block. A ref elsewhere in a body is prose, not a claim.
-  block="$(printf '%b' "$body" | awk '/<!--[[:space:]]*DEFERRED/{f=1;next} /<!--[[:space:]]*\/DEFERRED/{f=0} f')"
+  block="$(printf '%s' "$body" | awk '/<!--[[:space:]]*DEFERRED/{f=1;next} /<!--[[:space:]]*\/DEFERRED/{f=0} f')"
   [ -n "$block" ] || continue
   while read -r ref; do
     [ -n "$ref" ] || continue
     checked=$((checked + 1))
     already=0
-    printf '%b' "$comments" | grep -qF "$(marker "$ref")" && already=1
+    printf '%s' "$comments" | grep -qF "$(marker "$ref")" && already=1
     [ "$already" -eq 0 ] && ref_needed["$ref"]=1
     work+=("$num"$'\t'"$ref"$'\t'"$already"$'\t'"$labels")
   done <<< "$(printf '%s' "$block" | grep -oE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+' | sort -u)"
-done <<< "$(printf '%s' "$issues" | jq -r '.[] | [.number, (.body // ""), ([.labels[].name] | join(",")), ([.comments[].body] | join("\n"))] | @tsv')"
+done < <(printf '%s' "$issues" | jq -j '.[] | (.number|tostring), "\u001f", (.body // ""), "\u001f", ([.labels[].name] | join(",")), "\u001f", ([.comments[].body] | join("\n")), "\u0000"')
 
 declare -A state_of
 if [ "${#ref_needed[@]}" -gt 0 ]; then

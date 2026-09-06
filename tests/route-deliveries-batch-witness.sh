@@ -34,7 +34,10 @@ cat > "$ISSUES_JSON" <<'EOF'
    "comments": [{"body": "<!-- routed-delivery:hf7y/other#11 -->"}]},
   {"number": 3, "labels": [{"name": "deferred"}],
    "body": "waiting.\n<!-- DEFERRED -->\n- hf7y/other#10\n- hf7y/wide#20\n<!-- /DEFERRED -->",
-   "comments": []}
+   "comments": []},
+  {"number": 4, "labels": [],
+   "body": "waiting, no labels.\n<!-- DEFERRED -->\n- hf7y/other#10\n<!-- /DEFERRED -->",
+   "comments": [{"body": "<!-- routed-delivery:hf7y/other#10 -->"}]}
 ]
 EOF
 
@@ -119,6 +122,9 @@ echo "$out" | grep -q "WOULD ROUTE  hf7y/proj#3 <- hf7y/wide#20 closed" \
 echo "$out" | grep -q "hf7y/other#11" \
   && bad "issue #2 re-routed despite already carrying the routed-delivery marker" \
   || ok "issue #2's already-routed marker (read off the batched comments) suppresses a re-route"
+echo "$out" | grep -q "hf7y/proj#4" \
+  && bad "issue #4 (no labels) re-routed despite already carrying the routed-delivery marker" \
+  || ok "a labelless issue's already-routed marker still suppresses a re-route (hf7y/crt#148)"
 
 : > "$CALLS"
 out="$(FAKE_GH_MODE=list-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --check proj 2>&1)"; rc=$?
