@@ -72,14 +72,8 @@ command -v gh >/dev/null 2>&1 || { echo "$CLI_NAME: BLIND -- gh is not on PATH" 
 # invisible to every other account and would re-notify after any reprovision.
 marker() { printf 'routed-delivery:%s' "$1"; }
 
-# ONE round trip in, ONE round trip out (hf7y/scheduler#580). Before this,
-# realisateur's 87 refs cost 66s: a `gh issue view --json state` per ref plus
-# a `gh issue view --json comments` per closed one, strictly serial. Both are
-# gone. The own-repo marker check reads `comments` off the SAME issue-list
-# call below -- it was already fetching this project's issues in one shot,
-# `comments` just wasn't asked for. The cross-repo state check batches every
-# unique (repo, number) into ONE GraphQL query, aliased per ref, instead of
-# one REST call per ref.
+# ONE round trip in, ONE round trip out (#580) -- comments come back with
+# the issues here, and every dependency ref resolves in one graphql call below.
 issues="$(gh issue list -R "$SLUG" --state open --limit 100 --json number,body,labels,comments 2>/dev/null)" \
   || { echo "$CLI_NAME: BLIND -- could not read $SLUG's open issues" >&2; exit 6; }
 
@@ -108,8 +102,6 @@ if [ "${#ref_needed[@]}" -gt 0 ]; then
     alias="r$i"; ref_alias["$ref"]="$alias"; i=$((i + 1))
     dep_repo="${ref%#*}"; dep_num="${ref##*#}"
     owner="${dep_repo%%/*}"; name="${dep_repo#*/}"
-    # issueOrPullRequest, not issue: a ref is frequently a PR number, and a
-    # merged PR is the STRONGEST delivery signal there is (see below).
     q+="$alias: repository(owner: \"$owner\", name: \"$name\") { issueOrPullRequest(number: $dep_num) { __typename ... on Issue { state } ... on PullRequest { state } } } "
   done
   resp="$(gh api graphql -f query="query { $q }" 2>/dev/null)" \
@@ -124,8 +116,7 @@ routed=0
 for item in "${work[@]}"; do
   IFS=$'\t' read -r num ref already labels <<< "$item"
   [ "$already" -eq 0 ] || continue
-  # MERGED, not just CLOSED. Accepting only CLOSED silently skipped
-  # hf7y/crt#70, the exact PR that shipped the queue apms was waiting on.
+  # MERGED, not just CLOSED -- see hf7y/crt#70.
   state="${state_of[${ref_alias[$ref]:-}]:-}"
   case "$state" in CLOSED|MERGED) ;; *) continue ;; esac
   routed=$((routed + 1))

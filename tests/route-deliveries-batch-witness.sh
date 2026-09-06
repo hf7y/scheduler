@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# Witness for bin/route-deliveries.sh's batched dependency resolution
-# (hf7y/scheduler#580). Before this, one `gh issue view` fired per
-# cross-repo ref plus one more per closed ref to check the marker --
-# serial, linear in reference count, 66s measured on realisateur's 87
-# refs. This asserts the fix, not just the outcome: however many refs
-# exist, exactly ONE `gh issue list` and at most ONE `gh api graphql`
-# call happen, and `gh issue view` is never called at all.
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
@@ -23,8 +16,6 @@ fi
 WORK="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 FAKEBIN="$WORK/fakebin"
-# route-deliveries.sh resolves schedule/<project>.conf relative to ITSELF
-# (bin/../schedule), so give it a fake bin/ next to a fake schedule/.
 mkdir -p "$FAKEBIN" "$WORK/repo/bin" "$WORK/repo/schedule"
 CALLS="$WORK/gh-calls.log"
 
@@ -32,9 +23,6 @@ cat > "$WORK/repo/schedule/proj.conf" <<'EOF'
 REPO_URL="https://github.com/hf7y/proj.git"
 EOF
 
-# Three issues in hf7y/proj, each with a DEFERRED block naming a distinct
-# other-repo ref, plus a fourth ref repeated across two issues to prove
-# dedup. One issue already carries the routed-delivery marker for its ref.
 ISSUES_JSON="$WORK/issues.json"
 cat > "$ISSUES_JSON" <<'EOF'
 [
@@ -65,7 +53,6 @@ case "\$1 \$2" in
     cat "$ISSUES_JSON"
     ;;
   "issue view")
-    # Must never be called -- the whole point of the batch fix.
     echo "issue-view-call \$*" >> "$CALLS"
     echo "{}"
     ;;
@@ -133,12 +120,10 @@ echo "$out" | grep -q "hf7y/other#11" \
   && bad "issue #2 re-routed despite already carrying the routed-delivery marker" \
   || ok "issue #2's already-routed marker (read off the batched comments) suppresses a re-route"
 
-# BLIND on a failed issue-list call, as before.
 : > "$CALLS"
 out="$(FAKE_GH_MODE=list-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --check proj 2>&1)"; rc=$?
 [ "$rc" -eq 6 ] && ok "BLIND (exit 6) when gh issue list fails" || bad "expected exit 6, got $rc"
 
-# BLIND on a failed graphql call, not a silent zero-routed.
 : > "$CALLS"
 out="$(FAKE_GH_MODE=graphql-fail PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --check proj 2>&1)"; rc=$?
 [ "$rc" -eq 6 ] && ok "BLIND (exit 6) when the batched graphql call fails" || bad "expected exit 6, got $rc"
