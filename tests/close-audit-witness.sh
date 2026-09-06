@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# HERMETIC: a stub gh (CLOSE_AUDIT_GH_BIN) answers `repo view`/`api graphql`
-# from fixture JSON -- no network, no live tracker.
+# HERMETIC: stub gh answers from fixture JSON -- no network, no live tracker.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 C="$HERE/../bin/close-audit.sh"
@@ -8,8 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 echo "close-audit-witness"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 
-mkstub() {
-  # $1 = graphql JSON body to emit
+mkstub() {  # $1 = graphql JSON body to emit
   cat > "$W/gh" <<STUB
 #!/usr/bin/env bash
 if [ "\$1 \$2" = "repo view" ]; then

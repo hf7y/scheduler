@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# unlanded-work-check.sh -- checks a stale cached origin/HEAD against
-# GitHub's real default branch, and flags a local branch with commits no
-# PR (any state) names, for rule "LAND YOUR WORK" (#522) -- ANY state
-# counts as landed since this repo squash-merges (ancestry under-reports);
-# excludes salvage/* (lib/salvage.sh's crash-recovery net). Exit: see usage().
+# unlanded-work-check.sh -- flags a stale cached origin/HEAD and a local
+# branch with commits no PR names (rule LAND YOUR WORK, #522) -- ANY PR
+# state counts (this repo squash-merges); excludes salvage/*. Exit: usage().
 set -uo pipefail
 
 CLI_NAME="unlanded-work-check.sh"

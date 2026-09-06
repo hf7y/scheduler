@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# HERMETIC: a real throwaway git repo (bare origin + clone) under mktemp,
-# and a stub gh (UNLANDED_GH_BIN) answering from env-configured fixtures.
+# HERMETIC: a throwaway git repo under mktemp, and a stub gh from fixtures.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 U="$HERE/../bin/unlanded-work-check.sh"
@@ -18,9 +17,7 @@ git -C "$REPO" push -q origin HEAD:main
 git -C "$W/origin.git" symbolic-ref HEAD refs/heads/main
 git -C "$REPO" remote set-head origin -a >/dev/null 2>&1
 
-# stub gh: GH_DEFAULT_BRANCH answers `repo view`; GH_PR_COUNT (space-list
-# "branch=count") answers `pr list --head <branch>`, default 0.
-cat > "$W/gh" <<'STUB'
+cat > "$W/gh" <<'STUB'  # GH_DEFAULT_BRANCH answers repo view; GH_PR_COUNT="b=n ..." answers pr list
 #!/usr/bin/env bash
 if [ "$1 $2" = "repo view" ]; then
   echo "${GH_DEFAULT_BRANCH:-main}"
