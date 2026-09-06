@@ -59,23 +59,10 @@ for r in "$REF_MAIN" "$REF_BASH"; do
     || blind "$r is not readable here -- refusing to carry against a ref I cannot see"
 done
 
-# schedule_confs <ref> -- every schedule/ file scheduler-run, lib/paced-conf.sh
-# or dose-project.sh reads AS BUILD CONTENT: project confs (schedule/<p>.conf),
-# _standing-rules.md and every _<name>.md fragment, and every underscore-file
-# family read by a *<name>.conf glob at dispatch time -- _runner*.conf
-# (#350/#634), _paced*.conf and _contain*.conf (hf7y/scheduler#350, reopened
-# 2026-09-06: these were the other four of the five checkout-resolving read
-# sites #634 left behind).
-#
-# BY PATTERN, NOT THE bin/+lib/ INTERSECTION: a file's first appearance on
-# main must carry immediately (a new project's conf, a new host's _paced.conf)
-# -- the intersection method only ever carries what bashified already has.
-#
-# schedule/ROSTER and schedule/FREEZE MUST NEVER MATCH THIS PATTERN. Both are
-# live state, fetched fresh over `gh api` every read (lib/dose-common.sh's
-# fetch_repo_file) -- baking either into a build reintroduces the exact stale
-# clone this generation exists to remove. Neither carries a '.conf' or '.md'
-# suffix, so the glob excludes them structurally, not just by convention.
+# schedule_confs <ref> -- every schedule/<p>.conf, _*.conf and _*.md, by
+# pattern (not the bin/+lib/ intersection) so a first appearance carries at
+# once; #350. Excludes ROSTER/FREEZE structurally -- no .conf/.md suffix,
+# and both must stay live gh-api reads, never build content.
 schedule_confs() {  # <ref>
   git ls-tree -r --name-only "$1" -- schedule/ 2>/dev/null \
     | grep -E '^schedule/(_[^/]+\.md|[^/]+\.conf)$'
