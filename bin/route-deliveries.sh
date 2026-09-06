@@ -80,7 +80,20 @@ issues="$(gh issue list -R "$SLUG" --state open --limit 100 --json number,body,l
 declare -A ref_needed ref_alias
 work=()
 checked=0
-while IFS=$'\t' read -r num body labels comments; do
+while IFS= read -r rawline; do
+  [ -n "$rawline" ] || continue
+  # NOT `IFS=$'\t' read -r num body labels comments`: tab is "IFS whitespace"
+  # to bash's word-splitting, so an empty field (an issue with NO labels --
+  # the common case) collapses with its neighboring tab instead of staying a
+  # field. That shifts everything after it left by one: comments lands in
+  # $labels and $comments comes up empty, so the already-routed check below
+  # never finds its own marker and the same delivery gets re-routed on every
+  # run (observed live: hf7y/wtul#128 and #120 each re-routed 6-8 times).
+  # readarray -d splits strictly on the byte, not a whitespace class, so an
+  # empty field between two tabs stays a field.
+  readarray -d $'\t' -t _fields <<< "$rawline"
+  num="${_fields[0]:-}"; body="${_fields[1]:-}"; labels="${_fields[2]:-}"
+  comments="${_fields[3]:-}"; comments="${comments%$'\n'}"
   [ -n "$num" ] || continue
   # Only the DEFERRED block. A ref elsewhere in a body is prose, not a claim.
   block="$(printf '%b' "$body" | awk '/<!--[[:space:]]*DEFERRED/{f=1;next} /<!--[[:space:]]*\/DEFERRED/{f=0} f')"
