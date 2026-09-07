@@ -130,10 +130,6 @@ grep -q '^alpha|0|' "$PACED_CONF" \
   && ok "PACED_CONF still carries roster_rows' translation (alpha parked -> enabled 0)" \
   || bad "PACED_CONF is not the roster_rows translation any more: $(cat "$PACED_CONF")"
 
-# --- 4. ACCOUNT MODE IS UNCHANGED -------------------------------------------
-# 18 accounts run that path. Host mode is the only writer of
-# SCHEDULER_ROSTER_FILE; with the mode off the variable must stay unset so
-# roster_state_for keeps reading REPO_ROOT.
 sed -n '/^if \[ -n "${PACED_CONF:-}" \]; then$/,/^fi$/p' "$R" \
   | grep -n 'SCHEDULER_ROSTER_FILE' > "$TMP/hits" || true
 if [ -s "$TMP/hits" ]; then
