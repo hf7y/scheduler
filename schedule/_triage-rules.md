@@ -13,12 +13,12 @@
    him to confirm. If you are NOT sure, say so on the issue and leave it open
    -- that is a different, also-correct outcome.
 
-   Note how Zach answers (corrected 2026-08-14; the previous text here said
-   the opposite): he comments and LEAVES THE ISSUE OPEN. He applies no
-   `answered` label and does not want to. Issue STATE and LABELS carry NO
-   information about whether he answered -- read the COMMENTS. An open
-   question issue is not evidence it is unanswered; an issue is ANSWERED if
-   it carries a comment from the repo owner that is not agent-stamped.
+   Note how Zach answers: he comments and LEAVES THE ISSUE OPEN, applies no
+   `answered` label, and often answers OUT LOUD for a run to transcribe. So
+   STATE and LABELS carry nothing about it -- read the COMMENTS. ANSWERED, as
+   `etiquette` grades it, is an owner comment that is EITHER not agent-stamped
+   OR carries `<!-- decision-by: -->`. Most answered-open decisions here are
+   the SECOND kind; omit it and you re-ask what he has already ruled.
 
 4. ONE issue per run. A half-finished second one is worse than a queue that
    moves slowly. Work on a BRANCH and open a PR; never push main. Commit
