@@ -21,7 +21,6 @@
 set -uo pipefail
 
 CLI_NAME="dose-project.sh"
-SCHED_REL="Documents/Projects/scheduler"  # do_now()'s own hand-dispatch clone only, not do_live() (#350)
 DOSE_BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler"  # "current" UNRESOLVED (#350)
 
 usage() {
@@ -354,11 +353,15 @@ do_live() {
 # is tier-agnostic, so this is one function rather than two that drift apart.
 do_now() {
   local tier="${1:-batch}"
-  local home clone log
+  local home log abs_cmd
   home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
   [ -n "$home" ] || { echo "BROKEN: '$PROJECT' names account '$ROW_ACCT' but no such account exists on $HOST" >&2; exit 5; }
-  clone="$home/$SCHED_REL"
-  [ -d "$clone/.git" ] || { echo "BROKEN: $ROW_ACCT has no scheduler clone at $clone" >&2; exit 5; }
+
+  # Same DOSE_BUILD_ROOT do_live() converges to (#350) -- no clone, no pull:
+  # the installed build is always the current one, unlike a per-account clone
+  # that could be stale until hand-pulled.
+  abs_cmd="$DOSE_BUILD_ROOT/bin/scheduler-run"
+  [ -x "$abs_cmd" ] || { echo "BROKEN: no installed scheduler build at $abs_cmd -- refusing to dispatch against a clone path instead" >&2; exit 5; }
 
   [ "$ROW_STATE" = live ] || echo "note: '$PROJECT' is $ROW_STATE in the roster -- dispatching anyway, because you asked for one run, not for arming"
 
@@ -372,22 +375,13 @@ do_now() {
     return 0
   fi
 
-  # PULL FIRST, ALWAYS. The paced runner pulls on its tick; a hand-run never
-  # did, so a clone one commit behind died with `no such conf: <project>.conf`
-  # on a project registered that same hour. Measured 2026-08-25, apms.
-  if ! sudo -n -u "$ROW_ACCT" git -C "$clone" pull -q --ff-only 2>/dev/null; then
-    echo "BROKEN: could not fast-forward $ROW_ACCT's scheduler clone -- refusing to dispatch against a stale base" >&2
-    exit 5
-  fi
-  [ -f "$clone/schedule/$PROJECT.conf" ] || { echo "BROKEN: no schedule/$PROJECT.conf in $clone even after pulling -- is '$PROJECT' registered?" >&2; exit 5; }
-
   log="$home/dose-$tier.log"
   echo "dispatching '$PROJECT' as $ROW_ACCT on $HOST -- tier '$tier', gate and tempo bypassed"
   # setsid+nohup because the caller is usually a soon-to-close ssh session, and
   # bash -lc because a non-interactive shell has no PATH and `claude` is not
   # found without it.
   sudo -n -u "$ROW_ACCT" -H bash -lc \
-    "cd '$clone' && setsid nohup ./bin/scheduler-run '$PROJECT' '$tier' > '$log' 2>&1 < /dev/null &" \
+    "setsid nohup '$abs_cmd' '$PROJECT' '$tier' > '$log' 2>&1 < /dev/null &" \
     >/dev/null 2>&1
 
   # WITNESS BY LOOKING, not by trusting the launch. A backgrounded process that
