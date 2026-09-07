@@ -526,8 +526,8 @@ else
 fi
 # <<< paced conf resolution
 
-# >>> account-mode roster fetch (no local checkout: served build has no ROSTER, #350, #412)
-if [ -z "${SCHEDULER_ROSTER_FILE:-}" ] && [ ! -f "$REPO_ROOT/schedule/ROSTER" ]; then
+# >>> account-mode roster fetch (no local checkout: served build has no ROSTER, #350, #412; exempts explicit PACED_CONF, same override PACED_CONF_SRC names at :477)
+if [ "${PACED_CONF_SRC:-}" != "explicit PACED_CONF" ] && [ -z "${SCHEDULER_ROSTER_FILE:-}" ] && [ ! -f "$REPO_ROOT/schedule/ROSTER" ]; then
   . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
     echo "usage-paced-runner: no $REPO_ROOT/schedule/ROSTER and lib/dose-common.sh is not beside this script to fetch one. Refusing." >&2; exit 2; }
   if _roster="$(fetch_roster)"; then
