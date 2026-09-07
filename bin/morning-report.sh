@@ -21,9 +21,7 @@
 # safe to run before any project has ever produced a report.
 #
 # Also prints anything sitting in QUESTIONS.md across every registered
-# project, via the ../questions/*.md symlinks bin/sync-crontab.sh --apply
-# maintains -- so a flagged judgment call surfaces here too, not just in
-# a report nobody thinks to check the day it's written.
+# project, so a flagged judgment call surfaces here too.
 #
 # For any project that opts in with a DEPLOY_FRESH_CMD probe in its
 # schedule/<project>.conf, prints a prominent "DEPLOY PENDING" line when the

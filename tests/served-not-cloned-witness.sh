@@ -98,15 +98,18 @@ printf 'RUNNER_JOB="scheduler-paced-runner"\nRUNNER_CMD="bin/usage-paced-runner.
 T1_BUILD_ROOT="$T1_WORK/verb-builds"; mkdir -p "$T1_BUILD_ROOT/current/scheduler/bin"
 cat > "$T1_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" <<'EOF'
 #!/usr/bin/env bash
-true
+printf 'WOULD-DISPATCH [1/1] %s -> stub\n' "$SCRATCH_PROJECT" >> "$PACED_STATE_DIR/run.log"
 EOF
 chmod +x "$T1_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
+printf '#!/usr/bin/env bash\ntrue\n' > "$T1_BUILD_ROOT/current/scheduler/bin/usage-gate.sh"
+chmod +x "$T1_BUILD_ROOT/current/scheduler/bin/usage-gate.sh"
 
 T1_OUT="$(
   PATH="$T1_FAKEBIN:$PATH" \
   DOSE_HOST_OVERRIDE=t1host \
   DOSE_SCHEDULE_DIR="$T1_SCHED_DIR" \
   VERB_HOST_BUILD_ROOT="$T1_BUILD_ROOT" \
+  SCRATCH_PROJECT="$T1_PROJECT" \
   FAKE_ROSTER_CONTENT="$T1_PROJECT | scratchacct@t1host | 6h | live" \
   "$REPO_ROOT/bin/dose-project.sh" "$T1_PROJECT" --check 2>&1
 )"; T1_RC=$?

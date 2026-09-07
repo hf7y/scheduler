@@ -72,9 +72,9 @@ fi
 # root and must not reach for a host lock path.
 out="$(PACED_HOST_MODE=0 bash -n "$RUNNER" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "account mode parses clean" || bad "parse failed: $out"
-grep -q 'STATE_DIR="\$HOME/.local/share/\$JOB_NAME"' "$RUNNER" \
-  && ok "account mode still uses the \$HOME-scoped state dir" \
-  || bad "the account-mode state dir is no longer \$HOME-scoped"
+grep -q 'STATE_DIR="\${PACED_STATE_DIR:-\$HOME/.local/share/\$JOB_NAME}"' "$RUNNER" \
+  && ok "account mode still defaults to the \$HOME-scoped state dir" \
+  || bad "the account-mode state dir no longer defaults to \$HOME-scoped"
 
 printf '\npaced-host-mode-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

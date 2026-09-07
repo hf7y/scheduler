@@ -230,8 +230,8 @@ if [ "$ROW_HOST" != "$HOST" ]; then
   exit 7
 fi
 
-# --- 3b. the job this converges -- SAME source sync-crontab.sh already reads
-# (schedule/_runner.conf, host-overridable), read LOCAL now, not fetched
+# --- 3b. the job this converges -- schedule/_runner.conf, host-overridable,
+# read LOCAL now, not fetched
 # (#350). Only RUNNER_CRON is deliberately not read here -- roster-derived,
 # the whole point of #81 retiring the global RUNNER_CRON.
 runner_field_present() { grep -qE "^${2}=" <<<"$1"; }
@@ -286,6 +286,51 @@ do_parked() {
   exit 0
 }
 
+# --- 5a. WOULD THIS BUILD ACTUALLY DISPATCH? (#350) -------------------------
+# `-x` is presence; presence is not capability. Converging onto a build that
+# cannot dispatch takes the account DARK and prints `converged:` -- measured
+# two ways on monkey 2026-09-07, both reading as a busy quota. So REHEARSE:
+# DRY_RUN suppresses only the exec, ledger row and run record (#358), FORCE
+# skips gate and tempo, which is why the gate is tested separately first.
+REHEARSAL_WHY=''
+REHEARSAL_LOG=''
+build_can_dispatch() {  # <abs_cmd>
+  local abs_cmd="$1" home gate dir rc
+  home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
+  [ -n "$home" ] || { REHEARSAL_WHY="$ROW_ACCT has no home directory"; return 1; }
+
+  # The runner's OWN ladder: the tick's question, not a lookalike.
+  gate="$home/.local/bin/usage-gate.sh"
+  [ -x "$gate" ] || gate="$DOSE_BUILD_ROOT/bin/usage-gate.sh"
+  [ -x "$gate" ] || {
+    REHEARSAL_WHY="neither $home/.local/bin/usage-gate.sh nor the build carries usage-gate.sh, so every tick would log HOLD (gate rc=127) and read as a busy quota"
+    return 1; }
+
+  dir="$(sudo -n -u "$ROW_ACCT" -H mktemp -d 2>/dev/null)" \
+    || { REHEARSAL_WHY="could not open a scratch state dir as $ROW_ACCT"; return 1; }
+  # shellcheck disable=SC2086  # RUNNER_ENV is a conf-supplied VAR=VAL list
+  sudo -n -u "$ROW_ACCT" -H env "HOME=$home" "PACED_STATE_DIR=$dir" \
+    PACED_DRY_RUN=1 PACED_FORCE=1 PACED_MAX_PER_TICK=1 ${RUNNER_ENV:-} \
+    "$abs_cmd" >/dev/null 2>&1
+  rc=$?
+  REHEARSAL_LOG="$(sudo -n -u "$ROW_ACCT" cat "$dir/run.log" 2>/dev/null)"
+  sudo -n -u "$ROW_ACCT" rm -rf "$dir" 2>/dev/null || true
+
+  grep -q "WOULD-DISPATCH .* $PROJECT " <<<"$REHEARSAL_LOG" && return 0
+  REHEARSAL_WHY="the rehearsal exited $rc and never reached a WOULD-DISPATCH for '$PROJECT'"
+  return 1
+}
+
+# THE REFUSAL HAS TO REACH A PERSON (Zach, 2026-09-07). `demande` is crt's
+# door, and is NEVER fatal -- an undelivered escalation is not a second failure.
+escalate_refusal() {
+  local msg="dose --apply refused $PROJECT on $HOST: the served build cannot dispatch; nothing written"
+  if command -v demande >/dev/null 2>&1; then
+    demande ask "$msg" dose >/dev/null 2>&1 && return 0
+  fi
+  echo "        (this refusal reached nobody but you -- 'demande' did not take it)" >&2
+}
+
 # --- 5. live -> converge; 6. verify by re-reading, never trust the write ---
 do_live() {
   if [ "$ROW_ACCT" != "$LOCAL_ACCOUNT" ]; then  # account existence only, $home is no longer part of abs_cmd
@@ -298,12 +343,18 @@ do_live() {
     || { echo "BROKEN: roster rate '$ROW_RATE' for '$PROJECT' is not a form dose understands (want <N>h or <N>m)" >&2; exit 5; }
   validate_cron "$rate_fields" || { echo "BROKEN: derived cron '$rate_fields' is not 5 fields" >&2; exit 5; }
 
-  # abs_cmd used to be $home/$SCHED_REL/... (#350). DOSE_BUILD_ROOT, not
-  # DOSE_LIB_DIR, because the latter is THIS run's own resolved path and
-  # would freeze today's dated build dir into the crontab line.
+  # DOSE_BUILD_ROOT, not DOSE_LIB_DIR: the latter is THIS run's own resolved
+  # path and would freeze today's dated build dir into the crontab line (#350).
   local abs_cmd desired cur curline
   abs_cmd="$DOSE_BUILD_ROOT/$RUNNER_CMD_REL"
   [ -x "$abs_cmd" ] || { echo "BROKEN: no installed scheduler build at $abs_cmd -- refusing to converge to a clone path instead" >&2; exit 5; }
+  if ! build_can_dispatch "$abs_cmd"; then
+    echo "BROKEN: $abs_cmd is installed but CANNOT DISPATCH -- $REHEARSAL_WHY." >&2
+    echo "        Converging would take $ROW_ACCT dark and report it as fixing drift. Nothing was written." >&2
+    [ -n "$REHEARSAL_LOG" ] && printf '        rehearsal: %s\n' "$REHEARSAL_LOG" >&2
+    [ "$MODE" = --apply ] && escalate_refusal
+    exit 5
+  fi
   desired="$rate_fields ${RUNNER_ENV:+$RUNNER_ENV }$abs_cmd $TAG"
 
   cur="$(crontab_read "$ROW_ACCT")" || { echo "BROKEN: could not read $ROW_ACCT's crontab" >&2; exit 5; }

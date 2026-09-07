@@ -23,12 +23,9 @@
 # The declaration is DERIVED, not typed. This repo already says which of its
 # scripts must exist at an installed path, whenever a config names one, e.g.:
 #   schedule/_runner.conf    RUNNER_CMD=".../.local/bin/usage-paced-runner.sh"
-# (schedule/_sweep.conf and .scheduler/schedule.conf's BATCH_SCRIPT used to be
-# examples too; both fields are gone now that scheduler-run tiers run from a
-# checkout instead -- #495.)
 # A config assignment naming $DEPLOY_DIR/<name> IS the declaration that <name>
-# must be installed -- sync-crontab.sh will happily write a cron line
-# pointing at a path nothing ever created. Comment lines are excluded:
+# must be installed -- `dose` will happily write a cron line pointing at a
+# path nothing ever created. Comment lines are excluded:
 # several configs discuss installed paths in prose, and dexter's
 # deliberately use repo paths instead, so a commented example is not a
 # declaration.
@@ -171,8 +168,8 @@ if [ "${#DECLARED[@]}" -eq 0 ]; then
   # a discovery failure wearing the same face as a healthy host -- the very
   # confusion this section was added to end.
   echo "  NONE -- no config assignment names a path under $DEPLOY_DIR."
-  echo "  That is a DERIVATION failure, not a clean host: sync-crontab.sh writes"
-  echo "  cron lines from these configs, so at least one installed path is expected."
+  echo "  That is a DERIVATION failure, not a clean host: dose writes cron lines"
+  echo "  from these configs, so at least one installed path is expected."
   flagged=$((flagged + 1))
 else
   for name in "${DECLARED[@]}"; do

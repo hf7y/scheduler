@@ -4,8 +4,8 @@
 #
 #   scheduler-run <project> <sweep|batch>
 #
-# A tier whose conf sets <TIER>_SCRIPT keeps that legacy wrapper: sync-crontab
-# points cron straight at it, and the guard below refuses a manual call.
+# A tier whose conf sets <TIER>_SCRIPT keeps that legacy wrapper: cron points
+# straight at it, and the guard below refuses a manual call.
 #
 # HAND-RUN. This takes a project NAME, so it dispatches the project you meant;
 # PACED_FORCE=1 on usage-paced-runner.sh skips gate and tempo but still runs

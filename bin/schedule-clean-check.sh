@@ -2,14 +2,9 @@
 # schedule-clean-check.sh -- the committed-config gate: is schedule/ deployed
 # from a commit, or from a working tree nobody has saved?
 #
-# Extracted from bin/sync-crontab.sh's --check-clean (hf7y/scheduler#471,
-# retiring that script -- it stopped owning any crontab, see #454). This is
-# the ONLY half that had a live caller outside sync-crontab.sh itself:
-# bin/usage-paced-runner.sh's dispatch-critical gate. Kept as its own tiny
-# subprocess rather than folded into a sourced lib, on purpose -- see
-# bin/sync-crontab.sh's old header (git log) on why usage-paced-runner.sh
-# must never source a lib for something on its hot path: a syntax error in a
-# sourced file fails ALL dispatch, a subprocess failure fails one call.
+# Its one caller is bin/usage-paced-runner.sh's dispatch gate. A subprocess
+# rather than a sourced lib, on purpose: a syntax error in a sourced file
+# fails ALL dispatch, a subprocess failure fails one call.
 #
 # CLAUDE.md build discipline: "deploy verified against a git ref; drift fails
 # loud." Dirty = any tracked modification/staged change under schedule/, or
