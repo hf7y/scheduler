@@ -526,6 +526,22 @@ else
 fi
 # <<< paced conf resolution
 
+# >>> account-mode roster fetch (no local checkout: served build has no ROSTER, #350, #412)
+if [ -z "${SCHEDULER_ROSTER_FILE:-}" ] && [ ! -f "$REPO_ROOT/schedule/ROSTER" ]; then
+  . "$SELF_DIR/../lib/dose-common.sh" 2>/dev/null || {
+    echo "usage-paced-runner: no $REPO_ROOT/schedule/ROSTER and lib/dose-common.sh is not beside this script to fetch one. Refusing." >&2; exit 2; }
+  if _roster="$(fetch_roster)"; then
+    SCHEDULER_ROSTER_FILE="$(mktemp)"
+    trap 'rm -f "$SCHEDULER_ROSTER_FILE"' EXIT
+    printf '%s\n' "$_roster" > "$SCHEDULER_ROSTER_FILE"
+    export SCHEDULER_ROSTER_FILE
+  else
+    echo "usage-paced-runner: no local $REPO_ROOT/schedule/ROSTER and could not fetch one as $(id -un) (SUDO_USER=${SUDO_USER:-unset}). Refusing to dispatch rather than let every participant read as parked." >&2
+    exit 2
+  fi
+fi
+# <<< account-mode roster fetch
+
 # --- load enabled participants -------------------------------------------------
 # Format: name|enabled|command (host mode: ...|acct|command, #350; PACED_HOST_MODE
 # says which). Used to carry an optional weight as a third field, repeating a
