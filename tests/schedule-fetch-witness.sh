@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Witness for bin/scheduler-run's fetch fallback (hf7y/scheduler#350):
-# CONF/RULES_FILE/FRAG_FILE/_contain*.conf fetched live via gh when
-# $SCHED_ROOT/schedule does not exist (the served-build case), local
-# otherwise (every other fixture in this suite, unchanged). Asserts the
-# fetch path resolves all four, GAP vs BLIND are distinguishable and loud,
-# and a local schedule/ dir never calls gh even when gh is set to fail.
+# Witness for bin/scheduler-run's fetch fallback (hf7y/scheduler#350): with no local $SCHED_ROOT/schedule, CONF/RULES_FILE/FRAG_FILE/_contain*.conf are fetched via gh instead.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,7 +10,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-# --- fixture repo: bin/ and lib/ only, deliberately NO schedule/ dir --------
 FX="$TMP/repo"
 mkdir -p "$FX/bin" "$FX/lib"
 cp "$RUN" "$FX/bin/scheduler-run"
@@ -24,7 +18,6 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$FX/bin/freeze-check.sh"
 chmod +x "$FX/bin/freeze-check.sh" "$FX/bin/scheduler-run"
 printf 'printf "%%s" "$PROMPT"\nexit 0\n' > "$FX/lib/sweep-loop-common.sh"
 
-# --- the "remote" -- what a fake hf7y/scheduler@main is holding ------------
 REMOTE="$TMP/remote-schedule"
 mkdir -p "$REMOTE"
 printf 'REPO_URL="https://example.invalid/fixture.git"\nBATCH_JOB_NAME="fetched-batch"\nUSES_STANDING_RULES=1\nBATCH_PROMPT="OWN PROMPT LINE. @@FRAGMENT:frag-a@@"\n' > "$REMOTE/fetched.conf"
@@ -71,8 +64,7 @@ esac
 EOF
 chmod +x "$FAKEBIN/gh"
 
-run() {  # $1=project $2=tier [$3=gh mode, default ok] -- echoes the assembled
-         # prompt, returns its rc
+run() {  # $1=project $2=tier $3=gh mode(default ok) -- echoes the prompt, returns its rc
   ( cd "$FX" && PATH="$FAKEBIN:$PATH" FAKE_REMOTE="$REMOTE" FAKE_GH_LOG="$TMP/gh.log" \
       FAKE_GH_MODE="${3:-ok}" bash bin/scheduler-run "$1" "$2" 2>"$TMP/err" )
 }

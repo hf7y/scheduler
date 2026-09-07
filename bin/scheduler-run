@@ -24,10 +24,7 @@ SCHEDULE_DIR="$SCHED_ROOT/schedule"
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/dose-common.sh"
 
-# read_schedule_rel <name-under-schedule/>: local if $SCHEDULE_DIR exists
-# (checkout/clone, unchanged), else fetched live via gh (served build, #350,
-# no schedule/ shipped). Call plain, not `x=$(...)`: that subshell would drop
-# the SCHEDULE_SRC/SCHEDULE_CONTENT this sets.
+# read_schedule_rel <name-under-schedule/>: local if $SCHEDULE_DIR exists, else fetched via gh (#350). Call plain, not `x=$(...)` -- that drops SCHEDULE_SRC/SCHEDULE_CONTENT.
 read_schedule_rel() {
   local rel="${1:?read_schedule_rel needs a schedule/-relative path}"
   if [ -d "$SCHEDULE_DIR" ]; then
@@ -256,7 +253,6 @@ if [ "$TIER_ARG" = shotgun ]; then SELFDEV_IN_ACCOUNT=0; fi
 # schedule/_runner.<host>.conf. Both optional: run_contained() falls back to
 # its own built-in defaults when neither file sets them, so a host with no
 # _contain.conf at all still gets a cap, just an untuned one.
-# read_schedule_rel, not [-f]: on the served build (#350) this fetches live.
 for _contain_rel in "_contain.conf" "_contain.$(hostname -s 2>/dev/null || echo unknown).conf"; do
   # shellcheck disable=SC1090
   read_schedule_rel "$_contain_rel" && source <(printf '%s' "$SCHEDULE_CONTENT")
