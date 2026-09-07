@@ -143,13 +143,13 @@ roster_rows() {
 }
 
 # roster_state_for <project> <host> -- print live/parked for that project@host
-# row in schedule/ROSTER; return 1 if ROSTER is absent/unreadable or names no
-# row for it. A FUNCTION, not inlined, for the same reason roster_rows is:
-# tests/paced-roster-authority-witness.sh calls it directly.
+# row in schedule/ROSTER: rc=2 (BLIND) if unreadable, rc=1 (GAP) if it read
+# fine but names no row for this project@host (same split as fetch_repo_file
+# in lib/dose-common.sh). tests/paced-roster-authority-witness.sh calls this.
 roster_state_for() {
   local proj="$1" host="$2" f line p ah rate state
   f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
-  [ -r "$f" ] || return 1
+  [ -r "$f" ] || return 2
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|\#*) continue ;; esac
     IFS='|' read -r p ah rate state <<<"$line"
@@ -172,10 +172,16 @@ roster_state_for() {
 # standing `parked` (2026-08-25). A ROSTER miss is a logged refusal now.
 # _paced.<host>.conf is still the rotation SOURCE; deleting it is #364.
 participant_enabled() {
-  local name="$1" host="$2" rstate
-  if rstate="$(roster_state_for "$name" "$host")"; then
+  local name="$1" host="$2" rstate rc f
+  rstate="$(roster_state_for "$name" "$host")"; rc=$?
+  if [ "$rc" -eq 0 ]; then
     [ "$rstate" = "live" ]
     return
+  fi
+  if [ "$rc" -eq 2 ]; then
+    f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
+    log "ROSTER UNREADABLE at $f -- BLIND, cannot arm $name@$host: no setpoint is not permission"
+    return 1
   fi
   log "SKIP $name -- schedule/ROSTER names no $name@$host row, and ROSTER is the only arming surface"
   return 1
