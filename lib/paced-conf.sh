@@ -45,6 +45,11 @@
 #   was resolved, 1 when none exists -- and on that path PACED_CONF is left
 #   EMPTY on purpose, so a caller that ignores the return code fails on a
 #   missing file rather than silently reading a plausible-looking default.
+#
+#   A served build ships bin/ and lib/ but not schedule/ (#350), so a
+#   missing schedule/ DIRECTORY (not just a missing file inside it) means
+#   "no checkout here", not "no rotation" -- that case is fetched over gh
+#   instead of refused; see _paced_conf_fetch below.
 resolve_paced_conf() {
   local repo_root="${1:-}"
   if [ -z "$repo_root" ]; then
@@ -61,12 +66,49 @@ resolve_paced_conf() {
   elif [ -f "$repo_root/schedule/_paced.conf" ]; then
     PACED_CONF="$repo_root/schedule/_paced.conf"
     PACED_CONF_SRC="shared (no _paced.$PACED_HOST.conf)"
+  elif [ ! -d "$repo_root/schedule" ]; then
+    _paced_conf_fetch "$repo_root"
+    return $?
   else
     PACED_CONF=""
     PACED_CONF_SRC="NONE -- neither _paced.$PACED_HOST.conf nor _paced.conf under $repo_root/schedule"
     return 1
   fi
   return 0
+}
+
+# _paced_conf_fetch <repo-root> -- resolve_paced_conf's no-checkout branch:
+# same host-scoped-then-shared order as above, read via fetch_repo_file
+# (lib/dose-common.sh, #350) and materialised to a tempfile so every
+# downstream reader still takes a PATH. GAP (file absent at that ref) falls
+# through to the shared file same as a missing local file would; BLIND
+# (gh unreachable) refuses outright rather than guessing a second gh call
+# would fare differently.
+_paced_conf_fetch() {
+  local repo_root="$1" content rc
+  if ! declare -f fetch_repo_file >/dev/null; then
+    # shellcheck disable=SC1091
+    source "$(dirname "${BASH_SOURCE[0]}")/dose-common.sh"
+  fi
+  content="$(fetch_repo_file "schedule/_paced.$PACED_HOST.conf")"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    PACED_CONF="$(mktemp)"
+    printf '%s\n' "$content" > "$PACED_CONF"
+    PACED_CONF_SRC="host-scoped for $PACED_HOST via gh (no local checkout, #350)"
+    return 0
+  fi
+  if [ "$rc" -eq 4 ]; then
+    content="$(fetch_repo_file "schedule/_paced.conf")"; rc=$?
+    if [ "$rc" -eq 0 ]; then
+      PACED_CONF="$(mktemp)"
+      printf '%s\n' "$content" > "$PACED_CONF"
+      PACED_CONF_SRC="shared via gh (no _paced.$PACED_HOST.conf, no local checkout, #350)"
+      return 0
+    fi
+  fi
+  PACED_CONF=""
+  PACED_CONF_SRC="NONE -- no local $repo_root/schedule and neither _paced.$PACED_HOST.conf nor _paced.conf reachable via gh (rc=$rc)"
+  return 1
 }
 
 # paced_membership_set <repo-root>

@@ -102,6 +102,60 @@ case "$out" in
   *) bad "empty repo root should refuse -- got: $out" ;;
 esac
 
+# --- no local schedule/ at all: a served build (#350), fetch over gh --------
+echo "== lib/paced-conf.sh: no local schedule/ (served build) fetches over gh"
+FAKEBIN="$TMP/fakebin"; mkdir -p "$FAKEBIN" "$TMP/served"
+cat > "$FAKEBIN/gh" <<'FAKEGH'
+#!/usr/bin/env bash
+req=""
+for a in "$@"; do case "$a" in repos/*) req="$a" ;; esac; done
+case "$req" in
+  */contents/schedule/_paced.taro.conf*)
+    [ "$FAKE_HOST_RC" = 0 ] && { printf '%s' "$FAKE_HOST_CONTENT" | base64 -w0; exit 0; }
+    echo "HTTP 404: Not Found"; exit 1 ;;
+  */contents/schedule/_paced.conf*)
+    [ "$FAKE_SHARED_RC" = 0 ] && { printf '%s' "$FAKE_SHARED_CONTENT" | base64 -w0; exit 0; }
+    echo "HTTP 404: Not Found"; exit 1 ;;
+  repos/*) echo scheduler; exit 0 ;;
+  *) echo "fake gh: unhandled args: $*" >&2; exit 1 ;;
+esac
+FAKEGH
+chmod +x "$FAKEBIN/gh"
+
+fetch_resolve() {  # $1=host-scoped rc(0|1) $2=host content $3=shared rc(0|1) $4=shared content
+  (
+    set +u
+    PATH="$FAKEBIN:$PATH" FAKE_HOST_RC="$1" FAKE_HOST_CONTENT="$2" FAKE_SHARED_RC="$3" FAKE_SHARED_CONTENT="$4"
+    export PATH FAKE_HOST_RC FAKE_HOST_CONTENT FAKE_SHARED_RC FAKE_SHARED_CONTENT
+    # shellcheck disable=SC1090
+    source "$LIB"
+    PACED_HOST=taro; unset PACED_CONF
+    resolve_paced_conf "$TMP/served"; rc=$?
+    body="$(cat "${PACED_CONF:-/dev/null}" 2>/dev/null)"
+    echo "rc=$rc src=${PACED_CONF_SRC:-} body=[$body]"
+  )
+}
+
+out="$(fetch_resolve 0 'a|1|1|/bin/true' 1 '')"
+case "$out" in
+  *"rc=0"*"src=host-scoped for taro via gh"*"body=[a|1|1|/bin/true]"*)
+    ok "no local schedule/: host-scoped file fetched over gh" ;;
+  *) bad "host-scoped fetch should succeed -- got: $out" ;;
+esac
+
+out="$(fetch_resolve 1 '' 0 'b|1|1|/bin/true')"
+case "$out" in
+  *"rc=0"*"src=shared via gh"*"body=[b|1|1|/bin/true]"*)
+    ok "no local schedule/: host-scoped absent (GAP) falls through to shared over gh" ;;
+  *) bad "shared fetch fallback should succeed -- got: $out" ;;
+esac
+
+out="$(fetch_resolve 1 '' 1 '')"
+case "$out" in
+  *"rc=1"*"body=[]"*) ok "no local schedule/: neither reachable over gh -> refuses, PACED_CONF empty" ;;
+  *) bad "should refuse when gh has neither file -- got: $out" ;;
+esac
+
 # --- the runner's inline copy -----------------------------------------------
 # Lift the runner's block out by its markers and run it as a REAL script, the
 # same technique tests/sched-root-witness.sh uses. Extraction failing is a
