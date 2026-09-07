@@ -66,12 +66,7 @@ if ! resolve_paced_conf "$SCHED_ROOT"; then
   echo "scheduler: refusing rather than reporting an empty rotation as a quiet one." >&2
   exit 1
 fi
-# A served build with no local schedule/ (#350) resolves PACED_CONF to a
-# mktemp scratch file, not a repo path -- clean it up. Composed with QBUF's
-# own EXIT trap below, not overwritten by it: bash's `trap ... EXIT` replaces
-# the prior handler outright, so a second unconditional `trap` here would be
-# silently dropped the moment cmd_questions_issues runs.
-case "$PACED_CONF_SRC" in
+case "$PACED_CONF_SRC" in  # #350: a served build's PACED_CONF is a mktemp file; QBUF's trap re-covers cleaning it up, since `trap EXIT` replaces rather than chains
   *"via gh"*) PACED_CONF_TMP="$PACED_CONF"; trap 'rm -f "${PACED_CONF_TMP:-}"' EXIT ;;
 esac
 PACED_PTR="$HOME/.local/share/scheduler-paced-runner/rotation.idx"
@@ -755,11 +750,8 @@ cmd_questions_issues() {
   fi
 
   QBUF="$(mktemp -t "scheduler-questions-$proj.XXXXXX.md")"
-  # Rendered fresh, deleted on ANY exit including a crash or ^C -- the
-  # whole point of a view rather than a file. Also re-covers PACED_CONF_TMP
-  # (#350): this REPLACES the earlier resolve_paced_conf trap outright, so it
-  # has to clean up both, not just its own buffer.
-  trap 'rm -f "${QBUF:-}" "${PACED_CONF_TMP:-}"' EXIT INT TERM
+  # Rendered fresh, deleted on ANY exit including a crash or ^C -- the whole point of a view rather than a file.
+  trap 'rm -f "${QBUF:-}" "${PACED_CONF_TMP:-}"' EXIT INT TERM  # also covers PACED_CONF_TMP (#350)
 
   {
     printf '# Questions for %s — GitHub issues (%s)\n\n' "$proj" "$slug"

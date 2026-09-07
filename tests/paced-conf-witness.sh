@@ -102,8 +102,7 @@ case "$out" in
   *) bad "empty repo root should refuse -- got: $out" ;;
 esac
 
-# --- no local schedule/ at all: a served build (#350), fetch over gh --------
-echo "== lib/paced-conf.sh: no local schedule/ (served build) fetches over gh"
+echo "== lib/paced-conf.sh: no local schedule/ (served build, #350) fetches over gh"
 FAKEBIN="$TMP/fakebin"; mkdir -p "$FAKEBIN" "$TMP/served"
 cat > "$FAKEBIN/gh" <<'FAKEGH'
 #!/usr/bin/env bash
@@ -182,16 +181,10 @@ runner_resolve() {  # $1=repo root  $2=PACED_HOST  $3=explicit PACED_CONF
   )
 }
 
-# Compare only the branches BOTH implementations have. The runner carries one
-# extra branch the library deliberately does not: PACED_HOST_MODE=1, which
-# takes the rotation from schedule/ROSTER over `gh` with no checkout at all
-# (bin/usage-paced-runner.sh:328-345). bin/scheduler has no host mode, so
-# there is nothing on the library side to compare it against.
-#
-# CORRECTED 2026-08-29. This used to call that branch "a legacy absolute path
-# into mandark's old checkout" -- deleted 2026-08-16 by de1f01c (#230), with
-# host mode in its place, so the comment named the wrong rung. The rungs in
-# order are asserted in tests/arming-precedence-witness.sh.
+# Compare only the branches BOTH implementations have. The runner's extra
+# branch, PACED_HOST_MODE=1 (bin/usage-paced-runner.sh:328-345), takes the
+# rotation from schedule/ROSTER with no checkout and has no library-side
+# equivalent; rung order is asserted in tests/arming-precedence-witness.sh.
 for case_spec in "both alpha" "both beta" "shared-only alpha"; do
   set -- $case_spec
   repo="$TMP/$1"; host="$2"
