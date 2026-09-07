@@ -19,6 +19,11 @@
 # reads no tracker, spends no quota and dispatches no real work.
 set -uo pipefail
 
+# This witness rehearses the account its fixture row is named for. Account
+# mode owns a row by NAME (the row name IS the account), so a tick running
+# as whoever invokes the suite must say which account it is standing in for.
+export PACED_ACCOUNT=solo
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 TEMPO="$REPO/bin/tempo.sh"

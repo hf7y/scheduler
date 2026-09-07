@@ -607,7 +607,11 @@ own_names=(); own_cmds=(); own_accts=()
 # 23 ROSTER rows: `account` equals `project` in 23 of 23, a copy of the primary
 # key. Host mode keeps `-x`, where rows carry a real account column and root
 # runs them on every account's behalf.
-_me="$(id -un)"
+# PACED_ACCOUNT states the identity this tick runs as. It exists because the
+# filter below now turns on that identity, and a witness must be able to
+# rehearse an account without being able to become that unix user. Unset --
+# which is every cron tick -- it is `id -un`, byte for byte the old behaviour.
+_me="${PACED_ACCOUNT:-$(id -un)}"
 for ((_i=0; _i<${#names[@]}; _i++)); do
   _prog="${cmds[$_i]%% *}"
   if [ "$PACED_HOST_MODE" = 1 ]; then

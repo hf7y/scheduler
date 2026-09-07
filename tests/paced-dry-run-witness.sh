@@ -14,6 +14,11 @@
 # ran by writing a sentinel file, under a fake HOME.
 set -uo pipefail
 
+# This witness rehearses the account its fixture row is named for. Account
+# mode owns a row by NAME (the row name IS the account), so a tick running
+# as whoever invokes the suite must say which account it is standing in for.
+export PACED_ACCOUNT=alpha
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNNER="$ROOT/bin/usage-paced-runner.sh"
 [ -x "$RUNNER" ] || { echo "runner not executable: $RUNNER"; exit 1; }

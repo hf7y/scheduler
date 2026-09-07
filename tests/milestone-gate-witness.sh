@@ -7,6 +7,11 @@
 # never writes ROSTER (#291). gh and the gate are stubbed.
 set -uo pipefail
 
+# This witness rehearses the account its fixture row is named for. Account
+# mode owns a row by NAME (the row name IS the account), so a tick running
+# as whoever invokes the suite must say which account it is standing in for.
+export PACED_ACCOUNT=ecosim
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 RUNNER="$REPO/bin/usage-paced-runner.sh"

@@ -19,6 +19,11 @@
 #      brake a participant permanently, on every subsequent silent run.
 set -uo pipefail
 
+# This witness rehearses the account its fixture row is named for. Account
+# mode owns a row by NAME (the row name IS the account), so a tick running
+# as whoever invokes the suite must say which account it is standing in for.
+export PACED_ACCOUNT=alpha
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNNER="$ROOT/bin/usage-paced-runner.sh"
 VERDICT="$ROOT/bin/verdict.sh"
