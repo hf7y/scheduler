@@ -19,6 +19,11 @@
 #      the counter: the next rc=2 run starts counting from 1, not from where
 #      it left off. rc=0 (RUN) hits the same reset branch in the source, so
 #      is not re-tested separately.
+#   4. rc=127 -- USAGE_GATE not found, e.g. missing from an installed build
+#      (#350) -- counts toward the SAME streak as rc=2, not a separate one
+#      the detector never watches. Before #350's fix, `-eq 2` reset the
+#      streak file on every rc=127 tick, so a permanently missing gate never
+#      tripped GATE-ERROR-STREAK no matter how many ticks it ran.
 #
 # The gate is a scripted stub via USAGE_GATE, so this spends no quota and
 # dispatches no real work.
@@ -46,7 +51,12 @@ echo "solo|1|$H/own-run solo batch" > "$conf"
 roster="$T/ROSTER"
 echo 'solo | solo@monkey | 20m | live' > "$roster"
 
-GATE_RC_FILE="$T/gate-rc"
+export GATE_RC_FILE="$T/gate-rc"  # the stub below runs as a separate process (exec'd by
+# $RUNNER, not sourced), so an unexported GATE_RC_FILE is invisible to it --
+# `cat ""` then fails, `exit ""` reports bash's own "numeric argument
+# required" as rc=2, and every tick silently behaves as rc=2 regardless of
+# what was asked for. That coincided with rc=2 being the value most tests
+# here ask for, which is how this went unnoticed.
 cat > "$H/gate.sh" <<'EOF'
 #!/usr/bin/env bash
 rc="$(cat "$GATE_RC_FILE")"
@@ -95,6 +105,18 @@ tick 2
 tick 2
 n="$(streak_lines)"
 [ "${n:-0}" = "2" ] || fail "second streak of 3 after reset: expected 2 total GATE-ERROR-STREAK lines, got $n"
+
+# (4) rc=127 (gate binary not found) joins the SAME streak as rc=2 -- a
+# missing gate is not a separate, unwatched failure mode. Reset first with an
+# rc=1 HOLD, then mix rc=2 and rc=127 across the threshold.
+tick 1
+tick 2
+tick 2
+tick 127
+n="$(streak_lines)"
+[ "${n:-0}" = "3" ] || fail "mixed rc=2/rc=127 streak of 3: expected 3 total GATE-ERROR-STREAK lines, got $n"
+grep -q 'GATE-ERROR-STREAK n=3 -- usage gate has returned rc=127' "$LOG" \
+  || fail "mixed streak: expected the 3rd GATE-ERROR-STREAK line to name the rc=127 tick that completed it"
 
 if [ "$FAILED" -ne 0 ]; then
   echo "--- run.log ---"

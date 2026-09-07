@@ -41,8 +41,9 @@
 #                      per-account runners actually dispatched.
 #   PACED_MAX_PER_TICK (8) hard cap on dispatches in one tick, so one cron
 #                      firing cannot monopolize the flock. Rotation continues.
-#   GATE_ERROR_STREAK_THRESHOLD (5) consecutive gate rc=2 ticks before a
-#                      GATE-ERROR-STREAK line is logged. Why: the gate site.
+#   GATE_ERROR_STREAK_THRESHOLD (5) consecutive gate error ticks (any rc
+#                      other than 0 RUN or 1 HOLD) before a GATE-ERROR-STREAK
+#                      line is logged.
 set -uo pipefail
 
 JOB_NAME="scheduler-paced-runner"
@@ -759,11 +760,16 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     # identically, so a multi-day ERROR streak was indistinguishable from
     # ordinary pacing without grepping run.log for "rc=2" by hand. rc=0 or
     # rc=1 both mean the gate itself is working, so either resets the streak.
-    if [ "$rc" -eq 2 ]; then
+    # ANY OTHER rc counts too (#350): rc=127 (USAGE_GATE not found -- e.g. the
+    # installed build shipped without it) is not the documented probe-error
+    # rc=2, but it is just as much "the gate is broken, not the quota", and a
+    # detector keyed to `-eq 2` let a permanently-missing gate log an ordinary
+    # HOLD every tick forever with the streak file reset back to empty each time.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
       streak=$(( $(cat "$GATE_ERROR_STREAK_FILE" 2>/dev/null || echo 0) + 1 ))
       echo "$streak" > "$GATE_ERROR_STREAK_FILE"
       if [ $((streak % GATE_ERROR_STREAK_THRESHOLD)) -eq 0 ]; then
-        log "GATE-ERROR-STREAK n=$streak -- usage gate has returned rc=2 (probe failed/unparseable) for $streak consecutive ticks; this is a broken probe, not a busy quota"
+        log "GATE-ERROR-STREAK n=$streak -- usage gate has returned rc=$rc (not RUN/HOLD) for $streak consecutive ticks; this is a broken probe, not a busy quota"
       fi
     else
       rm -f "$GATE_ERROR_STREAK_FILE"
