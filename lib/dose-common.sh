@@ -99,6 +99,14 @@ gh_as() {
   fi
 }
 
+gh_as_identity_note() {  # not folded into gh_as: fetch_repo_file's `gh_as ... 2>&1` would capture it too (#570)
+  if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+    printf 'dose: reading gh as root, borrowing $SUDO_USER=%s'"'"'s session -- hostless only because %s is logged in here (#570)\n' "$SUDO_USER" "$SUDO_USER"
+  else
+    printf 'dose: reading gh as %s'"'"'s own session\n' "$(id -un)"
+  fi
+}
+
 # fetch_repo_file <relpath> -- print a file from the repo, over gh, no clone.
 #
 # GENERALISED FROM fetch_roster, not copied beside it. schedule/FREEZE needs
@@ -112,6 +120,7 @@ fetch_repo_file() {
     echo "BLIND: '$GH_BIN' not on PATH -- cannot read $rel" >&2
     return 6
   fi
+  [ -n "${_GH_AS_IDENTITY_LOGGED:-}" ] || { gh_as_identity_note >&2; _GH_AS_IDENTITY_LOGGED=1; }
   local out rc
   out="$(gh_as api "repos/$REPO_SLUG/contents/$rel?ref=$ROSTER_REF" --jq '.content' 2>&1)"
   rc=$?
