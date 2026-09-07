@@ -126,27 +126,29 @@ rm -rf "$T1_WORK"
 
 # test 3 (#306, "worth more than the other two together"): one account, two
 # repo args, dispatches to both. Models #304's scratch-account scenario.
-# Hermetic: do_now() runs for real (fake gh/sudo/getent/git/pgrep only)
-# against a scheduler-run stub planted at the exact path it execs.
+# Hermetic: do_now() runs for real (fake gh/sudo/getent/pgrep only) against a
+# scheduler-run stub planted at DOSE_BUILD_ROOT, no clone anywhere (#350).
 echo
 echo "-- test 3 (#306): the SAME worker, two repo arguments, dispatches to both --"
 T3_WORK="$(mktemp -d)"; T3_FAKEBIN="$T3_WORK/fakebin"; mkdir -p "$T3_FAKEBIN"
 T3_ACCT="scratchworker"
 T3_HOME="$T3_WORK/home/$T3_ACCT"
-T3_CLONE="$T3_HOME/Documents/Projects/scheduler"
-mkdir -p "$T3_CLONE/.git" "$T3_CLONE/bin" "$T3_CLONE/schedule"
+mkdir -p "$T3_HOME"
+T3_BUILD_ROOT="$T3_WORK/verb-builds"
+T3_BUILD="$T3_BUILD_ROOT/current/scheduler"
+mkdir -p "$T3_BUILD/bin" "$T3_BUILD/schedule"
 
-cat > "$T3_CLONE/schedule/scratch-repo-a.conf" <<'EOF'
+cat > "$T3_BUILD/schedule/scratch-repo-a.conf" <<'EOF'
 REPO_URL="https://github.com/hf7y/selfdev-permission-witness-scratch-a.git"
 EOF
-cat > "$T3_CLONE/schedule/scratch-repo-b.conf" <<'EOF'
+cat > "$T3_BUILD/schedule/scratch-repo-b.conf" <<'EOF'
 REPO_URL="https://github.com/hf7y/selfdev-permission-witness-scratch-b.git"
 EOF
 
 T3_DISPATCH_LOG="$T3_WORK/dispatch.log"; : > "$T3_DISPATCH_LOG"
 T3_RUNNING_MARKER="$T3_WORK/running-marker"
 
-cat > "$T3_CLONE/bin/scheduler-run" <<EOF
+cat > "$T3_BUILD/bin/scheduler-run" <<EOF
 #!/usr/bin/env bash
 proj="\$1"; tier="\$2"
 here="\$(cd "\$(dirname "\$0")/.." && pwd)"
@@ -154,7 +156,7 @@ repo_url="\$(grep -E '^REPO_URL=' "\$here/schedule/\$proj.conf" | head -1 | cut 
 printf '%s\t%s\t%s\n' "\$proj" "\$tier" "\$repo_url" >> "$T3_DISPATCH_LOG"
 touch "$T3_RUNNING_MARKER"
 EOF
-chmod +x "$T3_CLONE/bin/scheduler-run"
+chmod +x "$T3_BUILD/bin/scheduler-run"
 
 cat > "$T3_FAKEBIN/getent" <<EOF
 #!/usr/bin/env bash
@@ -172,12 +174,6 @@ while [ "$#" -gt 0 ]; do case "$1" in -n|-H) shift ;; -u) shift 2 ;; *) break ;;
 exec "$@"
 EOF
 chmod +x "$T3_FAKEBIN/sudo"
-
-cat > "$T3_FAKEBIN/git" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-chmod +x "$T3_FAKEBIN/git"
 
 cat > "$T3_FAKEBIN/pgrep" <<EOF
 #!/usr/bin/env bash
@@ -215,6 +211,7 @@ T3_OUT_A="$(
   HOME="$T3_HOSTILE_HOME" USER="$T3_HOSTILE_USER" LOGNAME="$T3_HOSTILE_USER" \
   DOSE_HOST_OVERRIDE=t3host \
   DOSE_SCHEDULE_DIR="$T3_SCHED_DIR" \
+  VERB_HOST_BUILD_ROOT="$T3_BUILD_ROOT" \
   FAKE_ROSTER_CONTENT="$T3_ROSTER" \
   "$REPO_ROOT/bin/dose-project.sh" scratch-repo-a --now 2>&1
 )"; T3_RC_A=$?
@@ -229,6 +226,7 @@ T3_OUT_B="$(
   HOME="$T3_HOSTILE_HOME" USER="$T3_HOSTILE_USER" LOGNAME="$T3_HOSTILE_USER" \
   DOSE_HOST_OVERRIDE=t3host \
   DOSE_SCHEDULE_DIR="$T3_SCHED_DIR" \
+  VERB_HOST_BUILD_ROOT="$T3_BUILD_ROOT" \
   FAKE_ROSTER_CONTENT="$T3_ROSTER" \
   "$REPO_ROOT/bin/dose-project.sh" scratch-repo-b --now 2>&1
 )"; T3_RC_B=$?
