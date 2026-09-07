@@ -1,44 +1,21 @@
 #!/usr/bin/env bash
 # served-not-cloned-witness.sh -- a v2 dispatch entry point takes its repo as
 # an ARGUMENT, never a fact derived from its own filesystem or its caller's
-# identity (hf7y/scheduler#306).
+# identity (hf7y/scheduler#306). Not a v1 alarm: this checks entry points
+# directly, not whether the 15 live accounts still clone.
 #
-# HISTORY. bin/served-not-cloned.sh enforced "a host is SERVED, not cloned"
-# until it was deleted 2026-08-22 (#511), two days before its own declared
-# sunset -- against a rule fourteen accounts were violating at that moment.
-# The old assertion ("no account executes out of a checkout it does not
-# own") presumed ownership-by-account, which v2 removes; #306's rewrite
-# (2026-08-27) replaces it with one line: "A worker's repo is an argument it
-# was handed, never a fact derived from its own filesystem or its own
-# username" -- and names three mechanical, cheap tests for it, all here:
-#
-#   (1) the crontab row a converger emits names no project (a cadence-only
-#       row is a fixed shape) -- see "test 1" below.
-#   (2) the dispatch entry point refuses when given no repo argument, rather
-#       than falling back to $USER, $HOME or basename $PWD -- see
-#       check_refuses_with_no_repo_arg() below. Landed first (#644) because
-#       it needed no fixture beyond a hostile identity.
-#   (3) the SAME worker, run twice with two different repo arguments,
-#       dispatches to both -- see "test 3" below. #306 calls this the one
-#       "worth more than the other two together" because (1) and (2) can be
-#       made to pass by a rename, and this issue exists because a rename
-#       passed once already. It needed a hermetic two-repo fixture (modeled
-#       on #304's scratch-account scenario) rather than a single hostile
-#       identity, which is why it landed after (1) and (2).
-#
-# NOT A V1 ALARM (#306's own instruction): this checks the entry points
-# scripts/humans call directly, not whether any of the 15 live accounts
-# still clone -- that would fire daily against every account for a rule the
-# project already knows it is mid-migration on.
+# #306's three tests, all here: (1) a converged crontab row names no
+# project, (2) the entry point refuses with no repo arg (check_refuses_with_
+# no_repo_arg, #644), (3) the same worker dispatches to two repo args in
+# turn -- "worth more than the other two together" per #306.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 source "$HERE/lib/witness-common.sh"
 echo "served-not-cloned-witness"
 
-# A hostile identity: a $USER/$HOME/$PWD that, if any of the three fallbacks
-# #306 names were live, would derive a DIFFERENT (and wrong) project name
-# than the caller meant -- rather than refusing.
+# A hostile identity: would derive a wrong project name if $USER/$HOME/$PWD
+# were ever consulted as a fallback.
 FAKE_HOME="$(mktemp -d)"; trap 'rm -rf "$FAKE_HOME"' EXIT
 FAKE_USER="totally-not-a-project-$$"
 
@@ -50,8 +27,6 @@ check_refuses_with_no_repo_arg() {  # <label> <script> [extra args...]
   [ "$rc" -ne 0 ] && ok "$label: exits nonzero ($rc) with no repo argument" \
     || bad "$label: exited 0 with no repo argument -- it dispatched SOMETHING"
 
-  # Same call, under an identity that would name a real-looking project if
-  # $USER, $HOME or `basename $PWD` were consulted as a fallback.
   out2="$(cd /tmp && HOME="$FAKE_HOME" USER="$FAKE_USER" LOGNAME="$FAKE_USER" "$script" "$@" 2>&1)"; rc2=$?
   [ "$rc2" -ne 0 ] && ok "$label: still refuses under a hostile \$USER/\$HOME/\$PWD" \
     || bad "$label: exited 0 under a hostile identity -- it derived a project instead of refusing"
@@ -76,15 +51,9 @@ for f in bin/scheduler-run bin/dose-project.sh; do
 done
 
 
-# --- test 1 (#306): the crontab row a converger emits names no project -----
-# bin/dose-project.sh's do_live() writes ONE line per converged account:
-# "<cron-fields> <RUNNER_ENV> <abs_cmd> <TAG>", where TAG comes from
-# schedule/_runner.conf's RUNNER_JOB (shared across every project) and
-# abs_cmd is the shared usage-paced-runner.sh build path -- neither is a
-# function of the calling PROJECT. Proven here against a live --check run,
-# not read off the source: a future refactor that slipped $PROJECT into the
-# line would be caught even if it never touched runner_tag()/TAG, the same
-# way #511 was a rename nothing here would have caught structurally.
+# test 1 (#306): dose-project.sh's do_live() crontab row has no $PROJECT in
+# it (TAG/abs_cmd both derive from the shared _runner.conf) -- proven live,
+# not read off the source.
 echo
 echo "-- test 1 (#306): the crontab row names no project --"
 T1_WORK="$(mktemp -d)"; T1_FAKEBIN="$T1_WORK/fakebin"; mkdir -p "$T1_FAKEBIN"
@@ -92,7 +61,6 @@ T1_PROJECT="scratch-crontab-shape-$$"
 
 cat > "$T1_FAKEBIN/gh" <<'EOF'
 #!/usr/bin/env bash
-# minimal fetch-only fake: --check only ever needs schedule/ROSTER's content.
 for a in "$@"; do
   case "$a" in
     */contents/schedule/ROSTER*) printf '%s' "$FAKE_ROSTER_CONTENT" | base64 -w0; exit 0 ;;
@@ -156,21 +124,10 @@ fi
 
 rm -rf "$T1_WORK"
 
-# --- test 3 (#306, "worth more than the other two together"): the SAME -----
-# worker, run twice with two different repo arguments, dispatches to both.
-#
-# Models #304's scratch-account scenario: one account/worker, no checkout of
-# its own beyond the shared scheduler clone dose-project.sh already resolves
-# via the roster, pointed at TWO different scratch repos in turn. This is
-# the one #306 says "cannot be satisfied by accident" -- (1) and (2) above
-# can be made to pass by a rename, and #306 exists because a rename passed
-# once already.
-#
-# Hermetic: bin/dose-project.sh's do_now() is exercised for real (fake
-# gh/sudo/getent/git/pgrep only), executing its OWN constructed command
-# against a stub ./bin/scheduler-run planted INSIDE the fixture clone at the
-# exact relative path do_now() execs -- so what runs is the real argv
-# dose-project.sh builds, not a re-implementation of it.
+# test 3 (#306, "worth more than the other two together"): one account, two
+# repo args, dispatches to both. Models #304's scratch-account scenario.
+# Hermetic: do_now() runs for real (fake gh/sudo/getent/git/pgrep only)
+# against a scheduler-run stub planted at the exact path it execs.
 echo
 echo "-- test 3 (#306): the SAME worker, two repo arguments, dispatches to both --"
 T3_WORK="$(mktemp -d)"; T3_FAKEBIN="$T3_WORK/fakebin"; mkdir -p "$T3_FAKEBIN"
@@ -179,9 +136,6 @@ T3_HOME="$T3_WORK/home/$T3_ACCT"
 T3_CLONE="$T3_HOME/Documents/Projects/scheduler"
 mkdir -p "$T3_CLONE/.git" "$T3_CLONE/bin" "$T3_CLONE/schedule"
 
-# Two distinct scratch repos, ONE account -- if the worker's repo were baked
-# into its filesystem or username instead of read from argv, these two calls
-# would collapse onto the same repo (or fail outright).
 cat > "$T3_CLONE/schedule/scratch-repo-a.conf" <<'EOF'
 REPO_URL="https://github.com/hf7y/selfdev-permission-witness-scratch-a.git"
 EOF
@@ -192,10 +146,6 @@ EOF
 T3_DISPATCH_LOG="$T3_WORK/dispatch.log"; : > "$T3_DISPATCH_LOG"
 T3_RUNNING_MARKER="$T3_WORK/running-marker"
 
-# Stands in for the real bin/scheduler-run, planted AT THE PATH do_now()
-# execs relative to the clone it resolved via getent -- so replacing it here
-# intercepts exactly what a real dispatch would run, with the same argv
-# dose-project.sh itself constructs, not a hand-rebuilt approximation of it.
 cat > "$T3_CLONE/bin/scheduler-run" <<EOF
 #!/usr/bin/env bash
 proj="\$1"; tier="\$2"
@@ -225,17 +175,13 @@ chmod +x "$T3_FAKEBIN/sudo"
 
 cat > "$T3_FAKEBIN/git" <<'EOF'
 #!/usr/bin/env bash
-# do_now()'s "pull first, always" -- always fast-forwards cleanly here.
 exit 0
 EOF
 chmod +x "$T3_FAKEBIN/git"
 
 cat > "$T3_FAKEBIN/pgrep" <<EOF
 #!/usr/bin/env bash
-# stands in for the real 'claude -p' process probe: "seen" once this
-# fixture's own scheduler-run stub has touched its marker, "not seen" once
-# the test clears it -- so both the ALREADY-RUNNING pre-check and the
-# post-dispatch wait key off one hermetic signal instead of a real process.
+# stands in for the real 'claude -p' probe: seen once the marker exists.
 [ -f "$T3_RUNNING_MARKER" ] && exit 0 || exit 1
 EOF
 chmod +x "$T3_FAKEBIN/pgrep"
@@ -258,10 +204,6 @@ T3_SCHED_DIR="$T3_WORK/dose-schedule"; mkdir -p "$T3_SCHED_DIR"
 printf 'RUNNER_JOB="scheduler-paced-runner"\nRUNNER_CMD="bin/usage-paced-runner.sh"\nRUNNER_ENV="PACED_MAX_PER_TICK=1"\n' \
   > "$T3_SCHED_DIR/_runner.conf"
 
-# A hostile ambient identity for BOTH calls -- neither $USER/$HOME nor cwd
-# names either scratch repo, so a regression that derived the repo from
-# identity rather than argv would either dispatch nothing distinguishable
-# between the two calls, or leak this name into the log.
 T3_HOSTILE_HOME="$(mktemp -d)"
 T3_HOSTILE_USER="totally-not-scratch-repo-$$"
 
@@ -279,10 +221,7 @@ T3_OUT_A="$(
 [ "$T3_RC_A" -eq 0 ] && ok "dispatch #1 (scratch-repo-a) exits 0" \
   || bad "dispatch #1 (scratch-repo-a) exited $T3_RC_A: $T3_OUT_A"
 
-# Marker cleared: the SAME worker is free again before its second ticket.
-# This fixture proves argument-driven repo selection across two sequential
-# dispatches, not concurrent execution of two repos at once.
-rm -f "$T3_RUNNING_MARKER"
+rm -f "$T3_RUNNING_MARKER"  # same worker, free again for its second ticket
 
 T3_OUT_B="$(
   cd /tmp && \
