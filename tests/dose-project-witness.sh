@@ -106,7 +106,7 @@ chmod +x "$FAKEBIN/crontab"
 cat > "$FAKEBIN/sudo" <<'EOF'
 #!/usr/bin/env bash
 while [ "$#" -gt 0 ]; do
-  case "$1" in -n) shift ;; -u) shift 2 ;; *) break ;; esac
+  case "$1" in -n|-H) shift ;; -u) shift 2 ;; *) break ;; esac
 done
 exec "$@"
 EOF
@@ -154,9 +154,17 @@ export VERB_HOST_BUILD_ROOT="$WORK/verb-builds"
 mkdir -p "$VERB_HOST_BUILD_ROOT/current/scheduler/bin"
 cat > "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" <<'STUB'
 #!/usr/bin/env bash
-true
+# Stands in for a build that CAN dispatch: under PACED_DRY_RUN it writes the
+# one line do_live()'s rehearsal reads. DOSE_REHEARSAL_DARK=1 makes it a build
+# that installs fine and dispatches nothing -- the case phase 4 exists for.
+[ "${DOSE_REHEARSAL_DARK:-0}" = 1 ] && exit 0
+printf '%s WOULD-DISPATCH [1/1] %s -> stub (mode=account)\n' \
+  "$(date -Is)" "${DOSE_REHEARSAL_PROJECT:-ecosim}" >> "$PACED_STATE_DIR/run.log"
 STUB
 chmod +x "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
+# the runner's account-mode gate ladder falls back to the build's copy
+printf '#!/usr/bin/env bash\ntrue\n' > "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-gate.sh"
+chmod +x "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-gate.sh"
 DOSE_ABS_CMD="$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"
 
 # --- 1. unknown project exits 4, not 0 --------------------------------------
@@ -267,6 +275,99 @@ if [ -s "$CRONFILE" ]; then
 else
   ok "nothing was written to the crontab when the build was missing"
 fi
+
+# --- 6e. AN INSTALLED BUILD THAT CANNOT DISPATCH IS REFUSED, NOT CONVERGED (#350) --
+# The whole point of phase 4. Before it, `-x` was the only test, so a build
+# that installs fine and dispatches nothing got a crontab line and a
+# `converged:` -- the account goes dark and dose reports it as fixing drift.
+# Measured on monkey 2026-09-07: the served build carries no usage-gate.sh
+# (HOLD gate rc=127) and no schedule/ROSTER (every row reads parked), and both
+# look like a busy quota in run.log.
+export CRONFILE="$WORK/cron6e"; : > "$CRONFILE"
+out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] && ok "a build that rehearses dark exits 5 (broken), not 0" \
+  || bad "dark build exited $rc, want 5: $out"
+grep -qi 'CANNOT DISPATCH' <<<"$out" \
+  && ok "the refusal says the build cannot dispatch" \
+  || bad "exit 5 but the message never says CANNOT DISPATCH: $out"
+grep -qi 'would take .* dark' <<<"$out" \
+  && ok "the refusal names the consequence it prevented" \
+  || bad "the refusal does not say what converging would have done: $out"
+grep -qi 'converged:' <<<"$out" \
+  && bad "THE BUG ITSELF: a dark build still printed 'converged:': $out" \
+  || ok "a dark build never prints 'converged:'"
+if [ -s "$CRONFILE" ]; then
+  bad "a crontab line was written for a build that cannot dispatch: $(cat "$CRONFILE")"
+else
+  ok "nothing was written to the crontab when the build could not dispatch"
+fi
+
+# --- 6f. no usage-gate.sh is its OWN named refusal, not a generic one -------
+# It matters that this is named: a missing gate does not crash, it logs
+# `HOLD (gate rc=127)` every tick, which is indistinguishable from being
+# on-pace. None of the 13 live accounts has a ~/.local/bin/usage-gate.sh to
+# fall back to (measured on monkey, 2026-09-07).
+export CRONFILE="$WORK/cron6f"; : > "$CRONFILE"
+mv "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-gate.sh" "$WORK/usage-gate.sh.bak"
+out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
+mv "$WORK/usage-gate.sh.bak" "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-gate.sh"
+chmod +x "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-gate.sh"
+[ "$rc" -eq 5 ] && ok "a build with no usage-gate.sh exits 5 (broken)" \
+  || bad "missing gate exited $rc, want 5: $out"
+grep -qi 'usage-gate.sh' <<<"$out" \
+  && ok "the refusal names usage-gate.sh, not just 'the rehearsal failed'" \
+  || bad "exit 5 but the message never names the gate: $out"
+grep -qi 'busy quota' <<<"$out" \
+  && ok "the refusal says what the symptom would have looked like" \
+  || bad "the refusal does not say the failure reads as a busy quota: $out"
+[ -s "$CRONFILE" ] && bad "a crontab line was written with no gate in the build" \
+  || ok "nothing was written to the crontab when the build had no gate"
+
+# --- 6g. --check refuses the same way, and does NOT escalate ---------------
+# --check must not preview a converge it knows would go dark; escalation is
+# --apply's alone, because --check writing nothing is not an incident.
+export CRONFILE="$WORK/cron6g"; : > "$CRONFILE"
+cat > "$FAKEBIN/demande" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$WORK/demande-calls.log"
+EOF
+chmod +x "$FAKEBIN/demande"
+: > "$WORK/demande-calls.log"
+out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --check 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] && ok "--check on a dark build exits 5 too, not 0" \
+  || bad "--check on a dark build exited $rc, want 5: $out"
+grep -qi 'would   converge' <<<"$out" \
+  && bad "--check still previewed a converge onto a build that cannot dispatch: $out" \
+  || ok "--check does not preview a converge it knows would go dark"
+[ -s "$WORK/demande-calls.log" ] \
+  && bad "--check escalated to Zach; only --apply should: $(cat "$WORK/demande-calls.log")" \
+  || ok "--check does not escalate"
+
+# --- 6h. --apply DOES escalate, through the demande verb (Zach, 2026-09-07) --
+# A refusal printed on a terminal nobody is watching is how the fleet stops
+# arming quietly. This is the half that makes the guard visible.
+export CRONFILE="$WORK/cron6h"; : > "$CRONFILE"
+: > "$WORK/demande-calls.log"
+out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
+grep -q 'ask ' "$WORK/demande-calls.log" \
+  && ok "--apply escalates the refusal through 'demande ask'" \
+  || bad "--apply refused but never escalated: $(cat "$WORK/demande-calls.log")"
+grep -q 'ecosim' "$WORK/demande-calls.log" \
+  && ok "the escalation names the project that was refused" \
+  || bad "the escalation does not name the project: $(cat "$WORK/demande-calls.log")"
+
+# --- 6i. escalation is NEVER fatal: no demande on PATH still refuses cleanly --
+# An escalation that could not be delivered must not turn a clean refusal into
+# a different, worse failure -- and it must SAY it reached nobody.
+export CRONFILE="$WORK/cron6i"; : > "$CRONFILE"
+rm -f "$FAKEBIN/demande"
+out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] && ok "with no demande on PATH the refusal is still exit 5" \
+  || bad "missing demande changed the exit code to $rc: $out"
+grep -qi 'reached nobody' <<<"$out" \
+  && ok "an undelivered escalation says so rather than passing silently" \
+  || bad "the escalation failed silently: $out"
+
 
 # --- 7. a HOST-scoped override wins over the shared conf, per field (#112/#350) --
 export CRONFILE="$WORK/cron7"; : > "$CRONFILE"

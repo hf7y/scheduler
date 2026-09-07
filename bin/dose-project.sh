@@ -286,6 +286,68 @@ do_parked() {
   exit 0
 }
 
+# --- 5a. WOULD THIS BUILD ACTUALLY DISPATCH? (#350) -------------------------
+# `-x $abs_cmd` is presence, and presence is not capability. Converging a live
+# account onto a build that cannot dispatch takes that account DARK and prints
+# `converged:` -- a failure reported as a fix, which is the shape this estate
+# keeps re-deriving. Two ways, both measured on monkey 2026-09-07, and BOTH
+# read in run.log as an ordinary busy quota:
+#
+#   * the build carries no bin/usage-gate.sh, so every tick logs
+#     `HOLD (gate rc=127)`. Account mode's ladder falls back to
+#     ~/.local/bin/usage-gate.sh -- and none of the 13 live accounts has one.
+#   * the build carries no schedule/ROSTER (carry.sh excludes it on purpose,
+#     #350; #432 makes it a service), so roster_state_for fails for every
+#     project and every row reads parked.
+#
+# So REHEARSE: run the runner the cron line will name, as the account it will
+# run as. PACED_DRY_RUN=1 suppresses only the exec, the ledger row and the run
+# record (#358) -- ROSTER, conf resolution and account resolution all run for
+# real. PACED_FORCE=1 skips the gate and tempo, which makes the answer
+# deterministic and spends no Anthropic quota; the gate is therefore checked
+# separately below, because a missing gate is precisely what a HOLD hides.
+REHEARSAL_WHY=''
+REHEARSAL_LOG=''
+build_can_dispatch() {  # <abs_cmd>
+  local abs_cmd="$1" home gate dir rc
+  home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
+  [ -n "$home" ] || { REHEARSAL_WHY="$ROW_ACCT has no home directory"; return 1; }
+
+  # The runner's OWN account-mode ladder (usage-paced-runner.sh, "which gate"),
+  # so this answers the question the tick asks, not a similar-looking one.
+  gate="$home/.local/bin/usage-gate.sh"
+  [ -x "$gate" ] || gate="$DOSE_BUILD_ROOT/bin/usage-gate.sh"
+  [ -x "$gate" ] || {
+    REHEARSAL_WHY="neither $home/.local/bin/usage-gate.sh nor the build carries usage-gate.sh, so every tick would log HOLD (gate rc=127) and read as a busy quota"
+    return 1; }
+
+  dir="$(sudo -n -u "$ROW_ACCT" -H mktemp -d 2>/dev/null)" \
+    || { REHEARSAL_WHY="could not open a scratch state dir as $ROW_ACCT"; return 1; }
+  # shellcheck disable=SC2086  # RUNNER_ENV is a conf-supplied VAR=VAL list
+  sudo -n -u "$ROW_ACCT" -H env "HOME=$home" "PACED_STATE_DIR=$dir" \
+    PACED_DRY_RUN=1 PACED_FORCE=1 PACED_MAX_PER_TICK=1 ${RUNNER_ENV:-} \
+    "$abs_cmd" >/dev/null 2>&1
+  rc=$?
+  REHEARSAL_LOG="$(sudo -n -u "$ROW_ACCT" cat "$dir/run.log" 2>/dev/null)"
+  sudo -n -u "$ROW_ACCT" rm -rf "$dir" 2>/dev/null || true
+
+  grep -q "WOULD-DISPATCH .* $PROJECT " <<<"$REHEARSAL_LOG" && return 0
+  REHEARSAL_WHY="the rehearsal exited $rc and never reached a WOULD-DISPATCH for '$PROJECT'"
+  return 1
+}
+
+# THE REFUSAL HAS TO REACH A PERSON (Zach, 2026-09-07). A refusal printed on a
+# terminal nobody is watching is how the fleet stops arming quietly. `demande`
+# is crt's estate-wide door; it is NEVER fatal here, because an escalation that
+# could not be delivered must not turn a clean refusal into a broken one.
+escalate_refusal() {
+  local msg="dose --apply refused $PROJECT on $HOST: the served build cannot dispatch; nothing written"
+  if command -v demande >/dev/null 2>&1; then
+    demande ask "$msg" dose >/dev/null 2>&1 && return 0
+  fi
+  echo "        (this refusal reached nobody but you -- 'demande' did not take it)" >&2
+}
+
 # --- 5. live -> converge; 6. verify by re-reading, never trust the write ---
 do_live() {
   if [ "$ROW_ACCT" != "$LOCAL_ACCOUNT" ]; then  # account existence only, $home is no longer part of abs_cmd
@@ -304,6 +366,13 @@ do_live() {
   local abs_cmd desired cur curline
   abs_cmd="$DOSE_BUILD_ROOT/$RUNNER_CMD_REL"
   [ -x "$abs_cmd" ] || { echo "BROKEN: no installed scheduler build at $abs_cmd -- refusing to converge to a clone path instead" >&2; exit 5; }
+  if ! build_can_dispatch "$abs_cmd"; then
+    echo "BROKEN: $abs_cmd is installed but CANNOT DISPATCH -- $REHEARSAL_WHY." >&2
+    echo "        Converging would take $ROW_ACCT dark and report it as fixing drift. Nothing was written." >&2
+    [ -n "$REHEARSAL_LOG" ] && printf '        rehearsal: %s\n' "$REHEARSAL_LOG" >&2
+    [ "$MODE" = --apply ] && escalate_refusal
+    exit 5
+  fi
   desired="$rate_fields ${RUNNER_ENV:+$RUNNER_ENV }$abs_cmd $TAG"
 
   cur="$(crontab_read "$ROW_ACCT")" || { echo "BROKEN: could not read $ROW_ACCT's crontab" >&2; exit 5; }

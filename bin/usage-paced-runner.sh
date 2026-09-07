@@ -243,8 +243,13 @@ if [ "$PACED_HOST_MODE" = 1 ]; then
   LOCK="${PACED_HOST_LOCK:-/run/lock/$JOB_NAME.lock}"
   mkdir -p "$STATE_DIR" "$(dirname "$LOCK")" 2>/dev/null || true
 else
-  STATE_DIR="$HOME/.local/share/$JOB_NAME"
+  # PACED_STATE_DIR is a REHEARSAL SEAM, not a config knob: `dose --apply`
+  # rehearses this runner (PACED_DRY_RUN=1) before converging a crontab onto
+  # the served build, and a rehearsal must not append to the account's real
+  # run.log. Unset -- which is every cron tick -- is the byte-for-byte old path.
+  STATE_DIR="${PACED_STATE_DIR:-$HOME/.local/share/$JOB_NAME}"
   LOCK="$STATE_DIR/run.lock"
+  mkdir -p "$STATE_DIR" 2>/dev/null || true
 fi
 LOG="$STATE_DIR/run.log"
 PTR="$STATE_DIR/rotation.idx"
