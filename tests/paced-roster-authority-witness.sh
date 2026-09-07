@@ -51,12 +51,6 @@ roster_state_for nosuchproject testhost >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 1 ] && ok "an unknown project@host returns 1 (GAP: no row, not a guess)" \
   || bad "expected rc=1 (GAP) for an unknown project, got rc=$rc"
 
-# THE BUG THIS SPINOFF FIXES (realisateur#350 investigation, 2026-09-07): a
-# totally absent/unreadable ROSTER used to return the SAME rc=1 as an
-# ordinary no-row miss above, so participant_enabled logged an identical
-# "SKIP ... names no X@host row" line whether the file was fine and simply
-# silent about this one project, or the whole arming surface had failed to
-# read. rc=2 (BLIND) now distinguishes the systemic case from the routine one.
 REPO_ROOT="$TMP/does-not-exist"
 roster_state_for alpha testhost >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 2 ] && ok "a missing ROSTER file returns 2 (BLIND), not the same 1 as a no-row GAP" \
@@ -88,15 +82,6 @@ grep -q 'SKIP epsilon .*ROSTER names no epsilon@testhost row' "$LOG" \
   && ok "and it says so in the log rather than going dark silently" \
   || bad "the refusal wrote no SKIP line: $(cat "$LOG" 2>/dev/null)"
 
-# THE OBSERVABILITY GAP THIS SPINOFF FIXES (realisateur#350 investigation,
-# 2026-09-07): before this fix, a totally absent/unreadable ROSTER made
-# EVERY row -- 19 of them, live on host monkey's clone-free pilot the day
-# this was found -- log the exact same "SKIP ... names no X@host row" line
-# as an ordinary, expected no-row miss (epsilon above). Nothing distinguished
-# "this project just has no row yet" from "the whole arming surface failed
-# to read." The dispatch DECISION must stay identical either way (still a
-# skip, still no HOLD/abort -- that redesign is #350/#359, not this fix);
-# only the LOG LINE should differ.
 REPO_ROOT="$TMP/does-not-exist"
 LOG="$TMP/run-blind.log"; log() { echo "$*" >> "$LOG"; }
 participant_enabled zeta testhost \
@@ -110,9 +95,6 @@ grep -q 'SKIP zeta .*names no zeta@testhost row' "$LOG" \
   || ok "the unreadable-file case does not masquerade as a routine no-row SKIP"
 REPO_ROOT="$TMP"
 
-# The mirror, on a READABLE roster that simply has no row for this project:
-# the ORIGINAL, routine message must still appear unchanged (not the new
-# BLIND wording) -- this is the common case and must stay boring.
 LOG="$TMP/run-gap.log"; log() { echo "$*" >> "$LOG"; }
 participant_enabled epsilon testhost \
   && bad "epsilon still has no ROSTER row -- must not dispatch" \
