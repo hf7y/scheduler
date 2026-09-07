@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Witness for bin/next-issue.sh (hf7y/scheduler#150 draft). Hermetic: a fake
-# gh on PATH, never the live estate. See bin/next-issue.sh's own header for
-# the reasoning this exercises.
+# Witness for bin/next-issue.sh (#150, adopted in #177). Hermetic: a fake gh
+# on PATH, never the live estate; that script's header carries the reasoning.
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
@@ -20,13 +19,10 @@ WORK="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
 
-# Fixture queue:
-#   #10  no deps                                        (oldest)
-#   #11  "Depends on #10"        -- #10 is CLOSED        -> eligible
-#   #12  "Depends on #99"        -- #99 is OPEN          -> SKIP
-#   #13  "Depends on #999"       -- #999 unreadable       -> SKIP (blind, fails closed)
-#   #14  "Blocked by #10"        -- alt phrasing, CLOSED  -> eligible
-#   #15  "Depends on #15"        -- self-reference        -> eligible (ignored)
+# Fixture queue, eligible unless noted: #10 no deps (oldest), #11 dep CLOSED,
+# #12 dep OPEN -> SKIP, #13 dep unreadable -> SKIP (blind, fails closed), #14
+# alt "Blocked by" phrasing, #15 self-reference (ignored), #16 assigned ->
+# SKIP (#663), #17 assignees: [] -- an empty list is not a claim.
 cat > "$FAKEBIN/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "${FAKE_GH_MODE:-ok}" = "listfail" ] && [ "$1 $2" = "issue list" ]; then
@@ -40,7 +36,9 @@ if [ "$1 $2" = "issue list" ]; then
   {"number": 12, "title": "deps on open #99", "createdAt": "2026-08-03T00:00:00Z", "body": "Depends on #99"},
   {"number": 13, "title": "deps on unreadable #999", "createdAt": "2026-08-04T00:00:00Z", "body": "Depends on #999"},
   {"number": 14, "title": "alt phrasing, closed", "createdAt": "2026-08-05T00:00:00Z", "body": "Blocked by #10"},
-  {"number": 15, "title": "self-referential dep", "createdAt": "2026-08-06T00:00:00Z", "body": "Depends on #15"}
+  {"number": 15, "title": "self-referential dep", "createdAt": "2026-08-06T00:00:00Z", "body": "Depends on #15"},
+  {"number": 16, "title": "claimed by a human", "createdAt": "2026-08-07T00:00:00Z", "body": "no deps here", "assignees": [{"login": "hf7y"}]},
+  {"number": 17, "title": "explicitly unassigned", "createdAt": "2026-08-08T00:00:00Z", "body": "no deps here", "assignees": []}
 ]
 JSON
   exit 0
@@ -83,9 +81,10 @@ nums="$(grep -oE '^#[0-9]+' <<<"$out" | tr -d '#')"
 want="10
 11
 14
-15"
+15
+17"
 if [ "$nums" = "$want" ]; then
-  ok "eligible issues printed oldest-first, exactly {10,11,14,15}"
+  ok "eligible issues printed oldest-first, exactly {10,11,14,15,17}"
 else
   bad "eligible set/order: got [$nums] want [$(tr '\n' ',' <<<"$want")]"
 fi
@@ -101,6 +100,22 @@ if grep -q "SKIP  #13  waiting on #999 (blind)" <<<"$stderr"; then
 else
   bad "#13 skip line missing or wrong: [$stderr]"
 fi
+
+# --- case 4b: a claimed issue is skipped; absent/empty assignees are not (#663) ---
+if grep -q "SKIP  #16  claimed by hf7y" <<<"$stderr"; then
+  ok "#16 skipped, names who claimed it"
+else
+  bad "#16 claim-skip line missing or wrong: [$stderr]"
+fi
+
+# Absent (#10-15) and empty (#17) both mean "nobody claimed this", never
+# "unreadable" -- inverting that drops every legacy issue out at once.
+if grep -qE '^#17\b' <<<"$out" && ! grep -q "SKIP  #10" <<<"$stderr"; then
+  ok "missing and empty assignee lists both read as unclaimed"
+else
+  bad "absent/empty assignees did not read as unclaimed: out=[$out] stderr=[$stderr]"
+fi
+
 
 # --- case 5: --limit is honoured ---------------------------------------------
 out="$("$TARGET" owner/repo --limit 2 2>/dev/null)"
