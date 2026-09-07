@@ -46,7 +46,7 @@ echo "solo|1|$H/own-run solo batch" > "$conf"
 roster="$T/ROSTER"
 echo 'solo | solo@monkey | 20m | live' > "$roster"
 
-GATE_RC_FILE="$T/gate-rc"
+export GATE_RC_FILE="$T/gate-rc"
 cat > "$H/gate.sh" <<'EOF'
 #!/usr/bin/env bash
 rc="$(cat "$GATE_RC_FILE")"
@@ -95,6 +95,15 @@ tick 2
 tick 2
 n="$(streak_lines)"
 [ "${n:-0}" = "2" ] || fail "second streak of 3 after reset: expected 2 total GATE-ERROR-STREAK lines, got $n"
+
+tick 1
+tick 2
+tick 2
+tick 127
+n="$(streak_lines)"
+[ "${n:-0}" = "3" ] || fail "mixed rc=2/rc=127 streak of 3: expected 3 total GATE-ERROR-STREAK lines, got $n"
+grep -q 'GATE-ERROR-STREAK n=3 -- usage gate has returned rc=127' "$LOG" \
+  || fail "mixed streak: expected the 3rd GATE-ERROR-STREAK line to name the rc=127 tick that completed it"
 
 if [ "$FAILED" -ne 0 ]; then
   echo "--- run.log ---"
