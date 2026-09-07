@@ -82,13 +82,10 @@ CONF_CONTENT="$SCHEDULE_CONTENT"
 # comparing them -- measured on monkey 2026-08-11, three armed accounts gave
 # three different answers.
 #
-# MUST run before route-deliveries.sh, below: on an account authenticated
-# purely by App token (no stored ~/.config/gh/hosts.yml -- dog@vaporwave is
-# the first of these), route-deliveries used to run before this mint existed,
-# found no gh credential at all, and went BLIND -- silently, since routing is
-# deliberately never fatal (hf7y/scheduler#657). Every account on monkey
-# carries a stored gho_ token, which is exactly why that ordering bug was
-# invisible there.
+# MUST precede route-deliveries.sh, below: an account authenticated purely by
+# App token (no stored hosts.yml -- dog@vaporwave is the first of these) used
+# to reach route-deliveries with no gh credential at all and go BLIND
+# silently, since routing is deliberately never fatal (hf7y/scheduler#657).
 GH_APP_HELPER="${SELFDEV_GH_APP_SH:-$HOME/.local/libexec/selfdev/selfdev-gh-app.sh}"
 GH_APP_CONF="${SELFDEV_APP_CONF:-$HOME/.config/selfdev/gh-app.conf}"
 if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_APP_CONF" ] && [ -x "$GH_APP_HELPER" ]; then

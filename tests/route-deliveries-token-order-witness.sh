@@ -1,19 +1,5 @@
 #!/usr/bin/env bash
-# Witness for hf7y/scheduler#657: route-deliveries.sh must see the minted
-# GH_TOKEN, not run before it exists.
-#
-# THE DEFECT. bin/scheduler-run calls route-deliveries.sh (delivering an
-# issue's blockers before the run picks tonight's work, #299) BEFORE it mints
-# the GitHub App installation token. On an account authenticated purely by
-# App token -- no ~/.config/gh/hosts.yml, the arrangement gen-2 wants and the
-# one `dog@vaporwave` already has -- route-deliveries runs with no credential
-# at all and goes BLIND, one tick stale, silently (never fatal by design, so
-# nothing surfaces it). Every account on monkey carries a stored gho_ token,
-# which is exactly why this went unnoticed there.
-#
-# THIS WITNESS never touches GitHub: route-deliveries.sh is stubbed to record
-# what GH_TOKEN held at the moment it was invoked, same fixture shape as
-# tests/gh-app-token-witness.sh (whose case 1 this borrows).
+# Witness for hf7y/scheduler#657: route-deliveries.sh must see GH_TOKEN before it runs.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
