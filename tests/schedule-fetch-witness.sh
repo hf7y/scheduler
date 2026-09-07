@@ -1,32 +1,10 @@
 #!/usr/bin/env bash
-# Witness for bin/scheduler-run's fetch fallback (hf7y/scheduler#350).
-#
-# THE GAP THIS CLOSES. CONF, RULES_FILE, FRAG_FILE and the _contain*.conf loop
-# all read "$SCHED_ROOT/schedule/..." off disk. That is fine in a dev checkout
-# or a v1 per-account clone (schedule/ is fast-forwarded before every
-# dispatch), but the served build #350 exists to retire clones onto ships
-# bin/ and lib/, not schedule/ (confirmed: `.../scheduler/schedule` 404s
-# against hf7y/verbs) -- so a scheduler-run running from that build had no
-# local schedule/ at all and would fail every one of these reads outright.
-#
-# read_schedule_rel in bin/scheduler-run now reads LOCAL when
-# $SCHED_ROOT/schedule exists (unchanged from before -- every other fixture in
-# this suite creates that directory, so they never touch the branch below),
-# and fetches live over `gh` -- the same no-checkout mechanism fetch_roster
-# already uses for schedule/ROSTER -- only when the directory itself is
-# absent. This witness is the ONLY fixture in the suite with no schedule/ dir
-# at all, so it is the only one that can exercise that branch.
-#
-# Asserts:
-#   1. CONF, USES_STANDING_RULES and a @@FRAGMENT:@@ marker all resolve by
-#      live fetch when schedule/ does not exist locally, and the assembled
-#      PROMPT is identical in shape to the local-read witnesses.
-#   2. _contain.conf (optional) is fetched too, when present.
-#   3. a GAP (repo reachable, file absent on that ref) is loud and exits
-#      nonzero -- nothing dispatched -- distinguishable in the message from
-#   4. a BLIND (gh itself failing) on the same call site.
-#   5. a fixture WITH a local schedule/ dir never calls gh at all, even when
-#      gh would fail -- the regression this whole conversion must not cause.
+# Witness for bin/scheduler-run's fetch fallback (hf7y/scheduler#350):
+# CONF/RULES_FILE/FRAG_FILE/_contain*.conf fetched live via gh when
+# $SCHED_ROOT/schedule does not exist (the served-build case), local
+# otherwise (every other fixture in this suite, unchanged). Asserts the
+# fetch path resolves all four, GAP vs BLIND are distinguishable and loud,
+# and a local schedule/ dir never calls gh even when gh is set to fail.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

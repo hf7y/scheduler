@@ -24,17 +24,10 @@ SCHEDULE_DIR="$SCHED_ROOT/schedule"
 # shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/dose-common.sh"
 
-# read_schedule_rel <name-under-schedule/> -- local when $SCHEDULE_DIR exists
-# (dev checkout / v1 clone, fast-forwarded before every dispatch, faster than
-# any build cadence -- not broken on the way out); a file missing from an
-# EXISTING schedule/ dir is a real error, not masked by fetching a same-named
-# file off main. Only when $SCHEDULE_DIR is absent -- the served build #350
-# exists for, which ships bin/ and lib/ but not schedule/ (confirmed:
-# `.../scheduler/schedule` 404s against hf7y/verbs) -- does it fetch live from
-# hf7y/scheduler over the API, no checkout, same as fetch_roster.
-#
-# Call plain, never `x=$(read_schedule_rel ...)`: that subshell drops the
-# SCHEDULE_SRC/SCHEDULE_CONTENT this sets before returning.
+# read_schedule_rel <name-under-schedule/>: local if $SCHEDULE_DIR exists
+# (checkout/clone, unchanged), else fetched live via gh (served build, #350,
+# no schedule/ shipped). Call plain, not `x=$(...)`: that subshell would drop
+# the SCHEDULE_SRC/SCHEDULE_CONTENT this sets.
 read_schedule_rel() {
   local rel="${1:?read_schedule_rel needs a schedule/-relative path}"
   if [ -d "$SCHEDULE_DIR" ]; then
