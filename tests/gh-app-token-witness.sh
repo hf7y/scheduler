@@ -25,8 +25,7 @@
 # TOKEN AND NOT A PAT". One source, once per dispatch, same for every account.
 #
 # Asserts, and 2 and 4 are the ones that rot:
-#   1. configured + helper works => GH_TOKEN is exported with EXACTLY what the
-#      helper printed
+#   1. configured + helper works => GH_TOKEN is exported with EXACTLY what the helper printed
 #   2. NOT configured => no GH_TOKEN, and the run proceeds. Fail-open is
 #      deliberate: this must never take a working credential away from an
 #      account that already had one, which is every account but ecosim today
