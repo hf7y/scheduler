@@ -593,11 +593,29 @@ done < "$PACED_CONF"
 # line all go. `examined` stays as the loop's termination guarantee for the
 # EXPIRED/FROZEN paths, which are decisions about rows this account owns.
 own_names=(); own_cmds=(); own_accts=()
+#
+# ACCOUNT MODE ASKS THE ACCOUNT, NOT THE PATH (2026-09-07). `-x` was never the
+# question -- it was a PROXY for it, valid only while every row named a 0700
+# per-account clone that no other uid could execute. Point a row at the served
+# build and the proxy inverts: one path, mode 0755, executable by all 19, so
+# every account claims every row. Measured on vaporwave, which has no clones:
+# `dog`'s own row failed `-x` (its clone path does not exist) and the tick
+# logged "1 row(s) belong to other accounts and none to this one" -- the
+# account's own row, read as somebody else's.
+#
+# The row's NAME is the account. hf7y/realisateur#996 measured that across all
+# 23 ROSTER rows: `account` equals `project` in 23 of 23, a copy of the primary
+# key. Host mode keeps `-x`, where rows carry a real account column and root
+# runs them on every account's behalf.
+_me="$(id -un)"
 for ((_i=0; _i<${#names[@]}; _i++)); do
   _prog="${cmds[$_i]%% *}"
-  if [ -x "$_prog" ] || command -v "$_prog" >/dev/null 2>&1; then
-    own_names+=("${names[$_i]}"); own_cmds+=("${cmds[$_i]}"); own_accts+=("${accts[$_i]}")
+  if [ "$PACED_HOST_MODE" = 1 ]; then
+    [ -x "$_prog" ] || command -v "$_prog" >/dev/null 2>&1 || continue
+  else
+    [ "${names[$_i]}" = "$_me" ] || continue
   fi
+  own_names+=("${names[$_i]}"); own_cmds+=("${cmds[$_i]}"); own_accts+=("${accts[$_i]}")
 done
 _foreign=$(( ${#names[@]} - ${#own_names[@]} ))
 names=("${own_names[@]}"); cmds=("${own_cmds[@]}"); accts=("${own_accts[@]}")
