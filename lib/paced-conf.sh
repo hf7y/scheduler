@@ -61,12 +61,39 @@ resolve_paced_conf() {
   elif [ -f "$repo_root/schedule/_paced.conf" ]; then
     PACED_CONF="$repo_root/schedule/_paced.conf"
     PACED_CONF_SRC="shared (no _paced.$PACED_HOST.conf)"
+  elif [ ! -d "$repo_root/schedule" ]; then
+    _paced_conf_fetch "$repo_root"
+    return $?
   else
     PACED_CONF=""
     PACED_CONF_SRC="NONE -- neither _paced.$PACED_HOST.conf nor _paced.conf under $repo_root/schedule"
     return 1
   fi
   return 0
+}
+
+_paced_conf_fetch() {  # <repo-root> -- schedule/ missing (#350): host-scoped then shared, via fetch_repo_file (lib/dose-common.sh)
+  local repo_root="$1" content rc
+  declare -f fetch_repo_file >/dev/null || source "$(dirname "${BASH_SOURCE[0]}")/dose-common.sh"
+  content="$(fetch_repo_file "schedule/_paced.$PACED_HOST.conf")"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    PACED_CONF="$(mktemp)"
+    printf '%s\n' "$content" > "$PACED_CONF"
+    PACED_CONF_SRC="host-scoped for $PACED_HOST via gh (no local checkout, #350)"
+    return 0
+  fi
+  if [ "$rc" -eq 4 ]; then
+    content="$(fetch_repo_file "schedule/_paced.conf")"; rc=$?
+    if [ "$rc" -eq 0 ]; then
+      PACED_CONF="$(mktemp)"
+      printf '%s\n' "$content" > "$PACED_CONF"
+      PACED_CONF_SRC="shared via gh (no _paced.$PACED_HOST.conf, no local checkout, #350)"
+      return 0
+    fi
+  fi
+  PACED_CONF=""
+  PACED_CONF_SRC="NONE -- no local $repo_root/schedule and neither _paced.$PACED_HOST.conf nor _paced.conf reachable via gh (rc=$rc)"
+  return 1
 }
 
 # paced_membership_set <repo-root>
