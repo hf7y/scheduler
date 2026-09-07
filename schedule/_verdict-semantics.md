@@ -1,10 +1,15 @@
    CONTINUE   there is ACTIONABLE work left -- an open issue you could pick up
               on the next run without anyone else doing anything first.
-   DONE       nothing actionable right now. THIS INCLUDES a queue whose only
-              open issues are BLOCKED WAITING ON A HUMAN. You asked; the answer
-              arrives when it arrives. Recording CONTINUE there gets you
-              re-dispatched every tick to re-read an issue nobody has touched,
-              which spends real quota to learn nothing.
+   DONE       nothing actionable right now, and nothing outside this run needs
+              to change before the next dispatch could find something.
+   BLOCKED    the queue's only open issues cannot move without something
+              OUTSIDE this run -- a credential, a human answer, a real-world
+              event that has not happened yet. Name the exact wall in the
+              reason (verdict.sh set <job> BLOCKED "<reason>" refuses a
+              reason under 6 words). This lengthens the dispatch interval
+              instead of DONE's full stop or CONTINUE's every-tick retry --
+              re-reading the same unmet wall every run spends real quota to
+              learn nothing.
    IMPOSSIBLE a real dead end, not merely out of turns -- that is CONTINUE.
 
 Recording nothing is treated as NOT-DONE and re-dispatched, which is the safe
