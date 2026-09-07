@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# carry.sh -- the actuator tests/carry-drift-witness.sh never had (#315).
+# carry.sh -- copy each carried file from main onto bashified (#315).
 #
-# DERIVED, NOT LISTED, because the detector is: the carried set is "tracked on
-# both refs under bin/ and lib/", read here from the same refs, so the two
-# cannot disagree about what a carry is. A carries.tsv would be a second
+# DERIVED, NOT LISTED: the carried set is "tracked on both refs under bin/ and
+# lib/", read from the refs themselves. A carries.tsv would be a second
 # definition of one fact -- what #210 refuses -- and carried path equals source
 # path here, so it would add nothing.
 #
