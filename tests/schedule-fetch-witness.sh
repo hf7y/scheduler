@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Witness for bin/scheduler-run's fetch fallback (hf7y/scheduler#350): with no local $SCHED_ROOT/schedule, CONF/RULES_FILE/FRAG_FILE/_contain*.conf are fetched via gh instead.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
