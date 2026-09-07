@@ -98,8 +98,6 @@ printf 'RUNNER_JOB="scheduler-paced-runner"\nRUNNER_CMD="bin/usage-paced-runner.
 T1_BUILD_ROOT="$T1_WORK/verb-builds"; mkdir -p "$T1_BUILD_ROOT/current/scheduler/bin"
 cat > "$T1_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" <<'EOF'
 #!/usr/bin/env bash
-# do_live() now REHEARSES this build before converging (#350 phase 4), so the
-# stub has to be a build that can dispatch, not merely one that exists.
 printf 'WOULD-DISPATCH [1/1] %s -> stub\n' "$SCRATCH_PROJECT" >> "$PACED_STATE_DIR/run.log"
 EOF
 chmod +x "$T1_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh"

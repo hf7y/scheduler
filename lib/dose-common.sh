@@ -55,10 +55,9 @@ cron_fields_for_rate() {
 
 validate_cron() { [ "$(awk '{print NF}' <<<"$1")" -eq 5 ]; }
 
-# --- crontab access, one account's at a time. Foreign-account read mirrors
-# bin/sync-crontab.sh's read_crontab_for(): "no crontab for" is a successful
-# read of nothing (crontab -l's own exit 1 for that case), anything else
-# nonzero is a real failure and must not be swallowed into "empty".
+# --- crontab access, one account's at a time. "no crontab for" is a
+# successful read of nothing (crontab -l's own exit 1 for that case); anything
+# else nonzero is a real failure and must not be swallowed into "empty".
 crontab_read() {
   local acct="$1" out rc
   if [ "$acct" = "$LOCAL_ACCOUNT" ]; then

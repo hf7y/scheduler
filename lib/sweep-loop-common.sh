@@ -9,10 +9,9 @@
 # REQUIRED
 #   JOB_NAME    short, unique, matches the wrapper's own filename. Names this
 #               job's state dir (~/.local/share/$JOB_NAME) and MUST match the
-#               SWEEP_JOB_NAME/BATCH_JOB_NAME field in schedule/<project>.conf
-#               -- that is how sync-crontab.sh finds this job's expiry state.
-#               TRAP: this script no longer edits crontab; sync-crontab.sh is
-#               the only writer, so a schedule has one source.
+#               SWEEP_JOB_NAME/BATCH_JOB_NAME field in schedule/<project>.conf.
+#               TRAP: this script never edits crontab; `dose` is the only
+#               writer, so a schedule has one source.
 #   PROJECT_KEY short, unique PER PROJECT, not per job. A project's Tier 1 and
 #               Tier 2 wrappers have different JOB_NAMEs and the SAME
 #               PROJECT_KEY -- that shared key is how they detect and avoid
@@ -682,7 +681,6 @@ if [[ "$NOW_IS" > "$EXPIRES_AT" ]]; then
   {
     echo "=== $NOW_IS ==="
     echo "expired -- dead-man switch tripped; no work attempted (no clone, no claude). $MSG"
-    echo "note: bin/sync-crontab.sh prunes this job's crontab line on its next --apply run; this script never touches crontab itself"
     echo "=== skipped (expired $EXPIRES_AT) $NOW_IS (0s) ==="
   } >> "$LOG"
   # Exit 3, not 0: distinct from success and from a fatal error (1), so a

@@ -72,10 +72,6 @@ fi
 # root and must not reach for a host lock path.
 out="$(PACED_HOST_MODE=0 bash -n "$RUNNER" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "account mode parses clean" || bad "parse failed: $out"
-# The DEFAULT must stay $HOME-scoped. PACED_STATE_DIR is a rehearsal seam
-# (#350 phase 4: `dose --apply` runs this file with PACED_DRY_RUN=1 before
-# converging a crontab, and must not append to the account's real run.log);
-# unset -- which is every cron tick -- it resolves to the old path exactly.
 grep -q 'STATE_DIR="\${PACED_STATE_DIR:-\$HOME/.local/share/\$JOB_NAME}"' "$RUNNER" \
   && ok "account mode still defaults to the \$HOME-scoped state dir" \
   || bad "the account-mode state dir no longer defaults to \$HOME-scoped"

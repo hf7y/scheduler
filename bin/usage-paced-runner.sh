@@ -243,10 +243,7 @@ if [ "$PACED_HOST_MODE" = 1 ]; then
   LOCK="${PACED_HOST_LOCK:-/run/lock/$JOB_NAME.lock}"
   mkdir -p "$STATE_DIR" "$(dirname "$LOCK")" 2>/dev/null || true
 else
-  # PACED_STATE_DIR is a REHEARSAL SEAM, not a config knob: `dose --apply`
-  # rehearses this runner (PACED_DRY_RUN=1) before converging a crontab onto
-  # the served build, and a rehearsal must not append to the account's real
-  # run.log. Unset -- which is every cron tick -- is the byte-for-byte old path.
+  # A REHEARSAL SEAM for `dose --apply`; unset (every tick) is the old path.
   STATE_DIR="${PACED_STATE_DIR:-$HOME/.local/share/$JOB_NAME}"
   LOCK="$STATE_DIR/run.lock"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
@@ -631,12 +628,8 @@ fi
 MAX_PER_TICK="${PACED_MAX_PER_TICK:-8}"
 
 # --- validate conf is committed before dispatch (2026-07-27) ----------------
-# FOCUS.md's "Consolidation roadmap" item 1 gate: "the paced runner
-# dispatches from a committed/validated copy of _paced*.conf". This check
-# refuses to dispatch a participant whose conf is dirty relative to HEAD
-# (verified) -- see bin/schedule-clean-check.sh for the gate itself (#471,
-# extracted out of the retired bin/sync-crontab.sh so this stays the one
-# definition of the rule).
+# Refuses to dispatch a participant whose conf is dirty relative to HEAD.
+# bin/schedule-clean-check.sh is the gate itself and the one definition (#471).
 if [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT/.git" ]; then
   if ! "$SELF_DIR/schedule-clean-check.sh" 2>/dev/null; then
     log "REFUSE -- schedule/ is dirty relative to HEAD (run git commit in the repo to proceed)"

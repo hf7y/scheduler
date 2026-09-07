@@ -67,7 +67,6 @@ deadman_check() {
   {
     echo "=== $now_is ==="
     echo "expired -- dead-man switch tripped; no work attempted (no clone, no claude). $msg"
-    echo "note: bin/sync-crontab.sh prunes this job's crontab line on its next --apply run; this script never touches crontab itself"
     echo "=== skipped (expired $expires_at) $now_is (0s) ==="
   } >> "$LOG"
   return 3
@@ -82,10 +81,7 @@ deadman_check() {
 # It measured the calendar: every job died EXPIRY_DAYS after its first run,
 # healthy or not, and the only cure was a human noticing and running `rm`
 # (found live 2026-08-11: three healthy, working accounts all within 19
-# hours of self-destructing on that timer, one already dead). The switch is
-# also what `sync-crontab.sh --apply` reads to PRUNE a job's crontab line, so
-# an unnoticed trip escalates from "stops running" to "stops being scheduled
-# at all".
+# hours of self-destructing on that timer, one already dead).
 #
 # WHAT COUNTS AS ALIVE, and why it is not "succeeded". A job that runs and
 # FAILS every night is not silent -- it is shouting, and the FAILED notify plus

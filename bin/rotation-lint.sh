@@ -20,8 +20,8 @@
 # one project, which is ROSTER's own shape and not visible here. Finding 2
 # survives intact, because pooling is still per LINE. The same hazard on the
 # FIXED-CRON side is confirmed live rather than theoretical -- see the
-# aedile/vkv-inventory notes in `_paced.conf` -- and bin/sync-crontab.sh
-# asserts it there. These files go in #364, and this lint goes with them.
+# aedile/vkv-inventory notes in `_paced.conf`. These files go in #364, and
+# this lint goes with them.
 #
 # Checks (both are zero-false-positive -- there is no legitimate reason for
 # either, which is what makes them safe to run every sweep):

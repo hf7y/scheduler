@@ -230,8 +230,8 @@ if [ "$ROW_HOST" != "$HOST" ]; then
   exit 7
 fi
 
-# --- 3b. the job this converges -- SAME source sync-crontab.sh already reads
-# (schedule/_runner.conf, host-overridable), read LOCAL now, not fetched
+# --- 3b. the job this converges -- schedule/_runner.conf, host-overridable,
+# read LOCAL now, not fetched
 # (#350). Only RUNNER_CRON is deliberately not read here -- roster-derived,
 # the whole point of #81 retiring the global RUNNER_CRON.
 runner_field_present() { grep -qE "^${2}=" <<<"$1"; }
@@ -287,25 +287,11 @@ do_parked() {
 }
 
 # --- 5a. WOULD THIS BUILD ACTUALLY DISPATCH? (#350) -------------------------
-# `-x $abs_cmd` is presence, and presence is not capability. Converging a live
-# account onto a build that cannot dispatch takes that account DARK and prints
-# `converged:` -- a failure reported as a fix, which is the shape this estate
-# keeps re-deriving. Two ways, both measured on monkey 2026-09-07, and BOTH
-# read in run.log as an ordinary busy quota:
-#
-#   * the build carries no bin/usage-gate.sh, so every tick logs
-#     `HOLD (gate rc=127)`. Account mode's ladder falls back to
-#     ~/.local/bin/usage-gate.sh -- and none of the 13 live accounts has one.
-#   * the build carries no schedule/ROSTER (carry.sh excludes it on purpose,
-#     #350; #432 makes it a service), so roster_state_for fails for every
-#     project and every row reads parked.
-#
-# So REHEARSE: run the runner the cron line will name, as the account it will
-# run as. PACED_DRY_RUN=1 suppresses only the exec, the ledger row and the run
-# record (#358) -- ROSTER, conf resolution and account resolution all run for
-# real. PACED_FORCE=1 skips the gate and tempo, which makes the answer
-# deterministic and spends no Anthropic quota; the gate is therefore checked
-# separately below, because a missing gate is precisely what a HOLD hides.
+# `-x` is presence; presence is not capability. Converging onto a build that
+# cannot dispatch takes the account DARK and prints `converged:` -- measured
+# two ways on monkey 2026-09-07, both reading as a busy quota. So REHEARSE:
+# DRY_RUN suppresses only the exec, ledger row and run record (#358), FORCE
+# skips gate and tempo, which is why the gate is tested separately first.
 REHEARSAL_WHY=''
 REHEARSAL_LOG=''
 build_can_dispatch() {  # <abs_cmd>
@@ -313,8 +299,7 @@ build_can_dispatch() {  # <abs_cmd>
   home="$(getent passwd "$ROW_ACCT" 2>/dev/null | cut -d: -f6)"
   [ -n "$home" ] || { REHEARSAL_WHY="$ROW_ACCT has no home directory"; return 1; }
 
-  # The runner's OWN account-mode ladder (usage-paced-runner.sh, "which gate"),
-  # so this answers the question the tick asks, not a similar-looking one.
+  # The runner's OWN ladder: the tick's question, not a lookalike.
   gate="$home/.local/bin/usage-gate.sh"
   [ -x "$gate" ] || gate="$DOSE_BUILD_ROOT/bin/usage-gate.sh"
   [ -x "$gate" ] || {
@@ -336,10 +321,8 @@ build_can_dispatch() {  # <abs_cmd>
   return 1
 }
 
-# THE REFUSAL HAS TO REACH A PERSON (Zach, 2026-09-07). A refusal printed on a
-# terminal nobody is watching is how the fleet stops arming quietly. `demande`
-# is crt's estate-wide door; it is NEVER fatal here, because an escalation that
-# could not be delivered must not turn a clean refusal into a broken one.
+# THE REFUSAL HAS TO REACH A PERSON (Zach, 2026-09-07). `demande` is crt's
+# door, and is NEVER fatal -- an undelivered escalation is not a second failure.
 escalate_refusal() {
   local msg="dose --apply refused $PROJECT on $HOST: the served build cannot dispatch; nothing written"
   if command -v demande >/dev/null 2>&1; then
@@ -360,9 +343,8 @@ do_live() {
     || { echo "BROKEN: roster rate '$ROW_RATE' for '$PROJECT' is not a form dose understands (want <N>h or <N>m)" >&2; exit 5; }
   validate_cron "$rate_fields" || { echo "BROKEN: derived cron '$rate_fields' is not 5 fields" >&2; exit 5; }
 
-  # abs_cmd used to be $home/$SCHED_REL/... (#350). DOSE_BUILD_ROOT, not
-  # DOSE_LIB_DIR, because the latter is THIS run's own resolved path and
-  # would freeze today's dated build dir into the crontab line.
+  # DOSE_BUILD_ROOT, not DOSE_LIB_DIR: the latter is THIS run's own resolved
+  # path and would freeze today's dated build dir into the crontab line (#350).
   local abs_cmd desired cur curline
   abs_cmd="$DOSE_BUILD_ROOT/$RUNNER_CMD_REL"
   [ -x "$abs_cmd" ] || { echo "BROKEN: no installed scheduler build at $abs_cmd -- refusing to converge to a clone path instead" >&2; exit 5; }

@@ -139,7 +139,7 @@ Read 'gh issue list --repo hf7y/scheduler --limit 200' next -- the tracker is th
 
 HARD RULES (this is infrastructure, not an app):
   * Make changes ONLY as commits in THIS working directory ($DEV_CLONE) on branch $BRANCH. Touch nothing outside it.
-  * NEVER run 'crontab', and NEVER run bin/sync-crontab.sh with --apply. Previewing (no --apply) to validate a schedule change is fine and encouraged.
+  * NEVER run 'crontab', and NEVER run 'dose <project> --apply' -- it converges a live account's crontab. Previewing with --check is fine and encouraged.
   * NEVER edit the installed wrapper scripts under ~/.local/bin, or any file outside this repo.
   * Prefer changes verifiable here and now (shellcheck, a dry-run, simulating cron's env with 'env -u SSH_AUTH_SOCK') over changes whose only test is 'wait for tonight'. If a change can't be safely verified without going live, write it up as a proposal in the report instead of committing it.
   * On a real judgment call or anything needing the user's blessing, file it with 'bin/scheduler ask scheduler \"<the question>\"' (it opens a GitHub issue) and describe it in the report rather than deciding unilaterally.

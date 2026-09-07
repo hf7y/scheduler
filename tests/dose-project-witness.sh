@@ -154,9 +154,6 @@ export VERB_HOST_BUILD_ROOT="$WORK/verb-builds"
 mkdir -p "$VERB_HOST_BUILD_ROOT/current/scheduler/bin"
 cat > "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-paced-runner.sh" <<'STUB'
 #!/usr/bin/env bash
-# Stands in for a build that CAN dispatch: under PACED_DRY_RUN it writes the
-# one line do_live()'s rehearsal reads. DOSE_REHEARSAL_DARK=1 makes it a build
-# that installs fine and dispatches nothing -- the case phase 4 exists for.
 [ "${DOSE_REHEARSAL_DARK:-0}" = 1 ] && exit 0
 printf '%s WOULD-DISPATCH [1/1] %s -> stub (mode=account)\n' \
   "$(date -Is)" "${DOSE_REHEARSAL_PROJECT:-ecosim}" >> "$PACED_STATE_DIR/run.log"
@@ -277,12 +274,8 @@ else
 fi
 
 # --- 6e. AN INSTALLED BUILD THAT CANNOT DISPATCH IS REFUSED, NOT CONVERGED (#350) --
-# The whole point of phase 4. Before it, `-x` was the only test, so a build
-# that installs fine and dispatches nothing got a crontab line and a
-# `converged:` -- the account goes dark and dose reports it as fixing drift.
-# Measured on monkey 2026-09-07: the served build carries no usage-gate.sh
-# (HOLD gate rc=127) and no schedule/ROSTER (every row reads parked), and both
-# look like a busy quota in run.log.
+# Before this, `-x` was the only test: a build that installs fine and
+# dispatches nothing got a crontab line and a `converged:`.
 export CRONFILE="$WORK/cron6e"; : > "$CRONFILE"
 out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
 [ "$rc" -eq 5 ] && ok "a build that rehearses dark exits 5 (broken), not 0" \
@@ -303,10 +296,7 @@ else
 fi
 
 # --- 6f. no usage-gate.sh is its OWN named refusal, not a generic one -------
-# It matters that this is named: a missing gate does not crash, it logs
-# `HOLD (gate rc=127)` every tick, which is indistinguishable from being
-# on-pace. None of the 13 live accounts has a ~/.local/bin/usage-gate.sh to
-# fall back to (measured on monkey, 2026-09-07).
+# A missing gate does not crash: it logs `HOLD (gate rc=127)`, forever.
 export CRONFILE="$WORK/cron6f"; : > "$CRONFILE"
 mv "$VERB_HOST_BUILD_ROOT/current/scheduler/bin/usage-gate.sh" "$WORK/usage-gate.sh.bak"
 out="$("$TARGET" ecosim --apply 2>&1)"; rc=$?
@@ -324,8 +314,6 @@ grep -qi 'busy quota' <<<"$out" \
   || ok "nothing was written to the crontab when the build had no gate"
 
 # --- 6g. --check refuses the same way, and does NOT escalate ---------------
-# --check must not preview a converge it knows would go dark; escalation is
-# --apply's alone, because --check writing nothing is not an incident.
 export CRONFILE="$WORK/cron6g"; : > "$CRONFILE"
 cat > "$FAKEBIN/demande" <<EOF
 #!/usr/bin/env bash
@@ -344,8 +332,6 @@ grep -qi 'would   converge' <<<"$out" \
   || ok "--check does not escalate"
 
 # --- 6h. --apply DOES escalate, through the demande verb (Zach, 2026-09-07) --
-# A refusal printed on a terminal nobody is watching is how the fleet stops
-# arming quietly. This is the half that makes the guard visible.
 export CRONFILE="$WORK/cron6h"; : > "$CRONFILE"
 : > "$WORK/demande-calls.log"
 out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
@@ -357,8 +343,6 @@ grep -q 'ecosim' "$WORK/demande-calls.log" \
   || bad "the escalation does not name the project: $(cat "$WORK/demande-calls.log")"
 
 # --- 6i. escalation is NEVER fatal: no demande on PATH still refuses cleanly --
-# An escalation that could not be delivered must not turn a clean refusal into
-# a different, worse failure -- and it must SAY it reached nobody.
 export CRONFILE="$WORK/cron6i"; : > "$CRONFILE"
 rm -f "$FAKEBIN/demande"
 out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
