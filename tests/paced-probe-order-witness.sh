@@ -39,11 +39,6 @@
 # for -- not the contents of the production file.
 set -uo pipefail
 
-# This witness rehearses the account its fixture row is named for. Account
-# mode owns a row by NAME (the row name IS the account), so a tick running
-# as whoever invokes the suite must say which account it is standing in for.
-export PACED_ACCOUNT=a
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 RUNNER="$REPO/bin/usage-paced-runner.sh"
@@ -113,6 +108,14 @@ EOF
     i=$((i + 1))
   done
 
+  # WHICH ROW IS OURS is now the account's NAME, not whether its path happens
+  # to be executable (2026-09-07). The paths above still differ, so this
+  # fixture keeps describing the same monkey shape -- one own row among two
+  # foreign ones -- it just states the ownership instead of implying it.
+  # own_idx=-1 names an account no row belongs to: the "none runnable" case.
+  local mine=__no_such_account__
+  case "$own_idx" in 0) mine=ecosim ;; 1) mine=bibliothecaire ;; 2) mine=vim-arcade ;; esac
+
   echo "$seed" > "$h/.local/share/scheduler-paced-runner/rotation.idx"
 
   # TEMPO_ENABLED=0 for the same reason the freeze allowlist is a fixture: this
@@ -123,6 +126,7 @@ EOF
   # would make this suite non-hermetic. tests/tempo-witness.sh owns tempo.
   PROBE_TALLY="$h/probes"; : > "$PROBE_TALLY"; export PROBE_TALLY
   HOME="$h" PACED_CONF="$conf" PACED_HOST=monkey PACED_MAX_PER_TICK=1 \
+    PACED_ACCOUNT="$mine" \
     SCHEDULER_FREEZE_FILE="$SCHEDULER_FREEZE_FILE" \
     SCHEDULER_FREEZE_CACHE="$SCHEDULER_FREEZE_CACHE" \
     TEMPO_ENABLED=0 \

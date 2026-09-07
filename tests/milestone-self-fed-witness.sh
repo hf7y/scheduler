@@ -50,6 +50,9 @@ EOF
   chmod +x "$h/bin/gh" "$h/gate.sh" "$h/own-run"
 
   echo "ecosim|1|$h/own-run ecosim batch" > "$h/paced.conf"
+  # Account mode owns a row by NAME (the row name IS the account), so a tick
+  # running as whoever invokes the suite says which account it stands in for.
+  local PACED_ACCOUNT=ecosim; export PACED_ACCOUNT
   echo 0 > "$h/.local/share/scheduler-paced-runner/rotation.idx"
 
   env HOME="$h" PATH="$h/bin:$PATH" \
