@@ -65,19 +65,19 @@ echo "== 1. symlink install -> resolves to the real checkout, not the symlink"
 make_repo "$TMP/checkout" "$BLOCK"
 mkdir -p "$TMP/localbin"
 ln -sfn "$TMP/checkout/bin/scheduler" "$TMP/localbin/scheduler"
-out="$("$TMP/localbin/scheduler" 2>&1)"
+out="$(env -u SCHED_ROOT "$TMP/localbin/scheduler" 2>&1)"  # -u: an ambient SCHED_ROOT (this account exports one) would skip self-location entirely
 [ "$out" = "RESOLVED=$TMP/checkout" ] \
   && ok "followed the symlink home ($TMP/checkout)" || bad "got: $out"
 
 echo "== 2. run straight out of the checkout -> that checkout"
-out="$("$TMP/checkout/bin/scheduler" 2>&1)"
+out="$(env -u SCHED_ROOT "$TMP/checkout/bin/scheduler" 2>&1)"
 [ "$out" = "RESOLVED=$TMP/checkout" ] && ok "self-located" || bad "got: $out"
 
 echo "== 3. THE REGRESSION: no checkout anywhere -> refuses, does NOT exit 0"
 # A copied-not-symlinked install sitting outside any repo, on a host where
 # the fallback path does not exist. This is the dexter case, exactly.
 stub "$TMP/orphan/bin/scheduler" "$NOBLOCK"
-out="$("$TMP/orphan/bin/scheduler" 2>&1)"; rc=$?
+out="$(env -u SCHED_ROOT "$TMP/orphan/bin/scheduler" 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && ok "non-zero exit (rc=$rc)" || bad "exited 0 on an unreadable world"
 grep -q 'cannot locate the scheduler checkout' <<<"$out" \
   && ok "says it cannot find the repo" || bad "silent: $out"
@@ -91,7 +91,7 @@ echo "== 4. a stray PARENT git repo is not mistaken for the checkout"
 mkdir -p "$TMP/stray"; : > "$TMP/stray/.git"
 [ -e "$TMP/stray/.git" ] || { echo "FAIL: fixture has no .git -- case 4 would pass without testing anything"; exit 1; }
 stub "$TMP/stray/bin/scheduler" "$NOBLOCK"
-out="$("$TMP/stray/bin/scheduler" 2>&1)"
+out="$(env -u SCHED_ROOT "$TMP/stray/bin/scheduler" 2>&1)"
 grep -q "RESOLVED=$TMP/stray" <<<"$out" \
   && bad "adopted a git repo that is not the scheduler checkout" \
   || ok "rejected a .git without the marker file"
@@ -101,7 +101,7 @@ echo "== 5. the third step really is the documented fallback path"
 # to be used rather than merely present in a comment.
 mkdir -p "$TMP/stray2"; : > "$TMP/stray2/.git"
 stub "$TMP/stray2/bin/scheduler" "$BLOCK"
-out="$("$TMP/stray2/bin/scheduler" 2>&1)"
+out="$(env -u SCHED_ROOT "$TMP/stray2/bin/scheduler" 2>&1)"
 grep -qF "$FALLBACK" <<<"$out" \
   && ok "fell back to the documented path" || bad "fallback not exercised: $out"
 
