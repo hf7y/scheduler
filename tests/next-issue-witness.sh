@@ -19,10 +19,9 @@ WORK="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
 
-# Fixture queue, eligible unless noted: #10 no deps (oldest), #11 dep CLOSED,
-# #12 dep OPEN -> SKIP, #13 dep unreadable -> SKIP (blind, fails closed), #14
-# alt "Blocked by" phrasing, #15 self-reference (ignored), #16 assigned ->
-# SKIP (#663), #17 assignees: [] -- an empty list is not a claim.
+# Fixture, eligible unless noted: #10 no deps (oldest), #11 dep CLOSED, #12 dep
+# OPEN -> SKIP, #13 dep unreadable -> SKIP (blind), #14 alt "Blocked by", #15
+# self-ref (ignored), #16 assigned -> SKIP (#663), #17 assignees: [] is no claim.
 cat > "$FAKEBIN/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "${FAKE_GH_MODE:-ok}" = "listfail" ] && [ "$1 $2" = "issue list" ]; then

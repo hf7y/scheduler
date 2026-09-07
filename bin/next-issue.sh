@@ -2,12 +2,10 @@
 # next-issue.sh -- suggest which open issue to pick up next, gated by
 # explicit "Depends on #N" text an issue's own body already carries.
 #
-# ADOPTED, per hf7y/scheduler#150 (decided 2026-08-14, landed in #177):
-# schedule/scheduler.conf's own BATCH_PROMPT (TRIAGE step) calls this script
-# directly, dogfooding on the one project this account fully owns. Other
-# projects' confs keep their own triage prose -- adopting the pointer there is
-# each project's own call, not a mandate from #150, whose PR body carries the
-# fuller research.
+# ADOPTED per #150 (decided 2026-08-14, landed in #177): scheduler.conf's own
+# BATCH_PROMPT calls this directly, dogfooding on the one project this account
+# owns. Other confs keep their own triage prose -- their call, not a mandate.
+# #150's PR body carries the fuller research.
 #
 # WHY THIS SHAPE AND NOT A SCORE. #150 found no reliable size signal in this
 # tracker -- body length does not predict hours-to-close, and a WSJF-style
@@ -17,11 +15,10 @@
 # `in-progress` fallback before it. A field nobody maintains is not a signal;
 # it is a mirror reflecting back as absence whatever nobody wrote to it.
 #
-# WHAT SURVIVES is what nobody has to maintain because it already exists for
-# another reason: issue AGE (a free GitHub timestamp), and the issue's own
-# prose naming what blocks it, written because the filer needed to say it. So:
-# OLDEST-first as before #150, but an issue is skipped -- not down-ranked --
-# while any "Depends on #N" it names is still open.
+# WHAT SURVIVES is what nobody maintains because it exists for another reason:
+# issue AGE (a free timestamp), and the issue's own prose naming what blocks
+# it, written because the filer needed to say it. So OLDEST-first as before
+# #150, but skipped -- not down-ranked -- while a "Depends on #N" is open.
 #
 # BLIND, not silently wrong. A dependency this script cannot resolve (`gh`
 # unreachable, rate-limited, the named issue deleted) is treated as OPEN and
