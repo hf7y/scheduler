@@ -12,6 +12,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 FX="$TMP/repo"
 mkdir -p "$FX/bin" "$FX/lib" "$FX/schedule"
 cp "$RUN" "$FX/bin/scheduler-run"
+cp "$ROOT/lib/dose-common.sh" "$FX/lib/dose-common.sh"  # #350: scheduler-run now sources this unconditionally
 printf '#!/usr/bin/env bash\nexit 0\n' > "$FX/bin/freeze-check.sh"
 chmod +x "$FX/bin/freeze-check.sh" "$FX/bin/scheduler-run"
 printf 'printf "%%s" "$PROMPT"\nexit 0\n' > "$FX/lib/sweep-loop-common.sh"
