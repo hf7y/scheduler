@@ -47,14 +47,14 @@ roster_state_for gamma testhost >/dev/null 2>&1 \
   && bad "a row for another host must not match" \
   || ok "a row naming another host does not match"
 
-roster_state_for nosuchproject testhost >/dev/null 2>&1 \
-  && bad "an unknown project must return 1, not a guess" \
-  || ok "an unknown project@host returns 1 (no row)"
+roster_state_for nosuchproject testhost >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 1 ] && ok "an unknown project@host returns 1 (GAP: no row, not a guess)" \
+  || bad "expected rc=1 (GAP) for an unknown project, got rc=$rc"
 
 REPO_ROOT="$TMP/does-not-exist"
-roster_state_for alpha testhost >/dev/null 2>&1 \
-  && bad "a missing ROSTER file must return 1, not fabricate a state" \
-  || ok "a missing ROSTER file returns 1"
+roster_state_for alpha testhost >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 2 ] && ok "a missing ROSTER file returns 2 (BLIND), not the same 1 as a no-row GAP" \
+  || bad "expected rc=2 (BLIND) for a missing ROSTER file, got rc=$rc"
 REPO_ROOT="$TMP"
 
 # --- participant_enabled: the actual dispatch decision ----------------------
@@ -81,6 +81,30 @@ participant_enabled epsilon testhost \
 grep -q 'SKIP epsilon .*ROSTER names no epsilon@testhost row' "$LOG" \
   && ok "and it says so in the log rather than going dark silently" \
   || bad "the refusal wrote no SKIP line: $(cat "$LOG" 2>/dev/null)"
+
+REPO_ROOT="$TMP/does-not-exist"
+LOG="$TMP/run-blind.log"; log() { echo "$*" >> "$LOG"; }
+participant_enabled zeta testhost \
+  && bad "an unreadable ROSTER must not dispatch -- BLIND is not permission" \
+  || ok "an unreadable ROSTER refuses the row, same dispatch outcome as a no-row GAP"
+grep -q 'ROSTER UNREADABLE at .*-- BLIND, cannot arm zeta@testhost' "$LOG" \
+  && ok "and it logs a loud, distinct BLIND line naming the unreadable path" \
+  || bad "no distinct BLIND line for an unreadable ROSTER: $(cat "$LOG" 2>/dev/null)"
+grep -q 'SKIP zeta .*names no zeta@testhost row' "$LOG" \
+  && bad "the unreadable-file case must NOT reuse the routine no-row SKIP wording" \
+  || ok "the unreadable-file case does not masquerade as a routine no-row SKIP"
+REPO_ROOT="$TMP"
+
+LOG="$TMP/run-gap.log"; log() { echo "$*" >> "$LOG"; }
+participant_enabled epsilon testhost \
+  && bad "epsilon still has no ROSTER row -- must not dispatch" \
+  || ok "a readable ROSTER missing one project's row still refuses that row"
+grep -q 'SKIP epsilon -- schedule/ROSTER names no epsilon@testhost row' "$LOG" \
+  && ok "and the routine no-row SKIP wording is unchanged by this fix" \
+  || bad "the routine no-row SKIP message changed or vanished: $(cat "$LOG" 2>/dev/null)"
+grep -q 'BLIND' "$LOG" \
+  && bad "a readable ROSTER with a merely-missing row must not print BLIND" \
+  || ok "no spurious BLIND line for the ordinary no-row case"
 
 # The signature IS the guarantee: a value never passed in cannot be consulted.
 if sed -n '/^participant_enabled() {/,/^}/p' "$R" | grep -q '\$enabled\|{enabled'; then
