@@ -343,9 +343,13 @@ grep -q 'ecosim' "$WORK/demande-calls.log" \
   || bad "the escalation does not name the project: $(cat "$WORK/demande-calls.log")"
 
 # --- 6i. escalation is NEVER fatal: no demande on PATH still refuses cleanly --
+# PATH restricted to FAKEBIN+bare essentials, not just "$FAKEBIN:$PATH": a host
+# that ships a real /usr/local/bin/demande (crt's verb build) would otherwise
+# still resolve one behind FAKEBIN once the fixture copy is removed, exercising
+# the live estate instead of the "nothing answers" path this case tests.
 export CRONFILE="$WORK/cron6i"; : > "$CRONFILE"
 rm -f "$FAKEBIN/demande"
-out="$(DOSE_REHEARSAL_DARK=1 "$TARGET" ecosim --apply 2>&1)"; rc=$?
+out="$(DOSE_REHEARSAL_DARK=1 PATH="$FAKEBIN:/usr/bin:/bin" "$TARGET" ecosim --apply 2>&1)"; rc=$?
 [ "$rc" -eq 5 ] && ok "with no demande on PATH the refusal is still exit 5" \
   || bad "missing demande changed the exit code to $rc: $out"
 grep -qi 'reached nobody' <<<"$out" \
