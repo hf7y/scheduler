@@ -127,8 +127,7 @@ rm -rf "$T1_WORK"
 # test 3 (#306, "worth more than the other two together"): one account, two
 # repo args, dispatches to both. Models #304's scratch-account scenario.
 # Hermetic: do_now() runs for real (fake gh/sudo/getent/pgrep only) against a
-# scheduler-run stub planted at DOSE_BUILD_ROOT -- no clone anywhere (#350:
-# do_now() now dispatches the installed build, same as do_live()).
+# scheduler-run stub planted at DOSE_BUILD_ROOT, no clone anywhere (#350).
 echo
 echo "-- test 3 (#306): the SAME worker, two repo arguments, dispatches to both --"
 T3_WORK="$(mktemp -d)"; T3_FAKEBIN="$T3_WORK/fakebin"; mkdir -p "$T3_FAKEBIN"
