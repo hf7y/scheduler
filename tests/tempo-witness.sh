@@ -160,12 +160,8 @@ esac
 pass "the default brakes on one label, and it is the one that means a human is in the way"
 
 echo "case 3c -- an assignee also counts as blocked, even with no label (#318)"
-# hf7y/scheduler#318 replaces the needs-human label with the GitHub assignee
-# field across three repos, but tempo's own site must not go first: landing
-# assignee-only detection here ahead of the other two repos would starve the
-# brake, since nothing assigns yet. ORing it onto the label instead is safe
-# in either order -- it only ever adds to the blocked count -- so this checks
-# the real filter tempo.sh sends to gh, not a re-derivation of it.
+# Why ORed onto the label rather than replacing it: bin/tempo.sh's own header
+# (#318). This checks the real filter tempo.sh sends to gh, not a re-derivation.
 FIXTURE="$T/issues.json"
 cat > "$FIXTURE" <<'JSON'
 [
