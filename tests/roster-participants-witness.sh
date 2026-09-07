@@ -25,10 +25,12 @@ gamma   | gamma@otherhost  | 6h | live
 
 delta   | delta@testhost   | 6h | live'
 
+VERB_HOST_BUILD_ROOT="$HERE/fixture-verb-builds"  # pinned, so the string below is host-independent
+export VERB_HOST_BUILD_ROOT
 out="$(printf '%s\n' "$ROSTER" | roster_rows)"
 
-grep -q '^alpha|1|/home/alpha/Documents/Projects/scheduler/bin/scheduler-run alpha batch$' <<<"$out" \
-  && ok "a live row becomes enabled=1 with the account's own command" || bad "live row wrong: $out"
+grep -q "^alpha|1|alpha|$VERB_HOST_BUILD_ROOT/current/scheduler/bin/scheduler-run alpha batch\$" <<<"$out" \
+  && ok "a live row becomes enabled=1, with an explicit account field and the served build's command" || bad "live row wrong: $out"
 grep -q '^beta|0|' <<<"$out" && ok "a parked row becomes enabled=0, not omitted" \
   || bad "parked row missing or wrong -- omitting it would ARM it (_paced.conf TRAP 1)"
 grep -q 'gamma' <<<"$out" && bad "a row for another host leaked in" \

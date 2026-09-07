@@ -19,9 +19,9 @@
 # (re-probed each iteration, not assumed) still owns the real stop condition --
 # this only removes the artificial one-per-tick ceiling, not the safety logic.
 #
-# Participants come from a participants conf (name|enabled|command), chosen
-# PER HOST -- see "which participants file" below. Each participant command is
-# a self-contained wrapper with its own lock + logging.
+# Participants come from a participants conf (name|enabled|command; host mode
+# adds an explicit acct field -- #350), chosen PER HOST -- see "which
+# participants file" below. Each command is a self-contained wrapper.
 #
 # Env knobs (forwarded to usage-gate.sh): USAGE_CEILING, USAGE_MIN_SLACK,
 # USAGE_PROBE_MODEL. Plus:
@@ -118,7 +118,8 @@ acct_of_prog() {
 # "$PACED_HOST": unset under `set -u`, the third consecutive blocked tick aborted
 # instead of filing (order pinned by tests/host-mode-preflight-witness.sh).
 roster_rows() {
-  local line p ah rate state acct
+  local line p ah rate state acct build_root
+  build_root="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler"
   # `|| [ -n "$line" ]` for the conf loader's reason below: a file with no
   # trailing newline is read one row short. ROSTER is one (hf7y/scheduler#430).
   while IFS= read -r line || [ -n "$line" ]; do
@@ -133,10 +134,10 @@ roster_rows() {
     # enabled is the roster's ONE state field -- the whole point of #79 is that
     # live/parked cannot disagree with a second file. No weight field: #528
     # deleted it (it was already inert here -- #55 -- and unexpressible under
-    # ROSTER).
+    # ROSTER). acct is now its own field, not read off the path below (#350).
     case "$state" in
-      live)   printf '%s|1|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
-      parked) printf '%s|0|/home/%s/Documents/Projects/scheduler/bin/scheduler-run %s batch\n' "$p" "$acct" "$p" ;;
+      live)   printf '%s|1|%s|%s\n' "$p" "$acct" "$build_root/bin/scheduler-run $p batch" ;;
+      parked) printf '%s|0|%s|%s\n' "$p" "$acct" "$build_root/bin/scheduler-run $p batch" ;;
     esac
   done
 }
@@ -526,23 +527,28 @@ fi
 # <<< paced conf resolution
 
 # --- load enabled participants -------------------------------------------------
-# Format: name|enabled|command. Used to carry an optional weight as a third
-# field, repeating a participant N times in the rotation pool below -- deleted
-# by #528 (host mode had already made it unexpressible: roster_rows emitted
-# weight 1 for every row, #55).
-names=(); cmds=()
+# Format: name|enabled|command (host mode: ...|acct|command, #350; PACED_HOST_MODE
+# says which). Used to carry an optional weight as a third field, repeating a
+# participant N times in the rotation pool below -- deleted by #528 (host mode
+# had already made it unexpressible: roster_rows emitted weight 1, #55).
+names=(); cmds=(); accts=()
 if [ ! -f "$PACED_CONF" ]; then
   log "FATAL no participants conf at $PACED_CONF [$PACED_CONF_SRC] host=$PACED_HOST"
   exit 1
 fi
 # `|| [ -n "$name" ]` because schedule/_paced.monkey.conf ends with no trailing
 # newline: a bare `read` saw 17 of its 18 rows and dropped the last silently.
-while IFS='|' read -r name enabled cmd || [ -n "$name" ]; do
+while IFS='|' read -r name enabled field3 field4 || [ -n "$name" ]; do
   case "$name" in ''|\#*) continue ;; esac
   name="${name// /}"
   participant_enabled "$name" "$PACED_HOST" || continue
+  if [ "$PACED_HOST_MODE" = 1 ]; then
+    acct="$field3"; cmd="$field4"
+  else
+    acct=""; cmd="$field3"
+  fi
   cmd="${cmd#"${cmd%%[![:space:]]*}"}"
-  names+=("$name"); cmds+=("$cmd")
+  names+=("$name"); cmds+=("$cmd"); accts+=("$acct")
 done < "$PACED_CONF"
 
 # --- EVERY RUNNER RUNS ONLY ITSELF (2026-08-19) -----------------------------
@@ -562,15 +568,15 @@ done < "$PACED_CONF"
 # the pool there is nothing to walk past, so the walk, its bound and its log
 # line all go. `examined` stays as the loop's termination guarantee for the
 # EXPIRED/FROZEN paths, which are decisions about rows this account owns.
-own_names=(); own_cmds=()
+own_names=(); own_cmds=(); own_accts=()
 for ((_i=0; _i<${#names[@]}; _i++)); do
   _prog="${cmds[$_i]%% *}"
   if [ -x "$_prog" ] || command -v "$_prog" >/dev/null 2>&1; then
-    own_names+=("${names[$_i]}"); own_cmds+=("${cmds[$_i]}")
+    own_names+=("${names[$_i]}"); own_cmds+=("${cmds[$_i]}"); own_accts+=("${accts[$_i]}")
   fi
 done
 _foreign=$(( ${#names[@]} - ${#own_names[@]} ))
-names=("${own_names[@]}"); cmds=("${own_cmds[@]}")
+names=("${own_names[@]}"); cmds=("${own_cmds[@]}"); accts=("${own_accts[@]}")
 
 n="${#names[@]}"
 if [ "$n" -eq 0 ]; then
@@ -727,7 +733,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   case "$last" in ''|*[!0-9-]*) last=-1 ;; esac
   idx=$(( (last + 1) % n ))
 
-  name="${names[$idx]}"; cmd="${cmds[$idx]}"
+  name="${names[$idx]}"; cmd="${cmds[$idx]}"; row_acct="${accts[$idx]:-}"
 
   # The runnability TEST that used to stand here (2026-08-06, "RUNNABILITY
   # BEFORE THE PROBE") moved to load time -- see "EVERY RUNNER RUNS ONLY
@@ -989,10 +995,10 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   fi
   export SCHEDULER_RESUME_PR="$_resume_pr" SCHEDULER_RESUME_REPO="$_resume_repo"
 
-  # HOST MODE: run AS the account that owns the row. The account is read off
-  # the command's own path (/home/<acct>/...), which is the authority for who
-  # runs it -- that path IS the thing being executed, so deriving the uid from
-  # anywhere else would let the two disagree.
+  # HOST MODE: run AS the account that owns the row. The account now comes
+  # from roster_rows()' own field (#350), not the command's path -- the
+  # command names the served build, identical for every account.
+  # acct_of_prog() stays as a fallback for an old-shaped, hand-set PACED_CONF.
   #
   # A LOGIN-SHAPED PATH IS NOT OPTIONAL. `sudo -u x cmd` is not a login shell,
   # so Ubuntu's .profile never runs and ~/.local/bin is absent -- the omission
@@ -1000,10 +1006,10 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # script that had just linked it (realisateur MONKEY.md 8.1). /usr/local/bin
   # is included because that is where this host's verbs now live.
   if [ "$PACED_HOST_MODE" = 1 ]; then
-    acct="$(acct_of_prog "$prog" || true)"
+    acct="${row_acct:-$(acct_of_prog "$prog" || true)}"
     acct_home="$(getent passwd "$acct" 2>/dev/null | cut -d: -f6)"
     if [ -z "$acct" ] || [ -z "$acct_home" ]; then
-      log "SKIP $name -- host mode cannot tell which account owns '$prog' (no /home/<acct>/ prefix, or no such account). NOT dispatched."
+      log "SKIP $name -- host mode cannot tell which account owns '$prog' (no explicit field and no /home/<acct>/ prefix, or no such account). NOT dispatched."
       dispatched=$((dispatched + 1))
       continue
     fi
