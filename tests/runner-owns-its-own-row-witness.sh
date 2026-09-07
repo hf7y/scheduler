@@ -92,7 +92,8 @@ slots="$(sed -n 's/.*ROTATION .* slots=\([0-9]*\) :: \(.*\)$/\1 \2/p' <<<"$log" 
 # real account column, so `-x` is still the right question there; this pins
 # that the account-mode change did not quietly rewrite it.
 echo "== host mode is unchanged"
-BLOCK="$(sed -n '/^_me="\$(id -un)"/,/^done$/p' "$RUNNER")"
+BLOCK="$(sed -n '/^_me=/,/^done$/p' "$RUNNER")"
+[ -n "$BLOCK" ] || bad "could not find the ownership filter block in $RUNNER -- this assertion is inert"
 grep -q 'PACED_HOST_MODE" = 1' <<<"$BLOCK" \
   && ok "the filter branches on host mode rather than applying one rule to both" \
   || bad "the ownership filter no longer distinguishes host mode from account mode"
