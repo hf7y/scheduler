@@ -20,6 +20,24 @@
 set -uo pipefail
 
 SCHED_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCHEDULE_DIR="$SCHED_ROOT/schedule"
+source "$SCHED_ROOT/lib/dose-common.sh"
+
+# read_schedule_rel <name-under-schedule/>: local if $SCHEDULE_DIR exists, else fetched via gh (#350). Call plain, not `x=$(...)` -- that drops SCHEDULE_SRC/SCHEDULE_CONTENT.
+read_schedule_rel() {
+  local rel="${1:?read_schedule_rel needs a schedule/-relative path}"
+  if [ -d "$SCHEDULE_DIR" ]; then
+    SCHEDULE_SRC="local $SCHEDULE_DIR/$rel"
+    if [ -f "$SCHEDULE_DIR/$rel" ]; then
+      SCHEDULE_CONTENT="$(cat "$SCHEDULE_DIR/$rel")"
+      return 0
+    fi
+    SCHEDULE_CONTENT=""
+    return 1
+  fi
+  SCHEDULE_SRC="fetched schedule/$rel via gh (no local schedule/ -- served build, #350)"
+  SCHEDULE_CONTENT="$(fetch_repo_file "schedule/$rel")"
+}
 
 PROJECT="${1:?usage: scheduler-run <project> <sweep|batch>}"
 TIER_ARG="${2:?usage: scheduler-run <project> <sweep|batch>}"
@@ -42,8 +60,20 @@ if ! "$SCHED_ROOT/bin/freeze-check.sh" "$PROJECT"; then
   exit 3
 fi
 
-CONF="$SCHED_ROOT/schedule/$PROJECT.conf"
-[ -f "$CONF" ] || { echo "scheduler-run: no such conf: $CONF" >&2; exit 2; }
+CONF_REL="$PROJECT.conf"
+read_schedule_rel "$CONF_REL"; CONF_RC=$?
+if [ "$CONF_RC" -ne 0 ]; then
+  case "$SCHEDULE_SRC" in
+    "local "*) echo "scheduler-run: no such conf: ${SCHEDULE_SRC#local }" >&2 ;;
+    *) echo "scheduler-run: no such conf: schedule/$CONF_REL -- $SCHEDULE_SRC" >&2 ;;
+  esac
+  exit 2
+fi
+case "$SCHEDULE_SRC" in
+  "local "*) CONF="${SCHEDULE_SRC#local }" ;;
+  *) CONF="schedule/$CONF_REL [$SCHEDULE_SRC]" ;;
+esac
+CONF_CONTENT="$SCHEDULE_CONTENT"
 
 # Deliver what this project was waiting on, BEFORE it picks tonight's issue --
 # so an issue unblocked since the last tick is visible in the queue this run
@@ -54,7 +84,7 @@ if [ -x "$SCHED_ROOT/bin/route-deliveries.sh" ]; then
     echo "scheduler-run: route-deliveries returned $? -- continuing to dispatch" >&2
 fi
 # shellcheck disable=SC1090
-source "$CONF"
+source <(printf '%s' "$CONF_CONTENT")
 
 # Indirect fetch of a <PREFIX>_<NAME> conf field; empty string if unset.
 field() { local v="${PREFIX}_$1"; printf '%s' "${!v:-}"; }
@@ -80,15 +110,18 @@ PROMPT="$(field PROMPT)"
 RULES_OPT="$(field USES_STANDING_RULES)"
 [ -n "$RULES_OPT" ] || RULES_OPT="${USES_STANDING_RULES:-0}"
 if [ "$RULES_OPT" = "1" ]; then
-  RULES_FILE="$SCHED_ROOT/schedule/_standing-rules.md"
-  if [ -f "$RULES_FILE" ]; then
-    PROMPT="$(cat "$RULES_FILE")
-
-$PROMPT"
-  else
-    echo "scheduler-run: $CONF sets USES_STANDING_RULES=1 but $RULES_FILE is missing" >&2
+  RULES_REL="_standing-rules.md"
+  read_schedule_rel "$RULES_REL"; RULES_RC=$?
+  if [ "$RULES_RC" -ne 0 ]; then
+    case "$SCHEDULE_SRC" in
+      "local "*) echo "scheduler-run: $CONF sets USES_STANDING_RULES=1 but ${SCHEDULE_SRC#local } is missing" >&2 ;;
+      *) echo "scheduler-run: $CONF sets USES_STANDING_RULES=1 but schedule/$RULES_REL could not be fetched -- $SCHEDULE_SRC" >&2 ;;
+    esac
     exit 2
   fi
+  PROMPT="$SCHEDULE_CONTENT
+
+$PROMPT"
 fi
 
 # Markers expand AFTER the conf is sourced, so a $VAR inside a fragment reaches
@@ -105,14 +138,17 @@ fi
 while [[ "$PROMPT" == *'@@FRAGMENT:'*'@@'* ]]; do
   marker="$(printf '%s' "$PROMPT" | grep -oE '@@FRAGMENT:[A-Za-z0-9_-]+@@' | head -1)"
   frag_name="${marker#@@FRAGMENT:}"; frag_name="${frag_name%@@}"
-  FRAG_FILE="$SCHED_ROOT/schedule/_$frag_name.md"
-  if [ -f "$FRAG_FILE" ]; then
-    frag_body="$(cat "$FRAG_FILE")"
-    PROMPT="${PROMPT//$marker/$frag_body}"
-  else
-    echo "scheduler-run: $CONF references $marker but $FRAG_FILE is missing" >&2
+  FRAG_REL="_$frag_name.md"
+  read_schedule_rel "$FRAG_REL"; FRAG_RC=$?
+  if [ "$FRAG_RC" -ne 0 ]; then
+    case "$SCHEDULE_SRC" in
+      "local "*) echo "scheduler-run: $CONF references $marker but ${SCHEDULE_SRC#local } is missing" >&2 ;;
+      *) echo "scheduler-run: $CONF references $marker but schedule/$FRAG_REL could not be fetched -- $SCHEDULE_SRC" >&2 ;;
+    esac
     exit 2
   fi
+  frag_body="$SCHEDULE_CONTENT"
+  PROMPT="${PROMPT//$marker/$frag_body}"
 done
 
 # Project-level runtime config (shared by both tiers).
@@ -216,12 +252,11 @@ if [ "$TIER_ARG" = shotgun ]; then SELFDEV_IN_ACCOUNT=0; fi
 # schedule/_runner.<host>.conf. Both optional: run_contained() falls back to
 # its own built-in defaults when neither file sets them, so a host with no
 # _contain.conf at all still gets a cap, just an untuned one.
-for _contain_f in "$SCHED_ROOT/schedule/_contain.conf" \
-                   "$SCHED_ROOT/schedule/_contain.$(hostname -s 2>/dev/null || echo unknown).conf"; do
+for _contain_rel in "_contain.conf" "_contain.$(hostname -s 2>/dev/null || echo unknown).conf"; do
   # shellcheck disable=SC1090
-  [ -f "$_contain_f" ] && source "$_contain_f"
+  read_schedule_rel "$_contain_rel" && source <(printf '%s' "$SCHEDULE_CONTENT")
 done
-unset _contain_f
+unset _contain_rel
 
 # GH_TOKEN -- mint a one-hour GitHub App installation token when this account
 # is wired for one. Witness: tests/gh-app-token-witness.sh.
