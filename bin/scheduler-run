@@ -21,7 +21,6 @@ set -uo pipefail
 
 SCHED_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCHEDULE_DIR="$SCHED_ROOT/schedule"
-# shellcheck disable=SC1091
 source "$SCHED_ROOT/lib/dose-common.sh"
 
 # read_schedule_rel <name-under-schedule/>: local if $SCHEDULE_DIR exists, else fetched via gh (#350). Call plain, not `x=$(...)` -- that drops SCHEDULE_SRC/SCHEDULE_CONTENT.
