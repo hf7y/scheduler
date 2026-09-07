@@ -143,13 +143,21 @@ roster_rows() {
 }
 
 # roster_state_for <project> <host> -- print live/parked for that project@host
-# row in schedule/ROSTER; return 1 if ROSTER is absent/unreadable or names no
-# row for it. A FUNCTION, not inlined, for the same reason roster_rows is:
+# row in schedule/ROSTER. Two distinct failure returns, not one, on the same
+# BLIND/GAP split fetch_repo_file makes in lib/dose-common.sh ("the file is
+# not there" and "I could not look" are different answers, and collapsing
+# them is this estate's signature failure): rc=2 is BLIND -- the file itself
+# is absent/unreadable, so NOTHING in it could be consulted, for this row or
+# any other. rc=1 is the GAP -- the file read fine but names no row for this
+# project@host, which is the ordinary, expected shape for most rows. Callers
+# MUST NOT treat these the same in what they log, even though both currently
+# resolve to "skip this row" in what gets dispatched (participant_enabled,
+# below). A FUNCTION, not inlined, for the same reason roster_rows is:
 # tests/paced-roster-authority-witness.sh calls it directly.
 roster_state_for() {
   local proj="$1" host="$2" f line p ah rate state
   f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
-  [ -r "$f" ] || return 1
+  [ -r "$f" ] || return 2
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|\#*) continue ;; esac
     IFS='|' read -r p ah rate state <<<"$line"
@@ -171,11 +179,25 @@ roster_state_for() {
 # ROSTER, which is how `crt|1|` and `secretaire|1|` kept dispatching against a
 # standing `parked` (2026-08-25). A ROSTER miss is a logged refusal now.
 # _paced.<host>.conf is still the rotation SOURCE; deleting it is #364.
+#
+# The DISPATCH DECISION (this function's return value) is unchanged from
+# before roster_state_for's rc split (#350 spinoff): BLIND and GAP both skip
+# this one row, exactly as a bare "no row" always did -- the loop still HOLDs
+# nothing and aborts nothing, that is the ongoing #350/#359 migration's call
+# to make, not this fix's. Only the LOG LINE differs, and it differs on
+# purpose: 19 identical "no row" lines when the whole file failed to read is
+# how a systemic failure hides inside routine, expected skips.
 participant_enabled() {
-  local name="$1" host="$2" rstate
-  if rstate="$(roster_state_for "$name" "$host")"; then
+  local name="$1" host="$2" rstate rc f
+  rstate="$(roster_state_for "$name" "$host")"; rc=$?
+  if [ "$rc" -eq 0 ]; then
     [ "$rstate" = "live" ]
     return
+  fi
+  if [ "$rc" -eq 2 ]; then
+    f="${SCHEDULER_ROSTER_FILE:-$REPO_ROOT/schedule/ROSTER}"
+    log "ROSTER UNREADABLE at $f -- BLIND, cannot arm $name@$host: no setpoint is not permission"
+    return 1
   fi
   log "SKIP $name -- schedule/ROSTER names no $name@$host row, and ROSTER is the only arming surface"
   return 1
