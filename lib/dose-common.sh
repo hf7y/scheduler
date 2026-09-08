@@ -82,14 +82,9 @@ crontab_write() {
   fi
 }
 
-# --- 1. bootstrap: read schedule/ROSTER from GitHub, not a local clone -----
-# WHOSE CREDENTIAL READS THE ROSTER. root has no `gh` auth on monkey (measured
-# 2026-08-11 and again 2026-08-30), so a human-invoked converger borrows
-# $SUDO_USER's rather than install a standing secret for a transient read.
-# BUT THE DISPATCH TICK READS THE ROSTER NOW (#412), retiring the "only the
-# converger reads it" premise this block carried: a cron tick has no human to
-# borrow from, so host mode reads as root and gets BLIND -- closed, never
-# working. `usage-paced-runner.sh --check` measures it; the credential is #364.
+# --- repo files that are STILL repo files: _runner.conf, _tempo.conf, FREEZE.
+# The roster left (see fetch_roster below). root has no `gh` auth, so a
+# human-invoked read borrows $SUDO_USER's rather than plant a standing secret.
 gh_as() {
   if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
     sudo -n -u "$SUDO_USER" "$GH_BIN" "$@"
@@ -149,27 +144,15 @@ fetch_repo_file() {
   printf '%s' "$out" | tr -d '\n' | base64 -d 2>/dev/null
 }
 
-# THE ARMING AUTHORITY IS A SERVICE, NOT THIS REPO (#432; Zach 2026-09-01,
-# "if this needs to run out of something, it's a container", and 2026-09-05,
-# "the roster shouldn't be in the repo").
+# THE ARMING AUTHORITY IS A SERVICE, NOT THIS REPO (#432). Over `gh` it needed
+# a credential every host lacked -- gh_as borrows $SUDO_USER's session and a
+# cron row has none, so host mode read BLIND and exited 2 every tick. A local
+# port needs none: verified from root@monkey under `env -i`, which is what a
+# cron row is.
 #
-# WHY THIS IS NOT A FETCH OPTIMISATION. Reading it over `gh` needed a
-# credential on every host and nobody had one: gh_as borrows $SUDO_USER's
-# session, an armed cron row has no human to borrow from, so host mode read
-# BLIND and exited 2 on every tick it would ever have run. It only ever
-# appeared to work on monkey, where a human is logged in. A local port needs
-# no credential at all -- measured 2026-09-08 from dog@vaporwave (uid 3000),
-# wtul@monkey, and root@monkey under `env -i`, which is what a cron row is.
-#
-# STATE AND NOTHING ELSE (#996). The two columns the old file carried besides
-# state were a copy of the primary key (account == project, 23 of 23 rows) and
-# a constant (rate == 20m, 23 of 23). `host` is answered by THIS MACHINE: a
-# project has a row here iff its unix account exists here. Read from the
-# machine that cannot go stale; a file about the machine can.
-#
-# CONSEQUENCE, and it is not cosmetic: `dose <p> --check` on a host where <p>
-# has no account now says so instead of hopping over ssh, because there is no
-# host column left to hop by. Run `dose` where the account lives.
+# STATE AND NOTHING ELSE (#996). `host` is answered by THIS MACHINE -- a
+# project has a row here iff its unix account exists here -- so `dose <p>` off
+# that host now says so instead of hopping. Run dose where the account lives.
 ROSTER_URL="${SCHEDULER_ROSTER_URL:-http://100.107.253.56:8646}"
 ROSTER_RATE="${SCHEDULER_ROSTER_RATE:-20m}"
 
@@ -180,16 +163,11 @@ fetch_roster() {
       echo "BLIND: '$_b' is not on PATH -- cannot read the roster service. Nothing was verified." >&2
       return 6; }
   done
-  # NO FALLBACK, to a checkout or to this repo. Unreachable is BLIND and BLIND
-  # classifies nothing -- a stale roster read as live is worse than an admitted
-  # blindness, which is already this file's rule for every other reader.
+  # NO FALLBACK. Unreachable is BLIND, and BLIND classifies nothing.
   raw="$(curl -fsS --max-time 10 "$ROSTER_URL/roster" 2>/dev/null)" || {
     echo "BLIND: the roster service at $ROSTER_URL is unreachable. Refusing to guess at what is armed." >&2
     return 6; }
-  # "COULD NOT LOOK" AND "LOOKED, NOTHING THERE" STAY DIFFERENT ANSWERS -- the
-  # same 6-vs-4 distinction fetch_repo_file draws, carried across the move. A
-  # reachable service carrying no rows is a GAP: real, positive, and not a
-  # credential problem.
+  # 6-vs-4 as fetch_repo_file draws it: reachable-but-empty is a GAP, not BLIND.
   local _rows
   _rows="$(printf '%s' "$raw" | jq -r '.rows[]? | "\(.project)\t\(.state)"' 2>/dev/null)"
   if [ -z "$_rows" ]; then
@@ -197,16 +175,8 @@ fetch_roster() {
     return 4
   fi
   # TRANSPORT ONLY -- EVERY ROW, NO HOST FILTER. The roster is the ESTATE's
-  # state, not this box's: hf7y/realisateur's arming.sh, decision-rot.sh,
-  # registry-set.sh and monkey-status-collect.py all take `.rows[]` whole, and
-  # a reader on one host must be able to see another host's projects.
-  #
-  # NARROWING IS THE CALLER'S JOB, AND IT ASKS THE MACHINE, not a column.
-  # monkey-status-collect.py states the rule: "does this project run here" is
-  # answered by whether the account exists on THIS box. usage-paced-runner's
-  # roster_rows() does exactly that; dose deliberately does not, so it can say
-  # "no account here" rather than "no such project" -- different sentences,
-  # different exit codes.
+  # state; realisateur's readers all take `.rows[]` whole. Narrowing is the
+  # caller's job and it asks the machine: roster_rows() does, dose does not.
   printf '%s\n' "$_rows" \
   | while IFS="$(printf '\t')" read -r _p _s; do
       [ -n "$_p" ] || continue

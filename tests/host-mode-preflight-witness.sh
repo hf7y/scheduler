@@ -46,9 +46,8 @@ CHECK="$TMP/check.sh"
   printf 'PACED_HOST="testhost"\n'
   printf 'SELF_DIR="%s/bin"\nREPO_ROOT="%s/repo"\n' "$TMP" "$TMP"
   printf 'id() { case "${1:-}" in -u) echo "$FAKE_UID" ;; -un) echo "$FAKE_UNAME" ;; esac; }\n'
-  # roster_rows asks the BOX which accounts exist now (#432), not a host column.
-  # Fixture projects are not accounts on the suite's host, so stub it beside
-  # id(); FAKE_GETENT_FAIL names the ones that are deliberately not here.
+  # roster_rows asks the BOX which accounts exist (#432). Stub it beside id();
+  # FAKE_GETENT_FAIL names the ones deliberately not here.
   printf 'getent() { [ "${1:-}" = passwd ] || return 2; for _n in ${FAKE_GETENT_FAIL:-}; do [ "$2" = "$_n" ] && return 2; done; printf "%%s:x:9999:9999::/home/%%s:/bin/bash\\n" "$2" "$2"; }\n'
   sed -n '/^roster_rows() {/,/^}/p' "$R"
   printf '%s\n' "$BLOCK"
@@ -105,9 +104,7 @@ rc="$(PACED_HOST_MODE=1 STUB_ROSTER="$PARKED" run 0 root)"
 grep -q '0 live, 2 parked' "$TMP/out" && ok "E2 counts them: 0 live, 2 parked" || bad "E2 counts: $(cat "$TMP/out")"
 grep -q 'dispatches NOTHING' "$TMP/out" && ok "E3 and says tick 1 dispatches nothing" || bad "E3 message: $(cat "$TMP/out")"
 
-# `c` is the not-here row. The roster carries state only (#432), so that is no
-# longer a host column -- it is the absence of a unix account, which is what
-# roster_rows now asks.
+# `c` is the not-here row -- an absent account now, not a host column (#432).
 MIXED='a | a@testhost | 2h | live
 b | b@testhost | 2h | parked
 c | c@otherhost | 2h | live'

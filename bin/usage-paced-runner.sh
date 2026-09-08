@@ -134,11 +134,8 @@ roster_rows() {
     ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
     state="$(printf '%s' "$state" | tr -d '[:space:]')"
     [ -n "$p" ] || continue
-    # WHICH ROWS ARE THIS MACHINE'S is the machine's answer (#432, #996), not a
-    # column in a file about the machine. fetch_roster hands over the WHOLE
-    # estate now -- other readers need that -- so the dispatcher narrows here,
-    # by whether the account exists locally. Read off the box it cannot go
-    # stale, which a file about the box can.
+    # WHICH ROWS ARE THIS MACHINE'S is the machine's answer (#432), not a
+    # column. fetch_roster hands over the whole estate; the dispatcher narrows.
     getent passwd "$p" >/dev/null 2>&1 || continue
     acct="${ah%@*}"
     # enabled is the roster's ONE state field -- the whole point of #79 is that
@@ -259,16 +256,10 @@ if [ "$PACED_HOST_MODE" = 1 ]; then
   LOCK="${PACED_HOST_LOCK:-/run/lock/$JOB_NAME.lock}"
   mkdir -p "$STATE_DIR" "$(dirname "$LOCK")" 2>/dev/null || true
 
-  # HOST MODE RUNS AS ROOT, SO IT NEEDS THE HOST-WIDE CREDENTIALS. Both of the
-  # gates below resolve theirs from $HOME, and root's $HOME is /root, which
-  # carries neither -- so before this the tick held on every row for a reason
-  # that read like a quota and was actually an empty file lookup. Measured on
-  # vaporwave 2026-09-08: `HOLD (gate rc=2) reason=no_token` and
-  # `MILESTONE-BLIND dog`, both cleared by the two lines below.
-  #
-  # PER-ACCOUNT WINS. Only filled in when the account's own path has nothing,
-  # so an account that carries its own credential still uses it, and account
-  # mode is untouched.
+  # HOST MODE RUNS AS ROOT, SO IT NEEDS THE HOST-WIDE CREDENTIALS. Both gates
+  # resolve theirs from $HOME and /root carries neither, so the tick held every
+  # row with `gate rc=2 no_token` / `MILESTONE-BLIND` -- an empty file lookup
+  # that reads like a busy quota. Per-account wins; account mode is untouched.
   if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ ! -s "$HOME/.claude/.credentials.json" ] \
      && [ -r "${SELFDEV_CLAUDE_TOKEN:-/etc/selfdev/claude-token}" ]; then
     CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '\r\n' < "${SELFDEV_CLAUDE_TOKEN:-/etc/selfdev/claude-token}")"

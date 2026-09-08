@@ -100,10 +100,8 @@ printf 'RUNNER_JOB="scheduler-paced-runner"\nRUNNER_CMD="bin/usage-paced-runner.
   > "$DOSE_SCHEDULE_DIR/_runner.conf"
 TAG='# scheduler:scheduler-paced-runner:RUNNER (usage-paced dispatch)'
 
-# ACCOUNT IS THE PROJECT. The service carries no account column, and #996
-# measured `account == project` in 23 of 23 rows, so a fixture with distinct
-# account names describes a shape that can no longer occur. `elsewhere` is the
-# off-host case, stated the way the audit now asks it: no account here.
+# ACCOUNT IS THE PROJECT (#996 measured 23 of 23), so distinct account names
+# describe a shape that can no longer occur. `elsewhere` = no account here.
 ROSTER="armed-and-running | armed-and-running@testhost | 20m | live
 armed-but-dark | armed-but-dark@testhost | 20m | live
 parked-project | parked-project@testhost | 20m | parked

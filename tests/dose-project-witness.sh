@@ -87,9 +87,8 @@ esac
 EOF
 chmod +x "$FAKEBIN/gh"
 
-# THE ROSTER IS A SERVICE (#432), so the fixture reaches the code under test
-# through curl, not gh. Same FAKE_ROSTER_CONTENT, converted to the service's
-# JSON here rather than restated in a second format per witness.
+# THE ROSTER IS A SERVICE (#432): the fixture reaches the code through curl,
+# not gh. Same FAKE_ROSTER_CONTENT, converted here rather than restated.
 cat > "$FAKEBIN/curl" <<'CURLEOF'
 #!/usr/bin/env bash
 # The roster SERVICE stands in for the roster FILE (#432). FAKE_GH_MODE keeps
@@ -244,9 +243,7 @@ grep -qF "WRONG_ENV" "$CRONFILE" && ok "re-read caught the inert write instead o
 # the roster never named). Landed in #111 unwitnessed; this closes that gap.
 export CRONFILE="$WORK/cron5"; : > "$CRONFILE"
 before="$(sha256sum "$CRONFILE")"
-# "NOT THIS MACHINE'S" IS THE ABSENCE OF A UNIX ACCOUNT (#432), not a host
-# column -- the roster carries state and nothing else, so the box answers.
-# Stated the way it presents live: elsewhere-proj has no account here.
+# "NOT THIS MACHINE'S" IS NOW THE ABSENCE OF A UNIX ACCOUNT (#432).
 export FAKE_GETENT_FAIL=elsewhere-proj
 out="$("$TARGET" elsewhere-proj --apply 2>&1)"; rc=$?
 unset FAKE_GETENT_FAIL
@@ -421,10 +418,8 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
   || ok "missing-account refusal wrote nothing"
 
 # --- 10-12. arm/park REFUSE while the read is served and the write is not --
-# hf7y/scheduler#686. The read comes from the roster service, so ROSTER_CONTENT
-# is synthesised; the old path rewrote it into schedule/ROSTER by auto-merging
-# PR, which would now commit a fabrication. Refusing is the safe half of the
-# split, and the refusal has to name the way to actually change state.
+# #686: ROSTER_CONTENT is synthesised now, so the old PR path would commit a
+# fabrication. The refusal must name the way to actually change state.
 rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
 [ "$rc" -eq 5 ] && ok "--arm refuses (5) rather than write a synthesised roster" \
@@ -463,9 +458,7 @@ grep -qF '#686' <<<"$out2" && ok "...and still cites #686 rather than blaming th
   || bad "--park's refusal changed cause when the account went missing: $out2"
 
 # --- 13. the auto-merge degrade path is unreachable while the write is off --
-# It was: PR opened, auto-merge refused, exit 0 with a degraded message. There
-# is no PR now, so the case asserts the refusal precedes gh entirely -- if this
-# ever exits 0 again, the write came back without #686 being closed.
+# If this ever exits 0 again, the write came back without #686 being closed.
 rm -f "$WORK/gh-calls.log"
 export FAKE_GH_AUTOMERGE_MODE=fail
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
@@ -476,10 +469,8 @@ unset FAKE_GH_AUTOMERGE_MODE
   || ok "no gh call at all -- the refusal is before the network"
 
 # --- 14. --shotgun parses, and NO LONGER travels (#432) -------------------
-# The hop is gone with the host column: the roster does not say where a project
-# runs, so there is nothing to ssh to. A project whose account is not here is
-# refused, and an ssh on PATH must stay untouched -- a hop that still fired
-# would dispatch on a host this one only guessed at.
+# The hop went with the host column. An ssh on PATH must stay untouched: a hop
+# that still fired would dispatch on a host this one only guessed at.
 cat > "$FAKEBIN/ssh" <<'SSH'
 #!/usr/bin/env bash
 echo "SSH-WAS-CALLED" >> "$WORK/ssh-calls.log"

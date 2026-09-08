@@ -183,10 +183,8 @@ touch "$T3_RUNNING_MARKER"
 EOF
 chmod +x "$T3_BUILD/bin/scheduler-run"
 
-# Since #432 the roster carries state only, so "does this project run here" is
-# `getent passwd <project>` -- the project name IS the account name. This
-# fixture has one worker serving two scratch repos, so it answers for the
-# worker AND for both project names, all pointing at the same home.
+# Since #432 the project name IS the account name. One worker serves two
+# scratch repos here, so this answers for all three, same home.
 cat > "$T3_FAKEBIN/getent" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = passwd ]; then
