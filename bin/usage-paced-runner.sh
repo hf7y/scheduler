@@ -134,7 +134,9 @@ roster_rows() {
     ah="$(printf '%s' "$ah" | tr -d '[:space:]')"
     state="$(printf '%s' "$state" | tr -d '[:space:]')"
     [ -n "$p" ] || continue
-    [ "${ah##*@}" = "$PACED_HOST" ] || continue
+    # WHICH ROWS ARE THIS MACHINE'S is the machine's answer (#432), not a
+    # column. fetch_roster hands over the whole estate; the dispatcher narrows.
+    getent passwd "$p" >/dev/null 2>&1 || continue
     acct="${ah%@*}"
     # enabled is the roster's ONE state field -- the whole point of #79 is that
     # live/parked cannot disagree with a second file. No weight field: #528
@@ -253,6 +255,21 @@ if [ "$PACED_HOST_MODE" = 1 ]; then
   STATE_DIR="${PACED_HOST_STATE:-/var/lib/$JOB_NAME}"
   LOCK="${PACED_HOST_LOCK:-/run/lock/$JOB_NAME.lock}"
   mkdir -p "$STATE_DIR" "$(dirname "$LOCK")" 2>/dev/null || true
+
+  # HOST MODE RUNS AS ROOT, SO IT NEEDS THE HOST-WIDE CREDENTIALS. Both gates
+  # resolve theirs from $HOME and /root carries neither, so the tick held every
+  # row with `gate rc=2 no_token` / `MILESTONE-BLIND` -- an empty file lookup
+  # that reads like a busy quota. Per-account wins; account mode is untouched.
+  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ ! -s "$HOME/.claude/.credentials.json" ] \
+     && [ -r "${SELFDEV_CLAUDE_TOKEN:-/etc/selfdev/claude-token}" ]; then
+    CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '\r\n' < "${SELFDEV_CLAUDE_TOKEN:-/etc/selfdev/claude-token}")"
+    export CLAUDE_CODE_OAUTH_TOKEN
+  fi
+  if [ -z "${SELFDEV_APP_CONF:-}" ] && [ ! -r "$HOME/.config/selfdev/gh-app.conf" ] \
+     && [ -r /etc/selfdev/gh-app.conf ]; then
+    SELFDEV_APP_CONF=/etc/selfdev/gh-app.conf
+    export SELFDEV_APP_CONF
+  fi
 else
   # A REHEARSAL SEAM for `dose --apply`; unset (every tick) is the old path.
   STATE_DIR="${PACED_STATE_DIR:-$HOME/.local/share/$JOB_NAME}"
