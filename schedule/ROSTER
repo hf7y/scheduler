@@ -14,8 +14,8 @@
 # WITNESS: tests/paced-roster-authority-witness.sh.
 #
 # `dose <project> --arm` / `--park` (#291) is the only supported way to
-# change `state`. It opens a PR with auto-merge armed, so a person MERGES and
-# the verb WRITES -- it does not hand-edit this file. It refuses a uid
+# change `state`: one POST to the roster service, verified by re-reading it
+# (#686) -- it opens no PR and does not hand-edit this file. It refuses a uid
 # 3000-3099 self-dev caller, and refuses a project with no unix account on
 # the row's host, so no project can arm itself and arming cannot converge to
 # a break. (#521: an earlier header said "ONLY A HUMAN EDITS THIS FILE'S
