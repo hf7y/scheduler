@@ -63,6 +63,15 @@ case "$src" in
   *) bad "no_token no longer emitted -- run.log lines and any matcher on it break" ;;
 esac
 
+echo "== a held human claim (#339) short-circuits before a token is even sought"
+claim_ln="$(grep -n 'usage_claim_status' "$GATE" | head -1 | cut -d: -f1)"
+token_ln="$(grep -n 'emit_error no_token' "$GATE" | head -1 | cut -d: -f1)"
+if [ -n "$claim_ln" ] && [ -n "$token_ln" ] && [ "$claim_ln" -lt "$token_ln" ]; then
+  ok "the claim check (line $claim_ln) precedes the token lookup (line $token_ln)"
+else
+  bad "claim check is missing or does not precede the token lookup (claim=$claim_ln token=$token_ln)"
+fi
+
 echo
 echo "usage-gate token witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

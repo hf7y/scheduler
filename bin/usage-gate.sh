@@ -95,6 +95,16 @@ fi
 
 GATE_HOST="${USAGE_HOST:-${PACED_HOST:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)}}"
 
+[ -n "$SELF_DIR" ] && [ -r "$SELF_DIR/../lib/usage-claim.sh" ] && . "$SELF_DIR/../lib/usage-claim.sh" 2>/dev/null  # #339: a held claim short-circuits HOLD below, before a probe; missing lib falls through
+if command -v usage_claim_status >/dev/null 2>&1 && CLAIM_INFO="$(usage_claim_status 2>/dev/null)"; then
+  if [ "$QUIET" = "1" ]; then echo HOLD; else
+    echo "verdict=HOLD binding=claim reason=human-claim claim=($CLAIM_INFO)"
+  fi
+  exit 1
+fi
+
+RATE_CACHE_FILE="${USAGE_RATE_CACHE_DIR:-$HOME/.local/share/scheduler-usage-gate}/last-reading"
+
 CONF_FILES=()
 if [ -n "$CONF_DIR" ]; then
   # base first, host-scoped second -- later file wins, per field
@@ -274,7 +284,7 @@ fi
 # own environment, so before conf support it only ever arrived when a caller
 # had exported it -- a conf/shell-var value would have been silently ignored.
 CEILING="$CEILING" MIN_SLACK="$MIN_SLACK" HTTP_CODE="$CODE" QUIET="$QUIET" \
-USAGE_RUSH_BEFORE_RESET_MIN="$RUSH_MIN" \
+USAGE_RUSH_BEFORE_RESET_MIN="$RUSH_MIN" USAGE_RATE_CACHE="$RATE_CACHE_FILE" \
 KNOB_SRC="ceiling:$CEILING_SRC,min_slack:$MIN_SLACK_SRC,rush_min:$RUSH_MIN_SRC,probe:$PROBE_VIA" \
 python3 - "$HDR" <<'PY'
 import os, re, sys, time
@@ -316,6 +326,21 @@ RUSH_MIN = float(os.environ.get("USAGE_RUSH_BEFORE_RESET_MIN", "120"))
 reset_7d = num(vals.get("7d-reset"))
 rush = reset_7d is not None and (reset_7d - now) / 60.0 <= RUSH_MIN
 
+RATE_CACHE = os.environ.get("USAGE_RATE_CACHE", "")  # #339: burn rate from the last cached reading; >6h old is a gap, not a rate
+prev_readings = {}
+if RATE_CACHE:
+    try:
+        for line in open(RATE_CACHE):
+            p = line.split()
+            if len(p) >= 2 and p[0] in ("5h", "7d"):
+                try:
+                    prev_readings[p[0]] = (float(p[1].split("=", 1)[1]), float(p[2].split("=", 1)[1]))
+                except (IndexError, ValueError):
+                    pass
+    except OSError:
+        pass
+new_readings = {}
+
 rows, block = [], []
 for w, length in WINDOWS:
     util   = num(vals.get(f"{w}-utilization"))
@@ -332,7 +357,14 @@ for w, length in WINDOWS:
     if util >= ceiling:                    reasons.append("ceiling")
     if slack < min_slack and not rush:     reasons.append("on-pace")
     if reasons: block.append((w, reasons))
-    rows.append((w, util, target, slack, reset, status))
+    rate_txt = "n/a"
+    if w in prev_readings:
+        pu, pt = prev_readings[w]
+        dt = now - pt
+        if 0 < dt <= 6 * 3600:
+            rate_txt = f"{(util - pu) * 100.0 / dt * 60.0:+.2f}pp/min(over{dt / 60.0:.0f}min)"
+    new_readings[w] = (util, now)
+    rows.append((w, util, target, slack, reset, status, rate_txt))
 
 # tightest = least slack; that's the binding window
 rows.sort(key=lambda r: r[3])
@@ -340,15 +372,24 @@ binding = rows[0][0] if rows else vals.get("representative-claim", "?")
 run = (len(block) == 0) and (len(rows) > 0)
 verdict = "RUN" if run else "HOLD"
 
+if RATE_CACHE and new_readings:
+    try:
+        os.makedirs(os.path.dirname(RATE_CACHE), exist_ok=True)
+        with open(RATE_CACHE, "w") as f:
+            for w, (u, t) in new_readings.items():
+                f.write(f"{w} util={u} now={t}\n")
+    except OSError:
+        pass
+
 if quiet:
     print(verdict); sys.exit(0 if run else 1)
 
 print(f"verdict={verdict} binding={binding} ceiling={ceiling} min_slack={min_slack} "
       f"http_code={code} rush={rush} knobs={os.environ.get('KNOB_SRC','?')}")
-for w, util, target, slack, reset, status in rows:
+for w, util, target, slack, reset, status, rate_txt in rows:
     mins = int((reset - now) / 60)
     print(f"window={w} util={util:.3f} burnline={target:.3f} slack={slack:+.3f} "
-          f"status={status} resets_in_min={mins}")
+          f"status={status} resets_in_min={mins} rate={rate_txt}")
 if block:
     print("hold_reasons=" + ";".join(f"{w}:{'/'.join(rs)}" for w, rs in block))
 # one-line human summary
