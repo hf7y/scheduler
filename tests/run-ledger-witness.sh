@@ -110,5 +110,25 @@ second_ts="$(ledger_last_ts r)"
 [ "$second_ts" != "$first_ts" ] && ok "ledger_last_ts advances on a hold row too, not only a real dispatch" \
   || bad "ledger_last_ts did not advance across rows: $first_ts / $second_ts"
 
+export RUN_LEDGER_FILE="$W/same.tsv"
+ledger_append s batch 1 BLOCKED "ssh dexter refused at 2026-09-05T12:03:11Z, tried 3 times"
+ledger_append s batch - BLOCKED-HOLD held
+ledger_append s batch 1 BLOCKED "ssh dexter refused at 2026-09-07T04:41:52Z, tried 7 times"
+r1="$(ledger_reason s BLOCKED 1)"
+r2="$(ledger_reason s BLOCKED 2)"
+ledger_reason_same "$r1" "$r2" && ok "two BLOCKED reasons naming the same wall compare equal despite different timestamps and counts" \
+  || bad "same-wall reasons '$r1' / '$r2' did not compare equal -- the doubling still cannot fire"
+
+ledger_append t batch 1 BLOCKED "ssh dexter refused, publickey denied"
+ledger_append t batch - BLOCKED-HOLD held
+ledger_append t batch 1 BLOCKED "docker binary not found on mandark"
+r1="$(ledger_reason t BLOCKED 1)"
+r2="$(ledger_reason t BLOCKED 2)"
+ledger_reason_same "$r1" "$r2" && bad "two reasons naming genuinely different walls compared equal -- over-normalised" \
+  || ok "two BLOCKED reasons naming different walls compare unequal: '$r1' / '$r2'"
+
+ledger_reason_same "" "" && bad "two empty reasons compared equal -- absence must never read as 'same wall'" \
+  || ok "two empty reasons do not compare equal"
+
 printf '\nrun-ledger-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

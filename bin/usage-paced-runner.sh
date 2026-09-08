@@ -938,7 +938,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       _bwant=$(( ${LEDGER_BLOCKED_HOLD:-6} * _brun ))
       _r1="$(ledger_reason "$name" BLOCKED 1 2>/dev/null || true)"
       _r2="$(ledger_reason "$name" BLOCKED 2 2>/dev/null || true)"
-      [ -n "$_r1" ] && [ "$_r1" = "$_r2" ] && _bwant=$(( _bwant * 2 ))
+      ledger_reason_same "$_r1" "$_r2" && _bwant=$(( _bwant * 2 ))
       if [ "$_bsince" -lt "$_bwant" ]; then
         ledger_append "$name" "${TIER:-batch}" - BLOCKED-HOLD "waiting: $_bsince/$_bwant after blockage #$_brun" 2>/dev/null || true
         log "BLOCKED-HOLD $name -- $_bsince/$_bwant opportunit(ies) since it reported BLOCKED${_r1:+ ($_r1)}. Backing off, not giving up."
@@ -1197,7 +1197,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       _brun="$(ledger_run "$name" BLOCKED BLOCKED-HOLD 2>/dev/null || echo 1)"
       [ "${_brun:-0}" -lt 1 ] && _brun=1
       _bprev="$(ledger_reason "$name" BLOCKED 2>/dev/null || true)"
-      [ -n "${_bprev:-}" ] && [ "$_bprev" = "$_breason" ] && _bsame=yes
+      ledger_reason_same "${_bprev:-}" "$_breason" && _bsame=yes
     fi
     _bhold=$(( ${LEDGER_BLOCKED_HOLD:-6} * _brun ))
     [ -n "$_bsame" ] && _bhold=$(( _bhold * 2 ))
