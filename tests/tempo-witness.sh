@@ -64,6 +64,11 @@ LEDGER="$T/ledger.tsv"
 export STATE_DIR="$T/state" RUN_LEDGER_FILE="$LEDGER" TEMPO_REPO="fake/repo"
 mkdir -p "$STATE_DIR"
 
+export STATE_ROOT="$T/runrecords"
+RRFILE="$STATE_ROOT/scheduler-runs/p.jsonl"
+rr_reset() { rm -f "$RRFILE"; mkdir -p "$(dirname "$RRFILE")"; }
+rr_add() { printf '{"verdict_computed":"%s"}\n' "$1" >> "$RRFILE"; }
+
 # open<TAB>blocked, the two numbers gh's --jq prints.
 set_counts() { printf '%s\t%s\n' "$1" "$2" > "$COUNTS"; rm -f "$STATE_DIR"/tempo-*.count; }
 # how many issues closed in the last 7d; no argument = the read fails (BLIND)
@@ -121,6 +126,36 @@ grep -q 'closed7d=BLIND' <<<"$out" || fail "the line must admit the closure coun
 grep -q 'fell back' <<<"$out" || fail "the line must name the fallback, got: $out"
 [ "$FAILED" = 0 ] && pass "BLIND on closures is a fallback that announces itself, not a stop"
 set_closed
+
+echo "case 1d -- the outcome mix, hf7y/scheduler#348"
+set_counts 12 0; set_closed; : > "$LEDGER"
+
+rr_reset; rr_add WORKED; rr_add WORKED; rr_add IDLE; rr_add WORKED; rr_add FAILED
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "120" ] || fail "1 IDLE in 5, real progress otherwise, must NOT discount, got: $out"
+grep -q 'outcome=none' <<<"$out" || fail "expected outcome=none, got: $out"
+
+rr_reset; rr_add IDLE; rr_add WORKED; rr_add IDLE; rr_add IDLE; rr_add WORKED
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "240" ] || fail "2+ IDLE with actionable>0 must discount drive, got: $out"
+grep -q 'outcome=idle-with-queue:3/5' <<<"$out" || fail "expected outcome=idle-with-queue:3/5, got: $out"
+
+rr_reset; rr_add WORKED-CUTOFF; rr_add WORKED; rr_add WORKED-CUTOFF; rr_add IDLE; rr_add WORKED
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "240" ] || fail "2+ WORKED-CUTOFF must discount drive, got: $out"
+grep -q 'outcome=cutoff:2/5' <<<"$out" || fail "expected outcome=cutoff:2/5, got: $out"
+
+rr_reset; rr_add FAILED; rr_add FAILED; rr_add FAILED; rr_add WORKED; rr_add IDLE
+out="$(run_tempo p)"
+[ "$(want_of "$out")" = "120" ] || fail "raw FAILED, however repeated, must NOT discount, got: $out"
+grep -q 'outcome=none' <<<"$out" || fail "expected outcome=none on a FAILED-heavy but otherwise-fine history, got: $out"
+
+rr_reset
+out="$(run_tempo p)"; rc=$?
+[ "$rc" = 0 ] || fail "a missing run-record ledger must not turn the whole verdict BLIND, got rc=$rc: $out"
+[ "$(want_of "$out")" = "120" ] || fail "a missing run-record ledger must fall back undiscounted, got: $out"
+grep -q 'outcome=BLIND' <<<"$out" || fail "the line must admit the run-record source is BLIND, got: $out"
+[ "$FAILED" = 0 ] && pass "repeated IDLE-with-queue or WORKED-CUTOFF discounts drive; FAILED alone and a missing ledger do not"
 
 echo "case 2 -- clamps"
 set_counts 400 0
