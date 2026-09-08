@@ -321,5 +321,8 @@ if [ "$SINCE_MIN" -ge "$WANT" ]; then
   emit RUN "$FACTS"
   exit 0
 fi
+if [ "$WANT" -eq "$MAX_MIN" ] && . "$REPO_ROOT/lib/floor-alert.sh" 2>/dev/null; then
+  floor_alert_maybe_ping "$PROJECT" "$DRIVE_SRC|$OUTCOME_SRC" "$CACHE_DIR" "${TEMPO_FLOOR_PERSIST_H:-12}"
+fi
 emit HOLD "$FACTS"
 exit 1
