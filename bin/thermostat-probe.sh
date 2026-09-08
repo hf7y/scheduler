@@ -56,7 +56,7 @@ T0_ISO="$(date -u -d "@$T0" +%Y-%m-%dT%H:%M:%SZ)"
 
 # The window is only evidence if no knob moved inside it, and that is read out
 # of git rather than asserted.
-CONF_PATHS=(schedule/_tempo.conf schedule/ROSTER "schedule/$PROJECT.conf")
+CONF_PATHS=(schedule/_tempo.conf "schedule/$PROJECT.conf")   # schedule/ROSTER retired: state is the service (#432), and keeping a deleted path here blinds every probe for one window
 for f in "$CONF_DIR"/_tempo.*.conf; do [ -e "$f" ] && CONF_PATHS+=("schedule/$(basename "$f")"); done
 TOUCHED="$(git -C "$REPO_ROOT" log --since="$T0_ISO" --format=%h -- "${CONF_PATHS[@]}" 2>/dev/null)" \
   || blind "git history unreadable in $REPO_ROOT"
