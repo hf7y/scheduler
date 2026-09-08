@@ -77,24 +77,26 @@ if [ -z "$OPEN_JSON" ] || ! jq -e . >/dev/null 2>&1 <<<"$OPEN_JSON"; then
   exit 6
 fi
 
-# Dependency state cache: dep number -> "open" | "closed" | "blind"
+# Dependency state cache: "repo#n" -> "open" | "closed" | "blind"
 declare -A DEP_STATE
 
 dep_state() {
-  local n="$1"
-  if [ -n "${DEP_STATE[$n]+x}" ]; then
-    printf '%s' "${DEP_STATE[$n]}"
+  local repo="$1" n="$2" key="$1#$2"
+  if [ -n "${DEP_STATE[$key]+x}" ]; then
+    printf '%s' "${DEP_STATE[$key]}"
     return 0
   fi
   local st
-  st="$("$GH_BIN" issue view "$n" --repo "$REPO" --json state -q '.state' 2>/dev/null)"
+  st="$("$GH_BIN" issue view "$n" --repo "$repo" --json state -q '.state' 2>/dev/null)"
   case "$st" in
-    OPEN)   DEP_STATE[$n]="open" ;;
-    CLOSED) DEP_STATE[$n]="closed" ;;
-    *)      DEP_STATE[$n]="blind" ;;  # unreadable -- fail closed, not open-by-default
+    OPEN)   DEP_STATE[$key]="open" ;;
+    CLOSED) DEP_STATE[$key]="closed" ;;
+    *)      DEP_STATE[$key]="blind" ;;  # unreadable -- fail closed, not open-by-default
   esac
-  printf '%s' "${DEP_STATE[$n]}"
+  printf '%s' "${DEP_STATE[$key]}"
 }
+
+DEP_REF_RE='(depends on|blocked by)[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+'  # optional owner/repo before #N; empty slug means $REPO
 
 # Oldest first, exactly the removed tie-breaker.
 SORTED_JSON="$(jq -c '[ .[] ] | sort_by(.createdAt)' <<<"$OPEN_JSON")"
@@ -117,15 +119,33 @@ while [ "$i" -lt "$count" ] && [ "$printed" -lt "$LIMIT" ]; do
   fi
 
   blocker=""
-  while IFS= read -r dep; do
-    [ -n "$dep" ] || continue
-    [ "$dep" != "$num" ] || continue  # an issue cannot depend on itself
-    state="$(dep_state "$dep")"
-    if [ "$state" != "closed" ]; then
-      blocker="#$dep ($state)"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    if grep -qiE '(depends on|blocked by)' <<<"$line" && ! grep -qiE "$DEP_REF_RE" <<<"$line"; then
+      blocker="unparseable dependency: ${line:0:70}"  # blind, not absent -- fail closed
       break
     fi
-  done < <(grep -oiE '(depends on|blocked by) #[0-9]+' <<<"$body" | grep -oE '[0-9]+')
+  done <<<"$body"
+
+  if [ -z "$blocker" ]; then
+    while IFS= read -r match; do
+      [ -n "$match" ] || continue
+      rest="$(sed -E 's/^(depends on|blocked by)[[:space:]]+//I' <<<"$match")"
+      slug="${rest%%#*}"
+      dep="${rest##*#}"
+      [ -n "$slug" ] || slug="$REPO"
+      [ "$slug" != "$REPO" ] || [ "$dep" != "$num" ] || continue  # an issue cannot depend on itself
+      state="$(dep_state "$slug" "$dep")"
+      if [ "$state" != "closed" ]; then
+        if [ "$slug" = "$REPO" ]; then
+          blocker="#$dep ($state)"
+        else
+          blocker="$slug#$dep ($state)"
+        fi
+        break
+      fi
+    done < <(grep -oiE "$DEP_REF_RE" <<<"$body")
+  fi
 
   if [ -n "$blocker" ]; then
     echo "SKIP  #$num  waiting on $blocker -- ${title:0:60}" >&2
