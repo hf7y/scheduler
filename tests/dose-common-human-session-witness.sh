@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# dose-common-human-session-witness.sh -- the no-clone roster read's BLIND/OK
-# split is a function of WHOSE gh session happens to be sitting around, not of
-# whether the caller supplied a credential (hf7y/scheduler#570).
+# dose-common-human-session-witness.sh -- fetch_repo_file's BLIND/OK split is
+# a function of WHOSE gh session happens to be sitting around, not of whether
+# the caller supplied a credential (hf7y/scheduler#570). schedule/ROSTER no
+# longer takes this path -- #432/#686 moved it to a credential-free HTTP
+# call -- but _paced.*.conf/_tempo.conf/FREEZE still fall back to it when a
+# served build ships no local schedule/ directory at all.
 #
 # gh_as() in lib/dose-common.sh borrows $SUDO_USER's `gh` session when running
 # as root under sudo. On monkey that is a human's authenticated session, so
@@ -9,13 +12,11 @@
 # exercises the case #570 says monkey "structurally cannot": running with NO
 # human session at all, as `dog` on vaporwave would.
 #
-# THIS IS DIAGNOSTIC, NOT A FIX. #570 is a DECISION (`DEFAULT-AFTER 14d: none
-# -- every option is a credential decision`) -- lib/sweep-loop-common.sh's own
-# contract is that a DECISION with no DEFAULT-AFTER is left alone, on purpose,
-# until a human picks one of the three options the issue lays out. This locks
-# in today's observable behaviour under all three identities #570 discusses,
-# so whichever option lands has a red witness to turn green instead of a
-# fresh one being written after the fact.
+# DIAGNOSTIC, NOT A FIX. #570 is a DECISION (`DEFAULT-AFTER 14d: none --
+# every option is a credential decision`) -- a DECISION with no DEFAULT-AFTER
+# is left alone, on purpose, until a human picks one of its three options.
+# This locks in today's behaviour under all three identities #570 discusses,
+# so whichever option lands has a red witness to turn green.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="$HERE/../lib/dose-common.sh"
