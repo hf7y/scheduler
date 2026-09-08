@@ -176,3 +176,7 @@ ledger_reason() {
     $4==p && $7==w { buf[++c]=$8 }
     END { if (c>=n) print buf[c-n+1] }' "$f"
 }
+
+ledger_reason_key() {  # normalized reason, for same-blocker comparison (#671); shape from hf7y/senechal lib/common.sh's _alert_normalize
+  sed -E 's/[0-9a-f]{8,}/<id>/g; s/[0-9]+/<n>/g' <<<"${1:-}"
+}

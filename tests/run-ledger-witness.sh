@@ -110,5 +110,22 @@ second_ts="$(ledger_last_ts r)"
 [ "$second_ts" != "$first_ts" ] && ok "ledger_last_ts advances on a hold row too, not only a real dispatch" \
   || bad "ledger_last_ts did not advance across rows: $first_ts / $second_ts"
 
+# --- 8. ledger_reason_key: same wall despite varying numbers, different wall even after normalizing (#671) ---
+export RUN_LEDGER_FILE="$W/reason-key.tsv"
+ledger_append s batch - BLOCKED "ssh dexter refused at 14:02:03Z, probe 000, retry in 5m"
+ledger_append s batch - BLOCKED "ssh dexter refused at 15:47:19Z, probe 000, retry in 12m"
+r1="$(ledger_reason s BLOCKED 1)"; r2="$(ledger_reason s BLOCKED 2)"
+[ "$(ledger_reason_key "$r1")" = "$(ledger_reason_key "$r2")" ] \
+  && ok "same wall, different timestamps/durations -- keys match, doubling fires" \
+  || bad "same-wall reasons normalized differently: [$r1] vs [$r2]"
+
+export RUN_LEDGER_FILE="$W/reason-key2.tsv"
+ledger_append t batch - BLOCKED "ssh dexter refused, no docker binary found"
+ledger_append t batch - BLOCKED "ssh mandark publickey denied, no docker binary found"
+r1="$(ledger_reason t BLOCKED 1)"; r2="$(ledger_reason t BLOCKED 2)"
+[ "$(ledger_reason_key "$r1")" != "$(ledger_reason_key "$r2")" ] \
+  && ok "genuinely different walls -- keys still differ, doubling does not over-fire" \
+  || bad "different-wall reasons normalized to the same key: [$r1] vs [$r2]"
+
 printf '\nrun-ledger-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
