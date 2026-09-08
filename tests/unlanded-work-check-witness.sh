@@ -85,5 +85,14 @@ out="$(run main '')"; rc=$?
 [ "$rc" -eq 0 ] && ok "the currently checked-out branch is never flagged mid-work" || bad "exited $rc, want 0: $out"
 git -C "$REPO" checkout -q main
 
+echo "-- 7. a ship branch with commits ahead of main, but a tree identical to it"
+git -C "$REPO" branch -D in-progress >/dev/null 2>&1
+git -C "$REPO" checkout -q -b ship-branch
+git -C "$REPO" commit -q --allow-empty -m "catch the ship branch up (no unique content)"
+git -C "$REPO" checkout -q main
+out="$(run main '')"; rc=$?
+[ "$rc" -eq 0 ] && ok "a branch whose tree matches default, despite unique commits, is not flagged" || bad "exited $rc, want 0: $out"
+git -C "$REPO" branch -D ship-branch >/dev/null 2>&1
+
 printf '\nunlanded-work-check-witness: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

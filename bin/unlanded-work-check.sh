@@ -12,7 +12,8 @@ usage: $CLI_NAME [repo]
 
 Checks <repo> (default: cwd) for work that git/GitHub's own state shows as
 not landed: a stale cached origin/HEAD, or a local branch that is neither
-merged into the default branch nor named by any PR (excludes salvage/*).
+merged into the default branch nor named by any PR (excludes salvage/*,
+and a branch whose tree is already identical to the default branch's).
 
 exit: 0 clean   2 drift or unlanded work found, printed   3 usage/broken
 EOF
@@ -60,6 +61,15 @@ while IFS= read -r b; do
   [ "$b" = "$CURRENT_BRANCH" ] && continue
   case "$b" in salvage/*) continue ;; esac
   if "$GIT_BIN" -C "$REPO_DIR" merge-base --is-ancestor "$b" "origin/$DEFAULT" 2>/dev/null; then
+    continue
+  fi
+  # A long-lived integration branch (e.g. a ship/build branch fed by many
+  # short-lived PR branches, never itself a PR head) can carry commits not on
+  # $DEFAULT while its tree is byte-identical to it -- every one of those
+  # commits already landed via its own PR before being merged in here. That
+  # is not unlanded work; there is nothing left to land. Same shape senechal
+  # PR #767 fixed for health/bashified-ships-main.sh.
+  if "$GIT_BIN" -C "$REPO_DIR" diff --quiet "origin/$DEFAULT" "$b" -- 2>/dev/null; then
     continue
   fi
   pr_count="$("$GH_BIN" pr list -R "$REPO_SLUG" --head "$b" --state all --json number -q 'length' 2>/dev/null)"
