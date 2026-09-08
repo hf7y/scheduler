@@ -2,11 +2,11 @@ GENERATION gen-2: no clones. Work that milestone only; its description is the sc
 cite and do not re-open: #303 ruled the entry point TAKES THE REPO AS AN ARGUMENT; #306 holds the
 invariant and the acceptance test; #432 puts state AND config in a container, not a git repo -- so
 never fix a dispatch failure at the FETCH, and a wider App scope, a public raw read and serving it
-from the verb build are all that one move. PROVED, confirm and do not recreate: `bin/scheduler-run`
-runs wholly from the installed build (`dog@vaporwave`, 2026-09-06, twice, pushed, no clone). NOT
-PROVED: `bin/usage-paced-runner.sh` has never dispatched from it -- 2026-09-07, host mode holds at
-gate rc=127 (`usage-gate.sh` is not carried), account mode skips all 19 rows (no ROSTER there;
-absent reads as parked), and both look like a busy quota. PROHIBITED: approving a build is a human
-gate; no clone goes until #306 passes, so stop READING from them first or you disarm the fleet; and
-`dose --apply` darkens a live account by converging its crontab onto that build path. Clone-free
-was declared done in prose three times while it was false: land a witness or land nothing.
+from the verb build are all that one move; blocked on realisateur#840/#996, unmerged. PROVED,
+confirm and do not recreate: `bin/scheduler-run` runs wholly from the installed build
+(`dog@vaporwave`, 2026-09-06, twice, pushed, no clone). `usage-paced-runner.sh`'s two build gaps --
+host-mode gate rc=127, account-mode all-19-skip -- are CODE-FIXED and carried onto `bashified`
+(#668, #675; #675 contests #432's delete-the-fetch ruling), but unproved against the INSTALLED
+build, which predates both. PROHIBITED: cutting or approving a build is a human gate; #676 makes
+`dose --apply` refuse onto one that cannot dispatch -- confirm, do not recreate. #679 (closed):
+retire the rotation filter, don't patch it -- schedule `scheduler-run` directly instead.
