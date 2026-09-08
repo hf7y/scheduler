@@ -108,27 +108,6 @@ printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
 printf ']}'
 CURLEOF
 chmod +x "$FAKEBIN/curl"
-# getent decides which rows belong to THIS machine now. Every project the
-# fixture names is an account here; nothing else is.
-cat > "$FAKEBIN/getent" <<'GETEOF'
-#!/usr/bin/env bash
-# WHICH ROWS BELONG TO THIS MACHINE is now getent's answer, not a host column.
-# The fixture still carries `account@host`, so this stub honours it: a project
-# is an account HERE iff its fixture row names this host. That keeps every
-# "a row on another host is not touched" case meaning what it meant.
-[ "${1:-}" = passwd ] || exit 2
-_h="${DOSE_HOST_OVERRIDE:-${PACED_HOST:-$(hostname -s 2>/dev/null || echo unknown)}}"
-printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' -v want="$2" -v host="$_h" '
-  !/^[[:space:]]*(#|$)/ && NF>=4 {
-    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$2)
-    split($2, a, "@")
-    if ($1 == want && a[2] == host) { found=1 }
-  }
-  END { exit(found ? 0 : 1) }' || exit 2
-printf '%s:x:3000:3000::/home/%s:/bin/bash\n' "$2" "$2"
-GETEOF
-chmod +x "$FAKEBIN/getent"
-
 
 cat > "$FAKEBIN/crontab" <<'EOF'
 #!/usr/bin/env bash
