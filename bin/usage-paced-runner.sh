@@ -57,6 +57,11 @@ SELF_DIR="$(cd "$(dirname "$SELF_REAL")" && pwd)"
 REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
 : "${REPO_ROOT:=}"   # empty is fine -- the checks below just fall through
 
+# #682: same mint scheduler-run already does for the project it dispatches --
+# non-fatal to source, so the milestone gate and tempo.sh below have it too.
+# shellcheck disable=SC1091
+. "$SELF_DIR/../lib/gh-app-token.sh" 2>/dev/null || true
+
 # HOST MODE -- one dispatcher for the machine, instead of one per account.
 # Zach, 2026-08-11: "the per-user absurdity should end and become rationalized."
 #
@@ -893,10 +898,23 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     unset _bsince
   fi
 
+  # GH_TOKEN, minted for THIS participant's own repo, reused by the milestone
+  # gate below and by tempo.sh: both read this project's tracker, and #682's
+  # gates held BLIND on ambient auth while scheduler-run minted for the same
+  # repo twenty lines further into the same dispatch. Un-mint between
+  # participants -- a token scoped to one project's repo must not leak onto
+  # the next iteration's `gh` calls.
+  [ -n "${_gat_minted:-}" ] && { unset GH_TOKEN; _gat_minted=""; }
+  _gat_slug="$(repo_slug_of "$name")"
+  if declare -F mint_gh_app_token >/dev/null 2>&1 && [ -n "$_gat_slug" ] && [ -z "${GH_TOKEN:-}" ]; then
+    mint_gh_app_token "$_gat_slug" usage-paced-runner
+    [ -n "${GH_TOKEN:-}" ] && _gat_minted=1
+  fi
+
   # NOT A ROSTER WRITE: `state` is the human's field (#291). A finished project
   # is live and idle; a new milestone resumes it. Slot consumed, like COOLDOWN.
   if [ "${MILESTONE_GATE:-1}" -ne 0 ]; then
-    _mslug="$(repo_slug_of "$name")"
+    _mslug="$_gat_slug"
     _mprobe=""
     [ -n "$_mslug" ] && _mprobe="$(milestone_gate_probe "$_mslug")"
     if [ -z "$_mprobe" ]; then
