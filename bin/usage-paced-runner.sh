@@ -464,6 +464,10 @@ file_to_realisateur() {
 # cause has repeated PULL_ESCALATE_AFTER ticks running. State is "<n> <reason>
 # <filed>"; a change of reason restarts the count, so an unrelated blip cannot
 # inherit an older cause's escalation.
+reason_normalize() {  # $1 = a BLOCKED reason -- collapse ids/counts/timestamps so repeat-blockage comparison isn't fooled by jitter (#671)
+  sed -E 's/[0-9a-f]{8,}/<id>/g; s/[0-9]+/<n>/g' <<<"$1"
+}
+
 pull_blocked() {  # $1 = short reason key   $2 = the line to log
   local reason="$1" line="$2" n=1 filed=0 prev_n=0 prev_reason="" prev_filed=0
   if [ -f "$PULL_STATE" ]; then
@@ -938,7 +942,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       _bwant=$(( ${LEDGER_BLOCKED_HOLD:-6} * _brun ))
       _r1="$(ledger_reason "$name" BLOCKED 1 2>/dev/null || true)"
       _r2="$(ledger_reason "$name" BLOCKED 2 2>/dev/null || true)"
-      [ -n "$_r1" ] && [ "$_r1" = "$_r2" ] && _bwant=$(( _bwant * 2 ))
+      [ -n "$_r1" ] && [ "$(reason_normalize "$_r1")" = "$(reason_normalize "$_r2")" ] && _bwant=$(( _bwant * 2 ))
       if [ "$_bsince" -lt "$_bwant" ]; then
         ledger_append "$name" "${TIER:-batch}" - BLOCKED-HOLD "waiting: $_bsince/$_bwant after blockage #$_brun" 2>/dev/null || true
         log "BLOCKED-HOLD $name -- $_bsince/$_bwant opportunit(ies) since it reported BLOCKED${_r1:+ ($_r1)}. Backing off, not giving up."
@@ -1197,7 +1201,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       _brun="$(ledger_run "$name" BLOCKED BLOCKED-HOLD 2>/dev/null || echo 1)"
       [ "${_brun:-0}" -lt 1 ] && _brun=1
       _bprev="$(ledger_reason "$name" BLOCKED 2>/dev/null || true)"
-      [ -n "${_bprev:-}" ] && [ "$_bprev" = "$_breason" ] && _bsame=yes
+      [ -n "${_bprev:-}" ] && [ "$(reason_normalize "$_bprev")" = "$(reason_normalize "$_breason")" ] && _bsame=yes
     fi
     _bhold=$(( ${LEDGER_BLOCKED_HOLD:-6} * _brun ))
     [ -n "$_bsame" ] && _bhold=$(( _bhold * 2 ))
