@@ -89,22 +89,68 @@ chmod +x "$FAKEBIN/gh"
 
 # THE ROSTER IS A SERVICE (#432): the fixture reaches the code through curl,
 # not gh. Same FAKE_ROSTER_CONTENT, converted here rather than restated.
-cat > "$FAKEBIN/curl" <<'CURLEOF'
+# The single-project endpoint also carries the WRITE (#686): a POST stores
+# into $WORK/roster-store, seeded from FAKE_ROSTER_CONTENT on first read, so
+# the verifying re-read that follows a write sees what was just posted.
+cat > "$FAKEBIN/curl" <<CURLEOF
 #!/usr/bin/env bash
-# The roster SERVICE stands in for the roster FILE (#432). FAKE_GH_MODE keeps
-# its old meanings so each witness's existing cases still mean what they meant:
-# `fail` is unreachable (BLIND 6), `absent` is reachable-but-empty (GAP 4).
-case "${FAKE_GH_MODE:-ok}" in
-  fail)   echo "curl: (7) Failed to connect" >&2; exit 7 ;;
-  absent) printf '{"rows": []}'; exit 0 ;;
+WORK="$WORK"
+STORE="\$WORK/roster-store"; mkdir -p "\$STORE"
+case "\${FAKE_GH_MODE:-ok}" in
+  fail) echo "curl: (7) Failed to connect" >&2; exit 7 ;;
 esac
-printf '{"rows": ['
-printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
-  !/^[[:space:]]*(#|$)/ && NF>=4 {
-    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
-    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
-  }'
-printf ']}'
+method=GET; outfile=""; url=""; data=""; token=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    -X) method="\$2"; shift 2 ;;
+    -H) case "\$2" in X-Roster-Token:*) token="\${2#X-Roster-Token: }" ;; esac; shift 2 ;;
+    -d) data="\$2"; shift 2 ;;
+    -o) outfile="\$2"; shift 2 ;;
+    -w|--max-time) shift 2 ;;
+    http*) url="\$1"; shift ;;
+    *) shift ;;
+  esac
+done
+case "\$url" in
+  */roster)
+    if [ "\${FAKE_GH_MODE:-ok}" = absent ]; then printf '{"rows": []}'; exit 0; fi
+    printf '{"rows": ['
+    printf '%s\n' "\$FAKE_ROSTER_CONTENT" | awk -F'|' '
+      !/^[[:space:]]*(#|\$)/ && NF>=4 {
+        gsub(/[[:space:]]/,"",\$1); gsub(/[[:space:]]/,"",\$4)
+        if (\$1!="" && \$4!="") { if(n++) printf ","; printf "{\\"project\\":\\"%s\\",\\"state\\":\\"%s\\"}", \$1, \$4 }
+      }'
+    printf ']}'
+    ;;
+  */roster/*)
+    proj="\${url##*/roster/}"
+    if [ "\$method" = POST ]; then
+      echo "post project=\$proj data=\$data" >> "\$WORK/roster-write.log"
+      if [ -z "\$token" ] || [ "\${FAKE_ROSTER_TOKEN_MODE:-ok}" = bad ]; then
+        body='{"error":"bad or missing X-Roster-Token"}'; code=403
+      else
+        newstate="\$(printf '%s' "\$data" | sed -n 's/.*"state":"\([^\"]*\)".*/\1/p')"
+        printf '%s' "\$newstate" > "\$STORE/\$proj"
+        body="{\\"project\\":\\"\$proj\\",\\"state\\":\\"\$newstate\\"}"; code=200
+      fi
+      if [ -n "\$outfile" ]; then printf '%s' "\$body" > "\$outfile"; printf '%s' "\$code"
+      else printf '%s' "\$body"; fi
+    else
+      if [ ! -f "\$STORE/\$proj" ]; then
+        st="\$(printf '%s\n' "\$FAKE_ROSTER_CONTENT" | awk -F'|' -v p="\$proj" '
+          !/^[[:space:]]*(#|\$)/ && NF>=4 {
+            gsub(/[[:space:]]/,"",\$1); gsub(/[[:space:]]/,"",\$4)
+            if (\$1==p) print \$4 }')"
+        [ -n "\$st" ] && printf '%s' "\$st" > "\$STORE/\$proj"
+      fi
+      if [ -f "\$STORE/\$proj" ]; then
+        printf '{"project":"%s","state":"%s"}' "\$proj" "\$(cat "\$STORE/\$proj")"
+      else
+        echo '{"error":"no such row"}' >&2; exit 22
+      fi
+    fi
+    ;;
+esac
 CURLEOF
 chmod +x "$FAKEBIN/curl"
 
@@ -158,6 +204,8 @@ chmod +x "$FAKEBIN/id"
 
 export PATH="$FAKEBIN:$PATH"
 export DOSE_HOST_OVERRIDE="testhost"
+export DOSE_ROSTER_WRITE_TOKEN_FILE="$WORK/roster-write.token"
+printf 'test-token' > "$DOSE_ROSTER_WRITE_TOKEN_FILE"
 ROSTER="ecosim | ecosim@testhost | 6h | live
 ghosttown | ghosttown@testhost | 6h | parked
 elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
@@ -417,56 +465,67 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
 [ -f "$WORK/gh-calls.log" ] && bad "missing-account refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "missing-account refusal wrote nothing"
 
-# --- 10-12. arm/park REFUSE while the read is served and the write is not --
-# #686: ROSTER_CONTENT is synthesised now, so the old PR path would commit a
-# fabrication. The refusal must name the way to actually change state.
-rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
+# --- 10-13. arm/park WRITE the service now (#686): one POST, verified by a
+# re-read -- never a branch, a PR, or schedule/ROSTER.
+rm -f "$WORK/gh-calls.log" "$WORK/roster-write.log" "$WORK/roster-store/ghosttown"
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
-[ "$rc" -eq 5 ] && ok "--arm refuses (5) rather than write a synthesised roster" \
-  || bad "--arm exited $rc, want 5: $out"
-grep -qF '#686' <<<"$out" && ok "the refusal names the issue that lifts it" \
-  || bad "exit 5 but the refusal cites nothing: $out"
-grep -qF '/roster/ghosttown' <<<"$out" && ok "...and names the POST that does work today" \
-  || bad "the refusal does not say how to change state: $out"
-[ -f "$WORK/written-roster" ] && bad "REFUSED and still wrote a roster: $(cat "$WORK/written-roster")" \
-  || ok "nothing was written to schedule/ROSTER"
-[ -f "$WORK/gh-calls.log" ] && bad "REFUSED and still reached gh: $(cat "$WORK/gh-calls.log")" \
+[ "$rc" -eq 0 ] && ok "--arm posts to the service and exits 0" \
+  || bad "--arm exited $rc, want 0: $out"
+grep -qF 'armed' <<<"$out" && ok "the success is named 'armed'" \
+  || bad "exit 0 but the output never says armed: $out"
+grep -qF 'project=ghosttown' "$WORK/roster-write.log" 2>/dev/null \
+  && grep -qF '"state":"live"' "$WORK/roster-write.log" \
+  && ok "the POST names the right project and state" \
+  || bad "the POST log doesn't show ghosttown -> live: $(cat "$WORK/roster-write.log" 2>/dev/null)"
+[ "$(cat "$WORK/roster-store/ghosttown" 2>/dev/null)" = live ] \
+  && ok "the fake service's own store now holds 'live' -- a real re-read would see it" \
+  || bad "the store was not updated by the write"
+[ -f "$WORK/gh-calls.log" ] && bad "--arm reached gh -- it should never touch the repo: $(cat "$WORK/gh-calls.log")" \
   || ok "no branch, no PR, no gh call at all"
 
-rm -f "$WORK/gh-calls.log"
+rm -f "$WORK/roster-write.log"
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm on an already-live project exits 0" || bad "--arm exited $rc: $out"
 grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" \
   || bad "--arm on a live project didn't say kept: $out"
-[ -f "$WORK/gh-calls.log" ] && bad "a no-op --arm still wrote to gh -- $(cat "$WORK/gh-calls.log")" \
+[ -f "$WORK/roster-write.log" ] && bad "a no-op --arm still posted to the service -- $(cat "$WORK/roster-write.log")" \
   || ok "a no-op --arm wrote nothing"
 
-rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
+rm -f "$WORK/roster-write.log" "$WORK/roster-store/ecosim"
 out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
-[ "$rc" -eq 5 ] && ok "--park refuses (5) too -- the refusal is not arm-only" \
-  || bad "--park exited $rc, want 5: $out"
-[ -f "$WORK/written-roster" ] && bad "--park REFUSED and still wrote a roster: $(cat "$WORK/written-roster")" \
-  || ok "--park wrote nothing"
+[ "$rc" -eq 0 ] && ok "--park posts too -- the write is not arm-only" \
+  || bad "--park exited $rc, want 0: $out"
+[ "$(cat "$WORK/roster-store/ecosim" 2>/dev/null)" = parked ] \
+  && ok "--park's POST carries state=parked" || bad "--park did not flip the store to parked"
 
 # --park never needed the account to exist, and still does not reach that far.
+rm -f "$WORK/roster-store/ecosim"; printf 'live' > "$WORK/roster-store/ecosim"
 export FAKE_GETENT_FAIL=ecosim
 out2="$("$TARGET" ecosim --park 2>&1)"; rc2=$?
 unset FAKE_GETENT_FAIL
-[ "$rc2" -eq 5 ] && ok "--park with no unix account refuses for the SAME reason, not a different one" \
-  || bad "--park with no account exited $rc2, want 5: $out2"
-grep -qF '#686' <<<"$out2" && ok "...and still cites #686 rather than blaming the account" \
-  || bad "--park's refusal changed cause when the account went missing: $out2"
+[ "$rc2" -eq 0 ] && ok "--park with no unix account still writes -- park never needed one" \
+  || bad "--park with no account exited $rc2, want 0: $out2"
 
-# --- 13. the auto-merge degrade path is unreachable while the write is off --
-# If this ever exits 0 again, the write came back without #686 being closed.
-rm -f "$WORK/gh-calls.log"
-export FAKE_GH_AUTOMERGE_MODE=fail
+# --- bad token: REFUSED (7), before the write is trusted -------------------
+rm -f "$WORK/roster-store/ghosttown"; printf 'parked' > "$WORK/roster-store/ghosttown"
+export FAKE_ROSTER_TOKEN_MODE=bad
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
-unset FAKE_GH_AUTOMERGE_MODE
-[ "$rc" -eq 5 ] && ok "--arm refuses before auto-merge is ever reached" \
-  || bad "--arm exited $rc with auto-merge failing, want 5: $out"
-[ -f "$WORK/gh-calls.log" ] && bad "the refusal still reached gh: $(cat "$WORK/gh-calls.log")" \
-  || ok "no gh call at all -- the refusal is before the network"
+unset FAKE_ROSTER_TOKEN_MODE
+[ "$rc" -eq 7 ] && ok "a token the service rejects REFUSES (7), not BROKEN" \
+  || bad "bad-token --arm exited $rc, want 7: $out"
+[ "$(cat "$WORK/roster-store/ghosttown")" = parked ] \
+  && ok "a rejected token leaves the service's state untouched" \
+  || bad "the store changed even though the token was rejected"
+
+# --- missing token file: REFUSED (7), never opens by default ---------------
+rm -f "$WORK/roster-store/ghosttown"; printf 'parked' > "$WORK/roster-store/ghosttown"
+export DOSE_ROSTER_WRITE_TOKEN_FILE="$WORK/no-such-token"
+out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+export DOSE_ROSTER_WRITE_TOKEN_FILE="$WORK/roster-write.token"
+[ "$rc" -eq 7 ] && ok "no readable token file REFUSES (7) before any network call" \
+  || bad "missing token file exited $rc, want 7: $out"
+grep -qi 'REFUSED' <<<"$out" && ok "the missing-token refusal is named" \
+  || bad "exit 7 but message never says REFUSED: $out"
 
 # --- 14. --shotgun parses, and NO LONGER travels (#432) -------------------
 # The hop went with the host column. An ssh on PATH must stay untouched: a hop

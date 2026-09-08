@@ -12,7 +12,7 @@
 # THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming/parking is reserved
 # for a human at a terminal -- an agent that armed and converged would have
 # self-armed. --check/--apply/--now never write it; --arm/--park (#291) do,
-# and refuse a uid 3000-3099 self-dev caller outright.
+# via roster_write() (#686), and refuse a uid 3000-3099 self-dev caller outright.
 #
 # RUNNER: tests/dose-project-witness.sh
 set -uo pipefail
@@ -29,9 +29,10 @@ read fresh from the roster service every run.
 
   --check   report what would change; writes nothing (default)
   --apply   write it, then re-read and verify
-  --arm     flip the roster row to 'live'. Human-only (#291): refuses a uid
-            3000-3099 self-dev account, and a project with no unix account
-            here. REFUSES ENTIRELY until #686 moves the write to the service.
+  --arm     flip the roster row to 'live', by one POST to the roster
+            service, verified by re-reading it. Human-only (#291): refuses
+            a uid 3000-3099 self-dev account, and a project with no unix
+            account here.
   --park    the same, to 'parked'.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
@@ -144,22 +145,7 @@ ROW_ACCT_HOST="${ROW[1]}"; ROW_RATE="${ROW[2]}"; ROW_STATE="${ROW[3]}"
 ROW_ACCT="${ROW_ACCT_HOST%@*}"; ROW_HOST="${ROW_ACCT_HOST##*@}"
 
 # --- 3a. --arm/--park (#291): write the roster, never converge. Runs before
-# the wrong-host check -- a GitHub write has no "wrong host" to be wrong about.
-roster_with_state() {  # <content> <project> <new-state>
-  awk -v proj="$2" -v newstate="$3" '
-    $0 ~ /^[[:space:]]*(#|$)/ { print; next }
-    {
-      n = split($0, f, "|")
-      if (n < 4) { print; next }
-      p = f[1]; gsub(/^[ \t]+|[ \t]+$/, "", p)
-      if (p != proj) { print; next }
-      lead = f[n]; sub(/[^ \t].*$/, "", lead)
-      out = f[1]
-      for (i = 2; i < n; i++) out = out "|" f[i]
-      print out "|" lead newstate
-    }
-  ' <<<"$1"
-}
+# the wrong-host check -- a service write has no "wrong host" to be wrong about.
 if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   NEW_STATE="live"
   [ "$MODE" = "--park" ] && NEW_STATE="parked"
@@ -178,40 +164,12 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
     fi
   fi
 
-  # THE WRITE HAS NOT MOVED, AND WRITING ANYWAY IS WORSE THAN REFUSING (#686):
-  # $ROSTER_CONTENT is SYNTHESISED from the service now, so committing it back
-  # would replace a 23-row file with this host's own fabrication, by PR.
-  echo "BROKEN: --${MODE#--} cannot write while the read is served and the write is not (#686)." >&2
-  echo "        The roster this process holds is synthesised from the service; writing it to schedule/ROSTER would commit a fabrication." >&2
-  echo "        Change state directly until #686 lands:" >&2
-  echo "          curl -fsS -X POST $ROSTER_URL/roster/$PROJECT \\" >&2
-  echo "            -H \"X-Roster-Token: \$(sudo cat /etc/scheduler/roster-write.token)\" \\" >&2
-  echo "            -d '{\"state\":\"$NEW_STATE\",\"by\":\"$(id -un)@$HOST\"}'" >&2
-  exit 5
-
-  # shellcheck disable=SC2317  # unreachable until #686 replaces it with a POST
-  NEW_ROSTER="$(roster_with_state "$ROSTER_CONTENT" "$PROJECT" "$NEW_STATE")"
-
-  BRANCH="dose-${MODE#--}-${PROJECT}-$(date +%s)"
-  TITLE="dose $PROJECT $MODE -> $NEW_STATE"
-  BODY="Opened by \`dose $PROJECT $MODE\` (hf7y/scheduler#291) -- flips schedule/ROSTER's state, the only field that arms or parks a project (#79, #429). Auto-merge is armed; this merges itself once 'suites' is green."
-
-  create_repo_branch "$BRANCH" "$ROSTER_REF" \
-    || { echo "BLIND: could not branch from '$ROSTER_REF' -- nothing written" >&2; exit 6; }
-  write_repo_file schedule/ROSTER "$NEW_ROSTER" "$BRANCH" "ROSTER: $PROJECT -> $NEW_STATE" \
-    || { echo "BROKEN: branched '$BRANCH' but could not write schedule/ROSTER on it -- delete the stray branch by hand: https://github.com/$REPO_SLUG/tree/$BRANCH" >&2; exit 5; }
-
-  read -r PR_NUM PR_URL < <(open_repo_pr "$BRANCH" "$ROSTER_REF" "$TITLE" "$BODY")
-  if [ -z "$PR_NUM" ]; then
-    echo "BROKEN: both files are committed on '$BRANCH' but opening the pull request failed -- open it by hand: https://github.com/$REPO_SLUG/compare/$ROSTER_REF...$BRANCH" >&2
-    exit 5
-  fi
-  if enable_pr_auto_merge "$PR_NUM"; then
-    echo "armed: PR #$PR_NUM will merge itself once 'suites' is green -- $PR_URL"
-  else
-    echo "opened: PR #$PR_NUM -- $PR_URL (auto-merge could not be armed; merge it by hand once green)"
-  fi
-  echo "next: once merged, run 'dose $PROJECT --apply' on $ROW_HOST to converge its crontab"
+  # $ROSTER_CONTENT is synthesised -- roster_write() (#686) posts only the field that changed.
+  roster_write "$PROJECT" "$NEW_STATE" "$(id -un)@$HOST"
+  rc=$?
+  [ "$rc" -eq 0 ] || exit "$rc"
+  echo "${MODE#--}ed: '$PROJECT' -> $NEW_STATE, confirmed by re-reading the roster service"
+  echo "next: run 'dose $PROJECT --apply' on the host that has $ROW_ACCT's account to converge its crontab"
   exit 0
 fi
 
