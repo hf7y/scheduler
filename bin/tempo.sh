@@ -55,6 +55,8 @@ Knobs, resolved env > schedule/_tempo.<host>.conf > schedule/_tempo.conf > defau
                         an issue with any GitHub assignee also counts as
                         blocked, label or not (hf7y/scheduler#318)
   TEMPO_CACHE_MIN       30       how long a tracker count may be reused
+  TEMPO_OUTCOME_WINDOW  5        trailing run-records checked for outcome mix
+  TEMPO_OUTCOME_REPEAT  2        repeats in that window that discount drive
 
 This utility cannot spend money. It has no --summon flag.
 EOF
@@ -121,12 +123,29 @@ want_int() {                                # want_int <KEY> <value> <lo> <hi>
   [ "$2" -ge "$3" ] && [ "$2" -le "$4" ] || blind "invalid_$1=$2 (out of range $3-$4)"
 }
 
+outcome_mix_counts() {                      # <project> -> "idle_n cutoff_n ok"
+  local proj="$1" f line v idle=0 cutoff=0
+  f="${STATE_ROOT:-$HOME/.local/share}/scheduler-runs/$proj.jsonl"
+  [ -r "$f" ] || { printf '0 0 0'; return; }
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    v="$(printf '%s' "$line" | grep -o '"verdict_computed":"[^"]*"' | sed -E 's/.*:"(.*)"/\1/')"
+    case "$v" in
+      IDLE) idle=$((idle + 1)) ;;
+      WORKED-CUTOFF) cutoff=$((cutoff + 1)) ;;
+    esac
+  done < <(tail -n "$OUTCOME_WINDOW" "$f" 2>/dev/null)
+  printf '%s %s 1' "$idle" "$cutoff"
+}
+
 knob TEMPO_ENABLED 1;        ENABLED="$KNOB_VAL"
 knob TEMPO_BASE_MIN 120;     BASE_MIN="$KNOB_VAL"; BASE_SRC="$KNOB_SRC"
 knob TEMPO_PIVOT_ISSUES 12;  PIVOT="$KNOB_VAL";    PIVOT_SRC="$KNOB_SRC"
 knob TEMPO_MIN_MIN 20;       MIN_MIN="$KNOB_VAL"
 knob TEMPO_MAX_MIN 1440;     MAX_MIN="$KNOB_VAL"
 knob TEMPO_CACHE_MIN 30;     CACHE_MIN="$KNOB_VAL"
+knob TEMPO_OUTCOME_WINDOW 5; OUTCOME_WINDOW="$KNOB_VAL"
+knob TEMPO_OUTCOME_REPEAT 2; OUTCOME_REPEAT="$KNOB_VAL"
 knob TEMPO_BLOCKED_LABELS 'needs-human'
 BLOCKED_LABELS="$KNOB_VAL"
 
@@ -140,6 +159,8 @@ want_int TEMPO_PIVOT_ISSUES "$PIVOT" 1 10000
 want_int TEMPO_MIN_MIN "$MIN_MIN" 1 10080
 want_int TEMPO_MAX_MIN "$MAX_MIN" 1 10080
 want_int TEMPO_CACHE_MIN "$CACHE_MIN" 0 10080
+want_int TEMPO_OUTCOME_WINDOW "$OUTCOME_WINDOW" 1 100
+want_int TEMPO_OUTCOME_REPEAT "$OUTCOME_REPEAT" 1 100
 [ "$MIN_MIN" -le "$MAX_MIN" ] || blind "TEMPO_MIN_MIN=$MIN_MIN exceeds TEMPO_MAX_MIN=$MAX_MIN"
 
 # --- which tracker ---------------------------------------------------------
@@ -269,6 +290,22 @@ else
   DRIVE_SRC="actionable(BLIND on closures -- fell back)"
 fi
 
+IDLE_N=0; CUTOFF_N=0; OUTCOME_OK=0
+read -r IDLE_N CUTOFF_N OUTCOME_OK <<<"$(outcome_mix_counts "$PROJECT")"
+OUTCOME_SRC="BLIND(no run-records -- undiscounted)"
+if [ "$OUTCOME_OK" = "1" ]; then
+  OUTCOME_SRC=none
+  if [ "$ACTIONABLE" -gt 0 ] && [ "$IDLE_N" -ge "$OUTCOME_REPEAT" ]; then
+    DRIVE=$(( (DRIVE + 1) / 2 )); OUTCOME_SRC="idle-with-queue:$IDLE_N/$OUTCOME_WINDOW"
+  fi
+  if [ "$CUTOFF_N" -ge "$OUTCOME_REPEAT" ]; then
+    DRIVE=$(( (DRIVE + 1) / 2 ))
+    [ "$OUTCOME_SRC" = none ] && OUTCOME_SRC="cutoff:$CUTOFF_N/$OUTCOME_WINDOW" \
+      || OUTCOME_SRC="$OUTCOME_SRC,cutoff:$CUTOFF_N/$OUTCOME_WINDOW"
+  fi
+  [ "$DRIVE" -lt 1 ] && DRIVE=1
+fi
+
 # want = BASE * PIVOT / max(1, drive), rounded, then clamped.
 DIV=$DRIVE; [ "$DIV" -lt 1 ] && DIV=1
 WANT=$(( (BASE_MIN * PIVOT + DIV / 2) / DIV ))
@@ -276,7 +313,7 @@ WANT=$(( (BASE_MIN * PIVOT + DIV / 2) / DIV ))
 [ "$WANT" -gt "$MAX_MIN" ] && WANT="$MAX_MIN"
 
 FACTS="project=$PROJECT repo=$SLUG open=$OPEN blocked=$BLOCKED actionable=$ACTIONABLE"
-FACTS="$FACTS closed7d=${CLOSED7:-BLIND} drive=$DRIVE via=$DRIVE_SRC"
+FACTS="$FACTS closed7d=${CLOSED7:-BLIND} drive=$DRIVE via=$DRIVE_SRC outcome=$OUTCOME_SRC"
 FACTS="$FACTS want_min=$WANT since_min=$SINCE_MIN counts=$SOURCE"
 FACTS="$FACTS knobs=base:$BASE_SRC,pivot:$PIVOT_SRC"
 
