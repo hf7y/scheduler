@@ -1,8 +1,8 @@
 GENERATION gen-2: no clones. Work that milestone only; its description is the scope bar. SETTLED,
 cite and do not re-open: #303 ruled the entry point TAKES THE REPO AS AN ARGUMENT; #306 holds the
 invariant and the acceptance test; #432 puts state AND config in a container, not a git repo -- so
-never fix a dispatch failure at the FETCH, and a wider App scope, a public raw read and serving it
-from the verb build are all that one move; blocked on realisateur#840/#996, unmerged. PROVED,
+never fix a dispatch failure at the FETCH. realisateur#840/#996 CLOSED unmerged, superseded by MERGED
+#1094 -- the arming service runs on dexter. PR #684 (draft) reads it; `dose-project.sh` untouched. PROVED,
 confirm and do not recreate: `bin/scheduler-run` runs wholly from the installed build
 (`dog@vaporwave`, 2026-09-06, twice, pushed, no clone). `usage-paced-runner.sh`'s two build gaps --
 host-mode gate rc=127, account-mode all-19-skip -- are CODE-FIXED and carried onto `bashified`
