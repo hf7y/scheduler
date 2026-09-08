@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# blocked-reason-normalize-witness.sh -- #671: the BLOCKED-HOLD doubling must
-# fire when two reasons name the same wall but differ only in volatile
-# tokens, and must NOT fire when they name genuinely different walls.
-set -uo pipefail
+set -uo pipefail  # #671: BLOCKED-HOLD must double for a repeated reason differing only in volatile tokens, not for a genuinely different one
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
