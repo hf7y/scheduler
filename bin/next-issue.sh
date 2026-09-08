@@ -81,19 +81,40 @@ fi
 declare -A DEP_STATE
 
 dep_state() {
-  local n="$1"
-  if [ -n "${DEP_STATE[$n]+x}" ]; then
-    printf '%s' "${DEP_STATE[$n]}"
+  local repo="$1" n="$2" key="$1#$2"
+  if [ -n "${DEP_STATE[$key]+x}" ]; then
+    printf '%s' "${DEP_STATE[$key]}"
     return 0
   fi
   local st
-  st="$("$GH_BIN" issue view "$n" --repo "$REPO" --json state -q '.state' 2>/dev/null)"
+  st="$("$GH_BIN" issue view "$n" --repo "$repo" --json state -q '.state' 2>/dev/null)"
   case "$st" in
-    OPEN)   DEP_STATE[$n]="open" ;;
-    CLOSED) DEP_STATE[$n]="closed" ;;
-    *)      DEP_STATE[$n]="blind" ;;  # unreadable -- fail closed, not open-by-default
+    OPEN)   DEP_STATE[$key]="open" ;;
+    CLOSED) DEP_STATE[$key]="closed" ;;
+    *)      DEP_STATE[$key]="blind" ;;  # unreadable -- fail closed, not open-by-default
   esac
-  printf '%s' "${DEP_STATE[$n]}"
+  printf '%s' "${DEP_STATE[$key]}"
+}
+
+parse_deps() {  # emits "repo<TAB>num" per ref, or "BLIND<TAB>snippet" if unparseable
+  local line snippet ref slug
+  while IFS= read -r line; do
+    grep -qiE '(depends on|blocked by)' <<<"$line" || continue
+    snippet="$(grep -oiE '(depends on|blocked by)[^#]{0,80}#[0-9]+' <<<"$line")"
+    if [ -z "$snippet" ]; then
+      printf 'BLIND\t%s\n' "${line:0:70}"
+      continue
+    fi
+    while IFS= read -r ref; do
+      [ -n "$ref" ] || continue
+      slug="$(grep -oE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+' <<<"$ref")"
+      if [ -n "$slug" ]; then
+        printf '%s\t%s\n' "${slug%#*}" "${slug##*#}"
+      else
+        printf '%s\t%s\n' "$REPO" "$(grep -oE '[0-9]+$' <<<"$ref")"
+      fi
+    done <<<"$snippet"
+  done <<<"$1"
 }
 
 # Oldest first, exactly the removed tie-breaker.
@@ -117,15 +138,19 @@ while [ "$i" -lt "$count" ] && [ "$printed" -lt "$LIMIT" ]; do
   fi
 
   blocker=""
-  while IFS= read -r dep; do
-    [ -n "$dep" ] || continue
-    [ "$dep" != "$num" ] || continue  # an issue cannot depend on itself
-    state="$(dep_state "$dep")"
-    if [ "$state" != "closed" ]; then
-      blocker="#$dep ($state)"
+  while IFS=$'\t' read -r drepo dep; do
+    [ -n "$drepo" ] || continue
+    if [ "$drepo" = "BLIND" ]; then
+      blocker="unparsed dependency text: \"$dep\""
       break
     fi
-  done < <(grep -oiE '(depends on|blocked by) #[0-9]+' <<<"$body" | grep -oE '[0-9]+')
+    [ "$drepo" = "$REPO" ] && [ "$dep" = "$num" ] && continue  # cannot depend on itself
+    state="$(dep_state "$drepo" "$dep")"
+    if [ "$state" != "closed" ]; then
+      [ "$drepo" = "$REPO" ] && blocker="#$dep ($state)" || blocker="$drepo#$dep ($state)"
+      break
+    fi
+  done < <(parse_deps "$body")
 
   if [ -n "$blocker" ]; then
     echo "SKIP  #$num  waiting on $blocker -- ${title:0:60}" >&2

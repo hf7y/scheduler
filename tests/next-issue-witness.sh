@@ -37,7 +37,9 @@ if [ "$1 $2" = "issue list" ]; then
   {"number": 14, "title": "alt phrasing, closed", "createdAt": "2026-08-05T00:00:00Z", "body": "Blocked by #10"},
   {"number": 15, "title": "self-referential dep", "createdAt": "2026-08-06T00:00:00Z", "body": "Depends on #15"},
   {"number": 16, "title": "claimed by a human", "createdAt": "2026-08-07T00:00:00Z", "body": "no deps here", "assignees": [{"login": "hf7y"}]},
-  {"number": 17, "title": "explicitly unassigned", "createdAt": "2026-08-08T00:00:00Z", "body": "no deps here", "assignees": []}
+  {"number": 17, "title": "explicitly unassigned", "createdAt": "2026-08-08T00:00:00Z", "body": "no deps here", "assignees": []},
+  {"number": 18, "title": "cross-repo dep, open", "createdAt": "2026-08-09T00:00:00Z", "body": "Depends on hf7y/other#40"},
+  {"number": 19, "title": "unparseable dep phrase", "createdAt": "2026-08-10T00:00:00Z", "body": "Depends on the container landing"}
 ]
 JSON
   exit 0
@@ -46,6 +48,7 @@ if [ "$1 $2" = "issue view" ]; then
   case "$3" in
     10) echo "CLOSED"; exit 0 ;;
     99) echo "OPEN"; exit 0 ;;
+    40) echo "OPEN"; exit 0 ;;
     999) exit 1 ;;
     *) exit 1 ;;
   esac
@@ -98,6 +101,18 @@ if grep -q "SKIP  #13  waiting on #999 (blind)" <<<"$stderr"; then
   ok "#13 skipped, unreadable dependency treated as blind (fails closed, not open-by-default)"
 else
   bad "#13 skip line missing or wrong: [$stderr]"
+fi
+
+if grep -q "SKIP  #18  waiting on hf7y/other#40 (open)" <<<"$stderr"; then
+  ok "#18 skipped, cross-repo owner/repo#N dependency parsed and resolved"
+else
+  bad "#18 skip line missing or wrong: [$stderr]"
+fi
+
+if grep -q 'SKIP  #19  waiting on unparsed dependency text: "Depends on the container landing"' <<<"$stderr"; then
+  ok "#19 skipped, unparseable dependency phrase refused loudly instead of passing silently"
+else
+  bad "#19 skip line missing or wrong: [$stderr]"
 fi
 
 # --- case 4b: a claimed issue is skipped; absent/empty assignees are not (#663) ---
