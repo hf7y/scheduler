@@ -59,26 +59,9 @@ printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
 printf ']}'
 CURLEOF
 chmod +x "$FAKEBIN/curl"
-# getent decides which rows belong to THIS machine now. Every project the
-# fixture names is an account here; nothing else is.
-cat > "$FAKEBIN/getent" <<'GETEOF'
-#!/usr/bin/env bash
-# WHICH ROWS BELONG TO THIS MACHINE is now getent's answer, not a host column.
-# The fixture still carries `account@host`, so this stub honours it: a project
-# is an account HERE iff its fixture row names this host. That keeps every
-# "a row on another host is not touched" case meaning what it meant.
-[ "${1:-}" = passwd ] || exit 2
-_h="${DOSE_HOST_OVERRIDE:-${PACED_HOST:-$(hostname -s 2>/dev/null || echo unknown)}}"
-printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' -v want="$2" -v host="$_h" '
-  !/^[[:space:]]*(#|$)/ && NF>=4 {
-    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$2)
-    split($2, a, "@")
-    if ($1 == want && a[2] == host) { found=1 }
-  }
-  END { exit(found ? 0 : 1) }' || exit 2
-printf '%s:x:3000:3000::/home/%s:/bin/bash\n' "$2" "$2"
-GETEOF
-chmod +x "$FAKEBIN/getent"
+# The roster carries state only now (#432): a project runs here iff its unix
+# account exists here. FAKE_GETENT_FAIL names the ones that do not.
+witness_stub_getent "$FAKEBIN"
 
 
 # fake sudo passes -u's account through an env var so fake crontab below
@@ -117,16 +100,21 @@ printf 'RUNNER_JOB="scheduler-paced-runner"\nRUNNER_CMD="bin/usage-paced-runner.
   > "$DOSE_SCHEDULE_DIR/_runner.conf"
 TAG='# scheduler:scheduler-paced-runner:RUNNER (usage-paced dispatch)'
 
-ROSTER="armed-and-running | ok-acct@testhost | 20m | live
-armed-but-dark | dark-acct@testhost | 20m | live
-parked-project | parked-acct@testhost | 20m | parked
-elsewhere | else-acct@otherhost | 20m | live"
+# ACCOUNT IS THE PROJECT. The service carries no account column, and #996
+# measured `account == project` in 23 of 23 rows, so a fixture with distinct
+# account names describes a shape that can no longer occur. `elsewhere` is the
+# off-host case, stated the way the audit now asks it: no account here.
+ROSTER="armed-and-running | armed-and-running@testhost | 20m | live
+armed-but-dark | armed-but-dark@testhost | 20m | live
+parked-project | parked-project@testhost | 20m | parked
+elsewhere | elsewhere@otherhost | 20m | live"
+export FAKE_GETENT_FAIL=elsewhere
 
 echo "-- 1. a live row whose account crontab carries the RUNNER line: ok, exit 0"
-printf '0,20,40 * * * * /some/cmd %s\n' "$TAG" > "$WORK/cron-ok-acct"
-: > "$WORK/cron-dark-acct"  # gets overwritten in test 2; empty here so test 1 alone would flag it
-rm -f "$WORK/cron-dark-acct"
-printf '0,20,40 * * * * /some/cmd %s\n' "$TAG" > "$WORK/cron-dark-acct"
+printf '0,20,40 * * * * /some/cmd %s\n' "$TAG" > "$WORK/cron-armed-and-running"
+: > "$WORK/cron-armed-but-dark"  # gets overwritten in test 2; empty here so test 1 alone would flag it
+rm -f "$WORK/cron-armed-but-dark"
+printf '0,20,40 * * * * /some/cmd %s\n' "$TAG" > "$WORK/cron-armed-but-dark"
 export FAKE_GH_MODE=ok FAKE_ROSTER_CONTENT="$ROSTER"
 out="$("$TARGET" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "both live rows on this host armed and running exits 0" || bad "exited $rc, want 0: $out"
@@ -137,7 +125,7 @@ grep -q "parked-project" <<<"$out" && bad "a parked row was checked at all: $out
   || ok "a parked row is skipped"
 
 echo "-- 2. a live row with no RUNNER line in its crontab: ARMED BUT NOT RUNNING, exit 1"
-: > "$WORK/cron-dark-acct"
+: > "$WORK/cron-armed-but-dark"
 out="$("$TARGET" 2>&1)"; rc=$?
 [ "$rc" -eq 1 ] && ok "a live row missing its RUNNER line exits 1" || bad "exited $rc, want 1: $out"
 grep -q "ARMED BUT NOT RUNNING: 'armed-but-dark'" <<<"$out" \
@@ -147,11 +135,13 @@ grep -q "ok: 'armed-and-running'" <<<"$out" && ok "the healthy row is still repo
   || bad "healthy row dropped once a bad one exists: $out"
 
 echo "-- 3. no live row names this host: kept, exit 0"
-export FAKE_ROSTER_CONTENT="only-elsewhere | acct@otherhost | 20m | live"
+export FAKE_ROSTER_CONTENT="only-elsewhere | only-elsewhere@otherhost | 20m | live"
+export FAKE_GETENT_FAIL="elsewhere only-elsewhere"
 out="$("$TARGET" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "no live row on this host exits 0" || bad "exited $rc, want 0: $out"
 grep -qi 'kept' <<<"$out" || bad "does not say kept when nothing applies here: $out"
 export FAKE_ROSTER_CONTENT="$ROSTER"
+export FAKE_GETENT_FAIL=elsewhere
 
 echo "-- 4. an unreachable gh is BLIND (exit 6), not silently clean"
 export FAKE_GH_MODE=fail

@@ -9,6 +9,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 R="$HERE/../bin/usage-paced-runner.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
+# The roster carries state only now (#432), so the dispatcher asks the box
+# which accounts exist. Fixture projects are not accounts on the suite's host.
+witness_stub_getent
 echo "roster-participants-witness"
 
 # roster_rows is a function so it can be tested; pull it out rather than run
@@ -18,6 +21,10 @@ declare -F roster_rows >/dev/null && ok "roster_rows extracted" \
   || { bad "could not extract roster_rows -- nothing below tested anything"; echo; exit 1; }
 
 PACED_HOST=testhost
+# gamma is the "not this machine's" case. It used to be expressed by the host
+# column; the roster carries state only now (#432), so it is expressed the way
+# the dispatcher actually asks -- gamma has no unix account here.
+FAKE_GETENT_FAIL=gamma
 ROSTER='# a comment
 alpha   | alpha@testhost   | 6h | live
 beta    | beta@testhost    | 1h | parked

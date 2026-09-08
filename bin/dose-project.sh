@@ -174,19 +174,30 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   fi
 
   # do_live exits 5 BROKEN if the account is missing -- catch it here first.
+  # READ THE MACHINE, not a column about it (#432): this used to ssh to
+  # $ROW_HOST to ask, and there is no host column to ssh by any more.
   if [ "$NEW_STATE" = "live" ]; then
-    ACCT_OK=1
-    if [ "$ROW_HOST" = "$HOST" ]; then
-      getent passwd "$ROW_ACCT" >/dev/null 2>&1 || ACCT_OK=0
-    else
-      ssh -o BatchMode=yes -o ConnectTimeout=5 "$ROW_HOST" "getent passwd '$ROW_ACCT'" >/dev/null 2>&1 || ACCT_OK=0
-    fi
-    if [ "$ACCT_OK" -ne 1 ]; then
-      echo "BROKEN: '$ROW_ACCT' has no unix account on '$ROW_HOST' yet -- arming now would converge to a break. Provision the account first, then --arm." >&2
+    if ! getent passwd "$ROW_ACCT" >/dev/null 2>&1; then
+      echo "BROKEN: '$ROW_ACCT' has no unix account on '$HOST' yet -- arming now would converge to a break. Provision the account first, then --arm. If it lives on another host, run dose there." >&2
       exit 5
     fi
   fi
 
+  # THE WRITE HAS NOT MOVED, AND WRITING ANYWAY WOULD BE WORSE THAN REFUSING
+  # (hf7y/scheduler#686). The read comes from the roster service now, so
+  # $ROSTER_CONTENT is SYNTHESISED -- one row per project, `<p> | <p>@<thishost>
+  # | 20m | <state>`, host answered by whichever box is running dose. Committing
+  # that back would replace a 23-row file carrying real account@host pairs with
+  # a fabrication of this host's own making, by auto-merging PR.
+  echo "BROKEN: --${MODE#--} cannot write while the read is served and the write is not (#686)." >&2
+  echo "        The roster this process holds is synthesised from the service; writing it to schedule/ROSTER would commit a fabrication." >&2
+  echo "        Change state directly until #686 lands:" >&2
+  echo "          curl -fsS -X POST $ROSTER_URL/roster/$PROJECT \\" >&2
+  echo "            -H \"X-Roster-Token: \$(sudo cat /etc/scheduler/roster-write.token)\" \\" >&2
+  echo "            -d '{\"state\":\"$NEW_STATE\",\"by\":\"$(id -un)@$HOST\"}'" >&2
+  exit 5
+
+  # shellcheck disable=SC2317  # unreachable until #686 replaces it with a POST
   NEW_ROSTER="$(roster_with_state "$ROSTER_CONTENT" "$PROJECT" "$NEW_STATE")"
 
   BRANCH="dose-${MODE#--}-${PROJECT}-$(date +%s)"
@@ -212,21 +223,19 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   exit 0
 fi
 
-# --- 3. wrong host: say so, stop. Never half-act. ---------------------------
-if [ "$ROW_HOST" != "$HOST" ]; then
-  # --now is the one mode that may travel. Converging a crontab is a WRITE and
-  # stays refused off-host; dispatching is a request the roster already says
-  # belongs to $ROW_HOST, so carrying it there is obedience, not a bypass.
-  if [ "$MODE" = --now ] || [ "$MODE" = --shotgun ]; then
-    echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
-    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' $MODE"
-  fi
-  # It writes state the roster's host reads on its ticks -- travels like --now.
-  if [ "$MODE" = --sprint ]; then
-    echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
-    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --sprint '$SPRINT_DUR'"
-  fi
-  echo "REFUSED: roster says '$PROJECT' runs on '$ROW_HOST', this host is '$HOST' -- stopping, nothing touched" >&2
+# --- 3. not this machine's project: say so, stop. Never half-act. -----------
+# THE ROSTER NO LONGER RECORDS WHICH HOST A PROJECT RUNS ON (#432, #996), so
+# there is no column to hop by and nowhere to ssh to. The box answers instead:
+# a project runs here iff its unix account exists here. That is the stronger
+# question -- it reads the machine that would actually run the row, and it
+# cannot disagree with itself the way a file about the machine could.
+#
+# THE HOP IS GONE, and that is the visible cost. `dose <p> --now` typed on the
+# wrong host used to carry itself over ssh; now it refuses. Run dose where the
+# account lives.
+if ! getent passwd "$ROW_ACCT" >/dev/null 2>&1; then
+  echo "REFUSED: '$PROJECT' has no unix account on '$HOST', so it does not run here -- stopping, nothing touched" >&2
+  echo "         The roster carries state and nothing else; run dose on the box that has the account." >&2
   exit 7
 fi
 

@@ -183,15 +183,35 @@ touch "$T3_RUNNING_MARKER"
 EOF
 chmod +x "$T3_BUILD/bin/scheduler-run"
 
+# Since #432 the roster carries state only, so "does this project run here" is
+# `getent passwd <project>` -- the project name IS the account name. This
+# fixture has one worker serving two scratch repos, so it answers for the
+# worker AND for both project names, all pointing at the same home.
 cat > "$T3_FAKEBIN/getent" <<EOF
 #!/usr/bin/env bash
-if [ "\$1" = passwd ] && [ "\$2" = "$T3_ACCT" ]; then
-  printf '%s:x:9999:9999::%s:/bin/bash\n' "$T3_ACCT" "$T3_HOME"
-  exit 0
+if [ "\$1" = passwd ]; then
+  case "\$2" in
+    "$T3_ACCT"|scratch-repo-a|scratch-repo-b)
+      printf '%s:x:9999:9999::%s:/bin/bash\n' "\$2" "$T3_HOME"
+      exit 0 ;;
+  esac
 fi
 exit 2
 EOF
 chmod +x "$T3_FAKEBIN/getent"
+
+# The roster reaches the code under test over curl now, not gh.
+cat > "$T3_FAKEBIN/curl" <<'CURLEOF'
+#!/usr/bin/env bash
+printf '{"rows": ['
+printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
+  !/^[[:space:]]*(#|$)/ && NF>=4 {
+    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
+    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
+  }'
+printf ']}'
+CURLEOF
+chmod +x "$T3_FAKEBIN/curl"
 
 cat > "$T3_FAKEBIN/sudo" <<'EOF'
 #!/usr/bin/env bash

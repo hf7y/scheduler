@@ -19,6 +19,9 @@ LIB="$ROOT/lib/paced-conf.sh"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
+# The roster carries state only now (#432), so the dispatcher asks the box
+# which accounts exist. Fixture projects are not accounts on the suite's host.
+witness_stub_getent
 
 # with_lib <repo-root> <fn> <var> -- run one lib/paced-conf.sh entry point
 # against a fixture and print the variable it set. Subshell per call: both

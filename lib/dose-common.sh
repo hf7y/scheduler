@@ -196,10 +196,20 @@ fetch_roster() {
     echo "GAP: $ROSTER_URL is reachable and carries no rows. Nothing is armed anywhere; this is not a credential problem." >&2
     return 4
   fi
+  # TRANSPORT ONLY -- EVERY ROW, NO HOST FILTER. The roster is the ESTATE's
+  # state, not this box's: hf7y/realisateur's arming.sh, decision-rot.sh,
+  # registry-set.sh and monkey-status-collect.py all take `.rows[]` whole, and
+  # a reader on one host must be able to see another host's projects.
+  #
+  # NARROWING IS THE CALLER'S JOB, AND IT ASKS THE MACHINE, not a column.
+  # monkey-status-collect.py states the rule: "does this project run here" is
+  # answered by whether the account exists on THIS box. usage-paced-runner's
+  # roster_rows() does exactly that; dose deliberately does not, so it can say
+  # "no account here" rather than "no such project" -- different sentences,
+  # different exit codes.
   printf '%s\n' "$_rows" \
   | while IFS="$(printf '\t')" read -r _p _s; do
       [ -n "$_p" ] || continue
-      getent passwd "$_p" >/dev/null 2>&1 || continue
       printf '%s | %s@%s | %s | %s\n' "$_p" "$_p" "${PACED_HOST:-$HOST}" "$ROSTER_RATE" "$_s"
     done
 }
