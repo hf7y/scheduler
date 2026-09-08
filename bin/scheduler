@@ -2494,7 +2494,44 @@ cmd_sweep() {
     echo "== [debroussaille] MISSING or not executable -- a wired check vanished =="
   fi
 
-  # Twelfth pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
+  # Twelfth pass: bin/interchange-probe.sh (#630) -- a real health probe with
+  # no caller. Left out of every sweep tick on purpose: it reads every
+  # registered repo's issue tracker over a rolling 7-day window
+  # (`gh issue list --state all --limit 300` per repo), and that number
+  # cannot move between 15-minute ticks -- recomputing it every sweep would
+  # just burn API calls. So it gets its own cadence, throttled by a stamp
+  # file rather than cron, since every other check here already fires from
+  # this one sweep loop. Its name matches neither *-check.sh nor *-lint.sh,
+  # so check-witness-lint (next) does not expect a fresh witness from it.
+  local interchange_stamp="$HOME/.local/share/scheduler-interchange-probe/last_run"
+  local interchange_cadence_h="${INTERCHANGE_PROBE_CADENCE_HOURS:-24}"
+  if [ -x "$SCHED_ROOT/bin/interchange-probe.sh" ]; then
+    local interchange_due=1
+    if [ -f "$interchange_stamp" ]; then
+      local interchange_last_epoch interchange_age_h
+      interchange_last_epoch="$(date -r "$interchange_stamp" +%s 2>/dev/null || echo 0)"
+      interchange_age_h=$(( ($(date +%s) - interchange_last_epoch) / 3600 ))
+      [ "$interchange_age_h" -ge "$interchange_cadence_h" ] || interchange_due=0
+    fi
+    if [ "$interchange_due" -eq 1 ]; then
+      mkdir -p "$(dirname "$interchange_stamp")"
+      local interchange_out interchange_rc
+      interchange_out="$("$SCHED_ROOT/bin/interchange-probe.sh" 2>&1)"
+      interchange_rc=$?
+      date -Is > "$interchange_stamp"
+      if [ "$interchange_rc" -eq 6 ]; then
+        echo "== [interchange] cannot read a tracker -- check is BLIND =="
+        echo "$interchange_out" | sed 's/^/  /'
+      elif [ "$interchange_rc" -ne 0 ]; then
+        echo "== [interchange] no cross-repo work filed and closed in the window =="
+        echo "$interchange_out" | sed 's/^/  /'
+      fi
+    fi
+  else
+    echo "== [interchange] MISSING or not executable -- a wired check vanished =="
+  fi
+
+  # Thirteenth pass: checks that exist but nothing runs (bin/check-witness-lint.sh,
   # built 2026-07-28 -- FOCUS.md step 1b). Answers "how do we make a
   # built-but-unwired check fail noisily?", which static analysis cannot: a
   # call site inside a branch that never executes greps identically to a live
