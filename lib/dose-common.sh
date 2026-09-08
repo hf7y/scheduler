@@ -184,45 +184,36 @@ fetch_roster() {
     done
 }
 
-branch_head_sha() {  # <ref> -> the sha it currently points at
-  local ref="${1:?branch_head_sha needs a ref}"
-  gh_as api "repos/$REPO_SLUG/git/ref/heads/$ref" --jq '.object.sha' 2>/dev/null
-}
+# roster_write <project> <new-state> <by> -- ONE POST, verified by a re-read
+# (#686). Reads the same 0640 root:root token dose's own uid-refusal gates on (#432 §8).
+ROSTER_WRITE_TOKEN_FILE="${DOSE_ROSTER_WRITE_TOKEN_FILE:-/etc/scheduler/roster-write.token}"
 
-create_repo_branch() {  # <new-branch> <base-ref>, off base's CURRENT tip
-  local branch="${1:?create_repo_branch needs a branch name}" base="${2:?needs a base ref}" sha
-  sha="$(branch_head_sha "$base")" || return 6
-  [ -n "$sha" ] || return 6
-  gh_as api "repos/$REPO_SLUG/git/refs" -f ref="refs/heads/$branch" -f sha="$sha" >/dev/null
-}
+roster_write() {
+  local project="${1:?roster_write needs a project}" state="${2:?needs a state}" by="${3:?needs a by}"
+  local token; token="$(cat "$ROSTER_WRITE_TOKEN_FILE" 2>/dev/null)"
+  [ -n "$token" ] || {
+    echo "REFUSED: cannot read a token from $ROSTER_WRITE_TOKEN_FILE -- writes stay closed by default, never open without one" >&2
+    return 7; }
 
-write_repo_file() {  # <path> <content> <branch> <commit-msg> -- re-fetches sha first, the API's optimistic lock
-  local rel="${1:?write_repo_file needs a path}" content="$2" branch="${3:?needs a branch}" msg="${4:?needs a commit message}"
-  local sha
-  sha="$(gh_as api "repos/$REPO_SLUG/contents/$rel?ref=$branch" --jq '.sha' 2>/dev/null)"
-  [ -n "$sha" ] || return 6
-  gh_as api "repos/$REPO_SLUG/contents/$rel" -X PUT \
-    -f message="$msg" -f content="$(printf '%s' "$content" | base64 -w0)" \
-    -f sha="$sha" -f branch="$branch" >/dev/null
-}
+  local body http resp
+  body="$(mktemp)" || return 6
+  http="$(curl -sS --max-time 10 -o "$body" -w '%{http_code}' -X POST "$ROSTER_URL/roster/$project" \
+            -H "X-Roster-Token: $token" \
+            -d "$(printf '{"state":"%s","by":"%s"}' "$state" "$by")" 2>/dev/null)"
+  resp="$(cat "$body" 2>/dev/null)"; rm -f "$body"
+  case "$http" in
+    200) ;;
+    403) echo "REFUSED: the roster service rejected this host's token -- $resp" >&2; return 7 ;;
+    ""|000) echo "BLIND: could not reach $ROSTER_URL to write $project -- $resp" >&2; return 6 ;;
+    *) echo "BROKEN: POST $ROSTER_URL/roster/$project -> HTTP $http: $resp" >&2; return 5 ;;
+  esac
 
-open_repo_pr() {  # <branch> <base> <title> <body> -> "<number> <url>"
-  local branch="${1:?}" base="${2:?}" title="${3:?}" body="${4:-}"
-  gh_as api "repos/$REPO_SLUG/pulls" \
-    -f title="$title" -f head="$branch" -f base="$base" -f body="$body" \
-    --jq '"\(.number) \(.html_url)"'
-}
-
-enable_pr_auto_merge() {  # <pr-number> -- GraphQL only; best-effort, PR still exists if this fails
-  local num="${1:?enable_pr_auto_merge needs a PR number}" node_id
-  node_id="$(gh_as api "repos/$REPO_SLUG/pulls/$num" --jq '.node_id' 2>/dev/null)"
-  [ -n "$node_id" ] || return 1
-  gh_as api graphql -f query='
-    mutation($id: ID!) {
-      enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: SQUASH}) {
-        pullRequest { number }
-      }
-    }' -f id="$node_id" >/dev/null 2>&1
+  local verify got
+  verify="$(curl -fsS --max-time 10 "$ROSTER_URL/roster/$project" 2>/dev/null)" \
+    || { echo "BROKEN: wrote $project=$state but the verifying re-read failed -- confirm by hand" >&2; return 5; }
+  got="$(printf '%s' "$verify" | jq -r '.state' 2>/dev/null)"
+  [ "$got" = "$state" ] || {
+    echo "BROKEN: posted state=$state for $project but re-read gives '$got' -- verify failed" >&2; return 5; }
 }
 
 # runner_tag <schedule-dir> <host> -- dose-project.sh's do_live() RUNNER tag,
