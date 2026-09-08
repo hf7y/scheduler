@@ -270,6 +270,14 @@ if [ "$PACED_HOST_MODE" = 1 ]; then
     SELFDEV_APP_CONF=/etc/selfdev/gh-app.conf
     export SELFDEV_APP_CONF
   fi
+  # THE CONF ALONE MINTS NOTHING: lib/gh-app-token.sh needs the HELPER too, and
+  # defaults it to $HOME/.local/libexec, which root has not got. Exporting one
+  # and not the other is why vaporwave held MILESTONE-BLIND on every tick.
+  if [ -z "${SELFDEV_GH_APP_SH:-}" ] && [ ! -x "$HOME/.local/libexec/selfdev/selfdev-gh-app.sh" ] \
+     && [ -x /usr/local/libexec/selfdev/selfdev-gh-app.sh ]; then
+    SELFDEV_GH_APP_SH=/usr/local/libexec/selfdev/selfdev-gh-app.sh
+    export SELFDEV_GH_APP_SH
+  fi
 else
   # A REHEARSAL SEAM for `dose --apply`; unset (every tick) is the old path.
   STATE_DIR="${PACED_STATE_DIR:-$HOME/.local/share/$JOB_NAME}"
@@ -363,6 +371,15 @@ fi
 [ -f "$LOG" ] && { tail -n 4000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
 log() { echo "$(date -Is) $*" >> "$LOG"; }
+
+# A LIBRARY THAT DID NOT LOAD IS NOT "NO MINT CONFIGURED" (2026-09-08). The
+# source above is `|| true` and the mint site guards on `declare -F`, so
+# lib/gh-app-token.sh missing from a build degraded to ambient auth with
+# nothing logged. On a host-mode root, which has no ambient auth, that is
+# MILESTONE-BLIND on every row of every tick and it names no cause. Once per
+# run, not per participant: it is one fact about the build, not about a row.
+declare -F mint_gh_app_token >/dev/null 2>&1 \
+  || log "LIB-MISSING lib/gh-app-token.sh did not load -- no App token can be minted, so every gh read below runs on $(id -un)'s ambient auth"
 
 # THE MISS IS LOUD NOW. `[ -d ]` above says nothing when false, so a host that
 # could not reach `claude` logged what one that could logged: nothing. To the
@@ -777,6 +794,17 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
 
   name="${names[$idx]}"; cmd="${cmds[$idx]}"; row_acct="${accts[$idx]:-}"
 
+  # WHOSE HOME IS THIS ROW'S? Host mode dispatches AS the account via `sudo -n
+  # -u`, so every per-project path below is the ACCOUNT's -- root only drives.
+  # lib/run-record.sh already gets this substitution further down; the dead-man
+  # stamp and the verdict reads did not, so root wrote and read /root/.local
+  # /share while the job used the account's. Reader and writer never met.
+  job_home="$HOME"
+  if [ "$PACED_HOST_MODE" = 1 ] && [ -n "$row_acct" ]; then
+    job_home="$(getent passwd "$row_acct" 2>/dev/null | cut -d: -f6)"
+    [ -n "$job_home" ] || job_home="$HOME"
+  fi
+
   # The runnability TEST that used to stand here (2026-08-06, "RUNNABILITY
   # BEFORE THE PROBE") moved to load time -- see "EVERY RUNNER RUNS ONLY
   # ITSELF" above. Every row still in the pool is one this account can run,
@@ -837,7 +865,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # a command not matching it has no expires_at there and dispatches as before
   # -- FAIL-OPEN. Belt-and-braces with sweep-loop-common.sh's pre-clone check:
   # this saves the slot, that one saves the clone. Counts toward MAX_PER_TICK.
-  job_state="$HOME/.local/share/$(basename "$prog" | sed 's/-loop\.sh$//')"
+  job_state="$job_home/.local/share/$(basename "$prog" | sed 's/-loop\.sh$//')"
   if [ -f "$job_state/expires_at" ]; then
     expires_at="$(cat "$job_state/expires_at" 2>/dev/null)"
     if [ -n "$expires_at" ] && [[ "$(date -Is)" > "$expires_at" ]]; then
@@ -1042,7 +1070,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # Consume any prior verdict BEFORE dispatching, so this run's outcome can
   # never be read off the last run's file. Same lesson as expires_at: a stale
   # stamp that reads as current is worse than no stamp.
-  "$SELF_DIR/verdict.sh" clear "$name" >/dev/null 2>&1 || true
+  STATE_ROOT="$job_home/.local/share" "$SELF_DIR/verdict.sh" clear "$name" >/dev/null 2>&1 || true
 
   _resume_pr="" _resume_repo=""
   if declare -F resume_hint_for_project >/dev/null 2>&1; then
@@ -1092,7 +1120,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # "hit --max-turns with work left" and "concluded it cannot be done", and
   # those want opposite responses. See bin/verdict.sh's header for the full
   # argument; the rule is that ABSENCE of a verdict is never GAVE-UP.
-  outcome="$("$SELF_DIR/verdict.sh" classify "$name" "$rc" 2>/dev/null)"; vrc=$?
+  outcome="$(STATE_ROOT="$job_home/.local/share" "$SELF_DIR/verdict.sh" classify "$name" "$rc" 2>/dev/null)"; vrc=$?
   log "DONE $name rc=$rc outcome=${outcome:-NOT-DONE} ($(( $(date +%s) - start ))s)"
 
   # Say when a verdict was never written, distinctly from CONTINUE. Both
@@ -1110,7 +1138,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # rebuilding the state path here -- one owner of that layout, not two.
   _no_verdict=0
   _derived=""
-  if ! "$SELF_DIR/verdict.sh" get "$name" >/dev/null 2>&1; then
+  if ! STATE_ROOT="$job_home/.local/share" "$SELF_DIR/verdict.sh" get "$name" >/dev/null 2>&1; then
     _derived="$(derive_no_verdict_reason "$name" "$start" 2>/dev/null)"
     log "NO-VERDICT $name -- ran with no verdict written (its brief asks for one). ${_derived:-no derivation available.} Treated as NOT-DONE and re-dispatched; metabolism untouched."
     _no_verdict=1
@@ -1128,7 +1156,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     if [ "$_no_verdict" -eq 1 ]; then
       _lreason="${_derived:-no-verdict: ran with no verdict written}"
     else
-      _lreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
+      _lreason="$(STATE_ROOT="$job_home/.local/share" "$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2- || true)"
     fi
     _rr_home="$HOME"  # type the silence (#347): see typed_ledger_outcome
     [ "$PACED_HOST_MODE" = 1 ] && _rr_home="$acct_home"
@@ -1155,7 +1183,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # the moment new work arrives, and a project that cannot restart without a
   # human is a brake with no thaw. So DONE lowers the FREQUENCY.
   if [ "$vrc" -eq 4 ]; then
-    _breason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2-)"
+    _breason="$(STATE_ROOT="$job_home/.local/share" "$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2-)"
     _brun=1; _bsame=""
     if declare -F ledger_run >/dev/null 2>&1; then
       _brun="$(ledger_run "$name" BLOCKED BLOCKED-HOLD 2>/dev/null || echo 1)"
@@ -1176,7 +1204,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     # adding a second parallel mechanism: stamp expires_at in the past and
     # this same runner's expiry check (above) stops dispatching it next tick,
     # logs why, and prints the one-command renewal.
-    vreason="$("$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2-)"
+    vreason="$(STATE_ROOT="$job_home/.local/share" "$SELF_DIR/verdict.sh" get "$name" 2>/dev/null | grep -m1 '^REASON=' | cut -d= -f2-)"
     log "GAVE-UP $name -- ${vreason:-no reason recorded}"
     if [ -n "${job_state:-}" ] && mkdir -p "$job_state" 2>/dev/null; then
       date -Is > "$job_state/expires_at"
