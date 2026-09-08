@@ -20,91 +20,73 @@ WORK="$(mktemp -d)" || { echo "cannot mktemp"; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
 
-cat > "$FAKEBIN/gh" <<EOF
+# DOSE-PROJECT.SH NEVER CALLS gh AT ALL (#432, #350): the roster is read and
+# written over curl, and _runner.conf reads local. A real `gh` further down
+# PATH would otherwise reach the live estate, so this fixture traps the call
+# rather than omitting it.
+cat > "$FAKEBIN/gh" <<'EOF'
 #!/usr/bin/env bash
-if [ "\${FAKE_GH_MODE:-ok}" = "fail" ]; then
-  echo "gh: authentication failed" >&2
-  exit 1
-fi
-WORK="$WORK"
-path="\$2"; shift 2 || true
-declare -A F
-JQEXPR=""
-while [ "\$#" -gt 0 ]; do
-  case "\$1" in
-    -f) k="\${2%%=*}"; F["\$k"]="\${2#*=}"; shift 2 ;;
-    --jq) JQEXPR="\$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-case "\$path" in
-  graphql)
-    if [ "\${FAKE_GH_AUTOMERGE_MODE:-ok}" = "fail" ]; then
-      echo "gh: auto-merge is not allowed on this repository" >&2; exit 1
-    fi
-    echo "graphql" >> "\$WORK/gh-calls.log" ;;
-  */git/ref/heads/*)
-    if [ "\${FAKE_GH_BRANCH_MODE:-ok}" = "fail" ]; then
-      echo "gh: could not resolve ref" >&2; exit 1
-    fi
-    echo "deadbeef0000" ;;
-  */git/refs)
-    if [ "\${FAKE_GH_BRANCH_MODE:-ok}" = "fail" ]; then
-      echo "gh: Reference already exists" >&2; exit 1
-    fi
-    printf 'branch ref=%s sha=%s\n' "\${F[ref]:-}" "\${F[sha]:-}" >> "\$WORK/gh-calls.log" ;;
-  */pulls)
-    if [ "\${FAKE_GH_PR_MODE:-ok}" = "fail" ]; then
-      echo "gh: could not create pull request" >&2; exit 1
-    fi
-    printf 'pr title=%s head=%s base=%s\n' "\${F[title]:-}" "\${F[head]:-}" "\${F[base]:-}" >> "\$WORK/gh-calls.log"
-    echo "42 https://github.com/hf7y/scheduler/pull/42" ;;
-  */pulls/*)
-    echo "PR_kwFake" ;;
-  */contents/schedule/ROSTER*)
-    if [ -n "\${F[content]:-}" ]; then
-      printf '%s' "\${F[content]}" | base64 -d > "\$WORK/written-roster"
-      printf 'write dest=roster branch=%s\n' "\${F[branch]:-}" >> "\$WORK/gh-calls.log"
-    else
-      # absent: the FILE 404s but the REPO probe (the catch-all below) still
-      # succeeds -- the exact pair that proves "not there" is knowable, and is
-      # not the same event as "cannot look".
-      if [ "\${FAKE_GH_MODE:-ok}" = "absent" ]; then
-        echo "gh: Not Found (HTTP 404)" >&2; exit 1
-      fi
-      if [ "\$JQEXPR" = ".sha" ]; then echo "roster-sha-1"; else
-        printf '%s' "\$FAKE_ROSTER_CONTENT" | base64 -w0
-      fi
-    fi ;;
-  */contents/schedule/_runner*)  # #350: local read now, not gh -- reaching this arm is the regression
-    echo "gh: dose-project.sh must not fetch \$path -- it ships in the build" >&2; exit 1 ;;
-  *)
-    # repo-reachability probe (repos/<slug>, no /contents/) -- always
-    # succeeds here; FAKE_GH_MODE=fail above is the only "gh itself is down"
-    # case this fixture models.
-    echo "scheduler"; exit 0 ;;
-esac
+echo "gh: dose-project.sh must not call gh -- the roster is a service and _runner.conf ships in the build" >&2
+exit 1
 EOF
 chmod +x "$FAKEBIN/gh"
 
-# THE ROSTER IS A SERVICE (#432): the fixture reaches the code through curl,
-# not gh. Same FAKE_ROSTER_CONTENT, converted here rather than restated.
+# THE ROSTER IS A SERVICE (#432, #686): the fixture reaches both the read and
+# the write through curl. FAKE_GH_MODE keeps its old meanings so existing
+# cases still mean what they meant: `fail` is unreachable (BLIND), `absent` is
+# reachable-but-empty (GAP). A POST records into FAKE_ROSTER_STATE_FILE, which
+# a later GET on that one project consults first -- the re-read a real service
+# would answer from committed state.
 cat > "$FAKEBIN/curl" <<'CURLEOF'
 #!/usr/bin/env bash
-# The roster SERVICE stands in for the roster FILE (#432). FAKE_GH_MODE keeps
-# its old meanings so each witness's existing cases still mean what they meant:
-# `fail` is unreachable (BLIND 6), `absent` is reachable-but-empty (GAP 4).
-case "${FAKE_GH_MODE:-ok}" in
-  fail)   echo "curl: (7) Failed to connect" >&2; exit 7 ;;
-  absent) printf '{"rows": []}'; exit 0 ;;
+METHOD=GET; URL=""; DATA=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -X) METHOD="$2"; shift 2 ;;
+    -d) DATA="$2"; shift 2 ;;
+    -H) shift 2 ;;
+    http://*|https://*) URL="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+# FAKE_GH_MODE=fail is unreachable for EVERY call, same as the live estate
+# would be; FAKE_ROSTER_POST_MODE=fail isolates just the write, so a witness
+# can prove the read still succeeded and only the POST did not.
+if [ "${FAKE_GH_MODE:-ok}" = fail ] \
+   || { [ "$METHOD" = POST ] && [ "${FAKE_ROSTER_POST_MODE:-ok}" = fail ]; }; then
+  echo "curl: (7) Failed to connect" >&2; exit 7
+fi
+STATE_FILE="${FAKE_ROSTER_STATE_FILE:-/dev/null}"
+if [ "$METHOD" = POST ]; then
+  proj="${URL##*/roster/}"
+  state="$(sed -n 's/.*"state":"\([^"]*\)".*/\1/p' <<<"$DATA")"
+  # A MISMATCH FIXTURE: the service says 200 but the row it later serves back
+  # never moved -- the exact "reported success, did nothing" case #686 exists
+  # to catch, modelled by simply not recording the write.
+  [ "${FAKE_ROSTER_VERIFY_MISMATCH:-0}" = 1 ] || printf '%s %s\n' "$proj" "$state" >> "$STATE_FILE"
+  printf '{"project":"%s","state":"%s"}' "$proj" "$state"
+  exit 0
+fi
+case "$URL" in
+  */roster)
+    if [ "${FAKE_GH_MODE:-ok}" = "absent" ]; then printf '{"rows": []}'; exit 0; fi
+    printf '{"rows": ['
+    printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
+      !/^[[:space:]]*(#|$)/ && NF>=4 {
+        gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
+        if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
+      }'
+    printf ']}'
+    exit 0 ;;
+  */roster/*)
+    proj="${URL##*/roster/}"
+    state="$(grep "^$proj " "$STATE_FILE" 2>/dev/null | tail -1 | cut -d' ' -f2)"
+    [ -n "$state" ] || state="$(printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' -v p="$proj" '
+      !/^[[:space:]]*(#|$)/ && NF>=4 { gsub(/[[:space:]]/,"",$1); if ($1==p) { gsub(/[[:space:]]/,"",$4); print $4 } }')"
+    [ -n "$state" ] || exit 22
+    printf '{"project":"%s","state":"%s"}' "$proj" "$state"
+    exit 0 ;;
 esac
-printf '{"rows": ['
-printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
-  !/^[[:space:]]*(#|$)/ && NF>=4 {
-    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
-    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
-  }'
-printf ']}'
 CURLEOF
 chmod +x "$FAKEBIN/curl"
 
@@ -158,6 +140,12 @@ chmod +x "$FAKEBIN/id"
 
 export PATH="$FAKEBIN:$PATH"
 export DOSE_HOST_OVERRIDE="testhost"
+# --arm/--park POST through write_roster_state (#686): a fixture token, and
+# the file the fake curl's POST/GET agree on for a project's live state.
+export DOSE_ROSTER_WRITE_TOKEN="$WORK/roster-write.token"
+printf 'test-roster-write-token\n' > "$DOSE_ROSTER_WRITE_TOKEN"
+export FAKE_ROSTER_STATE_FILE="$WORK/roster-live-state"
+: > "$FAKE_ROSTER_STATE_FILE"
 ROSTER="ecosim | ecosim@testhost | 6h | live
 ghosttown | ghosttown@testhost | 6h | parked
 elsewhere-proj | elsewhere-proj@otherhost | 6h | live"
@@ -417,56 +405,68 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
 [ -f "$WORK/gh-calls.log" ] && bad "missing-account refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "missing-account refusal wrote nothing"
 
-# --- 10-12. arm/park REFUSE while the read is served and the write is not --
-# #686: ROSTER_CONTENT is synthesised now, so the old PR path would commit a
-# fabrication. The refusal must name the way to actually change state.
-rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
+# --- 10. --arm POSTs the service and confirms by re-reading it (#686) ------
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
-[ "$rc" -eq 5 ] && ok "--arm refuses (5) rather than write a synthesised roster" \
-  || bad "--arm exited $rc, want 5: $out"
-grep -qF '#686' <<<"$out" && ok "the refusal names the issue that lifts it" \
-  || bad "exit 5 but the refusal cites nothing: $out"
-grep -qF '/roster/ghosttown' <<<"$out" && ok "...and names the POST that does work today" \
-  || bad "the refusal does not say how to change state: $out"
-[ -f "$WORK/written-roster" ] && bad "REFUSED and still wrote a roster: $(cat "$WORK/written-roster")" \
-  || ok "nothing was written to schedule/ROSTER"
-[ -f "$WORK/gh-calls.log" ] && bad "REFUSED and still reached gh: $(cat "$WORK/gh-calls.log")" \
-  || ok "no branch, no PR, no gh call at all"
+[ "$rc" -eq 0 ] && ok "--arm on a parked project exits 0" || bad "--arm exited $rc: $out"
+grep -qF 'armed:' <<<"$out" && ok "--arm reports the flip, not an opened PR" \
+  || bad "--arm did not report 'armed:': $out"
+grep -qF 're-reading' <<<"$out" && ok "--arm says the state was confirmed by re-reading" \
+  || bad "--arm's success message never mentions re-reading: $out"
+grep -qF 'ghosttown live' "$FAKE_ROSTER_STATE_FILE" \
+  && ok "the fake service actually recorded ghosttown -> live" \
+  || bad "no POST reached the fake service: $(cat "$FAKE_ROSTER_STATE_FILE")"
+[ -f "$WORK/gh-calls.log" ] && bad "--arm reached gh -- $(cat "$WORK/gh-calls.log")" \
+  || ok "no gh call at all -- the write goes straight to the service"
 
-rm -f "$WORK/gh-calls.log"
+# --- 11. already at the target state: kept, no network write ---------------
+: > "$FAKE_ROSTER_STATE_FILE"
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm on an already-live project exits 0" || bad "--arm exited $rc: $out"
 grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" \
   || bad "--arm on a live project didn't say kept: $out"
-[ -f "$WORK/gh-calls.log" ] && bad "a no-op --arm still wrote to gh -- $(cat "$WORK/gh-calls.log")" \
+[ -s "$FAKE_ROSTER_STATE_FILE" ] && bad "a no-op --arm still posted a write: $(cat "$FAKE_ROSTER_STATE_FILE")" \
   || ok "a no-op --arm wrote nothing"
 
-rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
-out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
-[ "$rc" -eq 5 ] && ok "--park refuses (5) too -- the refusal is not arm-only" \
-  || bad "--park exited $rc, want 5: $out"
-[ -f "$WORK/written-roster" ] && bad "--park REFUSED and still wrote a roster: $(cat "$WORK/written-roster")" \
-  || ok "--park wrote nothing"
-
-# --park never needed the account to exist, and still does not reach that far.
+# --park never needed the account to exist, and still does not check for one.
 export FAKE_GETENT_FAIL=ecosim
-out2="$("$TARGET" ecosim --park 2>&1)"; rc2=$?
+out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
 unset FAKE_GETENT_FAIL
-[ "$rc2" -eq 5 ] && ok "--park with no unix account refuses for the SAME reason, not a different one" \
-  || bad "--park with no account exited $rc2, want 5: $out2"
-grep -qF '#686' <<<"$out2" && ok "...and still cites #686 rather than blaming the account" \
-  || bad "--park's refusal changed cause when the account went missing: $out2"
+[ "$rc" -eq 0 ] && ok "--park does not require the account to exist" \
+  || bad "--park with no unix account exited $rc, want 0: $out"
+grep -qF 'ecosim parked' "$FAKE_ROSTER_STATE_FILE" \
+  && ok "--park posts the flip to parked" || bad "--park did not post: $(cat "$FAKE_ROSTER_STATE_FILE")"
+: > "$FAKE_ROSTER_STATE_FILE"
 
-# --- 13. the auto-merge degrade path is unreachable while the write is off --
-# If this ever exits 0 again, the write came back without #686 being closed.
-rm -f "$WORK/gh-calls.log"
-export FAKE_GH_AUTOMERGE_MODE=fail
+# --- 12. a missing or unreadable token REFUSES, never opens (#686) ---------
+mv "$DOSE_ROSTER_WRITE_TOKEN" "$WORK/roster-write.token.bak"
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
-unset FAKE_GH_AUTOMERGE_MODE
-[ "$rc" -eq 5 ] && ok "--arm refuses before auto-merge is ever reached" \
-  || bad "--arm exited $rc with auto-merge failing, want 5: $out"
-[ -f "$WORK/gh-calls.log" ] && bad "the refusal still reached gh: $(cat "$WORK/gh-calls.log")" \
-  || ok "no gh call at all -- the refusal is before the network"
+mv "$WORK/roster-write.token.bak" "$DOSE_ROSTER_WRITE_TOKEN"
+[ "$rc" -eq 5 ] && ok "--arm with no token exits 5 (broken), not open" \
+  || bad "--arm with no token exited $rc, want 5: $out"
+grep -qi 'token' <<<"$out" && ok "the refusal names the missing token" \
+  || bad "exit 5 but the refusal never mentions the token: $out"
+[ -s "$FAKE_ROSTER_STATE_FILE" ] && bad "a missing-token --arm still posted: $(cat "$FAKE_ROSTER_STATE_FILE")" \
+  || ok "a missing-token --arm reached the service not at all"
+
+# --- 13. unreachable during the write is BLIND, same as the read (#686) ----
+# FAKE_ROSTER_POST_MODE, not FAKE_GH_MODE: the read must succeed so this
+# proves the WRITE's own BLIND path, not the read's (already covered by #2).
+export FAKE_ROSTER_POST_MODE=fail
+out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+unset FAKE_ROSTER_POST_MODE
+[ "$rc" -eq 6 ] && ok "an unreachable service during --arm's POST is BLIND (6)" \
+  || bad "--arm with an unreachable POST exited $rc, want 6: $out"
+
+# --- 13b. a silent no-op -- POST 200s but the re-read never moved -- FAILS --
+# The exact measured failure this issue exists to catch: a write that reports
+# success and did nothing (40% of the old PR-based writes never merged).
+export FAKE_ROSTER_VERIFY_MISMATCH=1
+out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+unset FAKE_ROSTER_VERIFY_MISMATCH
+[ "$rc" -eq 5 ] && ok "a POST that does not stick fails the re-read (5), not a false 0" \
+  || bad "the silent no-op exited $rc, want 5: $out"
+grep -qi 'verify failed' <<<"$out" && ok "the failure names verify, not a generic error" \
+  || bad "exit 5 but the message never says verify failed: $out"
 
 # --- 14. --shotgun parses, and NO LONGER travels (#432) -------------------
 # The hop went with the host column. An ssh on PATH must stay untouched: a hop
