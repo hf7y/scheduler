@@ -176,3 +176,10 @@ ledger_reason() {
     $4==p && $7==w { buf[++c]=$8 }
     END { if (c>=n) print buf[c-n+1] }' "$f"
 }
+
+ledger_reason_same() {  # <a> <b> -- same BLOCKED wall once timestamps/PR#s/counts (#671) are normalised like senechal's _alert_normalize
+  local a b
+  a="$(printf '%s' "${1:-}" | sed -E 's/[0-9a-f]{8,}/<id>/g; s/[0-9]+/<n>/g')"
+  b="$(printf '%s' "${2:-}" | sed -E 's/[0-9a-f]{8,}/<id>/g; s/[0-9]+/<n>/g')"
+  [ -n "$a" ] && [ "$a" = "$b" ]
+}
