@@ -118,6 +118,14 @@ acct_of_prog() {
   printf '%s' "$a"
 }
 
+job_state_for() {  # <project> <job-home> <prog> -- dead-man state dir; host mode's prog is one shared scheduler-run (#684), so use BATCH_JOB_NAME instead, agreeing with sweep-loop-common.sh's STATE_DIR (#707)
+  local proj="$1" home="$2" prog="$3" jn=""
+  if [ "$PACED_HOST_MODE" = 1 ] && declare -F fetch_repo_file >/dev/null 2>&1; then
+    jn="$(BATCH_JOB_NAME=""; source <(fetch_repo_file "schedule/$proj.conf" 2>/dev/null) 2>/dev/null; printf '%s' "$BATCH_JOB_NAME")"  # shellcheck disable=SC1090
+  fi
+  printf '%s/.local/share/%s' "$home" "${jn:-$(basename "$prog" | sed 's/-loop\.sh$//')}"
+}
+
 # --- the roster parser, hoisted above the side-effecting section -------------
 # Pure, and defined this early because the pull gate's escalation expands
 # "$PACED_HOST": unset under `set -u`, the third consecutive blocked tick aborted
@@ -865,7 +873,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # a command not matching it has no expires_at there and dispatches as before
   # -- FAIL-OPEN. Belt-and-braces with sweep-loop-common.sh's pre-clone check:
   # this saves the slot, that one saves the clone. Counts toward MAX_PER_TICK.
-  job_state="$job_home/.local/share/$(basename "$prog" | sed 's/-loop\.sh$//')"
+  job_state="$(job_state_for "$name" "$job_home" "$prog")"
   if [ -f "$job_state/expires_at" ]; then
     expires_at="$(cat "$job_state/expires_at" 2>/dev/null)"
     if [ -n "$expires_at" ] && [[ "$(date -Is)" > "$expires_at" ]]; then
