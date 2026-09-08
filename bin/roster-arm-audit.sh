@@ -42,9 +42,13 @@ while IFS='|' read -r f1 f2 f3 f4 || [ -n "$f1" ]; do
   case "$f1" in ''|\#*) continue ;; esac
   proj="$(xargs <<<"$f1")"; accthost="$(xargs <<<"$f2")"; state="$(xargs <<<"$f4")"
   [ -n "$proj" ] || continue
-  [ "${accthost##*@}" = "$HOST" ] || continue
-  [ "$state" = "live" ] || continue
+  # WHICH ROWS ARE THIS MACHINE'S is the machine's answer (#432), not a column:
+  # the roster carries state and nothing else, so a project is audited here iff
+  # its unix account exists here. Auditing a row for another host would report
+  # "armed but not running" about a crontab this box cannot even read.
   acct="${accthost%@*}"
+  getent passwd "$acct" >/dev/null 2>&1 || continue
+  [ "$state" = "live" ] || continue
   CHECKED=$((CHECKED + 1))
 
   cron="$(crontab_read "$acct")"; rc=$?

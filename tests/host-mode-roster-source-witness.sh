@@ -23,6 +23,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 R="$HERE/../bin/usage-paced-runner.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
+# The roster carries state only now (#432), so the dispatcher asks the box
+# which accounts exist. Fixture projects are not accounts on the suite's host.
+witness_stub_getent
 echo "host-mode-roster-source-witness"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT

@@ -82,14 +82,9 @@ crontab_write() {
   fi
 }
 
-# --- 1. bootstrap: read schedule/ROSTER from GitHub, not a local clone -----
-# WHOSE CREDENTIAL READS THE ROSTER. root has no `gh` auth on monkey (measured
-# 2026-08-11 and again 2026-08-30), so a human-invoked converger borrows
-# $SUDO_USER's rather than install a standing secret for a transient read.
-# BUT THE DISPATCH TICK READS THE ROSTER NOW (#412), retiring the "only the
-# converger reads it" premise this block carried: a cron tick has no human to
-# borrow from, so host mode reads as root and gets BLIND -- closed, never
-# working. `usage-paced-runner.sh --check` measures it; the credential is #364.
+# --- repo files that are STILL repo files: _runner.conf, _tempo.conf, FREEZE.
+# The roster left (see fetch_roster below). root has no `gh` auth, so a
+# human-invoked read borrows $SUDO_USER's rather than plant a standing secret.
 gh_as() {
   if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
     sudo -n -u "$SUDO_USER" "$GH_BIN" "$@"
@@ -149,10 +144,45 @@ fetch_repo_file() {
   printf '%s' "$out" | tr -d '\n' | base64 -d 2>/dev/null
 }
 
-# The roster is just the file this was written for first. Kept as a named
-# function because every caller reads better saying what it wants than saying
-# a path, and because the path itself then lives in exactly one place.
-fetch_roster() { fetch_repo_file schedule/ROSTER; }
+# THE ARMING AUTHORITY IS A SERVICE, NOT THIS REPO (#432). Over `gh` it needed
+# a credential every host lacked -- gh_as borrows $SUDO_USER's session and a
+# cron row has none, so host mode read BLIND and exited 2 every tick. A local
+# port needs none: verified from root@monkey under `env -i`, which is what a
+# cron row is.
+#
+# STATE AND NOTHING ELSE (#996). `host` is answered by THIS MACHINE -- a
+# project has a row here iff its unix account exists here -- so `dose <p>` off
+# that host now says so instead of hopping. Run dose where the account lives.
+ROSTER_URL="${SCHEDULER_ROSTER_URL:-http://100.107.253.56:8646}"
+ROSTER_RATE="${SCHEDULER_ROSTER_RATE:-20m}"
+
+fetch_roster() {
+  local raw
+  for _b in curl jq; do
+    command -v "$_b" >/dev/null 2>&1 || {
+      echo "BLIND: '$_b' is not on PATH -- cannot read the roster service. Nothing was verified." >&2
+      return 6; }
+  done
+  # NO FALLBACK. Unreachable is BLIND, and BLIND classifies nothing.
+  raw="$(curl -fsS --max-time 10 "$ROSTER_URL/roster" 2>/dev/null)" || {
+    echo "BLIND: the roster service at $ROSTER_URL is unreachable. Refusing to guess at what is armed." >&2
+    return 6; }
+  # 6-vs-4 as fetch_repo_file draws it: reachable-but-empty is a GAP, not BLIND.
+  local _rows
+  _rows="$(printf '%s' "$raw" | jq -r '.rows[]? | "\(.project)\t\(.state)"' 2>/dev/null)"
+  if [ -z "$_rows" ]; then
+    echo "GAP: $ROSTER_URL is reachable and carries no rows. Nothing is armed anywhere; this is not a credential problem." >&2
+    return 4
+  fi
+  # TRANSPORT ONLY -- EVERY ROW, NO HOST FILTER. The roster is the ESTATE's
+  # state; realisateur's readers all take `.rows[]` whole. Narrowing is the
+  # caller's job and it asks the machine: roster_rows() does, dose does not.
+  printf '%s\n' "$_rows" \
+  | while IFS="$(printf '\t')" read -r _p _s; do
+      [ -n "$_p" ] || continue
+      printf '%s | %s@%s | %s | %s\n' "$_p" "$_p" "${PACED_HOST:-$HOST}" "$ROSTER_RATE" "$_s"
+    done
+}
 
 branch_head_sha() {  # <ref> -> the sha it currently points at
   local ref="${1:?branch_head_sha needs a ref}"

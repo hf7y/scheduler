@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# dose-project.sh -- dose <project>: converge THIS host to match schedule/ROSTER.
+# dose-project.sh -- dose <project>: converge THIS host to match the roster.
 #
 # hf7y/scheduler#80 (this command) + #81 (per-project rate). Frame: realisateur#134.
 #
-# Reads schedule/ROSTER from GITHUB via `gh api`, never a local clone: a clone
-# on this host can be days stale (measured 2026-08-11: 5 days), converging to
-# stale truth. `gh` unauthenticated, unreachable, or the file missing are all
-# indistinguishable from here and BLIND (exit 6) -- never a silent "no rows
-# found" (exit 4 is for a roster dose COULD read that has no row for this).
-# schedule/_runner.conf is a different kind of fact, and reads local (#350).
-# NOT HOSTLESS: gh_as() borrows a logged-in $SUDO_USER's session under sudo,
-# so this only reads as hostless with a human logged in, BLIND otherwise (#570).
+# THE ROSTER IS A SERVICE (#432), read over a local port with no credential.
+# Unreachable is BLIND (6); reachable-and-empty is a GAP (4). It carries STATE
+# only, so which host a project runs on is this box's answer -- its unix
+# account exists here, or dose refuses (7). schedule/_runner.conf is a
+# different kind of fact and reads local (#350).
 #
 # THE JUDGEMENT THIS SCRIPT DOES NOT GET TO MAKE. Arming/parking is reserved
-# for a human at a terminal -- an agent that edited the roster and converged
-# would have self-armed. --check/--apply/--now never write schedule/ROSTER;
-# --arm/--park (#291) do, but refuse a uid 3000-3099 self-dev caller outright.
+# for a human at a terminal -- an agent that armed and converged would have
+# self-armed. --check/--apply/--now never write it; --arm/--park (#291) do,
+# and refuse a uid 3000-3099 self-dev caller outright.
 #
 # RUNNER: tests/dose-project-witness.sh
 set -uo pipefail
@@ -27,15 +24,14 @@ usage() {
   cat <<EOF
 usage: $CLI_NAME <project> [--check|--apply|--arm|--park|--now|--shotgun]
 
-Converge THIS host's crontab to match schedule/ROSTER's row for <project>,
-read fresh from GitHub via 'gh api' every run.
+Converge THIS host's crontab to match the roster's row for <project>,
+read fresh from the roster service every run.
 
   --check   report what would change; writes nothing (default)
   --apply   write it, then re-read and verify
-  --arm     flip schedule/ROSTER's row to 'live', opening a pull request
-            with auto-merge armed. Human-only (#291): refuses a uid
-            3000-3099 self-dev account, and refuses a project whose unix
-            account does not exist on the roster's host.
+  --arm     flip the roster row to 'live'. Human-only (#291): refuses a uid
+            3000-3099 self-dev account, and a project with no unix account
+            here. REFUSES ENTIRELY until #686 moves the write to the service.
   --park    the same, to 'parked'.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
@@ -174,19 +170,26 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   fi
 
   # do_live exits 5 BROKEN if the account is missing -- catch it here first.
+  # Read the machine (#432); this used to ssh to $ROW_HOST, which is gone.
   if [ "$NEW_STATE" = "live" ]; then
-    ACCT_OK=1
-    if [ "$ROW_HOST" = "$HOST" ]; then
-      getent passwd "$ROW_ACCT" >/dev/null 2>&1 || ACCT_OK=0
-    else
-      ssh -o BatchMode=yes -o ConnectTimeout=5 "$ROW_HOST" "getent passwd '$ROW_ACCT'" >/dev/null 2>&1 || ACCT_OK=0
-    fi
-    if [ "$ACCT_OK" -ne 1 ]; then
-      echo "BROKEN: '$ROW_ACCT' has no unix account on '$ROW_HOST' yet -- arming now would converge to a break. Provision the account first, then --arm." >&2
+    if ! getent passwd "$ROW_ACCT" >/dev/null 2>&1; then
+      echo "BROKEN: '$ROW_ACCT' has no unix account on '$HOST' yet -- arming now would converge to a break. Provision the account first, then --arm. If it lives on another host, run dose there." >&2
       exit 5
     fi
   fi
 
+  # THE WRITE HAS NOT MOVED, AND WRITING ANYWAY IS WORSE THAN REFUSING (#686):
+  # $ROSTER_CONTENT is SYNTHESISED from the service now, so committing it back
+  # would replace a 23-row file with this host's own fabrication, by PR.
+  echo "BROKEN: --${MODE#--} cannot write while the read is served and the write is not (#686)." >&2
+  echo "        The roster this process holds is synthesised from the service; writing it to schedule/ROSTER would commit a fabrication." >&2
+  echo "        Change state directly until #686 lands:" >&2
+  echo "          curl -fsS -X POST $ROSTER_URL/roster/$PROJECT \\" >&2
+  echo "            -H \"X-Roster-Token: \$(sudo cat /etc/scheduler/roster-write.token)\" \\" >&2
+  echo "            -d '{\"state\":\"$NEW_STATE\",\"by\":\"$(id -un)@$HOST\"}'" >&2
+  exit 5
+
+  # shellcheck disable=SC2317  # unreachable until #686 replaces it with a POST
   NEW_ROSTER="$(roster_with_state "$ROSTER_CONTENT" "$PROJECT" "$NEW_STATE")"
 
   BRANCH="dose-${MODE#--}-${PROJECT}-$(date +%s)"
@@ -212,21 +215,13 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   exit 0
 fi
 
-# --- 3. wrong host: say so, stop. Never half-act. ---------------------------
-if [ "$ROW_HOST" != "$HOST" ]; then
-  # --now is the one mode that may travel. Converging a crontab is a WRITE and
-  # stays refused off-host; dispatching is a request the roster already says
-  # belongs to $ROW_HOST, so carrying it there is obedience, not a bypass.
-  if [ "$MODE" = --now ] || [ "$MODE" = --shotgun ]; then
-    echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
-    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' $MODE"
-  fi
-  # It writes state the roster's host reads on its ticks -- travels like --now.
-  if [ "$MODE" = --sprint ]; then
-    echo "hop: '$PROJECT' runs on '$ROW_HOST'; re-running there over ssh"
-    exec ssh -o BatchMode=yes "$ROW_HOST" "sudo -n dose '$PROJECT' --sprint '$SPRINT_DUR'"
-  fi
-  echo "REFUSED: roster says '$PROJECT' runs on '$ROW_HOST', this host is '$HOST' -- stopping, nothing touched" >&2
+# --- 3. not this machine's project: say so, stop. Never half-act. -----------
+# THE ROSTER NO LONGER RECORDS WHICH HOST A PROJECT RUNS ON (#432), so there is
+# no column to hop by and nowhere to ssh to; the box answers instead. THE HOP
+# IS GONE -- `dose <p> --now` on the wrong host refuses rather than travelling.
+if ! getent passwd "$ROW_ACCT" >/dev/null 2>&1; then
+  echo "REFUSED: '$PROJECT' has no unix account on '$HOST', so it does not run here -- stopping, nothing touched" >&2
+  echo "         The roster carries state and nothing else; run dose on the box that has the account." >&2
   exit 7
 fi
 

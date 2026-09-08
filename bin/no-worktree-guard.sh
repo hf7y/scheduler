@@ -7,68 +7,35 @@
 # GUARD-TEST: tests/no-worktree-witness.sh
 # GATE: default
 #
-# ---------------------------------------------------------------------------
-# WHY THIS EXISTS (hf7y/scheduler#49)
+# WHY THIS EXISTS (#49). Two production scripts here created a worktree on
+# every run, a one-time cleanup did not hold, and the estate regrew them within
+# days. Removing today's instances is not the fix -- the fix is that a third
+# creator cannot appear without this going red.
 #
-# Two production scripts here used to create a worktree on every run --
-# bin/scheduler-dev-cycle.sh and bin/overnight-dev.sh -- and a one-time
-# cleanup pass did not hold; the estate regrew them within days. Both now
-# work in a clone instead. Removing today's instances is not the fix: the
-# fix is that a third creator cannot appear without this going red.
+# DETECTION IS TEXTUAL, deliberately. Telling `git worktree add` inside an echo
+# from one for real is the per-case judgement that let two live here for
+# months. A justified mention goes in the allowlist below, in a diff, with a
+# reason. THE ALLOWLIST IS EMPTY, and that is the interesting fact.
 #
-# ---------------------------------------------------------------------------
-# WHAT IS AND IS NOT A VIOLATION
+# NOT SCANNED: tests/ (a mktemp worktree dropped on exit is correct usage),
+# archive/ (retired code kept as evidence -- a guard that demands retired code
+# be maintained gets disabled), and prose/conf, none of which can create one.
 #
-# DETECTION IS TEXTUAL, and deliberately so. Telling `git worktree add` inside
-# an `echo` from one on its own is exactly the per-case judgement that let two
-# of these live here for months. A justified mention goes in the allowlist
-# below, in a diff, with a reason attached -- a smaller and more visible
-# surface than a regex that tries to be clever about intent. The allowlist is
-# EMPTY today and that is the interesting fact about this repository.
+# AN ALLOWLIST, NOT A .ratchet. A ratchet suits a baseline expected to fall
+# over months; this one is expected to be EMPTY, and a one-command accept-flow
+# is how a new violation gets baselined by a run nobody reads. Compiled in, it
+# cannot grow without a diff -- and check B fails on an entry that has stopped
+# matching, which is the anti-rot half `--accept` would otherwise provide.
 #
-# tests/ is excluded. A worktree built under mktemp and dropped on exit is
-# correct usage and is not what #49 is about; a witness that needs a linked
-# worktree to have anything to assert about must stay writable.
+# PORTED, NOT PROPAGATED. realisateur carries the same mechanism with its own
+# allowlist (#77's reasoning): what would propagate is the judgement about
+# WHICH tree's paths are excused, not the scan. A shipped copy would name a
+# file this repo lacks and report its own entry stale forever.
 #
-# archive/ is excluded on bin/shellcheck-lint.sh's stated reasoning: it is
-# retired code kept as evidence, and a guard that demands retired code be
-# maintained is a guard that gets disabled.
-#
-# Markdown, schedule/*.conf and the RUN-MARKER are not scanned. None of them
-# can create a worktree, several of them describe the historical arrangement
-# on purpose, and folding prose in would make this un-passable on a
-# technicality -- the failure mode CLAUDE.md's silence-audit row was scoped
-# for.
-#
-# ---------------------------------------------------------------------------
-# WHY AN INLINE ALLOWLIST AND NOT A .ratchet FILE
-#
-# bin/shellcheck-lint.ratchet is the right shape for a baseline of many
-# findings expected to fall over months. This one is expected to be EMPTY, and
-# a ratchet whose accept-flow is one command is a way for a new violation to be
-# baselined by a run nobody reads. An allowlist compiled in cannot grow without
-# an edit to this file appearing in a diff. It also cannot ROT: check B fails
-# if an entry has stopped existing or stopped matching, which is the half
-# `--accept` normally provides and the half that matters when the target is
-# zero.
-#
-# ---------------------------------------------------------------------------
-# A PORTED COPY, NOT A PROPAGATED ONE
-#
-# hf7y/realisateur carries bin/no-worktree-lint.sh, the same mechanism with a
-# different allowlist. It is classified LOCAL there for the reason
-# hf7y/scheduler#77 already gives about shellcheck-lint.sh: what would
-# propagate is the judgement -- which paths in WHICH tree are excused -- not
-# the scan. A shipped copy would carry realisateur's one entry, naming a file
-# this repository does not have, and its own rot check would report that entry
-# stale forever.
-#
-# THE NAME. Not `no-worktree-lint.sh`, because bin/check-witness-lint.sh scans
-# `bin/*-lint.sh` and `bin/*-check.sh` for a runtime witness and would report
-# this NEVER RUN on every sweep. That would be a true statement about the wrong
-# sensor: this guard is gated by CI's `suites` job through
-# tests/no-worktree-witness.sh, not by `scheduler sweep`, so a sweep-witness
-# is not the thing that proves it ran.
+# THE NAME is not `*-lint.sh`, because check-witness-lint.sh scans those for a
+# runtime witness and would report this NEVER RUN every sweep -- a true
+# statement about the wrong sensor. CI's `suites` gates it, not `scheduler
+# sweep`.
 #
 # usage:  no-worktree-guard.sh [ROOT]
 # exit:   0 clean   1 FLAGs   2 BLIND (not a git tree, or zero files scanned --

@@ -87,6 +87,27 @@ esac
 EOF
 chmod +x "$FAKEBIN/gh"
 
+# THE ROSTER IS A SERVICE (#432): the fixture reaches the code through curl,
+# not gh. Same FAKE_ROSTER_CONTENT, converted here rather than restated.
+cat > "$FAKEBIN/curl" <<'CURLEOF'
+#!/usr/bin/env bash
+# The roster SERVICE stands in for the roster FILE (#432). FAKE_GH_MODE keeps
+# its old meanings so each witness's existing cases still mean what they meant:
+# `fail` is unreachable (BLIND 6), `absent` is reachable-but-empty (GAP 4).
+case "${FAKE_GH_MODE:-ok}" in
+  fail)   echo "curl: (7) Failed to connect" >&2; exit 7 ;;
+  absent) printf '{"rows": []}'; exit 0 ;;
+esac
+printf '{"rows": ['
+printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
+  !/^[[:space:]]*(#|$)/ && NF>=4 {
+    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
+    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
+  }'
+printf ']}'
+CURLEOF
+chmod +x "$FAKEBIN/curl"
+
 cat > "$FAKEBIN/crontab" <<'EOF'
 #!/usr/bin/env bash
 : "${CRONFILE:?}"
@@ -222,7 +243,10 @@ grep -qF "WRONG_ENV" "$CRONFILE" && ok "re-read caught the inert write instead o
 # the roster never named). Landed in #111 unwitnessed; this closes that gap.
 export CRONFILE="$WORK/cron5"; : > "$CRONFILE"
 before="$(sha256sum "$CRONFILE")"
+# "NOT THIS MACHINE'S" IS NOW THE ABSENCE OF A UNIX ACCOUNT (#432).
+export FAKE_GETENT_FAIL=elsewhere-proj
 out="$("$TARGET" elsewhere-proj --apply 2>&1)"; rc=$?
+unset FAKE_GETENT_FAIL
 after="$(sha256sum "$CRONFILE")"
 [ "$rc" -eq 7 ] && ok "wrong-host row exits 7 (refused)" \
   || bad "wrong-host row exited $rc, want 7: $out"
@@ -393,24 +417,21 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
 [ -f "$WORK/gh-calls.log" ] && bad "missing-account refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "missing-account refusal wrote nothing"
 
-# --- 10-12. arm/park writes schedule/ROSTER only now (#429, case 4 above) -
+# --- 10-12. arm/park REFUSE while the read is served and the write is not --
+# #686: ROSTER_CONTENT is synthesised now, so the old PR path would commit a
+# fabrication. The refusal must name the way to actually change state.
 rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] && ok "--arm on a parked project exits 0" || bad "--arm exited $rc: $out"
-grep -qF 'armed: PR #42' <<<"$out" && ok "--arm reports the PR armed for auto-merge" \
-  || bad "--arm did not report an armed PR: $out"
-grep -qF 'branch ref=refs/heads/dose-arm-ghosttown-' "$WORK/gh-calls.log" \
-  && ok "a fresh branch was created for the write" \
-  || bad "no branch-create call logged: $(cat "$WORK/gh-calls.log" 2>&1)"
-grep -qF 'write dest=roster' "$WORK/gh-calls.log" \
-  && ok "schedule/ROSTER was written on that branch" \
-  || bad "no roster write logged: $(cat "$WORK/gh-calls.log" 2>&1)"
-grep -qF 'ghosttown | ghosttown@testhost | 6h | live' "$WORK/written-roster" \
-  && ok "the written ROSTER flips ghosttown's row to live" \
-  || bad "written ROSTER does not carry the flipped row: $(cat "$WORK/written-roster" 2>&1)"
-grep -qF 'ecosim | ecosim@testhost | 6h | live' "$WORK/written-roster" \
-  && ok "the written ROSTER leaves ecosim's row untouched" \
-  || bad "an unrelated row changed: $(cat "$WORK/written-roster" 2>&1)"
+[ "$rc" -eq 5 ] && ok "--arm refuses (5) rather than write a synthesised roster" \
+  || bad "--arm exited $rc, want 5: $out"
+grep -qF '#686' <<<"$out" && ok "the refusal names the issue that lifts it" \
+  || bad "exit 5 but the refusal cites nothing: $out"
+grep -qF '/roster/ghosttown' <<<"$out" && ok "...and names the POST that does work today" \
+  || bad "the refusal does not say how to change state: $out"
+[ -f "$WORK/written-roster" ] && bad "REFUSED and still wrote a roster: $(cat "$WORK/written-roster")" \
+  || ok "nothing was written to schedule/ROSTER"
+[ -f "$WORK/gh-calls.log" ] && bad "REFUSED and still reached gh: $(cat "$WORK/gh-calls.log")" \
+  || ok "no branch, no PR, no gh call at all"
 
 rm -f "$WORK/gh-calls.log"
 out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
@@ -422,42 +443,54 @@ grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" 
 
 rm -f "$WORK/gh-calls.log" "$WORK/written-roster"
 out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] && ok "--park on a live project exits 0" || bad "--park exited $rc: $out"
-grep -qF 'ecosim | ecosim@testhost | 6h | parked' "$WORK/written-roster" \
-  && ok "--park flips the ROSTER row to parked" \
-  || bad "written ROSTER does not carry parked: $(cat "$WORK/written-roster" 2>&1)"
+[ "$rc" -eq 5 ] && ok "--park refuses (5) too -- the refusal is not arm-only" \
+  || bad "--park exited $rc, want 5: $out"
+[ -f "$WORK/written-roster" ] && bad "--park REFUSED and still wrote a roster: $(cat "$WORK/written-roster")" \
+  || ok "--park wrote nothing"
+
+# --park never needed the account to exist, and still does not reach that far.
 export FAKE_GETENT_FAIL=ecosim
 out2="$("$TARGET" ecosim --park 2>&1)"; rc2=$?
 unset FAKE_GETENT_FAIL
-[ "$rc2" -eq 0 ] && ok "--park does not require the account to exist" \
-  || bad "--park with no unix account exited $rc2, want 0: $out2"
+[ "$rc2" -eq 5 ] && ok "--park with no unix account refuses for the SAME reason, not a different one" \
+  || bad "--park with no account exited $rc2, want 5: $out2"
+grep -qF '#686' <<<"$out2" && ok "...and still cites #686 rather than blaming the account" \
+  || bad "--park's refusal changed cause when the account went missing: $out2"
 
-# --- 13. degrade path: no auto-merge -----------------------------------
+# --- 13. the auto-merge degrade path is unreachable while the write is off --
+# If this ever exits 0 again, the write came back without #686 being closed.
 rm -f "$WORK/gh-calls.log"
 export FAKE_GH_AUTOMERGE_MODE=fail
 out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
 unset FAKE_GH_AUTOMERGE_MODE
-[ "$rc" -eq 0 ] && ok "--arm still exits 0 when auto-merge cannot be armed" \
-  || bad "--arm exited $rc when auto-merge failed, want 0: $out"
-grep -qF 'opened: PR #42' <<<"$out" && ok "--arm reports opened-not-armed when auto-merge fails" \
-  || bad "--arm did not degrade its message: $out"
+[ "$rc" -eq 5 ] && ok "--arm refuses before auto-merge is ever reached" \
+  || bad "--arm exited $rc with auto-merge failing, want 5: $out"
+[ -f "$WORK/gh-calls.log" ] && bad "the refusal still reached gh: $(cat "$WORK/gh-calls.log")" \
+  || ok "no gh call at all -- the refusal is before the network"
 
-# --- 14. --shotgun: parses, and travels like --now (#586) -----------------
-# A hop carrying the wrong mode would dispatch a NIGHTLY BATCH on the roster's
-# host while reporting a shotgun. That is what this case catches.
+# --- 14. --shotgun parses, and NO LONGER travels (#432) -------------------
+# The hop went with the host column. An ssh on PATH must stay untouched: a hop
+# that still fired would dispatch on a host this one only guessed at.
 cat > "$FAKEBIN/ssh" <<'SSH'
 #!/usr/bin/env bash
-for a in "$@"; do :; done
-echo "SSH-WOULD-RUN: $a"
+echo "SSH-WAS-CALLED" >> "$WORK/ssh-calls.log"
 SSH
 chmod +x "$FAKEBIN/ssh"
+rm -f "$WORK/ssh-calls.log"
 
+export FAKE_GETENT_FAIL=elsewhere-proj
 out="$("$TARGET" elsewhere-proj --shotgun 2>&1)"; rc=$?
-grep -qi 'unknown flag' <<<"$out"   && bad "--shotgun was not parsed as a flag: $out"   || ok "--shotgun parses"
-grep -qF "SSH-WOULD-RUN: sudo -n dose 'elsewhere-proj' --shotgun" <<<"$out"   && ok "--shotgun hops to the roster's host carrying --shotgun, not --now"   || bad "the hop did not carry --shotgun (rc=$rc): $out"
+grep -qi 'unknown flag' <<<"$out" && bad "--shotgun was not parsed as a flag: $out" || ok "--shotgun parses"
+[ "$rc" -eq 7 ] && ok "--shotgun on a project with no account here is REFUSED (7)" \
+  || bad "--shotgun exited $rc, want 7: $out"
 
-out="$("$TARGET" elsewhere-proj --now 2>&1)"
-grep -qF "SSH-WOULD-RUN: sudo -n dose 'elsewhere-proj' --now" <<<"$out"   && ok "--now still hops as --now"   || bad "--now's hop regressed while --shotgun was added: $out"
+out="$("$TARGET" elsewhere-proj --now 2>&1)"; rc=$?
+[ "$rc" -eq 7 ] && ok "--now likewise refuses instead of hopping" \
+  || bad "--now exited $rc, want 7: $out"
+unset FAKE_GETENT_FAIL
+[ -f "$WORK/ssh-calls.log" ] \
+  && bad "the hop is gone but ssh was still called: $(cat "$WORK/ssh-calls.log")" \
+  || ok "no ssh was attempted -- there is no host column to hop by"
 rm -f "$FAKEBIN/ssh"
 
 "$TARGET" --help 2>&1 | grep -qF -- '--shotgun'   && ok "--shotgun is in the usage block"   || bad "--shotgun works but --help never mentions it"

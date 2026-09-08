@@ -6,6 +6,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 R="$HERE/../bin/usage-paced-runner.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
+# The roster carries state only now (#432), so the dispatcher asks the box
+# which accounts exist. Fixture projects are not accounts on the suite's host.
+witness_stub_getent
 echo "host-mode-preflight-witness"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
@@ -43,6 +46,9 @@ CHECK="$TMP/check.sh"
   printf 'PACED_HOST="testhost"\n'
   printf 'SELF_DIR="%s/bin"\nREPO_ROOT="%s/repo"\n' "$TMP" "$TMP"
   printf 'id() { case "${1:-}" in -u) echo "$FAKE_UID" ;; -un) echo "$FAKE_UNAME" ;; esac; }\n'
+  # roster_rows asks the BOX which accounts exist (#432). Stub it beside id();
+  # FAKE_GETENT_FAIL names the ones deliberately not here.
+  printf 'getent() { [ "${1:-}" = passwd ] || return 2; for _n in ${FAKE_GETENT_FAIL:-}; do [ "$2" = "$_n" ] && return 2; done; printf "%%s:x:9999:9999::/home/%%s:/bin/bash\\n" "$2" "$2"; }\n'
   sed -n '/^roster_rows() {/,/^}/p' "$R"
   printf '%s\n' "$BLOCK"
   printf 'echo FELL-THROUGH\n'; } > "$CHECK"
@@ -98,16 +104,17 @@ rc="$(PACED_HOST_MODE=1 STUB_ROSTER="$PARKED" run 0 root)"
 grep -q '0 live, 2 parked' "$TMP/out" && ok "E2 counts them: 0 live, 2 parked" || bad "E2 counts: $(cat "$TMP/out")"
 grep -q 'dispatches NOTHING' "$TMP/out" && ok "E3 and says tick 1 dispatches nothing" || bad "E3 message: $(cat "$TMP/out")"
 
+# `c` is the not-here row -- an absent account now, not a host column (#432).
 MIXED='a | a@testhost | 2h | live
 b | b@testhost | 2h | parked
 c | c@otherhost | 2h | live'
-rc="$(PACED_HOST_MODE=1 STUB_ROSTER="$MIXED" run 0 root)"
+rc="$(PACED_HOST_MODE=1 FAKE_GETENT_FAIL=c STUB_ROSTER="$MIXED" run 0 root)"
 [ "$rc" = 0 ] && ok "E4 a roster with live rows passes" || bad "E4 expected 0, got $rc"
 grep -q '1 live, 1 parked' "$TMP/out" \
   && ok "E5 counts only THIS host's rows (c@otherhost excluded)" \
   || bad "E5 counts: $(cat "$TMP/out")"
 
-rc="$(PACED_HOST_MODE=1 STUB_ROSTER='c | c@otherhost | 2h | live' run 0 root)"
+rc="$(PACED_HOST_MODE=1 FAKE_GETENT_FAIL=c STUB_ROSTER='c | c@otherhost | 2h | live' run 0 root)"
 [ "$rc" = 2 ] && ok "E6 a roster naming no row for this host refuses" || bad "E6 expected 2, got $rc"
 
 echo

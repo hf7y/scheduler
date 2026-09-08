@@ -70,6 +70,28 @@ echo scheduler
 EOF
 chmod +x "$T1_FAKEBIN/gh"
 
+# THE ROSTER IS A SERVICE (#432), so the fixture reaches the code under test
+# through curl, not gh. Same FAKE_ROSTER_CONTENT, converted to the service's
+# JSON here rather than restated in a second format per witness.
+cat > "$T1_FAKEBIN/curl" <<'CURLEOF'
+#!/usr/bin/env bash
+# The roster SERVICE stands in for the roster FILE (#432). FAKE_GH_MODE keeps
+# its old meanings so each witness's existing cases still mean what they meant:
+# `fail` is unreachable (BLIND 6), `absent` is reachable-but-empty (GAP 4).
+case "${FAKE_GH_MODE:-ok}" in
+  fail)   echo "curl: (7) Failed to connect" >&2; exit 7 ;;
+  absent) printf '{"rows": []}'; exit 0 ;;
+esac
+printf '{"rows": ['
+printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
+  !/^[[:space:]]*(#|$)/ && NF>=4 {
+    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
+    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
+  }'
+printf ']}'
+CURLEOF
+chmod +x "$T1_FAKEBIN/curl"
+
 cat > "$T1_FAKEBIN/sudo" <<'EOF'
 #!/usr/bin/env bash
 while [ "$#" -gt 0 ]; do case "$1" in -n|-H) shift ;; -u) shift 2 ;; *) break ;; esac; done
@@ -161,15 +183,33 @@ touch "$T3_RUNNING_MARKER"
 EOF
 chmod +x "$T3_BUILD/bin/scheduler-run"
 
+# Since #432 the project name IS the account name. One worker serves two
+# scratch repos here, so this answers for all three, same home.
 cat > "$T3_FAKEBIN/getent" <<EOF
 #!/usr/bin/env bash
-if [ "\$1" = passwd ] && [ "\$2" = "$T3_ACCT" ]; then
-  printf '%s:x:9999:9999::%s:/bin/bash\n' "$T3_ACCT" "$T3_HOME"
-  exit 0
+if [ "\$1" = passwd ]; then
+  case "\$2" in
+    "$T3_ACCT"|scratch-repo-a|scratch-repo-b)
+      printf '%s:x:9999:9999::%s:/bin/bash\n' "\$2" "$T3_HOME"
+      exit 0 ;;
+  esac
 fi
 exit 2
 EOF
 chmod +x "$T3_FAKEBIN/getent"
+
+# The roster reaches the code under test over curl now, not gh.
+cat > "$T3_FAKEBIN/curl" <<'CURLEOF'
+#!/usr/bin/env bash
+printf '{"rows": ['
+printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
+  !/^[[:space:]]*(#|$)/ && NF>=4 {
+    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
+    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
+  }'
+printf ']}'
+CURLEOF
+chmod +x "$T3_FAKEBIN/curl"
 
 cat > "$T3_FAKEBIN/sudo" <<'EOF'
 #!/usr/bin/env bash
