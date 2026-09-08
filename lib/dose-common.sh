@@ -149,10 +149,60 @@ fetch_repo_file() {
   printf '%s' "$out" | tr -d '\n' | base64 -d 2>/dev/null
 }
 
-# The roster is just the file this was written for first. Kept as a named
-# function because every caller reads better saying what it wants than saying
-# a path, and because the path itself then lives in exactly one place.
-fetch_roster() { fetch_repo_file schedule/ROSTER; }
+# THE ARMING AUTHORITY IS A SERVICE, NOT THIS REPO (#432; Zach 2026-09-01,
+# "if this needs to run out of something, it's a container", and 2026-09-05,
+# "the roster shouldn't be in the repo").
+#
+# WHY THIS IS NOT A FETCH OPTIMISATION. Reading it over `gh` needed a
+# credential on every host and nobody had one: gh_as borrows $SUDO_USER's
+# session, an armed cron row has no human to borrow from, so host mode read
+# BLIND and exited 2 on every tick it would ever have run. It only ever
+# appeared to work on monkey, where a human is logged in. A local port needs
+# no credential at all -- measured 2026-09-08 from dog@vaporwave (uid 3000),
+# wtul@monkey, and root@monkey under `env -i`, which is what a cron row is.
+#
+# STATE AND NOTHING ELSE (#996). The two columns the old file carried besides
+# state were a copy of the primary key (account == project, 23 of 23 rows) and
+# a constant (rate == 20m, 23 of 23). `host` is answered by THIS MACHINE: a
+# project has a row here iff its unix account exists here. Read from the
+# machine that cannot go stale; a file about the machine can.
+#
+# CONSEQUENCE, and it is not cosmetic: `dose <p> --check` on a host where <p>
+# has no account now says so instead of hopping over ssh, because there is no
+# host column left to hop by. Run `dose` where the account lives.
+ROSTER_URL="${SCHEDULER_ROSTER_URL:-http://100.107.253.56:8646}"
+ROSTER_RATE="${SCHEDULER_ROSTER_RATE:-20m}"
+
+fetch_roster() {
+  local raw
+  for _b in curl jq; do
+    command -v "$_b" >/dev/null 2>&1 || {
+      echo "BLIND: '$_b' is not on PATH -- cannot read the roster service. Nothing was verified." >&2
+      return 6; }
+  done
+  # NO FALLBACK, to a checkout or to this repo. Unreachable is BLIND and BLIND
+  # classifies nothing -- a stale roster read as live is worse than an admitted
+  # blindness, which is already this file's rule for every other reader.
+  raw="$(curl -fsS --max-time 10 "$ROSTER_URL/roster" 2>/dev/null)" || {
+    echo "BLIND: the roster service at $ROSTER_URL is unreachable. Refusing to guess at what is armed." >&2
+    return 6; }
+  # "COULD NOT LOOK" AND "LOOKED, NOTHING THERE" STAY DIFFERENT ANSWERS -- the
+  # same 6-vs-4 distinction fetch_repo_file draws, carried across the move. A
+  # reachable service carrying no rows is a GAP: real, positive, and not a
+  # credential problem.
+  local _rows
+  _rows="$(printf '%s' "$raw" | jq -r '.rows[]? | "\(.project)\t\(.state)"' 2>/dev/null)"
+  if [ -z "$_rows" ]; then
+    echo "GAP: $ROSTER_URL is reachable and carries no rows. Nothing is armed anywhere; this is not a credential problem." >&2
+    return 4
+  fi
+  printf '%s\n' "$_rows" \
+  | while IFS="$(printf '\t')" read -r _p _s; do
+      [ -n "$_p" ] || continue
+      getent passwd "$_p" >/dev/null 2>&1 || continue
+      printf '%s | %s@%s | %s | %s\n' "$_p" "$_p" "${PACED_HOST:-$HOST}" "$ROSTER_RATE" "$_s"
+    done
+}
 
 branch_head_sha() {  # <ref> -> the sha it currently points at
   local ref="${1:?branch_head_sha needs a ref}"

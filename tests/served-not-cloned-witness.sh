@@ -70,6 +70,49 @@ echo scheduler
 EOF
 chmod +x "$T1_FAKEBIN/gh"
 
+# THE ROSTER IS A SERVICE (#432), so the fixture reaches the code under test
+# through curl, not gh. Same FAKE_ROSTER_CONTENT, converted to the service's
+# JSON here rather than restated in a second format per witness.
+cat > "$T1_FAKEBIN/curl" <<'CURLEOF'
+#!/usr/bin/env bash
+# The roster SERVICE stands in for the roster FILE (#432). FAKE_GH_MODE keeps
+# its old meanings so each witness's existing cases still mean what they meant:
+# `fail` is unreachable (BLIND 6), `absent` is reachable-but-empty (GAP 4).
+case "${FAKE_GH_MODE:-ok}" in
+  fail)   echo "curl: (7) Failed to connect" >&2; exit 7 ;;
+  absent) printf '{"rows": []}'; exit 0 ;;
+esac
+printf '{"rows": ['
+printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' '
+  !/^[[:space:]]*(#|$)/ && NF>=4 {
+    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$4)
+    if ($1!="" && $4!="") { if(n++) printf ","; printf "{\"project\":\"%s\",\"state\":\"%s\"}", $1, $4 }
+  }'
+printf ']}'
+CURLEOF
+chmod +x "$T1_FAKEBIN/curl"
+# getent decides which rows belong to THIS machine now. Every project the
+# fixture names is an account here; nothing else is.
+cat > "$T1_FAKEBIN/getent" <<'GETEOF'
+#!/usr/bin/env bash
+# WHICH ROWS BELONG TO THIS MACHINE is now getent's answer, not a host column.
+# The fixture still carries `account@host`, so this stub honours it: a project
+# is an account HERE iff its fixture row names this host. That keeps every
+# "a row on another host is not touched" case meaning what it meant.
+[ "${1:-}" = passwd ] || exit 2
+_h="${DOSE_HOST_OVERRIDE:-${PACED_HOST:-$(hostname -s 2>/dev/null || echo unknown)}}"
+printf '%s\n' "$FAKE_ROSTER_CONTENT" | awk -F'|' -v want="$2" -v host="$_h" '
+  !/^[[:space:]]*(#|$)/ && NF>=4 {
+    gsub(/[[:space:]]/,"",$1); gsub(/[[:space:]]/,"",$2)
+    split($2, a, "@")
+    if ($1 == want && a[2] == host) { found=1 }
+  }
+  END { exit(found ? 0 : 1) }' || exit 2
+printf '%s:x:3000:3000::/home/%s:/bin/bash\n' "$2" "$2"
+GETEOF
+chmod +x "$T1_FAKEBIN/getent"
+
+
 cat > "$T1_FAKEBIN/sudo" <<'EOF'
 #!/usr/bin/env bash
 while [ "$#" -gt 0 ]; do case "$1" in -n|-H) shift ;; -u) shift 2 ;; *) break ;; esac; done
