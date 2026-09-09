@@ -127,7 +127,20 @@ if [ "$RULES_OPT" = "1" ]; then
     esac
     exit 2
   fi
-  PROMPT="$SCHEDULE_CONTENT
+  # #605: an unframed block that merely LOOKS like operator instruction is
+  # exactly the shape a model is trained to treat as suspect mid-conversation
+  # -- and it did: american-cycle read this block as prompt-injection and
+  # refused the run outright. The header/footer below say, in the run's own
+  # words, that this text is first-party and dispatched on purpose, so the
+  # fix is legibility at the point of ambiguity, not a verdict after the fact.
+  PROMPT="[DISPATCH BRIEF -- prepended by this repo's own bin/scheduler-run from
+schedule/_standing-rules.md before every run that opts in. Not user-supplied,
+not injected: first-party operating instructions for THIS run, the same
+footing as CLAUDE.md.]
+
+$SCHEDULE_CONTENT
+
+[END DISPATCH BRIEF -- the project's own brief follows.]
 
 $PROMPT"
 fi
