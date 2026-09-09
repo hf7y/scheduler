@@ -1251,17 +1251,21 @@ cmd_pacing_show() {
     echo "  max dispatches/tick: $max"
   fi
   echo
-  echo "live gate (usage-gate.sh, account-wide):"
-  if [ -x "$HOME/.local/bin/usage-gate.sh" ]; then
+  local gate="${USAGE_GATE:-}"  # same ladder as usage-paced-runner.sh:341-344 (#727)
+  [ -n "$gate" ] && [ -x "$gate" ] || gate="$HOME/.local/bin/usage-gate.sh"
+  [ -x "$gate" ] || gate="$SCHED_ROOT/bin/usage-gate.sh"
+  if [ -x "$gate" ]; then
+    echo "live gate (usage-gate.sh, account-wide, resolved: $gate):"
     local gate_out
-    gate_out="$("$HOME/.local/bin/usage-gate.sh" 2>&1)"
+    gate_out="$("$gate" 2>&1)"
     if [ "$human" = 1 ]; then
       pacing_show_human "$gate_out" | sed 's/^/  /'
     else
       printf '%s\n' "$gate_out" | sed 's/^/  /'
     fi
   else
-    echo "  (no ~/.local/bin/usage-gate.sh -- not deployed)"
+    echo "live gate (usage-gate.sh, account-wide):"
+    echo "  (not deployed -- tried \$USAGE_GATE=${USAGE_GATE:-<unset>}, $HOME/.local/bin/usage-gate.sh, $SCHED_ROOT/bin/usage-gate.sh)"
   fi
   echo
   echo "installed scripts (~/.local/bin -> repo bin/, must be symlinks):"
