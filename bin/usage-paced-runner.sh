@@ -437,6 +437,23 @@ PULL_FILE_TIMEOUT="${PACED_PULL_FILE_TIMEOUT:-60}"
 # (bin/scheduler:1304), minus the checkout it reads REPO_URL from. No --label:
 # `idea` does not exist on hf7y/realisateur and a missing named label makes gh
 # record NOTHING (bin/scheduler:854).
+# escalation_body <text> -- <text> wrapped in the shape lib/body-grammar.sh
+# requires: a declaration on line 1, and both ledger blocks.
+#
+# TRAP: A CHANNEL THAT RESOLVES IS NOT A CHANNEL THAT DELIVERS. Both channels
+# below were reachable and both were REFUSED, because the gh-sign shim grades
+# every `gh issue create` body and this one was bare prose. wtul escalated
+# PULL FROZEN 54 times over 10 days into that refusal and reached nobody
+# (hf7y/scheduler#732). tests/pull-escalation-witness.sh could not have caught
+# it: it stubs `gh` as `exit 1` -- deliberately, so an unstubbed run cannot
+# file real issues -- which proves routing and can never prove acceptance.
+# An escalation reports a fact and asks nothing, so NO-DECISION is honest; the
+# evidence really does live in this host's log, so DELIVERS names it.
+escalation_body() {  # $1 = the escalation text
+  printf 'NO-DECISION: an automatic escalation from usage-paced-runner.sh; it reports a fact and asks nothing.\n\n%s\n\n<!-- DEFERRED -->\n- none\n<!-- /DEFERRED -->\n\n<!-- DELIVERS -->\n- host:%s path:%s -- the dispatcher log this escalation was raised from.\n<!-- /DELIVERS -->\n' \
+    "$1" "$PACED_HOST" "$LOG"
+}
+
 file_to_realisateur() {
   local what="$1" text="$2" bin title bf
   bin="$(command -v scheduler 2>/dev/null || true)"
@@ -446,9 +463,10 @@ file_to_realisateur() {
     return 0
   fi
   # Title indexes (GitHub rejects one over 256), body records. --body-file,
-  # not --body: this text carries backticks and $(.
+  # not --body: this text carries backticks and $(. Channel 1 gets the grammar
+  # from cmd_idea; this one composes its own, so it must compose the same shape.
   title="$(printf '%s\n' "$text" | head -1 | cut -c1-200)"
-  bf="$(mktemp)"; printf '%s\n' "$text" > "$bf"
+  bf="$(mktemp)"; escalation_body "$text" > "$bf"
   if timeout "$PULL_FILE_TIMEOUT" gh issue create --repo hf7y/realisateur \
        --title "$title" --body-file "$bf" >/dev/null 2>&1; then
     rm -f "$bf"

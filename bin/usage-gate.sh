@@ -194,10 +194,15 @@ HDR="$(mktemp)"; trap 'rm -f "$HDR"' EXIT
 # --- try the FREE probe first, fall back to the paid one -------------------
 # GET /api/oauth/usage is free but answers only for an INTERACTIVE OAuth
 # credential: a `claude setup-token` credential -- every monkey self-dev
-# account -- gets 403 (`OAuth token does not meet scope requirement
-# user:profile`). Anything short of a clean 200 with a parseable body falls
-# straight through to the paid probe below, in exactly one paid call per
-# invocation.
+# account -- cannot use it, for want of the `user:profile` scope. MEASURED
+# 2026-09-09, because the code said one thing and the logs another: the
+# refusal is documented as 403 (`OAuth token does not meet scope requirement
+# user:profile`) and that does occur, but monkey's run.logs record
+# overwhelmingly `free:429`. Either way the outcome is identical -- anything
+# short of a clean 200 with a parseable body falls straight through to the
+# paid probe below, in exactly one paid call per invocation -- so do not read
+# a 429 here as a NEW fault: it is this same scope refusal, rate-limited.
+# That every armed account pays this separately is hf7y/scheduler#733.
 FREE_BODY="$(mktemp)"; trap 'rm -f "$HDR" "$FREE_BODY"' EXIT
 FREE_CODE=$(curl -sS -o "$FREE_BODY" -w '%{http_code}' --max-time 15 \
   https://api.anthropic.com/api/oauth/usage \
