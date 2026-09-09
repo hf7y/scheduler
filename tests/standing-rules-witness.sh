@@ -80,14 +80,15 @@ mkconf optin 'BATCH_JOB_NAME="optin-batch"' \
              'USES_STANDING_RULES=1'
 out="$(run optin batch)"; rc=$?
 first="$(printf '%s' "$out" | head -1)"
-if [ "$rc" -eq 0 ] && [ "$first" = "STANDING RULES (fixture). These override everything below." ]; then
-  ok "the rules file's first line is the prompt's first line"
+if [ "$rc" -eq 0 ] && [ "$first" = "[DISPATCH BRIEF -- prepended by this repo's own bin/scheduler-run from" ]; then
+  ok "a framing header, not the rules text itself, is the prompt's first line (#605)"
 else
-  bad "expected rules at the head, got rc=$rc first=[$first]"
+  bad "expected the #605 framing header at the head, got rc=$rc first=[$first]"
 fi
 case "$out" in
-  *"1. SECOND RULE, fixture text."*"OWN PROMPT LINE."*) ok "own prompt survives, below the rules" ;;
-  *) bad "own prompt missing or out of order: [$out]" ;;
+  *"first-party operating instructions for THIS run"*"STANDING RULES (fixture)."*"1. SECOND RULE, fixture text."*"[END DISPATCH BRIEF"*"OWN PROMPT LINE."*)
+    ok "framing header, then the rules body, then an end marker, then own prompt survives below" ;;
+  *) bad "framing/rules/marker/own-prompt out of order or missing: [$out]" ;;
 esac
 
 echo "== case 2: never opted in -- untouched"
@@ -117,7 +118,7 @@ else
 fi
 out="$(run pertier sweep)"
 case "$out" in
-  "STANDING RULES (fixture)."*"SWEEP OWN.") ok "the other tier still inherits the project-level yes" ;;
+  "[DISPATCH BRIEF"*"STANDING RULES (fixture)."*"SWEEP OWN.") ok "the other tier still inherits the project-level yes" ;;
   *) bad "sweep tier lost the project-level opt-in: [$out]" ;;
 esac
 # And the reverse: no project-level field at all, one tier opting itself in.
@@ -127,7 +128,7 @@ mkconf tieronly 'BATCH_JOB_NAME="tieronly-batch"' \
                 'SWEEP_PROMPT="SWEEP OWN."' \
                 'SWEEP_USES_STANDING_RULES=1'
 out="$(run tieronly sweep)"
-case "$out" in "STANDING RULES (fixture)."*) ok "a tier can opt itself in with no project-level field" ;;
+case "$out" in "[DISPATCH BRIEF"*"STANDING RULES (fixture)."*) ok "a tier can opt itself in with no project-level field" ;;
   *) bad "per-tier opt-in did not apply: [$out]" ;;
 esac
 out="$(run tieronly batch)"
