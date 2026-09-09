@@ -89,7 +89,7 @@ REPO_ROOT="$(cd "$SELF_DIR/.." 2>/dev/null && pwd)"
 
 # How many dispatch opportunities a project is held for after recording DONE.
 # 0 disables the brake entirely without editing code.
-LEDGER_DONE_COOLDOWN="${LEDGER_DONE_COOLDOWN:-3}"
+LEDGER_DONE_COOLDOWN="${LEDGER_DONE_COOLDOWN:-0}"
 # Base hold after a BLOCKED verdict, multiplied by the number of consecutive
 # blockages and doubled again when the reason repeats. 0 disables the backoff.
 LEDGER_BLOCKED_HOLD="${LEDGER_BLOCKED_HOLD:-6}"
@@ -926,9 +926,9 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   # tick has done its job. Not consuming it would let a cooling-down project
   # spin the rotation looking for someone else to run, which is a different
   # behaviour from the one being asked for.
-  if declare -F ledger_since >/dev/null 2>&1 && [ "${LEDGER_DONE_COOLDOWN:-3}" -gt 0 ]; then
+  if declare -F ledger_since >/dev/null 2>&1 && [ "${LEDGER_DONE_COOLDOWN:-0}" -gt 0 ]; then
     _since="$(ledger_since "$name" DONE 2>/dev/null || echo 999999)"
-    if [ "${_since:-999999}" -lt "${LEDGER_DONE_COOLDOWN:-3}" ]; then
+    if [ "${_since:-999999}" -lt "${LEDGER_DONE_COOLDOWN:-0}" ]; then
       # THE SKIP IS RECORDED. Without this row the count never advances and the
       # hold is permanent -- a stop wearing a cooldown's name. Recording it also
       # makes the brake visible in the same ledger as the dispatches it
