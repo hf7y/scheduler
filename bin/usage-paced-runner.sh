@@ -708,6 +708,34 @@ repo_slug_of() {
   sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$url"
 }
 
+# shotgun_slack_for <project> -> its schedule/<project>.conf's SHOTGUN_SLACK=
+# value, or empty if unset/unreadable. hf7y/scheduler#625: the per-project
+# opt-in knob for "run this tick's shotgun instead of batch". Grepped, not
+# sourced, same reason repo_slug_of parses REPO_URL by hand instead of loading
+# the conf: this process loops over every project's file in one tick, and
+# SHOTGUN_PROMPT is an arbitrary multi-line string that would clobber this
+# script's own variables if `source`d.
+shotgun_slack_for() {
+  local conf="$REPO_ROOT/schedule/${1:?}.conf" line v
+  [ -r "$conf" ] || return 0
+  line="$(grep -E '^[[:space:]]*SHOTGUN_SLACK[[:space:]]*=' "$conf" 2>/dev/null | tail -n1)"
+  [ -n "$line" ] || return 0
+  v="${line#*=}"; v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+  printf '%s' "$v"
+}
+
+# gate_slack_for_binding <verdict-text> -> the BINDING window's slack= value
+# from one usage-gate.sh reading (e.g. "+0.280"), or empty if the text names
+# no binding window (ERROR, or the QUIET RUN/HOLD/ERROR form). SHOTGUN_SLACK
+# compares against exactly this figure -- the tightest window, already picked
+# by usage-gate.sh itself, not a second computation of the same thing.
+gate_slack_for_binding() {
+  local v="$1" binding
+  binding="$(sed -n 's/^verdict=[A-Z]* binding=\([^ ]*\).*/\1/p' <<<"$v" | head -1)"
+  [ -n "$binding" ] || return 0
+  sed -n "s/^window=$binding .*slack=\\([+-][0-9.]*\\).*/\\1/p" <<<"$v" | head -1
+}
+
 # milestone_gate_probe <slug> -> "<count>\t<next>", or NOTHING if it could
 # not ask. <count> is open milestones having an open issue; <next> is the
 # title named by a `NEXT: <title>` line in an open milestone's description,
@@ -801,6 +829,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   idx=$(( (last + 1) % n ))
 
   name="${names[$idx]}"; cmd="${cmds[$idx]}"; row_acct="${accts[$idx]:-}"
+  dispatch_tier="batch"
 
   # WHOSE HOME IS THIS ROW'S? Host mode dispatches AS the account via `sudo -n
   # -u`, so every per-project path below is the ACCOUNT's -- root only drives.
@@ -856,6 +885,29 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
       fi
     else
       log "RUN  $summary"
+      # >>> shotgun slack substitution (hf7y/scheduler#625)
+      # Zach's ruling: a shotgun REPLACES that tick's batch, never runs beside
+      # it -- PROJECT_KEY already makes the two mutually exclusive per
+      # project, so substitution is the only shape that does not contend
+      # with itself. SHOTGUN_SLACK is unset for every real project today
+      # (opt-in, per project, in schedule/<name>.conf), so this stays dormant
+      # until a project's conf names a threshold -- picked from a week of
+      # usage-gate.sh readings, not guessed here.
+      _sw="$(shotgun_slack_for "$name")"
+      if [ -n "$_sw" ]; then
+        _sh="$(gate_slack_for_binding "$verdict")"
+        if [ -n "$_sh" ] && awk -v h="$_sh" -v w="$_sw" 'BEGIN{exit !(h+0>=w+0)}'; then
+          case "$cmd" in
+            *" batch")
+              cmd="${cmd% batch} shotgun"
+              dispatch_tier="shotgun"
+              log "SHOTGUN $name -- slack=$_sh >= SHOTGUN_SLACK=$_sw (schedule/$name.conf); this tick runs shotgun instead of batch"
+              ;;
+          esac
+        fi
+      fi
+      unset _sw _sh
+      # <<< shotgun slack substitution
     fi
   fi
 
@@ -1172,7 +1224,7 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
     if [ "$_ledger_outcome" != "${outcome:-NOT-DONE}" ]; then
       log "CUTOFF-TYPED $name -- run-record.sh found real progress before the ceiling; ledger row typed WORKED-CUTOFF instead of generic NOT-DONE"
     fi
-    ledger_append "$name" "${TIER:-batch}" "$rc" "$_ledger_outcome" "${_lreason:-}" \
+    ledger_append "$name" "${TIER:-$dispatch_tier}" "$rc" "$_ledger_outcome" "${_lreason:-}" \
       || log "LEDGER $name -- could not append to the run ledger; repetition is unobservable for this run"
     unset _lreason _rr_home _ledger_outcome
   fi

@@ -11,6 +11,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN="$ROOT/bin/scheduler-run"
 [ -f "$RUN" ] || { echo "scheduler-run not found: $RUN"; exit 1; }
+RUNNER="$ROOT/bin/usage-paced-runner.sh"
+[ -f "$RUNNER" ] || { echo "usage-paced-runner.sh not found: $RUNNER"; exit 1; }
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
@@ -132,6 +134,75 @@ done
 [ "$found" -gt 0 ] \
   && ok "checked $found conf(s) declaring a shotgun tier" \
   || bad "no conf declares SHOTGUN_JOB_NAME -- nothing is wired, so cases 1-4 prove only the plumbing"
+
+# --- case 6: SHOTGUN_SLACK, the tier's automatic trigger (hf7y/scheduler#625) -
+# Cases 1-5 are the HAND door: `dose <p> --shotgun`. This is the other half
+# Zach ruled on 2026-09-06 -- auto-fire, and it REPLACES that tick's batch --
+# implemented as one `if` in bin/usage-paced-runner.sh's dispatch loop. Lifts
+# the real functions and the real substitution block by their markers, the
+# same technique tests/derive-verdict-witness.sh uses for that file's
+# repo_slug_of: a reimplementation here would only prove the reimplementation
+# is right, not the shipped code.
+echo "== case 6: SHOTGUN_SLACK auto-fire substitution in usage-paced-runner.sh"
+FUNCS="$TMP/shotgun-slack-funcs.sh"
+awk '/^shotgun_slack_for\(\) \{/,/^\}/' "$RUNNER"      > "$FUNCS"
+awk '/^gate_slack_for_binding\(\) \{/,/^\}/' "$RUNNER" >> "$FUNCS"
+grep -q 'shotgun_slack_for()' "$FUNCS" \
+  && grep -q 'gate_slack_for_binding()' "$FUNCS" \
+  || bad "shotgun_slack_for() / gate_slack_for_binding() not found in $RUNNER"
+
+SWAP="$TMP/shotgun-slack-swap.sh"
+awk '/^[[:space:]]*# >>> shotgun slack substitution/,/^[[:space:]]*# <<< shotgun slack substitution/' "$RUNNER" > "$SWAP"
+grep -q 'shotgun_slack_for "\$name"' "$SWAP" \
+  || bad "could not extract the substitution block from $RUNNER (markers moved or renamed)"
+
+RUN_28PT='verdict=RUN binding=5h ceiling=0.85 min_slack=0.02 http_code=200 rush=False knobs=x
+window=5h util=0.300 burnline=0.578 slack=+0.278 status= resets_in_min=120 rate=n/a
+window=7d util=0.400 burnline=0.450 slack=+0.050 status= resets_in_min=5000 rate=n/a
+# RUN -- slack available'
+
+out="$(bash -c "$(cat "$FUNCS")"'
+gate_slack_for_binding "$1"' -- "$RUN_28PT")"
+[ "$out" = "+0.278" ] && ok "gate_slack_for_binding reads the BINDING window's own slack (+0.278)" \
+  || bad "expected +0.278, got: $out"
+out="$(bash -c "$(cat "$FUNCS")"'
+gate_slack_for_binding "$1"' -- 'verdict=ERROR reason=no_headers http_code=? knobs=x')"
+[ -z "$out" ] && ok "gate_slack_for_binding is empty for an ERROR reading" || bad "expected empty, got: $out"
+
+mkconf slacker 'SHOTGUN_SLACK=0.25'
+mkconf toopicky 'SHOTGUN_SLACK=0.90'
+out="$(REPO_ROOT="$FX" bash -c "$(cat "$FUNCS")"'
+shotgun_slack_for slacker')"
+[ "$out" = "0.25" ] && ok "shotgun_slack_for reads SHOTGUN_SLACK from the project's own conf" \
+  || bad "expected 0.25, got: $out"
+out="$(REPO_ROOT="$FX" bash -c "$(cat "$FUNCS")"'
+shotgun_slack_for both')"
+[ -z "$out" ] && ok "a conf with no SHOTGUN_SLACK reads as empty -- unset is the safe default" \
+  || bad "expected empty, got: $out"
+
+swap_case() {  # $1=project $2=cmd -> "cmd=[...] tier=[...]" after the real block runs
+  REPO_ROOT="$FX" name="$1" cmd="$2" verdict="$RUN_28PT" dispatch_tier="batch" bash -c '
+log() { :; }
+'"$(cat "$FUNCS")"'
+'"$(cat "$SWAP")"'
+echo "cmd=[$cmd] tier=[$dispatch_tier]"
+'
+}
+
+out="$(swap_case slacker "$ROOT/bin/scheduler-run slacker batch")"
+[[ "$out" == *"cmd=[$ROOT/bin/scheduler-run slacker shotgun]"* && "$out" == *"tier=[shotgun]"* ]] \
+  && ok "slack clearing SHOTGUN_SLACK swaps that tick's batch for shotgun" \
+  || bad "expected batch swapped to shotgun: $out"
+
+out="$(swap_case toopicky "$ROOT/bin/scheduler-run toopicky batch")"
+[[ "$out" == *"cmd=[$ROOT/bin/scheduler-run toopicky batch]"* && "$out" == *"tier=[batch]"* ]] \
+  && ok "slack short of a stricter SHOTGUN_SLACK leaves batch untouched" \
+  || bad "expected no substitution: $out"
+
+out="$(swap_case both "$ROOT/bin/scheduler-run both batch")"
+[[ "$out" == *"cmd=[$ROOT/bin/scheduler-run both batch]"* ]] \
+  && ok "SHOTGUN_SLACK unset (every real project today) -- dormant, matches the issue's own default-after" \
+  || bad "expected no substitution with SHOTGUN_SLACK unset: $out"
 
 echo
 echo "shotgun-tier-witness: $PASS passed, $FAIL failed"
