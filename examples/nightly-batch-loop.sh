@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# DEPRECATED as a pattern for NEW projects -- see the note atop
-# vkv-inventory-bug-sweep-loop.sh. A new project puts this config into
+# DEPRECATED as a pattern for NEW projects -- a per-project wrapper script
+# like this one. A new project puts this config into
 # schedule/<project>.conf (BATCH_* fields) instead of writing a wrapper;
 # bin/scheduler-run reads it. Kept as reference for still-live wrappers.
 #
