@@ -727,22 +727,30 @@ repo_slug_of() {
 }
 
 # milestone_gate_probe <slug> -> "<count>\t<next>", or NOTHING if it could
-# not ask. <count> is open milestones having an open issue; <next> is the
-# title named by a `NEXT: <title>` line in an open milestone's description,
-# or empty if none declares one (#582 -- GitHub milestones have no successor
-# field, so this is the whole chain-declaration contract: written into the
-# CURRENT milestone's description, by a human or a run, same as any other
-# milestoned content per #575's ruling on authorship).
+# not ask. A needs-human-only milestone is NOT permission (#587, zach's
+# ruling): <count> is open milestones with an open issue that is not
+# needs-human/assigned, tempo.sh's own ACTIONABLE subtraction. <next> is a
+# `NEXT: <title>` line from an open milestone's description, or empty (#582
+# chain-declaration contract, #575 authorship ruling).
 #
-# Empty is BLIND and must NEVER read as count=0: that would stop all
-# nineteen accounts on one outage, logged as deliberate. ONE call answers
-# both questions, so a chained project costs no second probe.
+# TWO calls since #587: <next> needs every open milestone regardless of open
+# count, <count> needs per-issue labels/assignees. Either missing is BLIND,
+# NEVER count=0 -- that stops all nineteen accounts on one outage.
 milestone_gate_probe() {
-  timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${1:?}/milestones?state=open" \
-    --jq '. as $ms
-      | ([$ms[] | select(.open_issues > 0)] | length) as $count
-      | ([$ms[].description // "" | capture("(?m)^NEXT:[ \t]*(?<t>.+)$")? | .t] | .[0] // "") as $next
-      | [$count, $next] | @tsv' 2>/dev/null
+  local slug="${1:?}" labels="${TEMPO_BLOCKED_LABELS:-needs-human}" ms count next
+  case "$labels" in                                                    # gh's --jq takes no --arg (see bin/tempo.sh)
+    *['"'\\\$\`]*) return 0 ;;
+  esac
+  ms="$(timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${slug}/milestones?state=open" 2>/dev/null)" || return 0
+  [ -n "$ms" ] || return 0
+  count="$(timeout "${MILESTONE_GATE_TIMEOUT:-15}" gh api "repos/${slug}/issues?state=open&per_page=100" --paginate \
+    --jq '[.[] | select(.milestone != null and .milestone.state == "open")
+             | select(( [(.labels // [])[].name] as $l | ("'"$labels"'" | split(",")) | any(. as $b | $l | index($b)) )
+                       or ((.assignees // []) | length > 0) | not)
+             | .milestone.number] | unique | length' 2>/dev/null)" || return 0
+  case "$count" in ''|*[!0-9]*) return 0 ;; esac
+  next="$(jq -r '[.[].description // "" | capture("(?m)^NEXT:[ \t]*(?<t>.+)$")? | .t] | .[0] // ""' <<<"$ms" 2>/dev/null)"
+  printf '%s\t%s' "$count" "$next"
 }
 
 milestone_self_fed() {  # <slug> -> 1 iff every actionable issue's last body line stamps an account other than zach, 0 if any doesn't, empty if unreadable (#575)
