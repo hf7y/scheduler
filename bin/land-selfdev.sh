@@ -24,6 +24,26 @@ case "$MODE" in --check|--land) ;; *) echo "usage: $0 [--check|--land]" >&2; exi
 PROJECTS="${INSTALLE_PROJECTS:-$HOME/Documents/Projects}"
 GH_OWNER="${SELFDEV_GH_OWNER:-hf7y}"
 
+# fetch_schedule_file <rel-under-schedule/>: print that file's content read
+# over `gh api`, no local scheduler checkout needed -- the same "served build"
+# design bin/scheduler-run's read_schedule_rel/fetch_repo_file already use
+# (hf7y/scheduler#350). land-selfdev.sh no longer clones scheduler into every
+# account (hf7y/realisateur#1138), so the checks below that used to read
+# $PROJECTS/scheduler/schedule/* off a clone this same run had just made now
+# read it this way instead, whether or not a local scheduler checkout happens
+# to exist. NOT sourced from lib/dose-common.sh's fetch_repo_file: this script
+# is staged and run as a lone file with no lib/ sibling (see the note above
+# PASS/GAPS/BAD), so this is a deliberately self-contained inline copy, kept
+# simple -- land-selfdev's own OK/MISSING/BAD vocabulary has no BLIND/GAP
+# split to preserve, so callers just treat any nonzero return as MISSING.
+fetch_schedule_file() {
+  local rel="${1:?fetch_schedule_file needs a schedule/-relative path}" out
+  command -v gh >/dev/null 2>&1 || return 1
+  out="$(gh api "repos/$GH_OWNER/scheduler/contents/schedule/$rel?ref=main" --jq '.content' 2>/dev/null)" || return 1
+  [ -n "$out" ] || return 1
+  printf '%s' "$out" | tr -d '\n' | base64 -d 2>/dev/null
+}
+
 # NOT collapsed into lib/provision-witness.sh (#517): this script is staged
 # and run as a lone file with no lib/ sibling -- setup-selfdev-project.sh
 # `install`s it alone into $STAGE, and tests/land-selfdev-deployment-guard-
@@ -58,18 +78,32 @@ case "$linger" in yes) ok "linger enabled" ;; *) gap "linger is not enabled (nee
 
 # TRAP: THE ONE THAT SILENTLY DISPATCHES THE WRONG ROTATION. scheduler falls back from _paced.$(hostname -s).conf to the SHARED _paced.conf; on a new host that is not a default, it is another machine's rotation. What matters is WHAT would be inherited -- mandark reads the shared one deliberately.
 HOST="$(hostname -s)"
-SHARED_PACED="$PROJECTS/scheduler/schedule/_paced.conf"
-if [ -f "$PROJECTS/scheduler/schedule/_paced.$HOST.conf" ]; then
-  ok "schedule/_paced.$HOST.conf exists -- this host has its own rotation"
-elif [ -d "$PROJECTS/scheduler" ]; then
-  enabled=$(grep -cE '^[a-z][^|]*\|1\|' "$SHARED_PACED" 2>/dev/null || echo 0)
-  if [ "${enabled:-0}" -gt 0 ]; then
-    bad "no schedule/_paced.$HOST.conf, and the shared _paced.conf has $enabled ENABLED row(s) -- this host would silently dispatch another machine's rotation"
-  else
-    gap "no schedule/_paced.$HOST.conf; this host falls back to the shared _paced.conf, which currently has 0 enabled rows (inert, but give this host its own file before arming anything)"
-  fi
+PACED_HOST_REL="_paced.$HOST.conf"
+if [ -f "$PROJECTS/scheduler/schedule/$PACED_HOST_REL" ]; then
+  ok "schedule/$PACED_HOST_REL exists locally -- this host has its own rotation"
+elif fetch_schedule_file "$PACED_HOST_REL" >/dev/null; then
+  ok "schedule/$PACED_HOST_REL exists (read via gh, no local scheduler checkout -- #350) -- this host has its own rotation"
 else
-  gap "scheduler not cloned yet; cannot check for _paced.$HOST.conf"
+  # No host-scoped file, local or remote: this host would fall back to the
+  # shared _paced.conf. Read THAT the same way -- local if a checkout happens
+  # to exist (a human dev clone), else via gh, so this stays informative on a
+  # host with nothing locally, same as scheduler-run itself.
+  shared_content="" shared_src=""
+  if [ -f "$PROJECTS/scheduler/schedule/_paced.conf" ]; then
+    shared_content="$(cat "$PROJECTS/scheduler/schedule/_paced.conf")"; shared_src="local"
+  elif shared_content="$(fetch_schedule_file "_paced.conf")"; then
+    shared_src="fetched via gh"
+  fi
+  if [ -n "$shared_src" ]; then
+    enabled=$(grep -cE '^[a-z][^|]*\|1\|' <<<"$shared_content" 2>/dev/null || echo 0)
+    if [ "${enabled:-0}" -gt 0 ]; then
+      bad "no schedule/$PACED_HOST_REL, and the shared schedule/_paced.conf ($shared_src) has $enabled ENABLED row(s) -- this host would silently dispatch another machine's rotation"
+    else
+      gap "no schedule/$PACED_HOST_REL; this host falls back to the shared schedule/_paced.conf ($shared_src), which currently has 0 enabled rows (inert, but give this host its own file before arming anything)"
+    fi
+  else
+    gap "could not read schedule/$PACED_HOST_REL or the shared schedule/_paced.conf, locally or via gh -- cannot check this host's rotation (gh unauthenticated? see the GitHub read/write checks below)"
+  fi
 fi
 
 CRED="$HOME/.claude/.credentials.json"
@@ -158,15 +192,35 @@ HOOK
   chmod +x "$hook"
 }
 
-# The two that must exist before anything can be derived from them.
+# The one that must exist before anything else can be derived from it.
 clone_or_update realisateur "https://github.com/$GH_OWNER/realisateur.git"
-clone_or_update scheduler   "https://github.com/$GH_OWNER/scheduler.git"
+
+# scheduler is DELIBERATELY NOT cloned here (hf7y/realisateur#1138): dispatch
+# reads schedule/<project>.conf over `gh api` when there is no local
+# schedule/ (bin/scheduler-run's read_schedule_rel, #350), and dose-project.sh
+# dispatches from the installed build (DOSE_BUILD_ROOT), never a per-account
+# checkout, because a checkout can go stale until hand-pulled --
+# hf7y/scheduler#321 is what that looked like: a dispatch checkout diverged
+# and ran stale code for three ticks before a human reset it by hand. An
+# account whose OWN project self-dev IS scheduler still gets a real,
+# writable checkout of it -- via the derived loop below, same as any other
+# project, if "scheduler" is in its SELFDEV_PROJECTS.
 
 # EVERY OTHER REPO IS DERIVED, NOT TYPED: schedule/<p>.conf declares REPO_URL and IS the registry. A typed list here would be a second source that drifts.
+# Read local-if-present, else via gh (fetch_schedule_file, #350 again) --
+# there is no longer a scheduler clone this run could have just made to read
+# off of, on any account, so this must not assume one exists.
 for p in ${SELFDEV_PROJECTS:-senechal ecosim}; do
-  conf="$PROJECTS/scheduler/schedule/$p.conf"
-  if [ ! -f "$conf" ]; then bad "$p: no schedule/$p.conf -- not a registered project"; continue; fi
-  url="$(grep -hE '^REPO_URL=' "$conf" | head -1 | cut -d'"' -f2)"
+  conf_content=""
+  if [ -f "$PROJECTS/scheduler/schedule/$p.conf" ]; then
+    conf_content="$(cat "$PROJECTS/scheduler/schedule/$p.conf")"
+  elif conf_content="$(fetch_schedule_file "$p.conf")"; then
+    act "$p: schedule/$p.conf read via gh, no scheduler clone needed (#350)"
+  else
+    bad "$p: no schedule/$p.conf -- not a registered project (checked locally and via gh; no scheduler clone needed, #350)"
+    continue
+  fi
+  url="$(grep -hE '^REPO_URL=' <<<"$conf_content" | head -1 | cut -d'"' -f2)"
   [ -n "$url" ] || { bad "$p: schedule/$p.conf declares no REPO_URL"; continue; }
   clone_or_update "$p" "$url"
 done
@@ -204,8 +258,19 @@ fi
 
 echo
 echo "== dispatch preview (NOTHING armed) =="
-if [ -x "$PROJECTS/scheduler/bin/dose-project.sh" ]; then
+# dose-project.sh dispatches from the INSTALLED build, never a per-account
+# checkout (same DOSE_BUILD_ROOT convention as bin/dose-project.sh and
+# bin/usage-paced-runner.sh themselves, #350) -- preview from there first.
+# The local-checkout branch only fires on the rare account that develops
+# scheduler itself and so has a real clone of it (see the derived-project
+# loop above); it did the same `cd`-and-run before this change.
+DOSE_INSTALLED="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler/bin/dose-project.sh"
+if [ -x "$DOSE_INSTALLED" ]; then
+  "$DOSE_INSTALLED" "$(id -un)" --check || true
+elif [ -x "$PROJECTS/scheduler/bin/dose-project.sh" ]; then
   ( cd "$PROJECTS/scheduler" && ./bin/dose-project.sh "$(id -un)" --check ) || true
+else
+  gap "no dose-project.sh at the installed build ($DOSE_INSTALLED) or a local scheduler checkout -- cannot preview dispatch (a host-level verb build install is out of this script's scope)"
 fi
 cat <<EOF
 
@@ -216,7 +281,11 @@ ZERO lines beginning "BROKEN". A live schedule/ROSTER row for $(id -un) is a
 human-only act (dose <project> --arm, #291) and has to exist before this can
 converge. Then, and only as a separate act:
 
-    cd $PROJECTS/scheduler && ./bin/dose-project.sh "$(id -un)" --apply
+    $DOSE_INSTALLED "$(id -un)" --apply
+
+(that's the installed build, not a checkout -- $PROJECTS/scheduler generally
+does not exist; see #1138. If it isn't there yet, a host-level verb build
+install is what puts it there, out of this script's scope.)
 
 Arming dispatch is the one step that spends a shared quota, and on this
 ecosystem's accounting mandark, dexter and this host all draw on the same
