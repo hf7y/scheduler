@@ -5,6 +5,6 @@ dispatch failure at the FETCH. #684/#686(#688)/#690/#691 MERGED: fetch_roster, r
 --arm/--park all read and write the service directly -- no gh, no checkout, no PR, no schedule/ROSTER.
 #570 CLOSED: Zach's ROSTER-as-state call mooted its credential DECISION. PROVED with no `gh` config at
 all: `dose-project.sh --check` runs clean, and #350's four checkout sites are gh-dead-code on what
-`carry.sh` cuts. NOT YET: a build carrying #684/#688/#690 and #676's rehearsal gate sits unpromoted --
-last promotion run 2026-09-07T03:19Z. OPEN: #350 waits on that promotion; #694 (dead-man DECISION,
-DEFAULT-AFTER 30d, filed today) -- neither is agent-actionable now.
+`carry.sh` cuts. NOT YET: approved build (2026-09-07) predates #684/#688/#690/#691/#676; next cut and
+promotion both wait on a 30-day interval and hf7y/verbs' reviewer gate. #694: 0d into 30d DEFAULT-AFTER.
+#712: secretaire rewrite, dexter entrypoint still missing. None is agent-actionable now.
