@@ -32,8 +32,12 @@ read fresh from the roster service every run.
   --arm     flip the roster row to 'live', by one POST to the roster
             service, verified by re-reading it. Human-only (#291): refuses
             a uid 3000-3099 self-dev account, and a project with no unix
-            account here.
-  --park    the same, to 'parked'.
+            account here. Requires --reason (#590).
+  --park    the same, to 'parked'. Requires --reason (#590).
+  --reason "<why>"
+            required alongside --arm/--park (#590): why this row is
+            changing, printed with the result and posted to the roster
+            service. Refused (usage) without one.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
             neither. Hops to the roster's host over ssh if you are elsewhere.
@@ -55,8 +59,8 @@ exit: 0 kept  2 usage  4 gap  5 broken  6 blind  7 refused
 EOF
 }
 
-MODE="--check"; PROJECT=""; SPRINT_DUR=""
-# while/shift, not `for a in "$@"`: --sprint is the first flag carrying a value.
+MODE="--check"; PROJECT=""; SPRINT_DUR=""; REASON=""
+# while/shift, not `for a in "$@"`: --sprint and --reason are flags carrying a value.
 while [ $# -gt 0 ]; do
   case "$1" in
     --check|--apply|--arm|--park|--now|--shotgun|--sprint-status) MODE="$1" ;;
@@ -64,6 +68,10 @@ while [ $# -gt 0 ]; do
       MODE="--sprint"; shift
       SPRINT_DUR="${1:-}"
       [ -n "$SPRINT_DUR" ] || { echo "$CLI_NAME: --sprint needs a duration (30m, 4h, 2d)" >&2; exit 2; } ;;
+    --reason)
+      shift
+      REASON="${1:-}"
+      [ -n "$REASON" ] || { echo "$CLI_NAME: --reason needs a value" >&2; exit 2; } ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "$CLI_NAME: unknown flag $1" >&2; exit 2 ;;
     *) PROJECT="$1" ;;
@@ -74,6 +82,13 @@ if [ "$MODE" = "--sprint-status" ]; then
   [ -z "$PROJECT" ] || { echo "$CLI_NAME: --sprint-status takes no project" >&2; exit 2; }
 else
   [ -n "$PROJECT" ] || { echo "$CLI_NAME: name a project (see --help)" >&2; exit 2; }
+fi
+
+# hf7y/scheduler#590: a park or arm cannot land without a stated reason --
+# checked as a usage error, before the uid gate, so a missing --reason reads
+# the same way any other missing required argument does.
+if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
+  [ -n "$REASON" ] || { echo "$CLI_NAME: $MODE needs --reason \"<why>\" (hf7y/scheduler#590)" >&2; exit 2; }
 fi
 
 # #291: refused on the CLI's OWN uid, before any network call.
@@ -136,6 +151,21 @@ find_row() {
   done < <(grep -vE '^[[:space:]]*(#|$)' <<<"$ROSTER_CONTENT")
   return 1
 }
+# roster_live_count <roster_content> -- "<live>/<total>" over every row,
+# same pipe-delimited shape find_row reads. #590: printed after --arm/--park
+# so the fleet fraction is read, not diffed by hand (hf7y/realisateur#987).
+roster_live_count() {
+  local content="$1" f1 f4 total=0 live=0
+  while IFS='|' read -r f1 _ _ f4 _ || [ -n "$f1" ]; do
+    f1="$(xargs <<<"$f1")"
+    [ -n "$f1" ] || continue
+    f4="$(xargs <<<"$f4")"
+    total=$((total + 1))
+    [ "$f4" = live ] && live=$((live + 1))
+  done < <(grep -vE '^[[:space:]]*(#|$)' <<<"$content")
+  printf '%s/%s' "$live" "$total"
+}
+
 mapfile -t ROW < <(find_row "$PROJECT")
 if [ "${#ROW[@]}" -lt 4 ]; then
   echo "GAP: '$PROJECT' is not in schedule/ROSTER -- nothing to converge" >&2
@@ -165,10 +195,20 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
   fi
 
   # $ROSTER_CONTENT is synthesised -- roster_write() (#686) posts only the field that changed.
-  roster_write "$PROJECT" "$NEW_STATE" "$(id -un)@$HOST"
+  roster_write "$PROJECT" "$NEW_STATE" "$(id -un)@$HOST" "$REASON"
   rc=$?
   [ "$rc" -eq 0 ] || exit "$rc"
-  echo "${MODE#--}ed: '$PROJECT' -> $NEW_STATE, confirmed by re-reading the roster service"
+  echo "${MODE#--}ed: '$PROJECT' -> $NEW_STATE ($REASON), confirmed by re-reading the roster service"
+
+  # #590: the live fraction AFTER this change -- $ROSTER_CONTENT predates the
+  # write, so adjust the one row that just moved instead of re-fetching.
+  base_live_total="$(roster_live_count "$ROSTER_CONTENT")"
+  base_live="${base_live_total%/*}"; row_total="${base_live_total#*/}"
+  new_live="$base_live"
+  [ "$ROW_STATE" = live ] && new_live=$((new_live - 1))
+  [ "$NEW_STATE" = live ] && new_live=$((new_live + 1))
+  echo "live: $new_live/$row_total"
+
   echo "next: run 'dose $PROJECT --apply' on the host that has $ROW_ACCT's account to converge its crontab"
   exit 0
 fi

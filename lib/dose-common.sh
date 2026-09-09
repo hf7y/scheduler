@@ -184,22 +184,25 @@ fetch_roster() {
     done
 }
 
-# roster_write <project> <new-state> <by> -- ONE POST, verified by a re-read
-# (#686). Reads the same 0640 root:root token dose's own uid-refusal gates on (#432 §8).
+# roster_write <project> <new-state> <by> [reason] -- ONE POST, verified by a
+# re-read (#686). Reads the same 0640 root:root token dose's own uid-refusal
+# gates on (#432 §8). reason (#590) rides along in the same POST -- dose
+# --arm/--park refuse without one before this is ever called.
 ROSTER_WRITE_TOKEN_FILE="${DOSE_ROSTER_WRITE_TOKEN_FILE:-/etc/scheduler/roster-write.token}"
 
 roster_write() {
-  local project="${1:?roster_write needs a project}" state="${2:?needs a state}" by="${3:?needs a by}"
+  local project="${1:?roster_write needs a project}" state="${2:?needs a state}" by="${3:?needs a by}" reason="${4:-}"
   local token; token="$(cat "$ROSTER_WRITE_TOKEN_FILE" 2>/dev/null)"
   [ -n "$token" ] || {
     echo "REFUSED: cannot read a token from $ROSTER_WRITE_TOKEN_FILE -- writes stay closed by default, never open without one" >&2
     return 7; }
 
-  local body http resp
+  local body http resp reason_json
+  reason_json="$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   body="$(mktemp)" || return 6
   http="$(curl -sS --max-time 10 -o "$body" -w '%{http_code}' -X POST "$ROSTER_URL/roster/$project" \
             -H "X-Roster-Token: $token" \
-            -d "$(printf '{"state":"%s","by":"%s"}' "$state" "$by")" 2>/dev/null)"
+            -d "$(printf '{"state":"%s","by":"%s","reason":"%s"}' "$state" "$by" "$reason_json")" 2>/dev/null)"
   resp="$(cat "$body" 2>/dev/null)"; rm -f "$body"
   case "$http" in
     200) ;;
