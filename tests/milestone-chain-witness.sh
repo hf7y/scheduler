@@ -8,6 +8,8 @@
 # terminal in the sense #582 asks for -- "the end of a chain holds, and logs
 # why"). Runs the REAL --jq filter against a fixture, like
 # milestone-self-fed-witness.sh does for issues, not a hand-simulated count.
+# Since #587, the count comes from a SECOND real call (issues, label-aware),
+# so each case below also feeds a matching issues fixture.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,10 +29,11 @@ ROSTER="$T/schedule/ROSTER"
 echo 'ecosim         | ecosim@monkey         | 20m | live' > "$ROSTER"
 export SCHEDULER_ROSTER_FILE="$ROSTER"
 
-tick() {  # <milestones-json> -> "log run.log" path; runs the runner's REAL --jq filter on the fixture
-  local milestones_json="$1"
+tick() {  # <milestones-json> [issues-json] -> "log run.log" path; runs the runner's REAL --jq filter on the fixtures
+  local milestones_json="$1" issues_json="${2:-[]}"
   local h="$T/h$$-$RANDOM"; mkdir -p "$h/.local/share/scheduler-paced-runner" "$h/bin"
   printf '%s' "$milestones_json" > "$h/milestones-fixture.json"
+  printf '%s' "$issues_json" > "$h/issues-fixture.json"
 
   cat > "$h/bin/gh" <<EOF
 #!/usr/bin/env bash
@@ -42,6 +45,13 @@ case "\$*" in
       [ "\${argv[\$i]}" = "--jq" ] && filter="\${argv[\$((i+1))]}"
     done
     jq -r "\$filter" "$h/milestones-fixture.json"
+    ;;
+  *issues*state=open*)
+    filter=""
+    for i in "\${!argv[@]}"; do
+      [ "\${argv[\$i]}" = "--jq" ] && filter="\${argv[\$((i+1))]}"
+    done
+    jq -r "\$filter" "$h/issues-fixture.json"
     ;;
   *) echo "milestone-chain-witness: unexpected gh call: \$*" >&2; exit 64 ;;
 esac
@@ -75,7 +85,7 @@ has() { grep -q "$2" "$1" 2>/dev/null; }
 
 # empty milestone, successor declared -> chained hold, names the successor, never a DISPATCH
 CHAINED='[{"title":"Week 1","open_issues":0,"description":"Wrapping up.\nNEXT: Week 2"}]'
-read -r LOG LEDGER <<<"$(tick "$CHAINED")"
+read -r LOG LEDGER <<<"$(tick "$CHAINED" '[]')"
 has "$LOG" 'MILESTONE-CHAIN-HELD' || fail "empty milestone naming a successor: expected MILESTONE-CHAIN-HELD ($LOG)"
 has "$LOG" 'Week 2' || fail "the successor's title should appear in the log line ($LOG)"
 has "$LOG" ' DISPATCH ' && fail "a chained-but-empty successor must not become a DISPATCH -- that reopens the self-feeding hazard (#541/#575) ($LOG)"
@@ -83,19 +93,20 @@ has "$LEDGER" 'MILESTONE-CHAIN-HELD' || fail "expected a MILESTONE-CHAIN-HELD le
 
 # empty milestone, no successor declared -> the plain, terminal MILESTONE-HELD (unchanged)
 TERMINAL='[{"title":"Week 1","open_issues":0,"description":"Wrapping up, nothing more planned."}]'
-read -r LOG LEDGER <<<"$(tick "$TERMINAL")"
+read -r LOG LEDGER <<<"$(tick "$TERMINAL" '[]')"
 has "$LOG" 'MILESTONE-HELD' || fail "empty milestone, no successor: expected plain MILESTONE-HELD ($LOG)"
 has "$LOG" 'MILESTONE-CHAIN-HELD' && fail "no NEXT: line was declared -- must not manufacture a chain ($LOG)"
 
 # empty milestone, description absent entirely (GitHub allows null) -> same terminal path, must not crash
 NULL_DESC='[{"title":"Week 1","open_issues":0,"description":null}]'
-read -r LOG LEDGER <<<"$(tick "$NULL_DESC")"
+read -r LOG LEDGER <<<"$(tick "$NULL_DESC" '[]')"
 has "$LOG" 'MILESTONE-HELD' || fail "null description: expected plain MILESTONE-HELD, not a crash ($LOG)"
 has "$LOG" 'MILESTONE-CHAIN-HELD' && fail "null description: must not manufacture a chain ($LOG)"
 
 # an open milestone with an open issue -> unaffected by any of this, regression check
 LIVE='[{"title":"Week 1","open_issues":2,"description":"NEXT: Week 2"}]'
-read -r LOG LEDGER <<<"$(tick "$LIVE")"
+LIVE_ISSUES='[{"number":1,"milestone":{"number":1,"state":"open"},"labels":[]}]'
+read -r LOG LEDGER <<<"$(tick "$LIVE" "$LIVE_ISSUES")"
 has "$LOG" ' DISPATCH ' || fail "1 actionable milestone: expected a DISPATCH regardless of any NEXT: line ($LOG)"
 has "$LOG" 'MILESTONE-HELD' && fail "1 actionable milestone: must not hold ($LOG)"
 has "$LOG" 'MILESTONE-CHAIN-HELD' && fail "1 actionable milestone: a NEXT: line on a non-empty milestone is not a hold reason ($LOG)"
