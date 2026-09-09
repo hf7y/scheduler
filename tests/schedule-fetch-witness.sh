@@ -72,11 +72,15 @@ echo "== case 1: CONF, standing rules and a fragment all resolve by live fetch"
 : > "$TMP/gh.log"
 out="$(run fetched batch)"; rc=$?
 first="$(printf '%s' "$out" | head -1)"
-if [ "$rc" -eq 0 ] && [ "$first" = "STANDING RULES (fixture, fetched). These override everything below." ]; then
-  ok "standing rules fetched and prepended (rc=$rc)"
+if [ "$rc" -eq 0 ] && [ "$first" = "[DISPATCH BRIEF -- prepended by this repo's own bin/scheduler-run from" ]; then
+  ok "standing rules fetched and prepended, with the #605 framing header (rc=$rc)"
 else
   bad "expected fetched rules at the head, got rc=$rc first=[$first] err=[$(cat "$TMP/err")]"
 fi
+case "$out" in
+  *"STANDING RULES (fixture, fetched)."*) ok "the fetched rules body itself is present" ;;
+  *) bad "fetched rules body missing: [$out]" ;;
+esac
 case "$out" in
   *"OWN PROMPT LINE."*"FRAGMENT BODY, FETCHED."*) ok "conf and fragment both fetched into the prompt" ;;
   *) bad "conf/fragment fetch did not resolve: [$out]" ;;

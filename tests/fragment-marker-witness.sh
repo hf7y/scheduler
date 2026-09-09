@@ -112,8 +112,8 @@ mkconf both 'BATCH_JOB_NAME="both-batch"' \
             'USES_STANDING_RULES=1'
 out="$(run both batch)"
 first="$(printf '%s' "$out" | head -1)"
-if [ "$first" = "STANDING RULES (fixture). These override everything below." ]; then
-  ok "standing rules still prepended at the true head"
+if [ "$first" = "[DISPATCH BRIEF -- prepended by this repo's own bin/scheduler-run from" ]; then
+  ok "standing rules (#605 framing header) still prepended at the true head"
 else
   bad "standing-rules prepend regressed: first=[$first]"
 fi
