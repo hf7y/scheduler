@@ -21,6 +21,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib/witness-common.sh"
 
+# The REAL gh, resolved BEFORE the fake one below shadows it on PATH. Case 3
+# grades a composed body with it; it reads without writing, so nothing is filed.
+REAL_GH="$(command -v gh 2>/dev/null || true)"
+
 # ---- scratch registry: a "caller" project (has a repo checkout on disk,
 # resolvable by project_for_path) and a "target" project (has REPO_URL, the
 # repo the issue actually gets filed against). ------------------------------
@@ -91,6 +95,63 @@ if grep -q -- "--label idea --label from:zach" "$GHLOG"; then
   ok "gh issue create carries from:zach when \$PWD matches no registered project"
 else
   bad "expected from:zach not found: $(grep '^issue create' "$GHLOG" || true)"
+fi
+
+echo "== 3. the body cmd_idea composes is one gh-sign will ACCEPT"
+# WHY (#732). The stub above answers `issue create` with a fake URL, so cases 1
+# and 2 pass whether or not the body would survive the real write. It would not
+# have: the gh-sign shim grades every body against lib/body-grammar.sh, and
+# cmd_idea sent the note plus a footer -- no declaration, no ledgers. cmd_ask
+# was migrated when that grammar landed and this path was missed, so every
+# `scheduler -i` was refused for any caller whose `gh` resolves to the shim,
+# and it took usage-paced-runner.sh's PULL FROZEN escalation down with it --
+# `scheduler -i` is that escalation's first channel.
+BODY_OUT="$TMP/idea-body.md"
+rm -f "$BODY_OUT"
+cat > "$TMP/bin/gh" <<'BODYSTUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GHLOG"
+if [ "${1:-}" = issue ] && [ "${2:-}" = create ]; then
+  prev=""
+  for a in "$@"; do
+    [ "$prev" = "--body-file" ] && cp "$a" "$BODY_OUT"
+    prev="$a"
+  done
+  echo "https://github.com/hf7y/targetproj/issues/999"
+fi
+exit 0
+BODYSTUB
+chmod +x "$TMP/bin/gh"
+: > "$GHLOG"
+( cd "$TMP" && BODY_OUT="$BODY_OUT" GHLOG="$GHLOG" PATH="$TMP/bin:$PATH" \
+    SCHED_ROOT="$TMP/root" "$ROOT/bin/scheduler" -i targetproj "a note from the witness" ) >/dev/null 2>&1
+if [ -s "$BODY_OUT" ]; then
+  ok "captured the body cmd_idea composes"
+  case "$(head -1 "$BODY_OUT")" in
+    DECISION:*|NO-DECISION:*) ok "line 1 declares a decision" ;;
+    *) bad "line 1 declares nothing: $(head -c 60 "$BODY_OUT")" ;;
+  esac
+  for _b in DEFERRED DELIVERS; do
+    if grep -qF "<!-- $_b -->" "$BODY_OUT" && grep -qF "<!-- /$_b -->" "$BODY_OUT"; then
+      ok "body carries a complete $_b block"
+    else bad "body has no complete <!-- $_b --> block"; fi
+  done
+  if grep -qF "a note from the witness" "$BODY_OUT"; then
+    ok "the note itself survives -- the declaration did not displace the record"
+  else bad "the note is gone from the body"; fi
+  # The real grader when this host has one; never a substitute for the above.
+  if [ -n "$REAL_GH" ] \
+     && printf 'NO-DECISION: probe\n\n<!-- DEFERRED -->\n- none\n<!-- /DEFERRED -->\n\n<!-- DELIVERS -->\n- none\n<!-- /DELIVERS -->\n' > "$TMP/probe.md" \
+     && "$REAL_GH" --check-body "$TMP/probe.md" 2>&1 | grep -qi 'well-formed'; then
+    _v="$("$REAL_GH" --check-body "$BODY_OUT" 2>&1)"
+    if printf '%s' "$_v" | grep -qi 'well-formed'; then
+      ok "accepted by the real body-grammar.sh"
+    else bad "REFUSED by the real body-grammar.sh -- $_v"; fi
+  else
+    echo "  (no --check-body grader on this host; structural assertions above still ran)"
+  fi
+else
+  bad "cmd_idea wrote no body -- nothing to grade"
 fi
 
 echo

@@ -41,6 +41,10 @@ grep -q 'PULL RECOVERED' "$BLOCK" \
 grep -q 'PACED_PULL_ESCALATE_AFTER' "$BLOCK" \
   || { echo "FAIL: the escalation threshold is not the documented knob"; exit 1; }
 
+# The REAL gh, resolved BEFORE the stub below shadows it -- the last section of
+# this file needs it, because a stub proves routing and never acceptance (#732).
+REAL_GH="$(command -v gh 2>/dev/null || true)"
+
 # A stub `scheduler` on PATH, so "filed to realisateur's inbox" is observable
 # instead of assumed. Every call appends a line; the count IS the assertion.
 mkdir -p "$TMP/bin"
@@ -206,6 +210,61 @@ if [ "$(wc -l < "$FILED" 2>/dev/null || echo 0)" -eq "$FILED_BEFORE6" ]; then
   ok "no phantom filing recorded -- the hung call never completed"
 else bad "a filing was recorded despite the filer timing out"; fi
 unset PACED_PULL_FILE_TIMEOUT
+
+echo
+echo "== 7. the body is ACCEPTED, not merely delivered to a gh that exists"
+# WHY THIS LIVES HERE (#732). Every case above stubs `gh` as `exit 1`, for the
+# reason stated at the top of this file -- an unstubbed run would file real
+# issues. That is right for routing, and it means cases 1-6 would ALL still
+# pass while every escalation was being refused at the write. They were: the
+# gh-sign shim grades each body against lib/body-grammar.sh, both channels sent
+# bare prose, and wtul escalated PULL FROZEN 54 times across 10 days into that
+# refusal and reached nobody.
+#
+# So: grade the body the runner composes. `gh --check-body` is the seam gh-sign
+# advertises for this and it READS WITHOUT WRITING, so nothing is filed. The
+# structural assertions run unconditionally -- a host with no shim must not
+# pass vacuously, which is the failure this repo keeps paying for.
+awk '/^escalation_body\(\)/,/^}/' "$RUNNER" > "$TMP/eb.sh"
+if [ -s "$TMP/eb.sh" ]; then
+  ok "escalation_body lifted from the runner"
+  PACED_HOST=monkey LOG="$TMP/run.log"
+  export PACED_HOST LOG
+  # shellcheck disable=SC1090
+  . "$TMP/eb.sh"
+  BODY_F="$TMP/escalation-body.md"
+  escalation_body "PULL FROZEN on monkey as wtul: /home/wtul/Documents/Projects/scheduler has not pulled for 49 consecutive dispatcher ticks (cause: diverged)." > "$BODY_F"
+
+  case "$(head -1 "$BODY_F")" in
+    DECISION:*|NO-DECISION:*) ok "body line 1 declares a decision" ;;
+    *) bad "body line 1 declares nothing: $(head -c 60 "$BODY_F")" ;;
+  esac
+  for _b in DEFERRED DELIVERS; do
+    if grep -qF "<!-- $_b -->" "$BODY_F" && grep -qF "<!-- /$_b -->" "$BODY_F"; then
+      ok "body carries a complete $_b block"
+    else bad "body has no complete <!-- $_b --> block"; fi
+  done
+  if grep -q 'host:monkey' "$BODY_F"; then
+    ok "DELIVERS names the host, typed, so a check can go and look"
+  else bad "DELIVERS carries no typed host: value"; fi
+  if grep -q 'diverged' "$BODY_F"; then
+    ok "the escalation text itself survives into the body"
+  else bad "the wrapper displaced the escalation -- the record is lost"; fi
+
+  # The real grader, when this host has one. Never a substitute for the above.
+  if [ -n "$REAL_GH" ] \
+     && printf 'NO-DECISION: probe\n\n<!-- DEFERRED -->\n- none\n<!-- /DEFERRED -->\n\n<!-- DELIVERS -->\n- none\n<!-- /DELIVERS -->\n' > "$TMP/probe.md" \
+     && "$REAL_GH" --check-body "$TMP/probe.md" 2>&1 | grep -qi 'well-formed'; then
+    _verdict="$("$REAL_GH" --check-body "$BODY_F" 2>&1)"
+    if printf '%s' "$_verdict" | grep -qi 'well-formed'; then
+      ok "accepted by the real body-grammar.sh"
+    else bad "REFUSED by the real body-grammar.sh -- $_verdict"; fi
+  else
+    echo "  (no --check-body grader on this host; structural assertions above still ran)"
+  fi
+else
+  bad "could not lift escalation_body -- the composer is gone or renamed"
+fi
 
 echo
 echo "pull-escalation-witness: $PASS passed, $FAIL failed"

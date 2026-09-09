@@ -1116,7 +1116,21 @@ cmd_idea() {
   # A multi-line note whose first line is already the whole title would
   # otherwise look complete in every summary view while carrying more.
   case "$text" in *$'\n'*) [ "$title" = "$first" ] && title="$title [...]" ;; esac
+  # THE BODY IS GRADED BEFORE IT IS WRITTEN. lib/body-grammar.sh, enforced by
+  # the gh-sign shim standing in front of `gh issue create`, wants a
+  # DECISION:/NO-DECISION: first line and both ledger blocks. cmd_ask was
+  # migrated when that grammar landed; THIS path was not, so every
+  # `scheduler -i` was refused for any caller whose `gh` resolves to the shim
+  # -- silently, because the refusal is a non-zero exit nobody was reading.
+  # It took usage-paced-runner.sh's PULL FROZEN escalation down with it for 10
+  # days on wtul, `scheduler -i` being that escalation's first channel
+  # (hf7y/scheduler#732).
+  # A note asks nothing and ships nothing, so NO-DECISION plus "- none" in both
+  # ledgers is the honest declaration here, not boilerplate to please a
+  # checker. The title is still the note's own first line; this is body-only.
   body="$(printf '%s\n' \
+    "NO-DECISION: a note filed through \`scheduler -i\`; it records something and asks nothing." \
+    "" \
     "$text" \
     "" \
     "---" \
@@ -1124,7 +1138,15 @@ cmd_idea() {
     "" \
     "Triage this on ${proj}'s next run: fold it into FOCUS.md if it is work," \
     "answer and close it if it is a note. Closing IS the acknowledgement --" \
-    "there is no separate label to add.")"
+    "there is no separate label to add." \
+    "" \
+    "<!-- DEFERRED -->" \
+    "- none" \
+    "<!-- /DEFERRED -->" \
+    "" \
+    "<!-- DELIVERS -->" \
+    "- none" \
+    "<!-- /DELIVERS -->")"
   # --body-file, not --body: a note containing a backtick or $( is a note,
   # not a command. Same reason CLAUDE.md requires `git commit -F`.
   local bf; bf="$(mktemp)"; printf '%s\n' "$body" > "$bf"
