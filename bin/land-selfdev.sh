@@ -24,12 +24,7 @@ case "$MODE" in --check|--land) ;; *) echo "usage: $0 [--check|--land]" >&2; exi
 PROJECTS="${INSTALLE_PROJECTS:-$HOME/Documents/Projects}"
 GH_OWNER="${SELFDEV_GH_OWNER:-hf7y}"
 
-# Same resolution as bin/dose-project.sh's DOSE_BUILD_ROOT (#350): "current"
-# UNRESOLVED deliberately, so this always points at whatever the host's verb
-# build symlink resolves to today, never a path frozen at land time. Most
-# self-dev accounts have no local scheduler checkout any more (#1138 below),
-# so this is the fallback source for scheduler's own schedule/ and bin/.
-SCHEDULER_BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler"
+SCHEDULER_BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler" # #350's DOSE_BUILD_ROOT resolution, unresolved on purpose: tracks the live symlink, not a path frozen at land time
 
 # NOT collapsed into lib/provision-witness.sh (#517): this script is staged
 # and run as a lone file with no lib/ sibling -- setup-selfdev-project.sh
@@ -65,10 +60,7 @@ case "$linger" in yes) ok "linger enabled" ;; *) gap "linger is not enabled (nee
 
 # TRAP: THE ONE THAT SILENTLY DISPATCHES THE WRONG ROTATION. scheduler falls back from _paced.$(hostname -s).conf to the SHARED _paced.conf; on a new host that is not a default, it is another machine's rotation. What matters is WHAT would be inherited -- mandark reads the shared one deliberately.
 HOST="$(hostname -s)"
-# Prefer a local scheduler checkout if this account happens to have one (the
-# scheduler self-dev account does); otherwise read the same served schedule/
-# the installed build dispatches from (#1138) -- both are read-only here.
-SCHED_SCHEDULE_DIR="$PROJECTS/scheduler/schedule"
+SCHED_SCHEDULE_DIR="$PROJECTS/scheduler/schedule" # own checkout if this account has one (only scheduler's does), else the served build (#1138)
 [ -d "$SCHED_SCHEDULE_DIR" ] || SCHED_SCHEDULE_DIR="$SCHEDULER_BUILD_ROOT/schedule"
 SHARED_PACED="$SCHED_SCHEDULE_DIR/_paced.conf"
 if [ -f "$SCHED_SCHEDULE_DIR/_paced.$HOST.conf" ]; then
@@ -170,28 +162,17 @@ HOOK
   chmod +x "$hook"
 }
 
-# realisateur must exist before anything can be derived from it: install-verb-
-# build.sh, install-verbs.sh and guard-readonly-clone.sh below all run out of
-# this checkout, and it is what BOOTSTRAPS the verb build in the first place,
-# so it cannot itself be replaced by a served build (chicken, egg).
-clone_or_update realisateur "https://github.com/$GH_OWNER/realisateur.git"
+clone_or_update realisateur "https://github.com/$GH_OWNER/realisateur.git" # bootstraps the verb build; cannot itself be replaced by a served one
 
-# scheduler is NOT cloned unconditionally any more (hf7y/scheduler#1138,
-# applying the #350 "no clones on the dispatch path" ruling). scheduler-run's
-# read_schedule_rel and dose-project.sh's DOSE_BUILD_ROOT both read/run from
-# the installed verb build, never a per-account checkout -- every OTHER
-# self-dev account was carrying a full scheduler clone its own dispatch never
-# touched. Per #350: "clones survive only as dev checkouts of the scheduler
-# project, which is what they were always meant to be" -- so the scheduler
-# account itself still gets one, to develop scheduler.
+# #1138: no longer cloned unconditionally -- #350's "no clones on the dispatch
+# path" ruling means every account but scheduler's own carried a checkout its
+# dispatch never touched. scheduler still gets one, to develop scheduler.
 if [ "$(id -un)" = scheduler ]; then
   clone_or_update scheduler "https://github.com/$GH_OWNER/scheduler.git"
 fi
 
 # EVERY OTHER REPO IS DERIVED, NOT TYPED: schedule/<p>.conf declares REPO_URL
-# and IS the registry. A typed list here would be a second source that drifts.
-# Read from this account's own scheduler checkout if it has one, else the
-# installed build -- see SCHEDULER_BUILD_ROOT above.
+# and IS the registry. Own checkout if this account has one, else the served build.
 for p in ${SELFDEV_PROJECTS:-senechal ecosim}; do
   conf="$PROJECTS/scheduler/schedule/$p.conf"
   [ -f "$conf" ] || conf="$SCHEDULER_BUILD_ROOT/schedule/$p.conf"
@@ -232,11 +213,7 @@ else
   gap "no $PROJECTS/realisateur/bin/guard-readonly-clone.sh -- read-only clones are NOT guarded against a local commit"
 fi
 
-# Prefer this account's own scheduler checkout if it has one (only the
-# scheduler account does, since above); every other account previews and
-# converges from the installed build, exactly like dose-project.sh's own
-# DOSE_BUILD_ROOT resolution (#350, #1138) -- no clone required.
-DOSE_ROOT="$PROJECTS/scheduler"
+DOSE_ROOT="$PROJECTS/scheduler" # own checkout if present, else the installed build (#350, #1138) -- no clone required
 [ -x "$DOSE_ROOT/bin/dose-project.sh" ] || DOSE_ROOT="$SCHEDULER_BUILD_ROOT"
 
 echo
