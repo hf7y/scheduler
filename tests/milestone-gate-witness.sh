@@ -103,6 +103,18 @@ has "$LOG" ' DISPATCH ' && fail "dispatched on a milestone whose only open issue
 LOG="$(tick "$MS_ONE" "$MIXED_SAME_MILESTONE")"
 has "$LOG" ' DISPATCH ' || fail "milestone with one blocked and one unblocked issue: expected a DISPATCH ($LOG)"
 
+# The blocked-label set is not read from TEMPO_BLOCKED_LABELS alone --
+# milestone_blocked_labels() also resolves schedule/_tempo.conf, the same
+# file tempo.sh itself reads, so the gate and the pacing setpoint can never
+# disagree about which label means "not work a run can do" (#587).
+CUSTOM_LABEL_ONLY='[{"number":16,"milestone":{"number":1,"state":"open"},"labels":[{"name":"needs-review"}],"assignees":[]}]'
+CUSTOM_CONF_DIR="$T/custom-conf-$$"
+mkdir -p "$CUSTOM_CONF_DIR"
+echo 'TEMPO_BLOCKED_LABELS=needs-review' > "$CUSTOM_CONF_DIR/_tempo.conf"
+LOG="$(tick "$MS_ONE" "$CUSTOM_LABEL_ONLY" TEMPO_CONF_DIR="$CUSTOM_CONF_DIR")"
+has "$LOG" 'MILESTONE-HELD' || fail "schedule/_tempo.conf's TEMPO_BLOCKED_LABELS=needs-review must gate the same as the env var ($LOG)"
+has "$LOG" ' DISPATCH ' && fail "dispatched on a milestone whose only open issue carries the conf-configured blocked label"
+
 LOG="$(tick BLIND "$NO_ISSUES")"
 has "$LOG" 'MILESTONE-BLIND' || fail "unreadable milestones: expected MILESTONE-BLIND ($LOG)"
 has "$LOG" ' DISPATCH ' && fail "unreadable milestones: dispatched despite holding by default"

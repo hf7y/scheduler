@@ -726,6 +726,35 @@ repo_slug_of() {
   sed -E 's#^https://github\.com/##; s#\.git$##' <<<"$url"
 }
 
+# milestone_blocked_labels -> the label set an issue may carry that a run is
+# forbidden to close, so it must not hold the gate open (#587). Resolved the
+# same way bin/tempo.sh resolves TEMPO_BLOCKED_LABELS -- env, then
+# schedule/_tempo.conf, then schedule/_tempo.<host>.conf (later file wins),
+# then the 'needs-human' default -- so the gate and the setpoint can never
+# disagree about which label means "not work a run can do". A second knob
+# resolver rather than a sourced one, on purpose: tempo.sh is installed as a
+# standalone copy (see its own note on usage-gate.sh), so this script cannot
+# assume tempo.sh is even on disk beside it.
+milestone_blocked_labels() {
+  if [ -n "${TEMPO_BLOCKED_LABELS:-}" ]; then
+    printf '%s' "$TEMPO_BLOCKED_LABELS"
+    return
+  fi
+  local host conf_dir f line v val=""
+  host="${PACED_HOST:-$(hostname -s 2>/dev/null || echo unknown)}"
+  conf_dir="${TEMPO_CONF_DIR:-$REPO_ROOT/schedule}"
+  for f in "$conf_dir/_tempo.conf" "$conf_dir/_tempo.$host.conf"; do
+    [ -f "$f" ] || continue
+    line="$(grep -E '^[[:space:]]*(export[[:space:]]+)?TEMPO_BLOCKED_LABELS[[:space:]]*=' "$f" 2>/dev/null | tail -n1)"
+    [ -n "$line" ] || continue
+    v="${line#*=}"; v="${v%%#*}"
+    v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+    v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+    [ -n "$v" ] && val="$v"
+  done
+  printf '%s' "${val:-needs-human}"
+}
+
 # milestone_gate_probe <slug> -> "<count>\t<next>", or NOTHING if it could
 # not ask. A needs-human-only milestone is NOT permission (#587, zach's
 # ruling): <count> is open milestones with an open issue that is not
@@ -737,7 +766,8 @@ repo_slug_of() {
 # count, <count> needs per-issue labels/assignees. Either missing is BLIND,
 # NEVER count=0 -- that stops all nineteen accounts on one outage.
 milestone_gate_probe() {
-  local slug="${1:?}" labels="${TEMPO_BLOCKED_LABELS:-needs-human}" ms count next
+  local slug="${1:?}" labels ms count next
+  labels="$(milestone_blocked_labels)"
   case "$labels" in                                                    # gh's --jq takes no --arg (see bin/tempo.sh)
     *['"'\\\$\`]*) return 0 ;;
   esac
