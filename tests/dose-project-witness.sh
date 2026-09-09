@@ -446,7 +446,7 @@ rm -f "$DOSE_SCHEDULE_DIR/_runner.testhost.conf"
 
 # --- 8-9. --arm/--park (#291) guards, both refused before any gh write -----
 export FAKE_UID=3011
-out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
+out="$("$TARGET" ecosim --arm --reason "test reason" 2>&1)"; rc=$?
 unset FAKE_UID
 [ "$rc" -eq 7 ] && ok "--arm from a self-dev uid exits 7 (refused)" \
   || bad "--arm from uid 3011 exited $rc, want 7: $out"
@@ -456,7 +456,7 @@ grep -qi 'REFUSED' <<<"$out" && ok "the self-dev refusal is named" \
   || ok "self-dev refusal touched gh not at all"
 
 export FAKE_GETENT_FAIL=ghosttown
-out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+out="$("$TARGET" ghosttown --arm --reason "test reason" 2>&1)"; rc=$?
 unset FAKE_GETENT_FAIL
 [ "$rc" -eq 5 ] && ok "--arm on a missing unix account exits 5 (broken)" \
   || bad "--arm with no unix account exited $rc, want 5: $out"
@@ -465,26 +465,56 @@ grep -qi 'no unix account' <<<"$out" && ok "the missing-account refusal names wh
 [ -f "$WORK/gh-calls.log" ] && bad "missing-account refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
   || ok "missing-account refusal wrote nothing"
 
+# --- 8c-8d. #590: --arm/--park refuse (usage, exit 2) without --reason,
+# before the uid gate or any network call -----------------------------------
+out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && ok "--arm with no --reason exits 2 (usage)" \
+  || bad "--arm with no --reason exited $rc, want 2: $out"
+grep -qF -- '--reason' <<<"$out" && ok "the missing-reason usage error names --reason" \
+  || bad "exit 2 but the message never mentions --reason: $out"
+[ -f "$WORK/gh-calls.log" ] && bad "missing-reason refusal still reached gh -- $(cat "$WORK/gh-calls.log")" \
+  || ok "missing-reason refusal touched gh not at all"
+
+out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && ok "--park with no --reason exits 2 (usage), same as --arm" \
+  || bad "--park with no --reason exited $rc, want 2: $out"
+
+out="$("$TARGET" ecosim --arm --reason "" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && ok "--reason with an empty value is refused the same as missing" \
+  || bad "--arm --reason '' exited $rc, want 2: $out"
+
+# a bare --check/--apply never needed a reason and still does not.
+out="$("$TARGET" ecosim --check 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "--check still needs no --reason" || bad "--check regressed: exited $rc: $out"
+
 # --- 10-13. arm/park WRITE the service now (#686): one POST, verified by a
 # re-read -- never a branch, a PR, or schedule/ROSTER.
 rm -f "$WORK/gh-calls.log" "$WORK/roster-write.log" "$WORK/roster-store/ghosttown"
-out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+out="$("$TARGET" ghosttown --arm --reason "needed for the demo" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm posts to the service and exits 0" \
   || bad "--arm exited $rc, want 0: $out"
 grep -qF 'armed' <<<"$out" && ok "the success is named 'armed'" \
   || bad "exit 0 but the output never says armed: $out"
+grep -qF 'needed for the demo' <<<"$out" && ok "the success line carries the stated reason" \
+  || bad "exit 0 but the output never echoes the reason: $out"
 grep -qF 'project=ghosttown' "$WORK/roster-write.log" 2>/dev/null \
   && grep -qF '"state":"live"' "$WORK/roster-write.log" \
   && ok "the POST names the right project and state" \
   || bad "the POST log doesn't show ghosttown -> live: $(cat "$WORK/roster-write.log" 2>/dev/null)"
+grep -qF '"reason":"needed for the demo"' "$WORK/roster-write.log" 2>/dev/null \
+  && ok "the POST carries the reason field (#590)" \
+  || bad "the POST log doesn't carry the reason: $(cat "$WORK/roster-write.log" 2>/dev/null)"
 [ "$(cat "$WORK/roster-store/ghosttown" 2>/dev/null)" = live ] \
   && ok "the fake service's own store now holds 'live' -- a real re-read would see it" \
   || bad "the store was not updated by the write"
 [ -f "$WORK/gh-calls.log" ] && bad "--arm reached gh -- it should never touch the repo: $(cat "$WORK/gh-calls.log")" \
   || ok "no branch, no PR, no gh call at all"
+# ROSTER fixture: ecosim live, ghosttown now live too, elsewhere-proj live -> 3/3
+grep -qF 'live: 3/3' <<<"$out" && ok "the arm logs the resulting live count (#590)" \
+  || bad "exit 0 but the output never logs the live fraction: $out"
 
 rm -f "$WORK/roster-write.log"
-out="$("$TARGET" ecosim --arm 2>&1)"; rc=$?
+out="$("$TARGET" ecosim --arm --reason "already live, no-op" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--arm on an already-live project exits 0" || bad "--arm exited $rc: $out"
 grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" \
   || bad "--arm on a live project didn't say kept: $out"
@@ -492,16 +522,23 @@ grep -qF 'kept' <<<"$out" && ok "--arm on an already-live project reports kept" 
   || ok "a no-op --arm wrote nothing"
 
 rm -f "$WORK/roster-write.log" "$WORK/roster-store/ecosim"
-out="$("$TARGET" ecosim --park 2>&1)"; rc=$?
+out="$("$TARGET" ecosim --park --reason "cksum clean, nothing to run" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "--park posts too -- the write is not arm-only" \
   || bad "--park exited $rc, want 0: $out"
 [ "$(cat "$WORK/roster-store/ecosim" 2>/dev/null)" = parked ] \
   && ok "--park's POST carries state=parked" || bad "--park did not flip the store to parked"
+grep -qF '"reason":"cksum clean, nothing to run"' "$WORK/roster-write.log" 2>/dev/null \
+  && ok "--park's POST carries the reason too, not arm-only" \
+  || bad "--park's POST log doesn't carry the reason: $(cat "$WORK/roster-write.log" 2>/dev/null)"
+# the bulk /roster fixture is static (ecosim live, ghosttown parked,
+# elsewhere-proj live = 2/3); ecosim flips live->parked on top of it -> 1/3
+grep -qF 'live: 1/3' <<<"$out" && ok "the park logs the DECREASED live count (#590)" \
+  || bad "exit 0 but the park never logs the reduced live fraction: $out"
 
 # --park never needed the account to exist, and still does not reach that far.
 rm -f "$WORK/roster-store/ecosim"; printf 'live' > "$WORK/roster-store/ecosim"
 export FAKE_GETENT_FAIL=ecosim
-out2="$("$TARGET" ecosim --park 2>&1)"; rc2=$?
+out2="$("$TARGET" ecosim --park --reason "no account needed" 2>&1)"; rc2=$?
 unset FAKE_GETENT_FAIL
 [ "$rc2" -eq 0 ] && ok "--park with no unix account still writes -- park never needed one" \
   || bad "--park with no account exited $rc2, want 0: $out2"
@@ -509,7 +546,7 @@ unset FAKE_GETENT_FAIL
 # --- bad token: REFUSED (7), before the write is trusted -------------------
 rm -f "$WORK/roster-store/ghosttown"; printf 'parked' > "$WORK/roster-store/ghosttown"
 export FAKE_ROSTER_TOKEN_MODE=bad
-out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+out="$("$TARGET" ghosttown --arm --reason "test reason" 2>&1)"; rc=$?
 unset FAKE_ROSTER_TOKEN_MODE
 [ "$rc" -eq 7 ] && ok "a token the service rejects REFUSES (7), not BROKEN" \
   || bad "bad-token --arm exited $rc, want 7: $out"
@@ -520,7 +557,7 @@ unset FAKE_ROSTER_TOKEN_MODE
 # --- missing token file: REFUSED (7), never opens by default ---------------
 rm -f "$WORK/roster-store/ghosttown"; printf 'parked' > "$WORK/roster-store/ghosttown"
 export DOSE_ROSTER_WRITE_TOKEN_FILE="$WORK/no-such-token"
-out="$("$TARGET" ghosttown --arm 2>&1)"; rc=$?
+out="$("$TARGET" ghosttown --arm --reason "test reason" 2>&1)"; rc=$?
 export DOSE_ROSTER_WRITE_TOKEN_FILE="$WORK/roster-write.token"
 [ "$rc" -eq 7 ] && ok "no readable token file REFUSES (7) before any network call" \
   || bad "missing token file exited $rc, want 7: $out"
