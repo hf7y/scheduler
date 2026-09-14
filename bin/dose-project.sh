@@ -40,7 +40,8 @@ read fresh from the roster service every run.
             service. Refused (usage) without one.
   --now     dispatch this project ONCE, right now, as its own account.
             Bypasses the usage gate and tempo -- scheduler-run consults
-            neither. Hops to the roster's host over ssh if you are elsewhere.
+            neither. REFUSES on any host but the project's own (#432 -- the
+            roster carries state only, so there is nowhere to ssh to).
   --shotgun dispatch this project ONCE as a FAN-OUT: one agent that
             splits its own issue queue N ways and works every shard at
             once, each in its own clone. Same bypasses as --now, and it
@@ -50,7 +51,7 @@ read fresh from the roster service every run.
             let this project's own ticks ignore the gate's PACE hold and
             tempo until an absolute wall-clock time, <dur> from now
             (30m, 4h, 2d). The CEILING is never bypassed. Ends by itself;
-            --sprint 0 ends it early. Hops like --now.
+            --sprint 0 ends it early. Refuses off-host, like --now.
   --sprint-status
             what is sprinting on this host, and when each one ends.
             Takes no project.
