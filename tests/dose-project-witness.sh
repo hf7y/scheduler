@@ -602,6 +602,17 @@ out="$("$TARGET" no-conf-at-all --arm --reason x 2>&1)"; rc=$?
 [ "$rc" -eq 4 ] && ok "an UNregistered project still exits 4 on --arm" || bad "unregistered --arm exited $rc, want 4: $out"
 grep -qF "register it before arming it" <<<"$out" && ok "...and names the conf it wants" || bad "message does not name the missing conf: $out"
 
+printf 'PROJECT="farproj"\nCRON_ACCOUNT="farproj"\nCRON_HOST="otherhost"\n' > "$DOSE_SCHEDULE_DIR/farproj.conf"
+: > "$WORK/roster-write.log"
+out="$(env FAKE_ROSTER_CONTENT="farproj | farproj@testhost | 6h | parked" FAKE_GETENT_FAIL=farproj "$TARGET" farproj --arm --reason 'armed from the control plane' 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "a project registered to ANOTHER host arms from here" || bad "cross-host --arm exited $rc: $out"
+grep -qF "does not witness that the account exists" <<<"$out" && ok "...and says it could not witness the account from here" || bad "no cross-host note: $out"
+grep -qF "post project=farproj" "$WORK/roster-write.log" && ok "...and the roster write still happened" || bad "no POST logged for farproj"
+
+printf 'PROJECT="hereproj"\nCRON_ACCOUNT="hereproj"\nCRON_HOST="testhost"\n' > "$DOSE_SCHEDULE_DIR/hereproj.conf"
+out="$(env FAKE_ROSTER_CONTENT="hereproj | hereproj@testhost | 6h | parked" FAKE_GETENT_FAIL=hereproj "$TARGET" hereproj --arm --reason 'local' 2>&1)"; rc=$?
+[ "$rc" -eq 5 ] && ok "a missing account on the project's OWN host still refuses" || bad "local missing-account --arm exited $rc, want 5: $out"
+
 echo
 echo "dose-project-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

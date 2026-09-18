@@ -201,6 +201,14 @@ if [ "${#ROW[@]}" -lt 4 ]; then
 else
   ROW_ACCT_HOST="${ROW[1]}"; ROW_RATE="${ROW[2]}"; ROW_STATE="${ROW[3]}"
   ROW_ACCT="${ROW_ACCT_HOST%@*}"; ROW_HOST="${ROW_ACCT_HOST##*@}"
+  # THE ROSTER CARRIES NO HOST. fetch_roster synthesises "<p>@<this host>" for
+  # every row, so ROW_HOST above is only ever wherever dose happens to be
+  # running. schedule/<project>.conf's CRON_HOST is the registered answer, and
+  # it is what decides whether the account should exist HERE.
+  if [ -f "$DOSE_SCHEDULE_DIR/$PROJECT.conf" ]; then
+    DOSE_CONF_HOST="$(runner_field_value "$(cat "$DOSE_SCHEDULE_DIR/$PROJECT.conf")" CRON_HOST)"
+    [ -n "$DOSE_CONF_HOST" ] && ROW_HOST="$DOSE_CONF_HOST"
+  fi
 fi
 
 # --- 3a. --arm/--park (#291): write the roster, never converge. Runs before
@@ -216,11 +224,20 @@ if [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; then
 
   # do_live exits 5 BROKEN if the account is missing -- catch it here first.
   # Read the machine (#432); this used to ssh to $ROW_HOST, which is gone.
-  if [ "$NEW_STATE" = "live" ]; then
+  #
+  # ONLY ON THE ROW'S OWN HOST. Arming is a control-plane write and the account
+  # is a fact about the DISPATCHING host, so asking the local passwd file about
+  # an account that was never meant to live here answers the wrong question --
+  # and, with the write token only on dexter, answered it fatally: a row whose
+  # account is on vaporwave could not be armed from dexter (no such account) or
+  # from vaporwave (no token), i.e. nowhere at all (2026-09-17, wavebucks).
+  if [ "$NEW_STATE" = "live" ] && [ "$ROW_HOST" = "$HOST" ]; then
     if ! getent passwd "$ROW_ACCT" >/dev/null 2>&1; then
-      echo "BROKEN: '$ROW_ACCT' has no unix account on '$HOST' yet -- arming now would converge to a break. Provision the account first, then --arm. If it lives on another host, run dose there." >&2
+      echo "BROKEN: '$ROW_ACCT' has no unix account on '$HOST' yet -- arming now would converge to a break. Provision the account first, then --arm." >&2
       exit 5
     fi
+  elif [ "$NEW_STATE" = "live" ]; then
+    echo "note: '$ROW_ACCT' dispatches on '$ROW_HOST', not here -- this arm does not witness that the account exists. Run 'dose $PROJECT --check' there."
   fi
 
   # $ROSTER_CONTENT is synthesised -- roster_write() (#686) posts only the field that changed.
