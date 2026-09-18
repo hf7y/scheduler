@@ -95,7 +95,7 @@ while IFS= read -r rawline; do
 done <<< "$(printf '%s' "$issues" | jq -r '.[] | [.number, (.body // ""), ([.labels[].name] | join(",")), ([.comments[].body] | join("\n"))] | @tsv')"
 
 declare -A state_of
-if [ "${#ref_needed[@]}" -gt 0 ]; then
+if [ -n "${ref_needed[*]+x}" ]; then   # NOT ${#ref_needed[@]}: under set -u an EMPTY associative array is still "unset" to bash 5.2, so the count errored out and killed every dispatch whose issues carried no dependency refs (vaporwave, dog, 2026-09-17)
   q=''; i=0
   for ref in "${!ref_needed[@]}"; do
     alias="r$i"; ref_alias["$ref"]="$alias"; i=$((i + 1))
