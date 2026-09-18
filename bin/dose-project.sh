@@ -167,13 +167,41 @@ roster_live_count() {
   printf '%s/%s' "$live" "$total"
 }
 
+runner_field_present() { grep -qE "^${2}=" <<<"$1"; }
+runner_field_value() {
+  grep -E "^${2}=" <<<"$1" | tail -1 | sed -E "s/^${2}=\"?([^\"]*)\"?.*/\1/"
+}
+DOSE_SCHEDULE_DIR="${DOSE_SCHEDULE_DIR:-$DOSE_LIB_DIR/schedule}"  # override is a witness-only seam
+
 mapfile -t ROW < <(find_row "$PROJECT")
 if [ "${#ROW[@]}" -lt 4 ]; then
-  echo "GAP: '$PROJECT' is not in schedule/ROSTER -- nothing to converge" >&2
-  exit 4
+  # A REGISTERED PROJECT WITH NO ROW IS ARMABLE, and was not until 2026-09-17.
+  # The roster service upserts (ON CONFLICT(project) DO UPDATE), so the row a
+  # FIRST arm needs is the write itself. This guard predates the service, when
+  # a row had to be committed to git before anything could flip it, and it made
+  # every newly registered project unarmable by the verb: wavebucks, provisioned
+  # on vaporwave, answered "nothing to converge" to its own first --arm.
+  # schedule/<project>.conf is the registration and so the proof; a bare name
+  # with no conf is still GAP, and says which file is missing.
+  DOSE_ROW_CONF="$DOSE_SCHEDULE_DIR/$PROJECT.conf"
+  if { [ "$MODE" = "--arm" ] || [ "$MODE" = "--park" ]; } && [ -f "$DOSE_ROW_CONF" ]; then
+    DOSE_ROW_CONF_BODY="$(cat "$DOSE_ROW_CONF")"
+    ROW_ACCT="$(runner_field_value "$DOSE_ROW_CONF_BODY" CRON_ACCOUNT)"
+    ROW_HOST="$(runner_field_value "$DOSE_ROW_CONF_BODY" CRON_HOST)"
+    [ -n "$ROW_ACCT" ] || ROW_ACCT="$PROJECT"
+    [ -n "$ROW_HOST" ] || ROW_HOST="$HOST"
+    ROW_ACCT_HOST="$ROW_ACCT@$ROW_HOST"; ROW_RATE="20m"; ROW_STATE="absent"
+    echo "note: '$PROJECT' has no roster row yet -- ${MODE#--} will CREATE one, registered at $DOSE_ROW_CONF"
+  else
+    echo "GAP: '$PROJECT' is not in schedule/ROSTER -- nothing to converge" >&2
+    [ -f "$DOSE_SCHEDULE_DIR/$PROJECT.conf" ] \
+      || echo "       nor is there a $DOSE_SCHEDULE_DIR/$PROJECT.conf -- register it before arming it" >&2
+    exit 4
+  fi
+else
+  ROW_ACCT_HOST="${ROW[1]}"; ROW_RATE="${ROW[2]}"; ROW_STATE="${ROW[3]}"
+  ROW_ACCT="${ROW_ACCT_HOST%@*}"; ROW_HOST="${ROW_ACCT_HOST##*@}"
 fi
-ROW_ACCT_HOST="${ROW[1]}"; ROW_RATE="${ROW[2]}"; ROW_STATE="${ROW[3]}"
-ROW_ACCT="${ROW_ACCT_HOST%@*}"; ROW_HOST="${ROW_ACCT_HOST##*@}"
 
 # --- 3a. --arm/--park (#291): write the roster, never converge. Runs before
 # the wrong-host check -- a service write has no "wrong host" to be wrong about.
@@ -228,11 +256,6 @@ fi
 # read LOCAL now, not fetched
 # (#350). Only RUNNER_CRON is deliberately not read here -- roster-derived,
 # the whole point of #81 retiring the global RUNNER_CRON.
-runner_field_present() { grep -qE "^${2}=" <<<"$1"; }
-runner_field_value() {
-  grep -E "^${2}=" <<<"$1" | tail -1 | sed -E "s/^${2}=\"?([^\"]*)\"?.*/\1/"
-}
-DOSE_SCHEDULE_DIR="${DOSE_SCHEDULE_DIR:-$DOSE_LIB_DIR/schedule}"  # override is a witness-only seam
 RUNNER_CONF_PATH="$DOSE_SCHEDULE_DIR/_runner.conf"
 if [ ! -f "$RUNNER_CONF_PATH" ]; then
   echo "BROKEN: no $RUNNER_CONF_PATH shipped beside this script -- nothing to converge to" >&2

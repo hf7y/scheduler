@@ -591,6 +591,17 @@ rm -f "$FAKEBIN/ssh"
 
 "$TARGET" --help 2>&1 | grep -qF -- '--shotgun'   && ok "--shotgun is in the usage block"   || bad "--shotgun works but --help never mentions it"
 
+printf 'PROJECT="freshproj"\nCRON_ACCOUNT="freshproj"\nCRON_HOST="testhost"\n' > "$DOSE_SCHEDULE_DIR/freshproj.conf"
+: > "$WORK/roster-write.log"
+out="$("$TARGET" freshproj --arm --reason 'first arm' 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "a registered project with no roster row can be armed" || bad "--arm on a rowless registered project exited $rc: $out"
+grep -qF "will CREATE one" <<<"$out" && ok "...and says the row is being created, not silently upserted" || bad "no CREATE note: $out"
+grep -qF "post project=freshproj" "$WORK/roster-write.log" && ok "...by one POST to the roster service" || bad "no POST logged: $(cat "$WORK/roster-write.log")"
+
+out="$("$TARGET" no-conf-at-all --arm --reason x 2>&1)"; rc=$?
+[ "$rc" -eq 4 ] && ok "an UNregistered project still exits 4 on --arm" || bad "unregistered --arm exited $rc, want 4: $out"
+grep -qF "register it before arming it" <<<"$out" && ok "...and names the conf it wants" || bad "message does not name the missing conf: $out"
+
 echo
 echo "dose-project-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1
