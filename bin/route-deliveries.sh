@@ -95,7 +95,7 @@ while IFS= read -r rawline; do
 done <<< "$(printf '%s' "$issues" | jq -r '.[] | [.number, (.body // ""), ([.labels[].name] | join(",")), ([.comments[].body] | join("\n"))] | @tsv')"
 
 declare -A state_of
-if [ "${#ref_needed[@]}" -gt 0 ]; then
+if [ -n "${ref_needed[*]+x}" ]; then   # not ${#...[@]}: empty assoc array is unset under set -u (#754)
   q=''; i=0
   for ref in "${!ref_needed[@]}"; do
     alias="r$i"; ref_alias["$ref"]="$alias"; i=$((i + 1))
