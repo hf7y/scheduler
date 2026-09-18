@@ -1068,7 +1068,21 @@ while [ "$dispatched" -lt "$MAX_PER_TICK" ] && [ "$examined" -lt "$n" ]; do
   [ -n "${_gat_minted:-}" ] && { unset GH_TOKEN; _gat_minted=""; }
   _gat_slug="$(repo_slug_of "$name")"
   if declare -F mint_gh_app_token >/dev/null 2>&1 && [ -n "$_gat_slug" ] && [ -z "${GH_TOKEN:-}" ]; then
+    # MINT FOR THE REPO'S OWNER, not the host's. The helper resolves an App
+    # INSTALLATION by owner, and in host mode this runs as root, whose conf is
+    # the host-wide one naming the estate owner -- so a project in a second org
+    # minted a token that cannot see its own repo, and the gate below held
+    # BLIND on every tick, forever. Measured 2026-09-18 on vaporwave, where all
+    # three media-arts-collective projects are armed:
+    #   MILESTONE-BLIND inventory-app -- could not read the milestone list
+    # SELFDEV_GH_OWNER wins over the conf in selfdev_app_load, so this is the
+    # supported seam, not an override.
+    # Set and unset around the call, never as a `VAR=x func` prefix: bash keeps
+    # a prefix assignment to a FUNCTION in the caller's environment, which would
+    # carry one project's owner onto the next participant's mint.
+    SELFDEV_GH_OWNER="${_gat_slug%%/*}"; export SELFDEV_GH_OWNER
     mint_gh_app_token "$_gat_slug" usage-paced-runner
+    unset SELFDEV_GH_OWNER
     [ -n "${GH_TOKEN:-}" ] && _gat_minted=1
   fi
 
