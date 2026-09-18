@@ -58,7 +58,7 @@ has "B2 conf carries the job name" "$(cat "$C/schedule/widget.conf")" 'BATCH_JOB
 has "B3 conf carries CRON_HOST"    "$(cat "$C/schedule/widget.conf")" 'CRON_HOST="testhost"'
 ROWS="$(grep -c '^widget|' "$C/schedule/_paced.testhost.conf")"
 [ "$ROWS" = 1 ] && ok "B4 exactly one row" || bad "B4 expected 1 row, got $ROWS"
-has "B5 the row is enabled" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" "widget|1|$HOMES/widget/Documents/Projects/scheduler/bin/scheduler-run widget batch"
+has "B5 the row is enabled" "$(grep '^widget|' "$C/schedule/_paced.testhost.conf")" "widget|1|/usr/local/share/verb-builds/current/scheduler/bin/scheduler-run widget batch"
 has "B6 prints the undo command" "$OUT" 'undo: git -C'
 
 echo "-- D. IDEMPOTENT: a second --apply changes nothing"
@@ -131,6 +131,27 @@ LAST_OTHER="$(grep -c '^other|1|[^|]*/other/x$' "$C4/schedule/_paced.testhost.co
 ROWS="$(grep -c '^widget|' "$C4/schedule/_paced.testhost.conf")"
 [ "$ROWS" = 1 ] && ok "I2 widget gets a row of its own" \
                 || bad "I2 expected 1 widget row, got $ROWS"
+
+echo "-- J. #1138: every account but scheduler's own gets the installed-build row"
+C5="$T/j"; rm -rf "$C5"; mkdir -p "$C5/schedule"
+cat > "$C5/schedule/scheduler.conf" <<'EOF'
+PROJECT="scheduler"
+PROJECT_KEY="scheduler"
+PROJECT_REPO_PATH="$HOME/Documents/Projects/scheduler"
+REPO_URL="https://github.com/hf7y/scheduler.git"
+SWEEP_JOB_NAME=""
+BATCH_JOB_NAME=""
+BATCH_PROMPT="/nightly-batch"
+AUTONOMY_TIER="medium"
+EOF
+printf '# rotation\nother|1|%s/other/x\n' "$HOMES" > "$C5/schedule/_paced.testhost.conf"
+git -C "$C5" init -q; git -C "$C5" add -A
+git -C "$C5" -c user.email=t@t -c user.name=t commit -qm init
+OUT="$(SELFDEV_HOME_ROOT="$HOMES" "$SCRIPT" scheduler --host testhost --repo "$C5" --apply 2>&1)"; RC=$?
+rc  "J1 exits 0" 0 "$RC"
+has "J2 scheduler's own row keeps its per-account checkout, not the build root" \
+    "$(grep '^scheduler|' "$C5/schedule/_paced.testhost.conf")" \
+    "scheduler|1|$HOMES/scheduler/Documents/Projects/scheduler/bin/scheduler-run scheduler batch"
 
 echo "-- H. the argument contract (cli-guard)"
 "$SCRIPT" widget --not-a-real-flag >/dev/null 2>&1; rc "H1 unknown flag exits 2" 2 "$?"

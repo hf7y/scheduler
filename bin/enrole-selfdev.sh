@@ -130,8 +130,14 @@ fi
 
 # One name, three surfaces (unix user, PROJECT, first column) -- MONKEY.md 2. The command is BUILT, not copied, so a renamed account leaves no stale path.
 # TRAP: the rotation column MUST stay an absolute literal -- _paced*.conf is read by `while IFS=| read`, not sourced, so $HOME does not expand there (MONKEY.md 4b). HOME_ROOT is a variable because a host may put accounts outside /home; it is resolved here and written out expanded.
+# #1138: every account but scheduler's own dispatches from the installed build, not a per-account checkout (land-selfdev.sh:170 draws the same line on `id -un = scheduler`). BUILD_ROOT mirrors land-selfdev.sh's SCHEDULER_BUILD_ROOT / dose-project.sh's DOSE_BUILD_ROOT -- same unresolved-on-purpose symlink, written out expanded for the same reason HOME_ROOT is.
 HOME_ROOT="${SELFDEV_HOME_ROOT:-/home}"
-ROW_CMD="$HOME_ROOT/$PROJECT/Documents/Projects/scheduler/bin/scheduler-run $PROJECT batch"
+BUILD_ROOT="${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler"
+if [ "$PROJECT" = scheduler ]; then
+  ROW_CMD="$HOME_ROOT/$PROJECT/Documents/Projects/scheduler/bin/scheduler-run $PROJECT batch"
+else
+  ROW_CMD="$BUILD_ROOT/bin/scheduler-run $PROJECT batch"
+fi
 echo "-- rotation row ($PACED)"
 cur_row="$(grep -m1 -E "^$PROJECT\|" "$PACED" || true)"
 want_enabled=1; [ "$MODE" = --retire ] && want_enabled=0
