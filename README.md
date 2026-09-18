@@ -82,6 +82,46 @@ caller outside itself (`bin/usage-paced-runner.sh`'s dispatch-critical
 gate). Exit 0 (clean) or 2 (dirty/unverifiable); writes nothing and reads no
 crontab, so it's safe to call from a sweep or another script.
 
+### Before deleting a file (or a symbol) the served build might still read
+
+`schedule/ROSTER` was dead on `main` and load-bearing on the fleet at the
+same time (hf7y/realisateur#1143): `lib/dose-common.sh` on `main` had moved
+to reading the roster *service*, so the file looked safe to remove (#716) —
+but the build every host actually dispatches from, cut a month earlier, still
+had the old `fetch_roster() { fetch_repo_file schedule/ROSTER; }`. The
+deletion took `dose` down within minutes on every host and was reverted
+(#718). `main` and the served build are *allowed* to disagree — that's the
+whole point of a 30-day release cadence plus two Zach-gated approvals — but
+nothing asked "does the build people are actually running still need this?"
+before the delete.
+
+Before removing a path, or changing what a function does, that another part
+of this repo might reach only through the served build (not through
+whatever `main` looks like right now), ask that question directly:
+
+```sh
+bin/served-build-consumer-check.sh schedule/ROSTER fetch_roster
+```
+
+It greps the tree at `${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler`
+— the same path `bin/dose-project.sh` calls `DOSE_BUILD_ROOT` and
+realisateur's `bin/land-selfdev.sh` calls `SCHEDULER_BUILD_ROOT`, i.e. the
+build the fleet is actually dispatching from right now, not this checkout —
+for each argument given. Exit 1 (`FOUND`) means the served build still
+reads it: land the consumer's fix in a cut build first, re-run this against
+*that* build, and only remove the source once it reports `CLEAR`. Exit 6
+(`BLIND`) means it could not check at all (wrong host, nothing installed,
+unreadable) — never treated as "clear," on purpose: a scan that could not
+look and a build that genuinely doesn't need the file grep identically
+otherwise, and conflating them is exactly the class of failure #1143 was
+opened to name (`bin/deploy-drift-check.sh` "exists precisely to report
+'installed scripts do not match git' and nothing consults it before a
+change that assumes they match"). It reads only; nothing it touches is
+written to. Run it on a host that runs dispatch (or point
+`VERB_HOST_BUILD_ROOT` at a stand-in for local testing) — a CI runner has no
+served build to check, so this is a step for whoever is about to open the
+deletion PR, not a required status check.
+
 ## What's in here
 
 | Path | What it is |
@@ -104,6 +144,7 @@ crontab, so it's safe to call from a sweep or another script.
 | `bin/token-usage.sh` | Run-by-hand snapshot of real per-project token/quota burn, read straight out of Claude Code's own session transcripts — not an estimate like the glance ETA column. `--days N` scopes it, `--no-quota` skips the live `usage-gate.sh` probe, `--no-snapshot` skips appending to its own history file. Deliberately off every clock (#264): it's a query tool for a human to run on demand, not a check with a pass/fail verdict. |
 | `bin/interchange-probe.sh` | Read-only "does one repo's work get filed into another repo's tracker and picked up there?" — counts, per `schedule/*.conf` registered repo, issues closed in a rolling window (`--window-hours`, default 168h) whose body cites another roster repo's issue/PR. `verdict=OK` (at least one cross-repo close) / `DOWN` (none) / `BLIND` (a tracker unreadable). Deliberately **not** wired into `scheduler sweep` (#264): sweep runs every 15 minutes and this reads every registered repo's issue tracker over a 7-day window — recomputing it that often would burn GitHub API calls for a number that can't have moved. It needs a cadence of its own (daily or slower), which doesn't exist yet; until then it's run by hand. |
 | `bin/deploy-drift-check.sh` | Read-only "is what's installed still what's in git?" check: compares every `~/.local/bin/<name>` against this repo's `bin/<name>` at a git ref (`origin/main` by default), flagging a copy that has drifted (naming the commit it *does* match, so staleness is a fact) and a copy that matches today but can silently rot — a symlink can't drift, a copy can. Wired into `scheduler sweep` as its ninth pass; prints the `ln -sfn` fix but never touches anything under `~/.local/bin` (installed wrappers stay a human step). |
+| `bin/served-build-consumer-check.sh` | Read-only "does the SERVED build (not this checkout) still read this?" — a **different** question from `deploy-drift-check.sh` above: that one checks a host's local wrapper symlinks against git, this one checks whether the fleet's actual dispatch build at `${VERB_HOST_BUILD_ROOT:-/usr/local/share/verb-builds}/current/scheduler` (`bin/dose-project.sh`'s `DOSE_BUILD_ROOT`) still contains a literal reference to a path or symbol you're about to delete from `main`. Built for hf7y/realisateur#1143 (`schedule/ROSTER`, #716/#718) — see "Before deleting a file" above. Exit 0 `CLEAR`, 1 `FOUND` (refuse the deletion), 2 usage, 6 `BLIND` (no served build to check — never conflated with clean). Not wired into `scheduler sweep` (it takes an argument naming what's about to be deleted; sweep has no such input) or CI (a runner has no served build); it's a step run by hand before proposing a removal. Witness: `tests/served-build-consumer-check-witness.sh`. |
 | `bin/unprinted-facts.sh` | The scheduler sprint's step-2 measurement, run by hand: for every fact the machinery records on disk, whether any view a human opens actually prints it — `PRINTED <view>` / `UNPRINTED` / `BLIND` (recorded nowhere, so not answerable even in principle). Exists as a script rather than a hand-kept list because a one-night inventory decays into a claim; this re-derives its evidence every run. Read it before changing what the glance shows — step 3's absence-surface is supposed to be designed against this, not against memory. Read-only, exits 0 whatever it finds (a measurement, not a gate). |
 | `lib/paced-conf.sh` | The one source for the two rotation questions. **`paced_membership_set <repo-root>`** answers *"does the paced system own this project's Tier 2?"* — `PACED_MEMBERS`, the **union** across `schedule/_paced.conf` and every `schedule/_paced.<host>.conf`, because a fixed nightly cron line for a project *another* host's runner dispatches is cross-host double dispatch. It was what `bin/sync-crontab.sh` suppressed a project's fixed nightly `BATCH` cron line on before that script was retired (#454/#488; the union was the only monotonically safe answer for a crontab writer — it could suppress a line that used to be emitted, never arm one that wasn't). No per-project cron line is written by anything today, so this question no longer has a live crontab-writing caller; `paced_membership_set` is currently unreferenced outside this file and its own tests. Added 2026-07-29 after `sync-crontab.sh` was found reading only the shared file — so commenting out mandark's `scheduler|1|3` line to make its self-dev *dark* (58d6495) simultaneously **armed** an auto-staggered nightly dispatch line for the next `--apply`, restoring mandark as a second writer of scheduler's own git history one command after the decision to stop being one (reproduced in a sandbox; the witness for this, `tests/sync-crontab-paced-witness.sh`, was deleted along with `sync-crontab.sh` itself in #488 — `paced_membership_set` is still covered by `tests/arming-precedence-witness.sh` and `tests/final-newline-rows-witness.sh`, just not against this specific incident any more). **`resolve_paced_conf <repo-root>`** answers the narrower *"which rotation runs HERE, right now?"* and sets `PACED_CONF`/`PACED_CONF_SRC` from `schedule/_paced.<short-hostname>.conf` if present, else `schedule/_paced.conf` (explicit `PACED_CONF` still wins; neither file present is a loud refusal with `PACED_CONF` left *empty*, never a plausible default). Sourced by `bin/scheduler` so `next`/`run`/`-p` describe the rotation that actually dispatches here. `bin/usage-paced-runner.sh` deliberately keeps its copy **inline** — it is the live `*/5` dispatcher and resolves its conf before it has anything safe to `source` from — so the agreement is mechanized instead: `tests/paced-conf-witness.sh` extracts the runner's block by its `>>>`/`<<<` markers and fails if the two ever disagree. Built 2026-07-29 after `bin/scheduler` was found hardcoding the shared file: on `dexter` it answered *"'scheduler' is not a participant"* about the one project dexter's rotation has enabled, and its old `weight <p> <n>` command (retired #528) edited and committed **mandark's** rotation — the cross-host write the per-host split exists to prevent. |
 | `lib/check-witness.sh` | The one source for the runtime-witness convention every check in `bin/` follows: `check_witness <name>` stamps `~/.local/share/scheduler-checks/<name>.lastrun` as the check's first act. Sourced, not run; never fatal — bookkeeping must not be able to break a check. |
