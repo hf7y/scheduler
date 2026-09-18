@@ -90,6 +90,7 @@ run() {  # echoes what the engine saw in GH_TOKEN; stderr lands in $TMP/err
     && unset GH_TOKEN \
     && PATH="$TMP/stub:$PATH" \
        SELFDEV_APP_CONF="$CONF" SELFDEV_GH_APP_SH="$HELPER" GH_OWN_REPO="hf7y/proj" \
+       SELFDEV_GH_OWNER="${WITNESS_ENV_OWNER:-}" \
        bash bin/scheduler-run proj batch 2>"$TMP/err" )
 }
 
@@ -188,6 +189,16 @@ if grep -q 'cannot see' "$TMP/err"; then
   ok "and it says WHICH repo the token could not see"
 else
   bad "silent non-export is indistinguishable from an unconfigured account: [$(cat "$TMP/err")]"
+fi
+
+printf 'SELFDEV_APP_ID=1\nSELFDEV_APP_KEY=/dev/null\nSELFDEV_GH_OWNER=conf-owner\n' > "$CONF"
+mkhelper "printf '%s' \"\${SELFDEV_GH_OWNER:-<unset>}\" > $TMP/seen-owner" 'echo tok-owner'
+echo ok > "$TMP/gh-scope"
+out="$(WITNESS_ENV_OWNER=env-owner run)"; rc=$?
+if [ "$(cat "$TMP/seen-owner" 2>/dev/null)" = "env-owner" ]; then
+  ok "SELFDEV_GH_OWNER in the environment overrides the conf's owner at mint time"
+else
+  bad "the helper saw owner [$(cat "$TMP/seen-owner" 2>/dev/null)], not env-owner -- a second-org project cannot mint"
 fi
 
 echo
