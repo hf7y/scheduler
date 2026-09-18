@@ -41,6 +41,13 @@ cat > "$ISSUES_JSON" <<'EOF'
 ]
 EOF
 
+NOREFS_JSON="$WORK/issues-norefs.json"
+cat > "$NOREFS_JSON" <<'EOF'
+[
+  {"number": 9, "labels": [], "body": "plain issue, no DEFERRED block at all", "comments": []}
+]
+EOF
+
 cat > "$FAKEBIN/gh" <<EOF
 #!/usr/bin/env bash
 set -u
@@ -57,7 +64,7 @@ fi
 case "\$1 \$2" in
   "issue list")
     echo "issue-view-or-list-call" >> "$CALLS"
-    cat "$ISSUES_JSON"
+    if [ "\${FAKE_GH_MODE:-ok}" = "no-refs" ]; then cat "$NOREFS_JSON"; else cat "$ISSUES_JSON"; fi
     ;;
   "issue view")
     echo "issue-view-call \$*" >> "$CALLS"
@@ -174,6 +181,16 @@ comment_calls="$(grep -c "^comment-call" "$CALLS")"
   || bad "expected 1 comment-call, got $comment_calls"
 grep -q "^edit-call" "$CALLS" && ok "drops the deferred label after routing" \
   || bad "expected an edit-call removing the deferred label"
+
+: > "$CALLS"
+out="$(FAKE_GH_MODE=no-refs PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --apply proj 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "exits 0 when no issue carries a dependency ref" || bad "exit=$rc out=[$out]"
+echo "$out" | grep -q "unbound variable" \
+  && bad "empty ref_needed still reads as unset: [$out]" \
+  || ok "an empty ref_needed is not an unbound variable"
+grep -q "^graphql-call" "$CALLS" \
+  && bad "asked graphql to resolve zero refs" \
+  || ok "skips the graphql round trip when there is nothing to resolve"
 
 echo "route-deliveries-batch-witness: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
