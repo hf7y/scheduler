@@ -183,10 +183,7 @@ grep -q "^edit-call" "$CALLS" && ok "drops the deferred label after routing" \
   || bad "expected an edit-call removing the deferred label"
 
 : > "$CALLS"
-# REGRESSION (vaporwave, dog, 2026-09-17): with no dependency refs anywhere, the
-# ref_needed associative array stays EMPTY -- and under `set -u` bash 5.2 still
-# treats an empty associative array as unset, so `${#ref_needed[@]}` aborted the
-# script and took the whole dispatch down with it before claude ever launched.
+# REGRESSION (#754): an empty ref_needed aborted the whole dispatch under set -u.
 out="$(FAKE_GH_MODE=no-refs PATH="$FAKEBIN:$PATH" "$WORK/repo/bin/route-deliveries.sh" --apply proj 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "exits 0 when no issue carries a dependency ref" || bad "exit=$rc out=[$out]"
 echo "$out" | grep -q "unbound variable" \
