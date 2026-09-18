@@ -88,7 +88,13 @@ while IFS= read -r rawline; do
     [ -n "$ref" ] || continue
     checked=$((checked + 1))
     already=0
-    printf '%b' "$comments" | grep -qF "$(marker "$ref")" && already=1
+    # A here-string, not a pipe: `printf ... | grep -qF` lets grep close its
+    # read end on the first match, and printf's next write() then gets
+    # SIGPIPE (141). Under `pipefail` that makes the whole pipeline non-zero
+    # even though grep matched, so `already` silently stayed 0 on any
+    # comment thread too big to land in one pipe buffer before grep quit --
+    # exactly what turned a single delivery into a repeat re-route.
+    grep -qF "$(marker "$ref")" <<< "$(printf '%b' "$comments")" && already=1
     [ "$already" -eq 0 ] && ref_needed["$ref"]=1
     work+=("$num"$'\t'"$ref"$'\t'"$already"$'\t'"$labels")
   done <<< "$(printf '%s' "$block" | grep -oE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+' | sort -u)"
@@ -127,7 +133,8 @@ for item in "${work[@]}"; do
     printf '  SKIP  %s#%s <- %s could not re-check before writing (BLIND, not absent); not posting\n' "$SLUG" "$num" "$ref" >&2
     continue
   fi
-  if printf '%s' "$recheck" | grep -qF "$(marker "$ref")"; then
+  # Same SIGPIPE/pipefail trap as the batched check above -- here-string, not a pipe.
+  if grep -qF "$(marker "$ref")" <<< "$(printf '%s' "$recheck")"; then
     printf '  SKIP  %s#%s <- %s already routed (raced)\n' "$SLUG" "$num" "$ref"
     continue
   fi
