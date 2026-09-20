@@ -238,6 +238,19 @@ dcp-gate-site   | dcp-gate-site@monkey   | 20m | live
 # ui/index.html is a committed bundle a source change silently makes stale.
 american-cycle  | american-cycle@monkey  | 20m | live
 
+# cinema-sanctuary -- PARKED, and the row is the last of the three things
+# registration is: this file's row, schedule/cinema-sanctuary.conf, and a unix
+# account. THE ACCOUNT DOES NOT EXIST. dexter -- which hosts monkey, and so
+# every self-dev account -- was offline on 2026-09-20, so
+# realisateur/bin/setup-selfdev-project.sh could not be run. do_live exits 5
+# BROKEN on a live row whose account is missing, and `dose --arm` refuses a
+# project with no unix account on the row's host, so `parked` is the only
+# state this row can honestly hold today; it cannot arm a break.
+# Arm with `dose cinema-sanctuary --arm` once the account lands. The conf
+# carries what this row cannot -- chiefly that `python3 derive.py` exits 4 by
+# design, and that a run must not make it green. hf7y/realisateur#1263.
+cinema-sanctuary | cinema-sanctuary@monkey | 20m | parked
+
 # --- vaporwave (realisateur#695): own host, own Anthropic account, so these do
 # not compete with the @monkey rows. Parked -- arming is a separate act
 # (runbook.1 s6) and none has run clean once. 20m is the ceiling; with empty
