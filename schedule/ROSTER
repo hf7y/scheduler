@@ -175,6 +175,13 @@ abletim         | abletim@monkey         | 20m | parked
 # (hf7y/apms-2173#23) refuses every non-GET while it is set; and the account's
 # clone has no canvas.token at all. Reads work, writes do not. Do not "tidy"
 # any of the three.
+#
+# hf7y/apms-2173#127 narrows LAYER 2 ONLY: put_section is a per-function
+# exemption from NeverRewriteVisible so a due date can reach an already-
+# published topic. _guard is untouched. Layers 1 and 3 still refuse it from
+# this account -- APMS_READ_ONLY=1 rejects the request before the exemption is
+# reached, and there is no token to send -- so the scheduled run still cannot
+# write to Canvas. The exemption only reaches a hand-run session on mandark.
 apms            | apms@monkey            | 20m | live
 
 # chezz -- Zach-directed ("1 and 3 so we can stop 3 in case it hits a limit
