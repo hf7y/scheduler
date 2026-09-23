@@ -56,6 +56,35 @@ def is_answered($owner):
                               and ((.body // "") | is_stamped | not)));
 '
 
+# THE OTHER DIALECT (#764). Everything above reads a COMMENT this repo posted:
+# `<!-- agent: <project>/<job> <ISO8601> -->`. Issue BODIES across the estate
+# are stamped by a different tool -- realisateur's bin/gh-sign.sh -- in a
+# different shape: `<!-- agent: <account>@<host> <ISO8601> build <id> -->`.
+# Neither regex matches the other, so `is_stamped` reads every gh-sign-stamped
+# BODY as a human's. Anything asking WHO FILED an issue wants this predicate.
+#
+# Deliberately NOT a widening of `is_stamped`: that one feeds `is_answered`,
+# where a stamped comment means "not Zach speaking", and broadening it would
+# silently change which issues read as answered.
+#
+# `zach@<host>` COUNTS AS AN AGENT here, which is where this parts company with
+# usage-paced-runner.sh's milestone_self_fed (that one calls the stamp a
+# human's). The stamp names the ACCOUNT a job ran under, not a person: an agent
+# working on mandark stamps `zach@mandark`. Treating it as human would leave the
+# account most agents run under able to manufacture pace. An issue Zach filed by
+# hand carries no stamp at all, and that is the line this draws.
+PROVENANCE_FILER_JQ='
+def body_agent_filer:
+  (((. // "") | split("\n") | map(sub("^\\s+";"") | sub("\\s+$";""))
+    | map(select(length > 0)) | last) // "") as $last
+  | if   ($last | test("^<!--\\s*agent:\\s*[^@[:space:]]+@"))
+    then ($last | capture("^<!--\\s*agent:\\s*(?<who>[^@]+)@") | .who)
+  elif   ($last | test("^<!--\\s*agent:\\s*\\S+/\\S+\\s+\\S+\\s*-->$"))
+    then ($last | capture("^<!--\\s*agent:\\s*(?<who>[^/]+)/") | .who)
+  else null end;
+def filed_by_agent: (body_agent_filer != null);
+'
+
 provenance_is_stamped() {
   local body="$1" last
   last="$(printf '%s\n' "$body" | sed '/^[[:space:]]*$/d' | tail -n1)"

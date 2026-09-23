@@ -42,7 +42,22 @@ echo call >> "$GH_CALLS"
 # closed in the last 7 days. The stub answers by which one was asked, because
 # answering both from one file is what let the closure term read as BLIND in
 # every case here without any of them saying so.
-for a in "$@"; do [ "$a" = closed ] && { cat "$GH_CLOSED" 2>/dev/null; exit 0; }; done
+# The closed question, since #764, asks for TWO numbers: closures, and the
+# subset no agent stamped. A fixture of real bodies runs tempo's OWN --jq (as
+# the open question already does); a bare count in $GH_CLOSED answers both
+# columns with the same number, i.e. "every closure was a human's", which is
+# what every case written before #764 assumed.
+for a in "$@"; do [ "$a" = closed ] && {
+  if [ -n "${GH_CLOSED_JSON:-}" ]; then
+    prev=''
+    for b in "$@"; do
+      [ "$prev" = --jq ] && { jq -r "$b" "$GH_CLOSED_JSON"; exit 0; }
+      prev="$b"
+    done
+  fi
+  n="$(cat "$GH_CLOSED" 2>/dev/null)"
+  case "${n:-x}" in ''|*[!0-9]*) printf '%s\n' "$n" ;; *) printf '%s\t%s\n' "$n" "$n" ;; esac
+  exit 0; }; done
 # When a fixture is set, run tempo.sh's OWN --jq argument (found in "$@")
 # against it with the real jq -- so case 3c below exercises the actual filter
 # string tempo.sh built, not a hand re-derivation of it that could drift.
@@ -313,6 +328,52 @@ printf '%s\tmonkey\tacct\tsolo\tbatch\t0\tWORKED\tr\n' "$(date -Is -d '-300 min'
 tick
 [ -s "$DISPATCH_MARK" ] || fail "300 min against a want of 120 should have dispatched"
 pass "and it is a regulator, not a stop"
+
+echo "case 12 -- WHICH closures earn pace (#764)"
+# 30 closures in the window. Two carry no stamp; the rest were filed by agents,
+# including one stamped `zach@mandark` (the account a job ran under, not a
+# person) and one in the comment dialect provenance.sh writes.
+CLOSEDJ="$T/closed.json"
+{
+  printf '['
+  printf '{"number":1,"body":"a thing Zach typed"},'
+  printf '{"number":2,"body":"another one, no stamp"},'
+  printf '{"number":3,"body":"agent work\\n\\n<!-- agent: zach@mandark 2026-09-23T01:00:00Z build b -->"},'
+  printf '{"number":4,"body":"agent work\\n\\n<!-- agent: scheduler/nightly 2026-09-23T01:00:00Z -->"},'
+  i=5; while [ $i -le 30 ]; do
+    printf '{"number":%s,"body":"agent work\\n\\n<!-- agent: apms@monkey 2026-09-23T01:00:00Z build b -->"}' "$i"
+    [ $i -lt 30 ] && printf ','
+    i=$((i + 1))
+  done
+  printf ']'
+} > "$CLOSEDJ"
+export GH_CLOSED_JSON="$CLOSEDJ"
+
+set_counts 60 0; : > "$LEDGER"; row 999999
+out="$(run_tempo p)"
+grep -q 'closed7d=30 ' <<<"$out" || fail "the raw closure count must still be reported, got: $out"
+grep -q 'humanfiled7d=2 ' <<<"$out" || fail "only the 2 unstamped bodies are human-filed, got: $out"
+grep -q 'drive=3 ' <<<"$out" || fail "drive must be humanfiled+1 = 3, not 31, got: $out"
+grep -q 'via=min(actionable,humanfiled7d+1)' <<<"$out" || fail "the line must say which term it used, got: $out"
+pass "28 self-filed closures buy nothing; the 2 a human filed set the pace"
+
+out="$(TEMPO_CLOSURE_SENSOR=all run_tempo p)"
+grep -q 'drive=31 ' <<<"$out" || fail "--sensor all must restore the pre-#764 arithmetic, got: $out"
+grep -q 'via=min(actionable,closed7d+1)' <<<"$out" || fail "and say so, got: $out"
+pass "TEMPO_CLOSURE_SENSOR=all is a one-variable rollback"
+
+# Every closure agent-filed: the floor, not a standstill.
+printf '[{"number":1,"body":"x\\n\\n<!-- agent: apms@monkey 2026-09-23T01:00:00Z build b -->"}]' > "$CLOSEDJ"
+out="$(run_tempo p)"
+grep -q 'humanfiled7d=0 ' <<<"$out" || fail "expected humanfiled7d=0, got: $out"
+grep -q 'drive=1 ' <<<"$out" || fail "the +1 floor must leave drive=1, never 0, got: $out"
+pass "a repo that only closes its own work falls to the slowest pace, not to a stop"
+
+unset GH_CLOSED_JSON
+set_closed 5
+out="$(run_tempo p)"
+grep -q 'humanfiled7d=5 ' <<<"$out" || fail "a bare count answers both columns, got: $out"
+pass "and a tracker with no stamps at all reads as human-filed, which is the safe direction"
 
 if [ "$FAILED" -ne 0 ]; then
   echo "--- runner log ---"; sed 's/^/  /' "$RLOG" 2>/dev/null
