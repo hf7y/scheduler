@@ -251,6 +251,14 @@ american-cycle  | american-cycle@monkey  | 20m | live
 # design, and that a run must not make it green. hf7y/realisateur#1263.
 cinema-sanctuary | cinema-sanctuary@monkey | 20m | parked
 
+# abc -- music for the Abecedarian trilogy. PARKED. Unlike cinema-sanctuary
+# above, the unix account DOES exist: uid 3020, group selfdev, deploy keys
+# wired, provisioned 2026-09-23 (hf7y/realisateur#1277). Parked because
+# arming is a separate act, not because anything is broken.
+# The repo's default branch is `main`, renamed from `master` the same day.
+# Arm with `dose abc --arm` once someone decides its queue is worth a slot.
+abc             | abc@monkey             | 20m | parked
+
 # --- vaporwave (realisateur#695): own host, own Anthropic account, so these do
 # not compete with the @monkey rows. Parked -- arming is a separate act
 # (runbook.1 s6) and none has run clean once. 20m is the ceiling; with empty
