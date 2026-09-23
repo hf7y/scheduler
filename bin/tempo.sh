@@ -13,14 +13,22 @@
 #   (drive = min(actionable, closed_7d + 1)). Until 2026-08-22 it was
 #   `actionable` alone, so FILING an issue bought DISPATCH -- positive
 #   feedback whose only negative term was a human closing things.
-# TRAP: the sensor is LABELS, not authorship. #147 specifies the split as WHO
-#   FILED IT, but every actor in the estate is `hf7y`, and the one provenance
-#   stamp reached 3 of 63 open issues when this was built. A 5-percent sensor
-#   defaulting the rest to "a human asked for this" fails in the dispatch-MORE
-#   direction, which is the runaway #147 names. `needs-human` measures the
-#   property the setpoint actually wants and is wrong in the SAFE direction:
-#   an unlabelled blocked issue reads as work, costing at most one dispatch
-#   that will label it.
+# TRAP: the BACKLOG sensor is LABELS, not authorship -- and that is still
+#   right. #147 specifies the split as WHO FILED IT, but every actor here is
+#   `hf7y`, so `needs-human` measures the property the setpoint wants and is
+#   wrong in the SAFE direction: an unlabelled blocked issue reads as work,
+#   costing at most one dispatch that will label it.
+# THE CLOSURE TERM IS A DIFFERENT QUESTION, and #764 is where it went wrong:
+#   a bare count of closures let the agent being paced supply its own brake.
+#   Measured 2026-09-23 over the last 7 days -- apms-2173 25 closures, 0 filed
+#   by a human; crt 15, 0; wtul 31, 1; senechal 54, 1. apms-2173 was earning
+#   drive=26 from issues it filed and closed itself, 13 of them within 15 to
+#   213 seconds of filing.
+#   The argument that used to stand here against authorship -- "the provenance
+#   stamp reached 3 of 63 issues, a 5-percent sensor" -- no longer holds: over
+#   those same four repos 123 of 125 closed issues carry a stamp. Density went
+#   from 5 percent to 98, so defaulting the unstamped few to "a human asked"
+#   now costs a rounding error rather than the runaway #147 names.
 # TRAP: exclusion is not a multiplier. "This does not count as backlog" is a
 #   weaker and different claim from "this is evidence against running".
 #
@@ -54,6 +62,8 @@ Knobs, resolved env > schedule/_tempo.<host>.conf > schedule/_tempo.conf > defau
   TEMPO_BLOCKED_LABELS  needs-human   (one label; see `etiquette`)
                         an issue with any GitHub assignee also counts as
                         blocked, label or not (hf7y/scheduler#318)
+  TEMPO_CLOSURE_SENSOR  filer    which closures earn pace: `filer` counts only
+                        issues no agent stamped, `all` is the pre-#764 count
   TEMPO_CACHE_MIN       30       how long a tracker count may be reused
   TEMPO_OUTCOME_WINDOW  5        trailing run-records checked for outcome mix
   TEMPO_OUTCOME_REPEAT  2        repeats in that window that discount drive
@@ -185,6 +195,9 @@ fi
 # shellcheck source=../lib/run-ledger.sh
 . "$REPO_ROOT/lib/run-ledger.sh" 2>/dev/null \
   || blind "cannot source $REPO_ROOT/lib/run-ledger.sh -- no clock to measure against"
+# PROVENANCE_FILER_JQ: who filed an issue, read off its body stamp (#764).
+. "$REPO_ROOT/lib/provenance.sh" 2>/dev/null \
+  || blind "cannot source $REPO_ROOT/lib/provenance.sh -- cannot tell an agent's closure from a human's"
 declare -F ledger_age_min >/dev/null 2>&1 \
   || blind "lib/run-ledger.sh has no ledger_age_min -- this build predates the thermostat"
 
@@ -202,10 +215,12 @@ SINCE_MIN="$(ledger_age_min "$PROJECT" COOLDOWN BLOCKED-HOLD 2>/dev/null || echo
 CACHE_DIR="${STATE_DIR:-$HOME/.local/share/scheduler-paced-runner}"
 CACHE="$CACHE_DIR/tempo-$PROJECT.count"
 NOW="$(date +%s)"
-OPEN=""; BLOCKED=""; CLOSED7=""; SOURCE="live"
+OPEN=""; BLOCKED=""; CLOSED7=""; HUMAN7=""; SOURCE="live"
+CLOSURE_SENSOR="${TEMPO_CLOSURE_SENSOR:-filer}"
+case "$CLOSURE_SENSOR" in filer|all) : ;; *) blind "TEMPO_CLOSURE_SENSOR is filer or all, not '$CLOSURE_SENSOR'" ;; esac
 
 if [ "$CACHE_MIN" -gt 0 ] && [ -r "$CACHE" ]; then
-  IFS=$'\t' read -r c_at c_open c_blocked c_closed < "$CACHE" 2>/dev/null || true
+  IFS=$'\t' read -r c_at c_open c_blocked c_closed c_human < "$CACHE" 2>/dev/null || true
   # The closure column is OPTIONAL: `-` when it could not be read, and absent
   # entirely in a cache written before the term existed. Neither is a zero --
   # zero closures is the slowest possible pace and must never be inferred from
@@ -217,6 +232,10 @@ if [ "$CACHE_MIN" -gt 0 ] && [ -r "$CACHE" ]; then
     *) if [ $(( (NOW - c_at) / 60 )) -lt "$CACHE_MIN" ] && [ "$c_at" -le "$NOW" ]; then
          OPEN="$c_open"; BLOCKED="$c_blocked"; SOURCE="cache"
          case "${c_closed:-x}" in ''|*[!0-9]*) CLOSED7="" ;; *) CLOSED7="$c_closed" ;; esac
+         # The human-filed column is optional for the same reason and absent
+         # in every cache written before #764. Missing is BLIND, never zero:
+         # zero human closures is the slowest pace this can ask for.
+         case "${c_human:-x}" in ''|*[!0-9]*) HUMAN7="" ;; *) HUMAN7="$c_human" ;; esac
        fi ;;
   esac
 fi
@@ -254,13 +273,19 @@ if [ -z "$OPEN" ]; then
   # stale low number is pacing on a lie in the slow direction.
   since7="$(date -u -d '7 days ago' +%Y-%m-%d 2>/dev/null || true)"
   if [ -n "$since7" ]; then
-    CLOSED7="$(gh issue list --repo "$SLUG" --state closed \
-                 --search "closed:>=$since7" --limit 300 --json number \
-                 --jq 'length' 2>/dev/null)" || CLOSED7=""
+    # TWO numbers out of ONE call: the raw closure count, and the count of
+    # closures on issues no agent stamped. `body` is fetched for the second;
+    # #764 measured that the first, alone, is supplied by the paced agent.
+    _cl="$(gh issue list --repo "$SLUG" --state closed \
+             --search "closed:>=$since7" --limit 300 --json number,body \
+             --jq "$PROVENANCE_FILER_JQ"'[ length,
+                   ([ .[] | select((.body // "") | filed_by_agent | not) ] | length) ] | @tsv' 2>/dev/null)" || _cl=""
+    IFS=$'\t' read -r CLOSED7 HUMAN7 <<<"$_cl"
     case "${CLOSED7:-x}" in *[!0-9]*) CLOSED7="" ;; esac
+    case "${HUMAN7:-x}" in *[!0-9]*) HUMAN7="" ;; esac
   fi
   if [ "$CACHE_MIN" -gt 0 ] && mkdir -p "$CACHE_DIR" 2>/dev/null; then
-    printf '%s\t%s\t%s\t%s\n' "$NOW" "$OPEN" "$BLOCKED" "${CLOSED7:--}" > "$CACHE" 2>/dev/null || true
+    printf '%s\t%s\t%s\t%s\t%s\n' "$NOW" "$OPEN" "$BLOCKED" "${CLOSED7:--}" "${HUMAN7:--}" > "$CACHE" 2>/dev/null || true
   fi
 fi
 
@@ -281,11 +306,20 @@ ACTIONABLE=$(( OPEN - BLOCKED ))
 # so. Failing closed would collapse every project to 1 and freeze the whole
 # fleet at daily on one bad gh call -- the exact "could not look" = "nothing is
 # wrong" inversion this estate keeps making, in the direction that hurts most.
+# WHICH CLOSURES EARN PACE (#764). `filer` counts only closures on issues no
+# agent stamped; `all` is the pre-#764 arithmetic, kept as a knob so a rollback
+# is one environment variable rather than a revert. The `+1` floor is unchanged
+# and is what keeps a repo with no human-filed closures at the slowest pace
+# instead of at a standstill -- still enough to close one thing and earn it back.
+case "$CLOSURE_SENSOR" in
+  filer) EARNED="$HUMAN7"; EARNED_SRC=humanfiled7d ;;
+  all)   EARNED="$CLOSED7"; EARNED_SRC=closed7d ;;
+esac
 DRIVE=$ACTIONABLE; DRIVE_SRC=actionable
-if [ -n "$CLOSED7" ]; then
-  DRIVE=$(( CLOSED7 + 1 ))
+if [ -n "$EARNED" ]; then
+  DRIVE=$(( EARNED + 1 ))
   [ "$ACTIONABLE" -lt "$DRIVE" ] && DRIVE=$ACTIONABLE
-  DRIVE_SRC="min(actionable,closed7d+1)"
+  DRIVE_SRC="min(actionable,${EARNED_SRC}+1)"
 else
   DRIVE_SRC="actionable(BLIND on closures -- fell back)"
 fi
@@ -313,7 +347,8 @@ WANT=$(( (BASE_MIN * PIVOT + DIV / 2) / DIV ))
 [ "$WANT" -gt "$MAX_MIN" ] && WANT="$MAX_MIN"
 
 FACTS="project=$PROJECT repo=$SLUG open=$OPEN blocked=$BLOCKED actionable=$ACTIONABLE"
-FACTS="$FACTS closed7d=${CLOSED7:-BLIND} drive=$DRIVE via=$DRIVE_SRC outcome=$OUTCOME_SRC"
+FACTS="$FACTS closed7d=${CLOSED7:-BLIND} humanfiled7d=${HUMAN7:-BLIND}"
+FACTS="$FACTS drive=$DRIVE via=$DRIVE_SRC outcome=$OUTCOME_SRC"
 FACTS="$FACTS want_min=$WANT since_min=$SINCE_MIN counts=$SOURCE"
 FACTS="$FACTS knobs=base:$BASE_SRC,pivot:$PIVOT_SRC"
 
